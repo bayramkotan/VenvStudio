@@ -2,7 +2,7 @@
 
 **Lightweight Python Virtual Environment Manager**
 
-A modern, cross-platform alternative to Anaconda for managing Python virtual environments. Built with PySide6 (Qt for Python) under LGPL-3.0 license.
+A modern, cross-platform application for managing Python virtual environments. Built with PySide6 (Qt for Python) under LGPL-3.0 license.
 
 ![Python](https://img.shields.io/badge/Python-3.8+-blue?logo=python)
 ![License](https://img.shields.io/badge/License-LGPL--3.0-green)

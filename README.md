@@ -34,7 +34,7 @@ A modern, cross-platform application for managing Python virtual environments. B
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/venvstudio.git
+git clone https://github.com/bayramkotan/venvstudio.git
 cd venvstudio
 
 # Install dependencies

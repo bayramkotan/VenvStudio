@@ -1,0 +1,10 @@
+{
+  "venv_base_dir": "",
+  "theme": "dark",
+  "auto_upgrade_pip": true,
+  "show_hidden_packages": false,
+  "default_python": "",
+  "window_width": 1100,
+  "window_height": 750,
+  "recent_envs": []
+}

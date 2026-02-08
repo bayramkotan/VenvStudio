@@ -11,9 +11,9 @@ from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QFrame, QTableWidget, QTableWidgetItem,
     QHeaderView, QMessageBox, QFileDialog,
-    QStackedWidget, QInputDialog, QApplication,
+    QStackedWidget, QInputDialog, QApplication, QProgressDialog,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QFont, QAction
 
 from src.core.venv_manager import VenvManager
@@ -37,6 +37,39 @@ class SidebarButton(QPushButton):
         self.setCheckable(True)
         self.setFixedHeight(44)
         self.setCursor(Qt.PointingHandCursor)
+
+
+class CloneWorker(QThread):
+    """Worker thread for cloning environments with progress."""
+    progress = Signal(str)
+    finished = Signal(bool, str)
+
+    def __init__(self, venv_manager, source, target):
+        super().__init__()
+        self.venv_manager = venv_manager
+        self.source = source
+        self.target = target
+        self._cancelled = False
+
+    def run(self):
+        success, msg = self.venv_manager.clone_venv(
+            self.source, self.target, callback=self._on_progress
+        )
+        if self._cancelled:
+            import shutil
+            target_path = self.venv_manager.base_dir / self.target
+            if target_path.exists():
+                shutil.rmtree(target_path, ignore_errors=True)
+            self.finished.emit(False, "Clone cancelled by user")
+        else:
+            self.finished.emit(success, msg)
+
+    def _on_progress(self, message):
+        if not self._cancelled:
+            self.progress.emit(message)
+
+    def cancel(self):
+        self._cancelled = True
 
 
 class MainWindow(QMainWindow):
@@ -327,16 +360,50 @@ class MainWindow(QMainWindow):
         source = self._get_selected_env_name()
         if not source:
             return
-        new_name, ok = QInputDialog.getText(self, "Clone Environment", f"Enter name for the clone of '{source}':")
-        if ok and new_name.strip():
-            self.statusBar().showMessage(f"Cloning '{source}' to '{new_name}'...")
-            QApplication.processEvents()
-            success, msg = self.venv_manager.clone_venv(source, new_name.strip())
-            if success:
-                self._refresh_env_list()
-                self.statusBar().showMessage(msg)
-            else:
-                QMessageBox.critical(self, "Error", msg)
+        new_name, ok = QInputDialog.getText(
+            self, "Clone Environment",
+            f"Enter name for the clone of '{source}':",
+            text=f"{source}-clone",
+        )
+        if not ok or not new_name.strip():
+            return
+
+        new_name = new_name.strip()
+
+        # Progress dialog
+        self.clone_progress = QProgressDialog(
+            f"Cloning '{source}' to '{new_name}'...", "Cancel", 0, 0, self
+        )
+        self.clone_progress.setWindowTitle("Cloning Environment")
+        self.clone_progress.setMinimumWidth(400)
+        self.clone_progress.setWindowModality(Qt.WindowModal)
+        self.clone_progress.show()
+
+        # Worker
+        self.clone_worker = CloneWorker(self.venv_manager, source, new_name)
+        self.clone_worker.progress.connect(
+            lambda msg: self.clone_progress.setLabelText(f"⏳ {msg}")
+        )
+        self.clone_worker.finished.connect(self._on_clone_finished)
+        self.clone_progress.canceled.connect(self._on_clone_cancel)
+        self.clone_worker.start()
+
+    def _on_clone_finished(self, success, message):
+        self.clone_progress.close()
+        if success:
+            self._refresh_env_list()
+            self.statusBar().showMessage(message)
+            QMessageBox.information(self, "Success", message)
+        else:
+            if "cancelled" not in message.lower():
+                QMessageBox.critical(self, "Error", message)
+            self.statusBar().showMessage(message)
+
+    def _on_clone_cancel(self):
+        if hasattr(self, 'clone_worker') and self.clone_worker.isRunning():
+            self.clone_worker.cancel()
+            self.clone_worker.wait(5000)
+            self._refresh_env_list()
 
     def _open_package_manager(self):
         name = self._get_selected_env_name()

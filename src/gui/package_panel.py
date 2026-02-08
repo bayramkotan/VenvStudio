@@ -1,6 +1,6 @@
 """
 VenvStudio - Package Management Panel
-Browse catalog, install, uninstall, import/export requirements
+With cancel support, installed package indicators in catalog
 """
 
 from PySide6.QtWidgets import (
@@ -10,17 +10,19 @@ from PySide6.QtWidgets import (
     QTextEdit, QComboBox, QProgressBar, QFrame, QScrollArea,
     QGridLayout, QGroupBox, QSizePolicy,
 )
-from PySide6.QtCore import Qt, QThread, Signal, QSize
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt, QThread, Signal, QSize, QProcess
+from PySide6.QtGui import QFont, QColor
 
 from src.core.pip_manager import PipManager
 from src.utils.constants import PACKAGE_CATALOG, PRESETS
 
 from pathlib import Path
+import os
+import signal
 
 
 class WorkerThread(QThread):
-    """Generic worker thread for async operations."""
+    """Worker thread with cancel support."""
     finished = Signal(bool, str)
     progress = Signal(str)
 
@@ -29,14 +31,25 @@ class WorkerThread(QThread):
         self.func = func
         self.args = args
         self.kwargs = kwargs
+        self._cancelled = False
 
     def run(self):
         try:
-            self.kwargs["callback"] = self.progress.emit
+            self.kwargs["callback"] = self._on_progress
             success, msg = self.func(*self.args, **self.kwargs)
-            self.finished.emit(success, msg)
+            if self._cancelled:
+                self.finished.emit(False, "Operation cancelled by user")
+            else:
+                self.finished.emit(success, msg)
         except Exception as e:
             self.finished.emit(False, str(e))
+
+    def _on_progress(self, message):
+        if not self._cancelled:
+            self.progress.emit(message)
+
+    def cancel(self):
+        self._cancelled = True
 
 
 class PackagePanel(QWidget):
@@ -46,6 +59,7 @@ class PackagePanel(QWidget):
         super().__init__(parent)
         self.pip_manager = None
         self.current_worker = None
+        self.installed_package_names = set()  # Track installed packages
         self._setup_ui()
 
     def _setup_ui(self):
@@ -53,25 +67,35 @@ class PackagePanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
+        # Environment indicator at top
+        self.env_bar = QFrame()
+        self.env_bar.setFixedHeight(44)
+        self.env_bar.setStyleSheet("background-color: rgba(137, 180, 250, 0.1); border-bottom: 1px solid #313244;")
+        env_bar_layout = QHBoxLayout(self.env_bar)
+        env_bar_layout.setContentsMargins(16, 0, 16, 0)
+
+        self.env_name_label = QLabel("No environment selected")
+        self.env_name_label.setStyleSheet("font-weight: bold; font-size: 13px;")
+        env_bar_layout.addWidget(self.env_name_label)
+
+        env_bar_layout.addStretch()
+
+        self.env_pkg_count = QLabel("")
+        self.env_pkg_count.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        env_bar_layout.addWidget(self.env_pkg_count)
+
+        layout.addWidget(self.env_bar)
+
         self.tabs = QTabWidget()
-
-        # Tab 1: Installed packages
         self.tabs.addTab(self._create_installed_tab(), "📦 Installed")
-
-        # Tab 2: Package catalog
         self.tabs.addTab(self._create_catalog_tab(), "🛒 Catalog")
-
-        # Tab 3: Quick install presets
         self.tabs.addTab(self._create_presets_tab(), "⚡ Presets")
-
-        # Tab 4: Manual install
         self.tabs.addTab(self._create_manual_tab(), "⌨️ Manual Install")
-
         layout.addWidget(self.tabs)
 
-        # Status bar
+        # Status bar with cancel button
         self.status_bar = QFrame()
-        self.status_bar.setFixedHeight(40)
+        self.status_bar.setFixedHeight(44)
         status_layout = QHBoxLayout(self.status_bar)
         status_layout.setContentsMargins(12, 4, 12, 4)
 
@@ -79,10 +103,17 @@ class PackagePanel(QWidget):
         self.status_label.setStyleSheet("color: #a6adc8; font-size: 12px;")
         status_layout.addWidget(self.status_label, 1)
 
+        self.cancel_btn = QPushButton("⛔ Cancel")
+        self.cancel_btn.setObjectName("danger")
+        self.cancel_btn.setFixedWidth(100)
+        self.cancel_btn.setVisible(False)
+        self.cancel_btn.clicked.connect(self._cancel_operation)
+        status_layout.addWidget(self.cancel_btn)
+
         self.progress_bar = QProgressBar()
         self.progress_bar.setFixedWidth(200)
         self.progress_bar.setVisible(False)
-        self.progress_bar.setRange(0, 0)  # indeterminate
+        self.progress_bar.setRange(0, 0)
         status_layout.addWidget(self.progress_bar)
 
         layout.addWidget(self.status_bar)
@@ -92,7 +123,6 @@ class PackagePanel(QWidget):
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(12, 12, 12, 12)
 
-        # Toolbar
         toolbar = QHBoxLayout()
 
         self.search_input = QLineEdit()
@@ -112,7 +142,6 @@ class PackagePanel(QWidget):
 
         layout.addLayout(toolbar)
 
-        # Packages table
         self.packages_table = QTableWidget()
         self.packages_table.setColumnCount(3)
         self.packages_table.setHorizontalHeaderLabels(["Package", "Version", ""])
@@ -125,13 +154,10 @@ class PackagePanel(QWidget):
         self.packages_table.verticalHeader().setVisible(False)
         layout.addWidget(self.packages_table)
 
-        # Bottom toolbar
         bottom = QHBoxLayout()
-
         self.pkg_count_label = QLabel("0 packages")
         self.pkg_count_label.setStyleSheet("color: #a6adc8;")
         bottom.addWidget(self.pkg_count_label)
-
         bottom.addStretch()
 
         export_btn = QPushButton("Export requirements.txt")
@@ -152,7 +178,6 @@ class PackagePanel(QWidget):
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(12, 12, 12, 12)
 
-        # Category selector
         cat_layout = QHBoxLayout()
         cat_label = QLabel("Category:")
         cat_layout.addWidget(cat_label)
@@ -166,6 +191,11 @@ class PackagePanel(QWidget):
 
         cat_layout.addStretch()
 
+        # Legend
+        legend = QLabel("🟢 = installed")
+        legend.setStyleSheet("color: #a6e3a1; font-size: 11px;")
+        cat_layout.addWidget(legend)
+
         install_selected_btn = QPushButton("Install Selected")
         install_selected_btn.setObjectName("success")
         install_selected_btn.clicked.connect(self._install_catalog_selected)
@@ -173,15 +203,16 @@ class PackagePanel(QWidget):
 
         layout.addLayout(cat_layout)
 
-        # Catalog table
         self.catalog_table = QTableWidget()
-        self.catalog_table.setColumnCount(4)
-        self.catalog_table.setHorizontalHeaderLabels(["", "Package", "Description", "Category"])
+        self.catalog_table.setColumnCount(5)
+        self.catalog_table.setHorizontalHeaderLabels(["", "Package", "Description", "Category", "Status"])
         self.catalog_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
         self.catalog_table.setColumnWidth(0, 40)
         self.catalog_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.catalog_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         self.catalog_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.catalog_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Fixed)
+        self.catalog_table.setColumnWidth(4, 70)
         self.catalog_table.setAlternatingRowColors(True)
         self.catalog_table.verticalHeader().setVisible(False)
         layout.addWidget(self.catalog_table)
@@ -205,19 +236,16 @@ class PackagePanel(QWidget):
             card.setObjectName("card")
             card_layout = QVBoxLayout(card)
 
-            # Preset name
             name_label = QLabel(preset_name)
             name_label.setFont(QFont("Segoe UI", 14, QFont.Bold))
             card_layout.addWidget(name_label)
 
-            # Package list
             pkg_text = ", ".join(packages)
             pkg_label = QLabel(pkg_text)
             pkg_label.setWordWrap(True)
             pkg_label.setStyleSheet("color: #a6adc8; font-size: 12px;")
             card_layout.addWidget(pkg_label)
 
-            # Install button
             install_btn = QPushButton(f"Install ({len(packages)} packages)")
             install_btn.setObjectName("success")
             install_btn.clicked.connect(lambda checked, pkgs=packages: self._install_packages(pkgs))
@@ -235,7 +263,6 @@ class PackagePanel(QWidget):
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(12, 12, 12, 12)
 
-        # Instructions
         info = QLabel(
             "Enter package names separated by spaces or newlines.\n"
             "You can specify versions like: numpy==1.24.0 or pandas>=2.0"
@@ -244,7 +271,6 @@ class PackagePanel(QWidget):
         info.setWordWrap(True)
         layout.addWidget(info)
 
-        # Text input
         self.manual_input = QTextEdit()
         self.manual_input.setPlaceholderText(
             "numpy pandas matplotlib\n"
@@ -253,7 +279,6 @@ class PackagePanel(QWidget):
         )
         layout.addWidget(self.manual_input)
 
-        # Buttons
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
 
@@ -269,7 +294,6 @@ class PackagePanel(QWidget):
 
         layout.addLayout(btn_layout)
 
-        # Output log
         self.output_log = QTextEdit()
         self.output_log.setReadOnly(True)
         self.output_log.setMaximumHeight(200)
@@ -278,32 +302,33 @@ class PackagePanel(QWidget):
 
         return widget
 
+    # ── Public Methods ──
+
     def set_venv(self, venv_path: Path):
         """Set the active virtual environment."""
         self.pip_manager = PipManager(venv_path)
+        self.env_name_label.setText(f"🐍 Environment: {venv_path.name}")
         self.refresh_packages()
         self.status_label.setText(f"Environment: {venv_path.name}")
 
     def refresh_packages(self):
-        """Refresh the installed packages list."""
+        """Refresh the installed packages list and update indicators."""
         if not self.pip_manager:
             return
 
         packages = self.pip_manager.list_packages()
-        self.packages_table.setRowCount(len(packages))
+        self.installed_package_names = {pkg.name.lower() for pkg in packages}
 
+        self.packages_table.setRowCount(len(packages))
         for i, pkg in enumerate(packages):
-            # Package name
             name_item = QTableWidgetItem(pkg.name)
             name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
             self.packages_table.setItem(i, 0, name_item)
 
-            # Version
             ver_item = QTableWidgetItem(pkg.version)
             ver_item.setFlags(ver_item.flags() & ~Qt.ItemIsEditable)
             self.packages_table.setItem(i, 1, ver_item)
 
-            # Checkbox for selection
             cb = QCheckBox()
             cb_widget = QWidget()
             cb_layout = QHBoxLayout(cb_widget)
@@ -312,15 +337,14 @@ class PackagePanel(QWidget):
             cb_layout.setContentsMargins(0, 0, 0, 0)
             self.packages_table.setCellWidget(i, 2, cb_widget)
 
-        self.pkg_count_label.setText(f"{len(packages)} packages")
+        count = len(packages)
+        self.pkg_count_label.setText(f"{count} packages")
+        self.env_pkg_count.setText(f"{count} packages installed")
 
-    def _filter_installed(self, text: str):
-        """Filter installed packages by name."""
-        for row in range(self.packages_table.rowCount()):
-            item = self.packages_table.item(row, 0)
-            if item:
-                match = text.lower() in item.text().lower()
-                self.packages_table.setRowHidden(row, not match)
+        # Update catalog to show installed status
+        self._update_catalog_status()
+
+    # ── Catalog Methods ──
 
     def _populate_catalog(self):
         """Populate catalog table based on selected category."""
@@ -336,7 +360,6 @@ class PackagePanel(QWidget):
             for pkg in cat_data.get("packages", []):
                 self.catalog_table.insertRow(row)
 
-                # Checkbox
                 cb = QCheckBox()
                 cb_widget = QWidget()
                 cb_layout = QHBoxLayout(cb_widget)
@@ -345,7 +368,6 @@ class PackagePanel(QWidget):
                 cb_layout.setContentsMargins(0, 0, 0, 0)
                 self.catalog_table.setCellWidget(row, 0, cb_widget)
 
-                # Name
                 name_item = QTableWidgetItem(pkg["name"])
                 name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
                 name_font = QFont()
@@ -353,20 +375,39 @@ class PackagePanel(QWidget):
                 name_item.setFont(name_font)
                 self.catalog_table.setItem(row, 1, name_item)
 
-                # Description
                 desc_item = QTableWidgetItem(pkg["desc"])
                 desc_item.setFlags(desc_item.flags() & ~Qt.ItemIsEditable)
                 self.catalog_table.setItem(row, 2, desc_item)
 
-                # Category
                 cat_item = QTableWidgetItem(cat_name)
                 cat_item.setFlags(cat_item.flags() & ~Qt.ItemIsEditable)
                 self.catalog_table.setItem(row, 3, cat_item)
 
+                # Status column - installed indicator
+                is_installed = pkg["name"].lower() in self.installed_package_names
+                status_item = QTableWidgetItem("✅" if is_installed else "")
+                status_item.setFlags(status_item.flags() & ~Qt.ItemIsEditable)
+                status_item.setTextAlignment(Qt.AlignCenter)
+                if is_installed:
+                    status_item.setForeground(QColor("#a6e3a1"))
+                self.catalog_table.setItem(row, 4, status_item)
+
                 row += 1
 
+    def _update_catalog_status(self):
+        """Update installed status indicators in catalog."""
+        for row in range(self.catalog_table.rowCount()):
+            name_item = self.catalog_table.item(row, 1)
+            if name_item:
+                is_installed = name_item.text().lower() in self.installed_package_names
+                status_item = QTableWidgetItem("✅" if is_installed else "")
+                status_item.setFlags(status_item.flags() & ~Qt.ItemIsEditable)
+                status_item.setTextAlignment(Qt.AlignCenter)
+                if is_installed:
+                    status_item.setForeground(QColor("#a6e3a1"))
+                self.catalog_table.setItem(row, 4, status_item)
+
     def _install_catalog_selected(self):
-        """Install selected packages from catalog."""
         packages = []
         for row in range(self.catalog_table.rowCount()):
             cb_widget = self.catalog_table.cellWidget(row, 0)
@@ -376,17 +417,16 @@ class PackagePanel(QWidget):
                     item = self.catalog_table.item(row, 1)
                     if item:
                         packages.append(item.text())
-
         if not packages:
-            QMessageBox.information(self, "Info", "No packages selected. Check the boxes next to packages you want to install.")
+            QMessageBox.information(self, "Info", "No packages selected.\nCheck the boxes next to packages you want to install.")
             return
-
         self._install_packages(packages)
 
+    # ── Install / Uninstall ──
+
     def _install_packages(self, packages: list):
-        """Install a list of packages using a worker thread."""
         if not self.pip_manager:
-            QMessageBox.warning(self, "Warning", "No environment selected. Please select an environment first.")
+            QMessageBox.warning(self, "Warning", "No environment selected.\nPlease select an environment first.")
             return
 
         reply = QMessageBox.question(
@@ -406,16 +446,13 @@ class PackagePanel(QWidget):
         self.current_worker.start()
 
     def _install_manual(self):
-        """Install packages from manual text input."""
         text = self.manual_input.toPlainText().strip()
         if not text:
             return
-
         packages = text.split()
         self._install_packages(packages)
 
     def _uninstall_selected(self):
-        """Uninstall selected packages from the installed list."""
         if not self.pip_manager:
             return
 
@@ -448,15 +485,9 @@ class PackagePanel(QWidget):
         self.current_worker.start()
 
     def _export_requirements(self):
-        """Export installed packages to requirements.txt."""
         if not self.pip_manager:
             return
-
-        filepath, _ = QFileDialog.getSaveFileName(
-            self, "Export Requirements",
-            "requirements.txt",
-            "Text Files (*.txt)",
-        )
+        filepath, _ = QFileDialog.getSaveFileName(self, "Export Requirements", "requirements.txt", "Text Files (*.txt)")
         if filepath:
             success, msg = self.pip_manager.export_requirements(Path(filepath))
             if success:
@@ -465,24 +496,25 @@ class PackagePanel(QWidget):
                 QMessageBox.critical(self, "Error", msg)
 
     def _import_requirements(self):
-        """Import and install from requirements.txt."""
         if not self.pip_manager:
             QMessageBox.warning(self, "Warning", "No environment selected.")
             return
-
-        filepath, _ = QFileDialog.getOpenFileName(
-            self, "Import Requirements",
-            "",
-            "Text Files (*.txt);;All Files (*)",
-        )
+        filepath, _ = QFileDialog.getOpenFileName(self, "Import Requirements", "", "Text Files (*.txt);;All Files (*)")
         if filepath:
             self._set_busy(True)
-            self.current_worker = WorkerThread(
-                self.pip_manager.import_requirements, Path(filepath)
-            )
+            self.current_worker = WorkerThread(self.pip_manager.import_requirements, Path(filepath))
             self.current_worker.progress.connect(self._on_progress)
             self.current_worker.finished.connect(self._on_install_finished)
             self.current_worker.start()
+
+    def _filter_installed(self, text: str):
+        for row in range(self.packages_table.rowCount()):
+            item = self.packages_table.item(row, 0)
+            if item:
+                match = text.lower() in item.text().lower()
+                self.packages_table.setRowHidden(row, not match)
+
+    # ── Worker Callbacks ──
 
     def _on_progress(self, message: str):
         self.status_label.setText(message)
@@ -497,8 +529,28 @@ class PackagePanel(QWidget):
             self.refresh_packages()
         else:
             self.status_label.setText("Operation failed")
-            QMessageBox.critical(self, "Error", message[:500])
+            if "cancelled" not in message.lower():
+                QMessageBox.critical(self, "Error", message[:500])
+
+    def _cancel_operation(self):
+        """Cancel the current running operation."""
+        if self.current_worker and self.current_worker.isRunning():
+            reply = QMessageBox.question(
+                self, "Cancel Operation",
+                "Are you sure you want to cancel the current operation?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply == QMessageBox.Yes:
+                self.status_label.setText("⛔ Cancelling...")
+                self.current_worker.cancel()
+                # Don't wait forever - force stop after 3s
+                if not self.current_worker.wait(3000):
+                    self.current_worker.terminate()
+                self._set_busy(False)
+                self.status_label.setText("⛔ Operation cancelled")
+                self.output_log.append("\n⛔ Operation cancelled by user")
 
     def _set_busy(self, busy: bool):
         self.progress_bar.setVisible(busy)
+        self.cancel_btn.setVisible(busy)
         self.tabs.setEnabled(not busy)

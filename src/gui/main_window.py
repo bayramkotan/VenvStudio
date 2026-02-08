@@ -20,6 +20,7 @@ from src.core.venv_manager import VenvManager
 from src.core.config_manager import ConfigManager
 from src.gui.env_dialog import EnvCreateDialog
 from src.gui.package_panel import PackagePanel
+from src.gui.settings_page import SettingsPage
 from src.gui.styles import get_theme
 from src.utils.platform_utils import (
     get_activate_command, open_terminal_at, get_platform,
@@ -134,6 +135,11 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(self.btn_packages)
         self.nav_buttons.append(self.btn_packages)
 
+        self.btn_settings = SidebarButton("Settings", "⚙️")
+        self.btn_settings.clicked.connect(lambda: self._switch_page(2))
+        sidebar_layout.addWidget(self.btn_settings)
+        self.nav_buttons.append(self.btn_settings)
+
         sidebar_layout.addStretch()
 
         footer_label = QLabel("  LGPL-3.0 License")
@@ -143,9 +149,17 @@ class MainWindow(QMainWindow):
 
         # Content Area
         self.stack = QStackedWidget()
-        self.stack.addWidget(self._create_env_page())
+        self.stack.addWidget(self._create_env_page())       # Page 0
         self.package_panel = PackagePanel()
-        self.stack.addWidget(self.package_panel)
+        self.stack.addWidget(self.package_panel)             # Page 1
+
+        # Settings page
+        self.settings_page = SettingsPage(self.config)
+        self.settings_page.theme_changed.connect(self._on_theme_changed)
+        self.settings_page.font_changed.connect(self._on_font_changed)
+        self.settings_page.settings_saved.connect(self._on_settings_saved)
+        self.stack.addWidget(self.settings_page)             # Page 2
+
         main_layout.addWidget(self.stack, 1)
 
         self.statusBar().showMessage("Ready")
@@ -341,15 +355,8 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(f"Opened terminal for '{name}'")
 
     def _open_settings(self):
-        directory = QFileDialog.getExistingDirectory(
-            self, "Select Base Directory for Environments",
-            str(self.config.get_venv_base_dir()),
-        )
-        if directory:
-            self.config.set_venv_base_dir(directory)
-            self.venv_manager.set_base_dir(Path(directory))
-            self._refresh_env_list()
-            self.statusBar().showMessage(f"Base directory changed to: {directory}")
+        """Navigate to the settings page."""
+        self._switch_page(2)
 
     def _set_theme(self, theme_name):
         self.config.set("theme", theme_name)
@@ -359,12 +366,29 @@ class MainWindow(QMainWindow):
         theme = self.config.get("theme", "dark")
         self.setStyleSheet(get_theme(theme))
 
+    def _on_theme_changed(self, theme_name):
+        """Handle theme change from settings page."""
+        self._apply_theme()
+
+    def _on_font_changed(self, family, size):
+        """Handle font change from settings page."""
+        from PySide6.QtWidgets import QApplication
+        font = QFont(family, size)
+        QApplication.instance().setFont(font)
+
+    def _on_settings_saved(self):
+        """Handle settings saved - refresh env list with potentially new base dir."""
+        new_dir = self.config.get_venv_base_dir()
+        self.venv_manager.set_base_dir(new_dir)
+        self._refresh_env_list()
+        self.statusBar().showMessage("Settings saved")
+
     def _show_about(self):
         QMessageBox.about(
             self, f"About {APP_NAME}",
             f"<h2>{APP_NAME} v{APP_VERSION}</h2>"
             f"<p>Lightweight Python Virtual Environment Manager</p>"
-            f"<p>A modern, cross-platform alternative to Anaconda.</p>"
+            f"<p>Create, manage, and organize your Python environments with ease.</p>"
             f"<p><b>License:</b> LGPL-3.0</p>"
             f"<p><b>Platform:</b> {get_platform().title()}</p>"
             f"<p>Built with PySide6 (Qt for Python)</p>"

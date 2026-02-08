@@ -74,6 +74,7 @@ def find_system_pythons() -> List[Tuple[str, str]]:
     """
     pythons = []
     seen_versions = set()
+    seen_paths = set()
 
     candidates = ["python3", "python"]
     for major in [3]:
@@ -82,19 +83,35 @@ def find_system_pythons() -> List[Tuple[str, str]]:
 
     for candidate in candidates:
         exe_path = shutil.which(candidate)
-        if exe_path:
-            try:
-                result = subprocess.run(
-                    [exe_path, "--version"],
-                    capture_output=True, text=True, timeout=5
-                )
-                version = result.stdout.strip() or result.stderr.strip()
-                version = version.replace("Python ", "")
-                if version and version not in seen_versions:
-                    seen_versions.add(version)
-                    pythons.append((version, exe_path))
-            except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        if not exe_path:
+            continue
+
+        # Windows Store alias filtrele
+        normalized = os.path.normpath(exe_path).lower()
+        if "windowsapps" in normalized:
+            continue
+
+        if normalized in seen_paths:
+            continue
+        seen_paths.add(normalized)
+
+        try:
+            result = subprocess.run(
+                [exe_path, "--version"],
+                capture_output=True, text=True, timeout=5
+            )
+            version = result.stdout.strip() or result.stderr.strip()
+            version = version.replace("Python ", "")
+
+            # Versiyon numarası formatını kontrol et (x.y.z)
+            if not version or not version[0].isdigit():
                 continue
+
+            if version not in seen_versions:
+                seen_versions.add(version)
+                pythons.append((version, exe_path))
+        except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+            continue
 
     pythons.sort(key=lambda x: x[0], reverse=True)
     return pythons

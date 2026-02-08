@@ -123,6 +123,7 @@ def get_hidden_imports() -> list:
         "src.gui.main_window",
         "src.gui.env_dialog",
         "src.gui.package_panel",
+        "src.gui.settings_page",
         "src.gui.styles",
         "src.core",
         "src.core.venv_manager",

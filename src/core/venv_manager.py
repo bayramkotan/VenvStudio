@@ -317,7 +317,7 @@ class VenvManager:
             return False, f"Error cloning environment: {str(e)}"
 
     def rename_venv(self, old_name: str, new_name: str) -> tuple[bool, str]:
-        """Rename an environment by renaming its directory."""
+        """Rename an environment - renames directory and updates internal paths."""
         import shutil
         old_path = self.base_dir / old_name
         new_path = self.base_dir / new_name
@@ -328,9 +328,71 @@ class VenvManager:
             return False, f"Environment '{new_name}' already exists at:\n{new_path}"
 
         try:
+            # 1. Rename directory
             shutil.move(str(old_path), str(new_path))
+
+            # 2. Update pyvenv.cfg if it references old path
+            cfg_file = new_path / "pyvenv.cfg"
+            if cfg_file.exists():
+                try:
+                    text = cfg_file.read_text(encoding="utf-8")
+                    text = text.replace(str(old_path), str(new_path))
+                    cfg_file.write_text(text, encoding="utf-8")
+                except Exception:
+                    pass
+
+            # 3. Update activation scripts with new path
+            self._update_activate_scripts(new_path, old_name, new_name, old_path, new_path)
+
+            # 4. Update meta file
+            meta_file = new_path / ".venvstudio_meta.json"
+            if meta_file.exists():
+                try:
+                    with open(meta_file) as f:
+                        meta = json.load(f)
+                    meta["name"] = new_name
+                    with open(meta_file, "w") as f:
+                        json.dump(meta, f, indent=2)
+                except Exception:
+                    pass
+
             return True, f"Environment '{old_name}' renamed to '{new_name}'"
         except PermissionError:
             return False, f"Cannot rename: folder is locked.\nClose any terminals using this environment and try again."
         except Exception as e:
             return False, f"Error renaming environment: {str(e)}"
+
+    def _update_activate_scripts(self, venv_path, old_name, new_name, old_full, new_full):
+        """Update activate scripts to reflect new environment name and path."""
+        system = sys.platform
+
+        # Windows scripts
+        scripts_dir = venv_path / "Scripts"
+        if scripts_dir.exists():
+            for script_name in ["activate", "activate.bat", "Activate.ps1"]:
+                script_file = scripts_dir / script_name
+                if script_file.exists():
+                    try:
+                        text = script_file.read_text(encoding="utf-8")
+                        text = text.replace(str(old_full), str(new_full))
+                        text = text.replace(f'"{old_name}"', f'"{new_name}"')
+                        text = text.replace(f"({old_name})", f"({new_name})")
+                        text = text.replace(f"VIRTUAL_ENV={old_name}", f"VIRTUAL_ENV={new_name}")
+                        script_file.write_text(text, encoding="utf-8")
+                    except Exception:
+                        pass
+
+        # Unix scripts
+        bin_dir = venv_path / "bin"
+        if bin_dir.exists():
+            for script_name in ["activate", "activate.csh", "activate.fish"]:
+                script_file = bin_dir / script_name
+                if script_file.exists():
+                    try:
+                        text = script_file.read_text(encoding="utf-8")
+                        text = text.replace(str(old_full), str(new_full))
+                        text = text.replace(f'"{old_name}"', f'"{new_name}"')
+                        text = text.replace(f"({old_name})", f"({new_name})")
+                        script_file.write_text(text, encoding="utf-8")
+                    except Exception:
+                        pass

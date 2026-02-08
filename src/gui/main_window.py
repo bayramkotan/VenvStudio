@@ -243,7 +243,7 @@ class MainWindow(QMainWindow):
 
         self.info_label = QLabel()
         self.info_label.setObjectName("subheader")
-        self._update_info_label()
+        self.info_label.setText(f"\U0001f4c2 {self.config.get_venv_base_dir()}")
         layout.addWidget(self.info_label)
 
         self.env_table = QTableWidget()

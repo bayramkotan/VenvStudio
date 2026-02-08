@@ -147,48 +147,8 @@ class VenvManager:
         except Exception as e:
             return False, f"Error deleting environment: {str(e)}"
 
-    def list_venvs_fast(self) -> List[VenvInfo]:
-        """Fast list - only check directory names and validity, no subprocess calls."""
-        venvs = []
-        if not self.base_dir.exists():
-            return venvs
-
-        for item in sorted(self.base_dir.iterdir()):
-            if item.is_dir():
-                python_exe = get_python_executable(item)
-                is_valid = python_exe.exists()
-
-                info = VenvInfo(
-                    name=item.name,
-                    path=item,
-                    is_valid=is_valid,
-                    python_version="..." if is_valid else "N/A",
-                    size="...",
-                    package_count=0,
-                )
-
-                # Creation date (no subprocess needed)
-                meta_file = item / ".venvstudio_meta.json"
-                if meta_file.exists():
-                    try:
-                        with open(meta_file) as f:
-                            meta = json.load(f)
-                        info.created = meta.get("created", "")
-                    except (json.JSONDecodeError, IOError):
-                        pass
-                if not info.created:
-                    try:
-                        stat = item.stat()
-                        info.created = datetime.fromtimestamp(stat.st_ctime).isoformat()
-                    except OSError:
-                        pass
-
-                venvs.append(info)
-
-        return venvs
-
     def list_venvs(self) -> List[VenvInfo]:
-        """Full list with all details (slow - calls subprocess for each env)."""
+        """List all virtual environments in the base directory."""
         venvs = []
 
         if not self.base_dir.exists():
@@ -318,19 +278,16 @@ class VenvManager:
 
     def rename_venv(self, old_name: str, new_name: str) -> tuple[bool, str]:
         """Rename an environment by renaming its directory."""
-        import shutil
         old_path = self.base_dir / old_name
         new_path = self.base_dir / new_name
 
         if not old_path.exists():
-            return False, f"Environment '{old_name}' not found at:\n{old_path}"
+            return False, f"Environment '{old_name}' not found"
         if new_path.exists():
-            return False, f"Environment '{new_name}' already exists at:\n{new_path}"
+            return False, f"Environment '{new_name}' already exists"
 
         try:
-            shutil.move(str(old_path), str(new_path))
+            old_path.rename(new_path)
             return True, f"Environment '{old_name}' renamed to '{new_name}'"
-        except PermissionError:
-            return False, f"Cannot rename: folder is locked.\nClose any terminals using this environment and try again."
         except Exception as e:
             return False, f"Error renaming environment: {str(e)}"

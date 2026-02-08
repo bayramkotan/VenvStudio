@@ -72,6 +72,26 @@ class CloneWorker(QThread):
         self._cancelled = True
 
 
+class EnvDetailWorker(QThread):
+    """Background worker to load env details (Python version, package count, size)."""
+    env_detail_ready = Signal(int, str, int, str)  # row, python_ver, pkg_count, size
+    all_done = Signal()
+
+    def __init__(self, venv_manager, env_names):
+        super().__init__()
+        self.venv_manager = venv_manager
+        self.env_names = env_names
+
+    def run(self):
+        for i, name in enumerate(self.env_names):
+            info = self.venv_manager.get_venv_info(name)
+            if info:
+                self.env_detail_ready.emit(
+                    i, info.python_version, info.package_count, info.size
+                )
+        self.all_done.emit()
+
+
 class MainWindow(QMainWindow):
     """Main application window."""
 
@@ -260,6 +280,12 @@ class MainWindow(QMainWindow):
         self.btn_clone.setEnabled(False)
         action_layout.addWidget(self.btn_clone)
 
+        self.btn_rename = QPushButton("✏️ Rename")
+        self.btn_rename.setObjectName("secondary")
+        self.btn_rename.clicked.connect(self._rename_env)
+        self.btn_rename.setEnabled(False)
+        action_layout.addWidget(self.btn_rename)
+
         action_layout.addStretch()
 
         self.btn_delete = QPushButton("\U0001f5d1\ufe0f Delete")
@@ -277,8 +303,12 @@ class MainWindow(QMainWindow):
             btn.setChecked(i == index)
 
     def _refresh_env_list(self):
+        """Phase 1: Instantly show env names, then load details in background."""
         self.env_table.setRowCount(0)
-        envs = self.venv_manager.list_venvs()
+        self.statusBar().showMessage("Loading environments...")
+
+        # Fast load - no subprocess, instant
+        envs = self.venv_manager.list_venvs_fast()
         self.env_table.setRowCount(len(envs))
 
         for i, env in enumerate(envs):
@@ -291,8 +321,8 @@ class MainWindow(QMainWindow):
             name_item.setFont(name_font)
             self.env_table.setItem(i, 0, name_item)
             self.env_table.setItem(i, 1, QTableWidgetItem(f"  {env.python_version}"))
-            self.env_table.setItem(i, 2, QTableWidgetItem(f"  {env.package_count}"))
-            self.env_table.setItem(i, 3, QTableWidgetItem(f"  {env.size}"))
+            self.env_table.setItem(i, 2, QTableWidgetItem(f"  ..."))
+            self.env_table.setItem(i, 3, QTableWidgetItem(f"  ..."))
 
             created_str = ""
             if env.created:
@@ -303,12 +333,33 @@ class MainWindow(QMainWindow):
                     created_str = env.created[:16]
             self.env_table.setItem(i, 4, QTableWidgetItem(f"  {created_str}"))
 
-        self._update_info_label()
-        self.statusBar().showMessage(f"Found {len(envs)} environment(s)")
+        self._update_info_label_fast(len(envs))
+
+        # Phase 2: Load details in background thread
+        if envs:
+            self._detail_worker = EnvDetailWorker(self.venv_manager, [e.name for e in envs])
+            self._detail_worker.env_detail_ready.connect(self._on_env_detail_ready)
+            self._detail_worker.all_done.connect(self._on_all_details_done)
+            self._detail_worker.start()
+
+    def _on_env_detail_ready(self, row, python_version, package_count, size):
+        """Update a single row with detailed info from background thread."""
+        if row < self.env_table.rowCount():
+            self.env_table.setItem(row, 1, QTableWidgetItem(f"  {python_version}"))
+            self.env_table.setItem(row, 2, QTableWidgetItem(f"  {package_count}"))
+            self.env_table.setItem(row, 3, QTableWidgetItem(f"  {size}"))
+
+    def _on_all_details_done(self):
+        count = self.env_table.rowCount()
+        self.statusBar().showMessage(f"Found {count} environment(s)")
+
+    def _update_info_label_fast(self, count):
+        base_dir = self.config.get_venv_base_dir()
+        self.info_label.setText(f"\U0001f4c2 {base_dir}  \u2022  {count} environment(s)")
 
     def _update_info_label(self):
         base_dir = self.config.get_venv_base_dir()
-        count = len(self.venv_manager.list_venvs())
+        count = self.env_table.rowCount()
         self.info_label.setText(f"\U0001f4c2 {base_dir}  \u2022  {count} environment(s)")
 
     def _on_env_selected(self):
@@ -317,6 +368,7 @@ class MainWindow(QMainWindow):
         self.btn_manage_pkgs.setEnabled(has_selection)
         self.btn_terminal.setEnabled(has_selection)
         self.btn_clone.setEnabled(has_selection)
+        self.btn_rename.setEnabled(has_selection)
         self.btn_delete.setEnabled(has_selection)
 
         if has_selection:
@@ -338,6 +390,32 @@ class MainWindow(QMainWindow):
         dialog = EnvCreateDialog(self.venv_manager, self.config, self)
         dialog.env_created.connect(lambda name: self._refresh_env_list())
         dialog.exec()
+
+    def _rename_env(self):
+        name = self._get_selected_env_name()
+        if not name:
+            return
+        new_name, ok = QInputDialog.getText(
+            self, "Rename Environment",
+            f"Enter new name for '{name}':",
+            text=name,
+        )
+        if not ok or not new_name.strip() or new_name.strip() == name:
+            return
+
+        new_name = new_name.strip()
+        invalid_chars = set(' /\\:*?"<>|')
+        if any(c in invalid_chars for c in new_name):
+            QMessageBox.warning(self, "Warning", "Name contains invalid characters.")
+            return
+
+        success, msg = self.venv_manager.rename_venv(name, new_name)
+        if success:
+            self._refresh_env_list()
+            self.statusBar().showMessage(msg)
+            QMessageBox.information(self, "Success", msg)
+        else:
+            QMessageBox.critical(self, "Error", msg)
 
     def _delete_env(self):
         name = self._get_selected_env_name()

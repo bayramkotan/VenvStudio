@@ -191,31 +191,39 @@ class PackagePanel(QWidget):
 
         cat_layout.addStretch()
 
-        # Legend
-        legend = QLabel("🟢 = installed")
-        legend.setStyleSheet("color: #a6e3a1; font-size: 11px;")
+        legend = QLabel("☑ = installed  |  Check to install, uncheck to remove")
+        legend.setStyleSheet("color: #a6adc8; font-size: 11px;")
         cat_layout.addWidget(legend)
-
-        install_selected_btn = QPushButton("Install Selected")
-        install_selected_btn.setObjectName("success")
-        install_selected_btn.clicked.connect(self._install_catalog_selected)
-        cat_layout.addWidget(install_selected_btn)
 
         layout.addLayout(cat_layout)
 
         self.catalog_table = QTableWidget()
-        self.catalog_table.setColumnCount(5)
-        self.catalog_table.setHorizontalHeaderLabels(["", "Package", "Description", "Category", "Status"])
+        self.catalog_table.setColumnCount(4)
+        self.catalog_table.setHorizontalHeaderLabels(["Install", "Package", "Description", "Category"])
         self.catalog_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
-        self.catalog_table.setColumnWidth(0, 40)
+        self.catalog_table.setColumnWidth(0, 55)
         self.catalog_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.catalog_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         self.catalog_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        self.catalog_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Fixed)
-        self.catalog_table.setColumnWidth(4, 70)
         self.catalog_table.setAlternatingRowColors(True)
         self.catalog_table.verticalHeader().setVisible(False)
         layout.addWidget(self.catalog_table)
+
+        # Bottom: Apply Changes button
+        bottom_layout = QHBoxLayout()
+        bottom_layout.addStretch()
+
+        self.changes_label = QLabel("")
+        self.changes_label.setStyleSheet("color: #f9e2af; font-size: 12px;")
+        bottom_layout.addWidget(self.changes_label)
+
+        apply_btn = QPushButton("  ✅ Apply Changes  ")
+        apply_btn.setObjectName("success")
+        apply_btn.setFixedHeight(38)
+        apply_btn.clicked.connect(self._apply_catalog_changes)
+        bottom_layout.addWidget(apply_btn)
+
+        layout.addLayout(bottom_layout)
 
         self._populate_catalog()
         return widget
@@ -347,7 +355,7 @@ class PackagePanel(QWidget):
     # ── Catalog Methods ──
 
     def _populate_catalog(self):
-        """Populate catalog table based on selected category."""
+        """Populate catalog table - checkboxes pre-checked for installed packages."""
         selected = self.category_combo.currentData()
         self.catalog_table.setRowCount(0)
 
@@ -360,7 +368,10 @@ class PackagePanel(QWidget):
             for pkg in cat_data.get("packages", []):
                 self.catalog_table.insertRow(row)
 
+                is_installed = pkg["name"].lower() in self.installed_package_names
+
                 cb = QCheckBox()
+                cb.setChecked(is_installed)
                 cb_widget = QWidget()
                 cb_layout = QHBoxLayout(cb_widget)
                 cb_layout.addWidget(cb)
@@ -373,6 +384,8 @@ class PackagePanel(QWidget):
                 name_font = QFont()
                 name_font.setBold(True)
                 name_item.setFont(name_font)
+                if is_installed:
+                    name_item.setForeground(QColor("#a6e3a1"))
                 self.catalog_table.setItem(row, 1, name_item)
 
                 desc_item = QTableWidgetItem(pkg["desc"])
@@ -383,44 +396,86 @@ class PackagePanel(QWidget):
                 cat_item.setFlags(cat_item.flags() & ~Qt.ItemIsEditable)
                 self.catalog_table.setItem(row, 3, cat_item)
 
-                # Status column - installed indicator
-                is_installed = pkg["name"].lower() in self.installed_package_names
-                status_item = QTableWidgetItem("✅" if is_installed else "")
-                status_item.setFlags(status_item.flags() & ~Qt.ItemIsEditable)
-                status_item.setTextAlignment(Qt.AlignCenter)
-                if is_installed:
-                    status_item.setForeground(QColor("#a6e3a1"))
-                self.catalog_table.setItem(row, 4, status_item)
-
                 row += 1
 
     def _update_catalog_status(self):
-        """Update installed status indicators in catalog."""
-        for row in range(self.catalog_table.rowCount()):
-            name_item = self.catalog_table.item(row, 1)
-            if name_item:
-                is_installed = name_item.text().lower() in self.installed_package_names
-                status_item = QTableWidgetItem("✅" if is_installed else "")
-                status_item.setFlags(status_item.flags() & ~Qt.ItemIsEditable)
-                status_item.setTextAlignment(Qt.AlignCenter)
-                if is_installed:
-                    status_item.setForeground(QColor("#a6e3a1"))
-                self.catalog_table.setItem(row, 4, status_item)
+        """Re-check installed status after package changes."""
+        self._populate_catalog()
 
-    def _install_catalog_selected(self):
-        packages = []
+    def _apply_catalog_changes(self):
+        """Apply changes: uninstall unchecked (was installed), install checked (was not installed)."""
+        if not self.pip_manager:
+            QMessageBox.warning(self, "Warning", "No environment selected.")
+            return
+
+        to_install = []
+        to_uninstall = []
+
         for row in range(self.catalog_table.rowCount()):
             cb_widget = self.catalog_table.cellWidget(row, 0)
-            if cb_widget:
-                cb = cb_widget.findChild(QCheckBox)
-                if cb and cb.isChecked():
-                    item = self.catalog_table.item(row, 1)
-                    if item:
-                        packages.append(item.text())
-        if not packages:
-            QMessageBox.information(self, "Info", "No packages selected.\nCheck the boxes next to packages you want to install.")
+            if not cb_widget:
+                continue
+            cb = cb_widget.findChild(QCheckBox)
+            if not cb:
+                continue
+
+            name_item = self.catalog_table.item(row, 1)
+            if not name_item:
+                continue
+
+            pkg_name = name_item.text()
+            is_checked = cb.isChecked()
+            was_installed = pkg_name.lower() in self.installed_package_names
+
+            if is_checked and not was_installed:
+                to_install.append(pkg_name)
+            elif not is_checked and was_installed:
+                to_uninstall.append(pkg_name)
+
+        if not to_install and not to_uninstall:
+            QMessageBox.information(self, "No Changes", "No changes detected.\n\nCheck packages to install, uncheck to remove.")
             return
-        self._install_packages(packages)
+
+        # Confirm
+        msg_parts = []
+        if to_uninstall:
+            msg_parts.append(f"Remove ({len(to_uninstall)}): {', '.join(to_uninstall)}")
+        if to_install:
+            msg_parts.append(f"Install ({len(to_install)}): {', '.join(to_install)}")
+
+        reply = QMessageBox.question(
+            self, "Apply Changes",
+            "Apply the following changes?\n\n" + "\n\n".join(msg_parts),
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        self._set_busy(True)
+        self.output_log.clear()
+
+        # Uninstall first, then install
+        if to_uninstall:
+            self.status_label.setText(f"Removing {len(to_uninstall)} packages...")
+            self.current_worker = WorkerThread(self.pip_manager.uninstall_packages, to_uninstall)
+            self.current_worker.progress.connect(self._on_progress)
+            if to_install:
+                # Chain: after uninstall finishes, start install
+                self.current_worker.finished.connect(
+                    lambda ok, msg: self._chain_install(ok, msg, to_install)
+                )
+            else:
+                self.current_worker.finished.connect(self._on_install_finished)
+            self.current_worker.start()
+        elif to_install:
+            self._install_packages(to_install)
+
+    def _chain_install(self, uninstall_ok, uninstall_msg, to_install):
+        """After uninstall completes, start install."""
+        if not uninstall_ok:
+            self.output_log.append(f"❌ Uninstall failed: {uninstall_msg[:300]}")
+        self.output_log.append(f"✅ Uninstall done. Starting install...")
+        self._install_packages(to_install)
 
     # ── Install / Uninstall ──
 

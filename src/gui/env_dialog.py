@@ -105,6 +105,9 @@ class EnvCreateDialog(QDialog):
         change_btn.setFixedWidth(36)
         change_btn.setFixedHeight(28)
         change_btn.setToolTip("Browse for a different folder")
+        change_btn.setFocusPolicy(Qt.NoFocus)
+        change_btn.setDefault(False)
+        change_btn.setAutoDefault(False)
         change_btn.clicked.connect(self._change_location)
         loc_layout.addWidget(change_btn)
         form_layout.addRow("Location:", loc_layout)
@@ -187,10 +190,12 @@ class EnvCreateDialog(QDialog):
 
         self.cancel_btn = QPushButton("Cancel")
         self.cancel_btn.setObjectName("secondary")
+        self.cancel_btn.setAutoDefault(False)
         self.cancel_btn.clicked.connect(self._on_cancel)
         btn_layout.addWidget(self.cancel_btn)
 
         self.create_btn = QPushButton("  Create Environment  ")
+        self.create_btn.setDefault(True)
         self.create_btn.clicked.connect(self._create)
         btn_layout.addWidget(self.create_btn)
 

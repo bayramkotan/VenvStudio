@@ -15,6 +15,7 @@ from PySide6.QtGui import QFont
 
 from src.utils.platform_utils import find_system_pythons, get_platform
 from src.utils.constants import APP_NAME, APP_VERSION
+from src.utils.i18n import tr
 
 # Dil tanımları
 LANGUAGES = {
@@ -59,16 +60,16 @@ class SettingsPage(QWidget):
         layout.setSpacing(20)
 
         # Header
-        title = QLabel("Settings")
+        title = QLabel(tr("settings_title"))
         title.setObjectName("header")
         layout.addWidget(title)
 
-        subtitle = QLabel("Customize VenvStudio to your preferences")
+        subtitle = QLabel(tr("customize_venvstudio"))
         subtitle.setObjectName("subheader")
         layout.addWidget(subtitle)
 
         # ── 1. APPEARANCE ──
-        appearance_group = QGroupBox("🎨 Appearance")
+        appearance_group = QGroupBox(f"🎨 {tr('appearance')}")
         appearance_layout = QFormLayout()
         appearance_layout.setSpacing(12)
 
@@ -77,18 +78,18 @@ class SettingsPage(QWidget):
         self.theme_combo.setFocusPolicy(Qt.StrongFocus)
         self.theme_combo.addItem("🌙 Dark", "dark")
         self.theme_combo.addItem("☀️ Light", "light")
-        appearance_layout.addRow("Theme:", self.theme_combo)
+        appearance_layout.addRow(f"{tr('theme')}", self.theme_combo)
 
         # Font family
         self.font_combo = QFontComboBox()
-        appearance_layout.addRow("Font:", self.font_combo)
+        appearance_layout.addRow(f"{tr('font')}", self.font_combo)
 
         # Font size
         self.font_size_spin = QSpinBox()
         self.font_size_spin.setRange(8, 24)
         self.font_size_spin.setValue(13)
         self.font_size_spin.setSuffix(" px")
-        appearance_layout.addRow("Font Size:", self.font_size_spin)
+        appearance_layout.addRow(f"{tr('font_size')}", self.font_size_spin)
 
         # UI Scale info
         scale_label = QLabel("UI scaling follows your system display settings.")
@@ -99,7 +100,7 @@ class SettingsPage(QWidget):
         layout.addWidget(appearance_group)
 
         # ── 2. LANGUAGE ──
-        lang_group = QGroupBox("🌍 Language")
+        lang_group = QGroupBox(f"🌍 {tr('language')}")
         lang_layout = QFormLayout()
         lang_layout.setSpacing(12)
 
@@ -116,9 +117,9 @@ class SettingsPage(QWidget):
         self.lang_combo.setEnabled(False)  # Disabled until checkbox is checked
         lang_row.addWidget(self.lang_combo, 1)
 
-        lang_layout.addRow("Interface Language:", lang_row)
+        lang_layout.addRow(f"{tr('interface_language')}", lang_row)
 
-        lang_note = QLabel("Enable the checkbox to change language. Takes effect after restart.")
+        lang_note = QLabel(tr("language_note"))
         lang_note.setStyleSheet("color: #6c7086; font-size: 11px;")
         lang_layout.addRow("", lang_note)
 
@@ -126,11 +127,11 @@ class SettingsPage(QWidget):
         layout.addWidget(lang_group)
 
         # ── 3. PYTHON VERSIONS ──
-        python_group = QGroupBox("🐍 Python Versions")
+        python_group = QGroupBox(f"🐍 {tr('python_versions')}")
         python_layout = QVBoxLayout()
         python_layout.setSpacing(12)
 
-        python_info = QLabel("System Python installations detected automatically. You can also add custom paths.")
+        python_info = QLabel(tr("python_info"))
         python_info.setWordWrap(True)
         python_info.setStyleSheet("color: #a6adc8; font-size: 12px;")
         python_layout.addWidget(python_info)
@@ -155,17 +156,17 @@ class SettingsPage(QWidget):
         # Python action buttons
         py_btn_layout = QHBoxLayout()
 
-        scan_btn = QPushButton("🔍 Scan System")
+        scan_btn = QPushButton(f"🔍 {tr('scan_system')}")
         scan_btn.setObjectName("secondary")
         scan_btn.clicked.connect(self._scan_pythons)
         py_btn_layout.addWidget(scan_btn)
 
-        add_py_btn = QPushButton("+ Add Custom Path")
+        add_py_btn = QPushButton(f"+ {tr('add_custom_path')}")
         add_py_btn.setObjectName("secondary")
         add_py_btn.clicked.connect(self._add_custom_python)
         py_btn_layout.addWidget(add_py_btn)
 
-        remove_py_btn = QPushButton("Remove Selected")
+        remove_py_btn = QPushButton(tr("remove_selected"))
         remove_py_btn.setObjectName("danger")
         remove_py_btn.clicked.connect(self._remove_custom_python)
         py_btn_layout.addWidget(remove_py_btn)
@@ -175,11 +176,11 @@ class SettingsPage(QWidget):
 
         # Default Python
         default_py_layout = QHBoxLayout()
-        default_py_label = QLabel("Default Python for new environments:")
+        default_py_label = QLabel(f"{tr('default_python')}")
         default_py_layout.addWidget(default_py_label)
         self.default_python_combo = QComboBox()
         self.default_python_combo.setFocusPolicy(Qt.StrongFocus)
-        self.default_python_combo.addItem("System Default", "")
+        self.default_python_combo.addItem(tr("system_default"), "")
         default_py_layout.addWidget(self.default_python_combo, 1)
         python_layout.addLayout(default_py_layout)
 
@@ -187,7 +188,7 @@ class SettingsPage(QWidget):
         layout.addWidget(python_group)
 
         # ── 4. PATHS ──
-        paths_group = QGroupBox("📂 Paths")
+        paths_group = QGroupBox(f"📂 {tr('paths')}")
         paths_layout = QFormLayout()
         paths_layout.setSpacing(12)
 
@@ -219,23 +220,23 @@ class SettingsPage(QWidget):
         layout.addWidget(paths_group)
 
         # ── 5. GENERAL ──
-        general_group = QGroupBox("⚙️ General")
+        general_group = QGroupBox(f"⚙️ {tr('general')}")
         general_layout = QFormLayout()
         general_layout.setSpacing(10)
 
-        self.auto_pip_cb = QCheckBox("Auto-upgrade pip when creating new environments")
+        self.auto_pip_cb = QCheckBox(tr("auto_upgrade_pip"))
         general_layout.addRow(self.auto_pip_cb)
 
-        self.confirm_delete_cb = QCheckBox("Ask for confirmation before deleting environments")
+        self.confirm_delete_cb = QCheckBox(tr("confirm_delete"))
         general_layout.addRow(self.confirm_delete_cb)
 
-        self.show_hidden_cb = QCheckBox("Show hidden/system packages in package list")
+        self.show_hidden_cb = QCheckBox(tr("show_hidden_packages"))
         general_layout.addRow(self.show_hidden_cb)
 
-        self.check_updates_cb = QCheckBox("Check for VenvStudio updates on startup")
+        self.check_updates_cb = QCheckBox(tr("check_updates"))
         general_layout.addRow(self.check_updates_cb)
 
-        self.save_window_cb = QCheckBox("Remember window size and position")
+        self.save_window_cb = QCheckBox(tr("remember_window"))
         general_layout.addRow(self.save_window_cb)
 
         # Default terminal
@@ -255,7 +256,7 @@ class SettingsPage(QWidget):
             self.terminal_combo.addItem("GNOME Terminal", "gnome-terminal")
             self.terminal_combo.addItem("Konsole", "konsole")
             self.terminal_combo.addItem("xterm", "xterm")
-        general_layout.addRow("Default Terminal:", self.terminal_combo)
+        general_layout.addRow(f"{tr('default_terminal')}", self.terminal_combo)
 
         general_group.setLayout(general_layout)
         layout.addWidget(general_group)
@@ -285,14 +286,14 @@ class SettingsPage(QWidget):
         # ── SAVE / RESET BUTTONS ──
         btn_layout = QHBoxLayout()
 
-        reset_all_btn = QPushButton("Reset All to Defaults")
+        reset_all_btn = QPushButton(tr("reset_defaults"))
         reset_all_btn.setObjectName("danger")
         reset_all_btn.clicked.connect(self._reset_all)
         btn_layout.addWidget(reset_all_btn)
 
         btn_layout.addStretch()
 
-        save_btn = QPushButton("  💾 Save Settings  ")
+        save_btn = QPushButton(f"  💾 {tr('save_settings')}  ")
         save_btn.setObjectName("success")
         save_btn.setFixedHeight(40)
         save_btn.clicked.connect(self._save_settings)
@@ -492,7 +493,8 @@ class SettingsPage(QWidget):
         new_lang = self.lang_combo.currentData()
         old_lang = self.config.get("language", "en")
         self.config.set("language", new_lang)
-        if new_lang != old_lang:
+        lang_changed = (new_lang != old_lang and self.lang_enabled_cb.isChecked())
+        if lang_changed:
             self.language_changed.emit(new_lang)
 
         # Default Python
@@ -512,6 +514,18 @@ class SettingsPage(QWidget):
 
         self.settings_saved.emit()
         QMessageBox.information(self, "Settings", "Settings saved successfully! ✅")
+
+        if lang_changed:
+            reply = QMessageBox.question(
+                self, "Restart Required",
+                "Language changed. VenvStudio needs to restart.\n\nRestart now?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply == QMessageBox.Yes:
+                import sys, os
+                from PySide6.QtWidgets import QApplication
+                QApplication.quit()
+                os.execv(sys.executable, [sys.executable] + sys.argv)
 
     def _reset_all(self):
         """Reset all settings to defaults."""

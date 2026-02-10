@@ -92,6 +92,39 @@ class EnvDetailWorker(QThread):
         self.all_done.emit()
 
 
+class DeleteWorker(QThread):
+    """Worker thread for deleting environments with progress."""
+    progress = Signal(str)
+    finished = Signal(bool, str)
+
+    def __init__(self, venv_manager, name):
+        super().__init__()
+        self.venv_manager = venv_manager
+        self.name = name
+
+    def run(self):
+        success, msg = self.venv_manager.delete_venv(self.name, callback=self.progress.emit)
+        self.finished.emit(success, msg)
+
+
+class RenameWorker(QThread):
+    """Worker thread for renaming environments (clone+delete) with progress."""
+    progress = Signal(str)
+    finished = Signal(bool, str)
+
+    def __init__(self, venv_manager, old_name, new_name):
+        super().__init__()
+        self.venv_manager = venv_manager
+        self.old_name = old_name
+        self.new_name = new_name
+
+    def run(self):
+        success, msg = self.venv_manager.rename_venv(
+            self.old_name, self.new_name, callback=self.progress.emit
+        )
+        self.finished.emit(success, msg)
+
+
 class MainWindow(QMainWindow):
     """Main application window."""
 
@@ -204,6 +237,7 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         self.stack.addWidget(self._create_env_page())       # Page 0
         self.package_panel = PackagePanel()
+        self.package_panel.env_refresh_requested.connect(self._refresh_env_list)
         self.stack.addWidget(self.package_panel)             # Page 1
 
         # Settings page
@@ -397,7 +431,7 @@ class MainWindow(QMainWindow):
             return
         new_name, ok = QInputDialog.getText(
             self, "Rename Environment",
-            f"Enter new name for '{name}':",
+            f"Enter new name for '{name}':\n\n(This will create a new environment with the same packages\nand remove the old one.)",
             text=name,
         )
         if not ok or not new_name.strip() or new_name.strip() == name:
@@ -409,13 +443,29 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Warning", "Name contains invalid characters.")
             return
 
-        success, msg = self.venv_manager.rename_venv(name, new_name)
+        self.rename_progress = QProgressDialog(
+            f"Renaming '{name}' → '{new_name}'...", "Cancel", 0, 0, self
+        )
+        self.rename_progress.setWindowTitle("Renaming Environment")
+        self.rename_progress.setMinimumWidth(400)
+        self.rename_progress.setWindowModality(Qt.WindowModal)
+        self.rename_progress.show()
+
+        self._rename_worker = RenameWorker(self.venv_manager, name, new_name)
+        self._rename_worker.progress.connect(
+            lambda msg: self.rename_progress.setLabelText(f"⏳ {msg}")
+        )
+        self._rename_worker.finished.connect(self._on_rename_finished)
+        self._rename_worker.start()
+
+    def _on_rename_finished(self, success, message):
+        self.rename_progress.close()
         if success:
             self._refresh_env_list()
-            self.statusBar().showMessage(msg)
-            QMessageBox.information(self, "Success", msg)
+            self.statusBar().showMessage(message)
+            QMessageBox.information(self, "Success", message)
         else:
-            QMessageBox.critical(self, "Error", msg)
+            QMessageBox.critical(self, "Error", message)
 
     def _delete_env(self):
         name = self._get_selected_env_name()
@@ -427,12 +477,29 @@ class MainWindow(QMainWindow):
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
         )
         if reply == QMessageBox.Yes:
-            success, msg = self.venv_manager.delete_venv(name)
-            if success:
-                self._refresh_env_list()
-                self.statusBar().showMessage(msg)
-            else:
-                QMessageBox.critical(self, "Error", msg)
+            self.delete_progress = QProgressDialog(
+                f"Deleting '{name}'...", None, 0, 0, self
+            )
+            self.delete_progress.setWindowTitle("Deleting Environment")
+            self.delete_progress.setMinimumWidth(350)
+            self.delete_progress.setWindowModality(Qt.WindowModal)
+            self.delete_progress.setCancelButton(None)
+            self.delete_progress.show()
+
+            self._delete_worker = DeleteWorker(self.venv_manager, name)
+            self._delete_worker.progress.connect(
+                lambda msg: self.delete_progress.setLabelText(f"⏳ {msg}")
+            )
+            self._delete_worker.finished.connect(self._on_delete_finished)
+            self._delete_worker.start()
+
+    def _on_delete_finished(self, success, message):
+        self.delete_progress.close()
+        if success:
+            self._refresh_env_list()
+            self.statusBar().showMessage(message)
+        else:
+            QMessageBox.critical(self, "Error", message)
 
     def _clone_env(self):
         source = self._get_selected_env_name()

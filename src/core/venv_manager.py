@@ -134,7 +134,7 @@ class VenvManager:
                 shutil.rmtree(venv_path, ignore_errors=True)
             return False, f"Error creating environment: {str(e)}"
 
-    def delete_venv(self, name: str) -> tuple[bool, str]:
+    def delete_venv(self, name: str, callback=None) -> tuple[bool, str]:
         """Delete a virtual environment."""
         venv_path = self.base_dir / name
 
@@ -142,6 +142,8 @@ class VenvManager:
             return False, f"Environment '{name}' not found"
 
         try:
+            if callback:
+                callback(f"Deleting '{name}'...")
             shutil.rmtree(venv_path)
             return True, f"Environment '{name}' deleted successfully"
         except Exception as e:
@@ -316,83 +318,80 @@ class VenvManager:
         except Exception as e:
             return False, f"Error cloning environment: {str(e)}"
 
-    def rename_venv(self, old_name: str, new_name: str) -> tuple[bool, str]:
-        """Rename an environment - renames directory and updates internal paths."""
-        import shutil
+    def rename_venv(self, old_name: str, new_name: str, callback=None) -> tuple[bool, str]:
+        """Rename environment via clone + delete for reliable pip support."""
         old_path = self.base_dir / old_name
         new_path = self.base_dir / new_name
 
         if not old_path.exists():
-            return False, f"Environment '{old_name}' not found at:\n{old_path}"
+            return False, f"Environment '{old_name}' not found"
         if new_path.exists():
-            return False, f"Environment '{new_name}' already exists at:\n{new_path}"
+            return False, f"Environment '{new_name}' already exists"
 
         try:
-            # 1. Rename directory
-            shutil.move(str(old_path), str(new_path))
+            if callback:
+                callback(f"Getting packages from '{old_name}'...")
 
-            # 2. Update pyvenv.cfg if it references old path
-            cfg_file = new_path / "pyvenv.cfg"
-            if cfg_file.exists():
+            # 1. Freeze packages from old env
+            pip_exe = get_pip_executable(old_path)
+            requirements = ""
+            if pip_exe.exists():
+                result = subprocess.run(
+                    [str(pip_exe), "freeze"],
+                    capture_output=True, text=True, timeout=15,
+                )
+                requirements = result.stdout
+
+            # 2. Create new env
+            if callback:
+                callback(f"Creating '{new_name}'...")
+            success, msg = self.create_venv(new_name, callback=callback)
+            if not success:
+                return False, msg
+
+            # 3. Install packages into new env
+            if requirements.strip():
+                req_file = new_path / "_rename_requirements.txt"
+                with open(req_file, "w") as f:
+                    f.write(requirements)
+
+                target_pip = get_pip_executable(new_path)
+                if callback:
+                    callback(f"Installing packages into '{new_name}'...")
+
+                result = subprocess.run(
+                    [str(target_pip), "install", "-r", str(req_file)],
+                    capture_output=True, text=True, timeout=300,
+                )
+                req_file.unlink(missing_ok=True)
+
+                if result.returncode != 0:
+                    # New env created but packages failed — keep both, warn user
+                    return False, (
+                        f"Created '{new_name}' but failed to install some packages.\n"
+                        f"Original '{old_name}' preserved.\n{result.stderr[:300]}"
+                    )
+
+            # 4. Copy metadata
+            old_meta = old_path / ".venvstudio_meta.json"
+            new_meta = new_path / ".venvstudio_meta.json"
+            if old_meta.exists():
                 try:
-                    text = cfg_file.read_text(encoding="utf-8")
-                    text = text.replace(str(old_path), str(new_path))
-                    cfg_file.write_text(text, encoding="utf-8")
-                except Exception:
-                    pass
-
-            # 3. Update activation scripts with new path
-            self._update_activate_scripts(new_path, old_name, new_name, old_path, new_path)
-
-            # 4. Update meta file
-            meta_file = new_path / ".venvstudio_meta.json"
-            if meta_file.exists():
-                try:
-                    with open(meta_file) as f:
+                    with open(old_meta) as f:
                         meta = json.load(f)
                     meta["name"] = new_name
-                    with open(meta_file, "w") as f:
+                    meta["renamed_from"] = old_name
+                    with open(new_meta, "w") as f:
                         json.dump(meta, f, indent=2)
                 except Exception:
                     pass
 
+            # 5. Delete old env
+            if callback:
+                callback(f"Removing old '{old_name}'...")
+            shutil.rmtree(old_path, ignore_errors=True)
+
             return True, f"Environment '{old_name}' renamed to '{new_name}'"
-        except PermissionError:
-            return False, f"Cannot rename: folder is locked.\nClose any terminals using this environment and try again."
+
         except Exception as e:
             return False, f"Error renaming environment: {str(e)}"
-
-    def _update_activate_scripts(self, venv_path, old_name, new_name, old_full, new_full):
-        """Update activate scripts to reflect new environment name and path."""
-        system = sys.platform
-
-        # Windows scripts
-        scripts_dir = venv_path / "Scripts"
-        if scripts_dir.exists():
-            for script_name in ["activate", "activate.bat", "Activate.ps1"]:
-                script_file = scripts_dir / script_name
-                if script_file.exists():
-                    try:
-                        text = script_file.read_text(encoding="utf-8")
-                        text = text.replace(str(old_full), str(new_full))
-                        text = text.replace(f'"{old_name}"', f'"{new_name}"')
-                        text = text.replace(f"({old_name})", f"({new_name})")
-                        text = text.replace(f"VIRTUAL_ENV={old_name}", f"VIRTUAL_ENV={new_name}")
-                        script_file.write_text(text, encoding="utf-8")
-                    except Exception:
-                        pass
-
-        # Unix scripts
-        bin_dir = venv_path / "bin"
-        if bin_dir.exists():
-            for script_name in ["activate", "activate.csh", "activate.fish"]:
-                script_file = bin_dir / script_name
-                if script_file.exists():
-                    try:
-                        text = script_file.read_text(encoding="utf-8")
-                        text = text.replace(str(old_full), str(new_full))
-                        text = text.replace(f'"{old_name}"', f'"{new_name}"')
-                        text = text.replace(f"({old_name})", f"({new_name})")
-                        script_file.write_text(text, encoding="utf-8")
-                    except Exception:
-                        pass

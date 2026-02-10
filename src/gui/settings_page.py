@@ -218,23 +218,41 @@ class SettingsPage(QWidget):
 
         # ── 5. GENERAL ──
         general_group = QGroupBox("⚙️ General")
-        general_layout = QVBoxLayout()
+        general_layout = QFormLayout()
         general_layout.setSpacing(10)
 
         self.auto_pip_cb = QCheckBox("Auto-upgrade pip when creating new environments")
-        general_layout.addWidget(self.auto_pip_cb)
+        general_layout.addRow(self.auto_pip_cb)
 
         self.confirm_delete_cb = QCheckBox("Ask for confirmation before deleting environments")
-        general_layout.addWidget(self.confirm_delete_cb)
+        general_layout.addRow(self.confirm_delete_cb)
 
         self.show_hidden_cb = QCheckBox("Show hidden/system packages in package list")
-        general_layout.addWidget(self.show_hidden_cb)
+        general_layout.addRow(self.show_hidden_cb)
 
         self.check_updates_cb = QCheckBox("Check for VenvStudio updates on startup")
-        general_layout.addWidget(self.check_updates_cb)
+        general_layout.addRow(self.check_updates_cb)
 
         self.save_window_cb = QCheckBox("Remember window size and position")
-        general_layout.addWidget(self.save_window_cb)
+        general_layout.addRow(self.save_window_cb)
+
+        # Default terminal
+        self.terminal_combo = QComboBox()
+        platform = get_platform()
+        if platform == "windows":
+            self.terminal_combo.addItem("PowerShell", "powershell")
+            self.terminal_combo.addItem("CMD", "cmd")
+            self.terminal_combo.addItem("Windows Terminal", "wt")
+            self.terminal_combo.addItem("Git Bash", "git-bash")
+        elif platform == "macos":
+            self.terminal_combo.addItem("Terminal", "terminal")
+            self.terminal_combo.addItem("iTerm2", "iterm2")
+        else:
+            self.terminal_combo.addItem("System Default", "default")
+            self.terminal_combo.addItem("GNOME Terminal", "gnome-terminal")
+            self.terminal_combo.addItem("Konsole", "konsole")
+            self.terminal_combo.addItem("xterm", "xterm")
+        general_layout.addRow("Default Terminal:", self.terminal_combo)
 
         general_group.setLayout(general_layout)
         layout.addWidget(general_group)
@@ -324,6 +342,12 @@ class SettingsPage(QWidget):
         self.show_hidden_cb.setChecked(self.config.get("show_hidden_packages", False))
         self.check_updates_cb.setChecked(self.config.get("check_updates", False))
         self.save_window_cb.setChecked(self.config.get("save_window_geometry", True))
+
+        # Terminal
+        terminal = self.config.get("default_terminal", "")
+        idx = self.terminal_combo.findData(terminal)
+        if idx >= 0:
+            self.terminal_combo.setCurrentIndex(idx)
 
         # Scan pythons
         self._scan_pythons()
@@ -474,6 +498,7 @@ class SettingsPage(QWidget):
         self.config.set("show_hidden_packages", self.show_hidden_cb.isChecked())
         self.config.set("check_updates", self.check_updates_cb.isChecked())
         self.config.set("save_window_geometry", self.save_window_cb.isChecked())
+        self.config.set("default_terminal", self.terminal_combo.currentData())
 
         self.settings_saved.emit()
         QMessageBox.information(self, "Settings", "Settings saved successfully! ✅")

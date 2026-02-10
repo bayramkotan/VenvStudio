@@ -3,44 +3,75 @@ VenvStudio - Constants and Popular Package Catalog
 """
 
 APP_NAME = "VenvStudio"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.1.0"
 APP_DESCRIPTION = "Lightweight Python Virtual Environment Manager"
 APP_AUTHOR = "VenvStudio Team"
 
-# Popular packages organized by category
 PACKAGE_CATALOG = {
-    "🔬 Data Science": {
+    "🔬 Data Exploration & Transformation": {
         "icon": "🔬",
         "packages": [
             {"name": "numpy", "desc": "Fundamental package for numerical computing"},
             {"name": "pandas", "desc": "Data analysis and manipulation library"},
             {"name": "scipy", "desc": "Scientific computing and technical computing"},
-            {"name": "matplotlib", "desc": "2D plotting and visualization"},
-            {"name": "seaborn", "desc": "Statistical data visualization"},
-            {"name": "plotly", "desc": "Interactive graphing library"},
-            {"name": "scikit-learn", "desc": "Machine learning algorithms"},
+            {"name": "jupyter", "desc": "Interactive notebooks for data exploration"},
+            {"name": "intake", "desc": "Data catalog and loading library"},
+            {"name": "dask", "desc": "Parallel computing with task scheduling"},
+            {"name": "polars", "desc": "Fast DataFrame library written in Rust"},
             {"name": "statsmodels", "desc": "Statistical modeling and econometrics"},
             {"name": "sympy", "desc": "Symbolic mathematics"},
         ],
     },
-    "🤖 Machine Learning & AI": {
+    "📊 Visualization": {
+        "icon": "📊",
+        "packages": [
+            {"name": "matplotlib", "desc": "2D plotting and visualization"},
+            {"name": "seaborn", "desc": "Statistical data visualization"},
+            {"name": "plotly", "desc": "Interactive graphing library"},
+            {"name": "bokeh", "desc": "Interactive visualization for modern browsers"},
+            {"name": "holoviews", "desc": "Declarative data visualization"},
+            {"name": "altair", "desc": "Declarative statistical visualization"},
+            {"name": "dash", "desc": "Web-based analytical dashboards"},
+        ],
+    },
+    "🤖 AI & Machine Learning": {
         "icon": "🤖",
         "packages": [
+            {"name": "scikit-learn", "desc": "Machine learning algorithms"},
             {"name": "tensorflow", "desc": "Google's ML framework"},
-            {"name": "torch", "desc": "PyTorch - Facebook's ML framework"},
             {"name": "keras", "desc": "High-level neural networks API"},
+            {"name": "torch", "desc": "PyTorch - Facebook's ML framework"},
             {"name": "xgboost", "desc": "Gradient boosting framework"},
             {"name": "lightgbm", "desc": "Light gradient boosting machine"},
-            {"name": "transformers", "desc": "Hugging Face transformer models"},
             {"name": "opencv-python", "desc": "Computer vision library"},
+            {"name": "onnx", "desc": "Open Neural Network Exchange format"},
+        ],
+    },
+    "📝 Natural Language Processing": {
+        "icon": "📝",
+        "packages": [
             {"name": "nltk", "desc": "Natural language toolkit"},
+            {"name": "gensim", "desc": "Topic modeling and document similarity"},
+            {"name": "transformers", "desc": "Hugging Face transformer models"},
             {"name": "spacy", "desc": "Industrial-strength NLP"},
+            {"name": "textblob", "desc": "Simple NLP tasks"},
+            {"name": "sentence-transformers", "desc": "Sentence embeddings"},
+        ],
+    },
+    "🖥️ GUI & Frontend": {
+        "icon": "🖥️",
+        "packages": [
+            {"name": "flask", "desc": "Lightweight WSGI web framework"},
+            {"name": "cherrypy", "desc": "Minimalist Python web framework"},
+            {"name": "streamlit", "desc": "Create data apps in minutes"},
+            {"name": "panel", "desc": "High-level app and dashboarding solution"},
+            {"name": "gradio", "desc": "Build ML demos quickly"},
+            {"name": "PySide6", "desc": "Qt for Python - GUI toolkit"},
         ],
     },
     "🌐 Web Development": {
         "icon": "🌐",
         "packages": [
-            {"name": "flask", "desc": "Lightweight WSGI web framework"},
             {"name": "django", "desc": "High-level Python web framework"},
             {"name": "fastapi", "desc": "Modern, fast web framework for APIs"},
             {"name": "uvicorn", "desc": "ASGI web server implementation"},
@@ -75,7 +106,6 @@ PACKAGE_CATALOG = {
             {"name": "pre-commit", "desc": "Git pre-commit hooks"},
             {"name": "tox", "desc": "Test automation"},
             {"name": "ipython", "desc": "Enhanced interactive Python"},
-            {"name": "jupyter", "desc": "Jupyter notebook"},
         ],
     },
     "☁️ Cloud & DevOps": {
@@ -87,7 +117,6 @@ PACKAGE_CATALOG = {
             {"name": "docker", "desc": "Docker SDK for Python"},
             {"name": "fabric", "desc": "Remote execution and deployment"},
             {"name": "paramiko", "desc": "SSH2 protocol library"},
-            {"name": "ansible-core", "desc": "IT automation platform"},
         ],
     },
     "📦 Utilities": {
@@ -102,7 +131,6 @@ PACKAGE_CATALOG = {
             {"name": "tqdm", "desc": "Progress bar library"},
             {"name": "pillow", "desc": "Image processing library"},
             {"name": "pyyaml", "desc": "YAML parser and emitter"},
-            {"name": "toml", "desc": "TOML file parser"},
         ],
     },
     "🔒 Security & Networking": {
@@ -112,13 +140,22 @@ PACKAGE_CATALOG = {
             {"name": "pyjwt", "desc": "JSON Web Token implementation"},
             {"name": "bcrypt", "desc": "Password hashing"},
             {"name": "scapy", "desc": "Packet manipulation library"},
-            {"name": "paramiko", "desc": "SSH protocol implementation"},
             {"name": "python-nmap", "desc": "Nmap port scanner interface"},
+        ],
+    },
+    "🧪 IDE & Tools": {
+        "icon": "🧪",
+        "packages": [
+            {"name": "spyder-kernels", "desc": "Spyder IDE kernel support"},
+            {"name": "jupyterlab", "desc": "JupyterLab - next-gen notebook interface"},
+            {"name": "notebook", "desc": "Jupyter Notebook classic"},
+            {"name": "orange3", "desc": "Orange - visual programming for data mining"},
+            {"name": "voila", "desc": "Turn notebooks into standalone web apps"},
+            {"name": "ipywidgets", "desc": "Interactive widgets for Jupyter"},
         ],
     },
 }
 
-# Quick-install presets
 PRESETS = {
     "📊 Data Science Starter": ["numpy", "pandas", "matplotlib", "scikit-learn", "jupyter"],
     "🌐 Web API (FastAPI)": ["fastapi", "uvicorn", "sqlalchemy", "pydantic", "python-dotenv"],
@@ -128,4 +165,19 @@ PRESETS = {
     "🧪 Testing Suite": ["pytest", "pytest-cov", "pytest-asyncio", "factory-boy", "faker"],
     "🛠️ Dev Essentials": ["black", "flake8", "mypy", "isort", "pre-commit", "pytest"],
     "🔬 NLP Toolkit": ["transformers", "nltk", "spacy", "pandas", "numpy"],
+    "🖥️ GUI Development": ["PySide6", "pyinstaller"],
+    "📊 Visualization Suite": ["matplotlib", "seaborn", "plotly", "bokeh", "altair"],
+    "🧪 JupyterLab Full": ["jupyterlab", "ipywidgets", "numpy", "pandas", "matplotlib"],
+}
+
+COMMAND_HINTS = {
+    "install": "pip install {packages}",
+    "uninstall": "pip uninstall -y {packages}",
+    "list": "pip list --format=json",
+    "freeze": "pip freeze > requirements.txt",
+    "import_req": "pip install -r requirements.txt",
+    "create_venv": "python -m venv {name}",
+    "activate_win": r"{path}\Scripts\Activate.ps1",
+    "activate_unix": "source {path}/bin/activate",
+    "clone": "pip freeze > req.txt && python -m venv {target} && pip install -r req.txt",
 }

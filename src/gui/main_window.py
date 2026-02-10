@@ -143,9 +143,24 @@ class MainWindow(QMainWindow):
     def _setup_window(self):
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
         width = self.config.get("window_width", 1100)
-        height = self.config.get("window_height", 750)
+        height = self.config.get("window_height", 700)
+
+        # Clamp to screen size
+        screen = QApplication.primaryScreen()
+        if screen:
+            avail = screen.availableGeometry()
+            width = min(width, avail.width() - 80)
+            height = min(height, avail.height() - 80)
+
         self.resize(width, height)
         self.setMinimumSize(900, 600)
+
+        # Center on screen
+        if screen:
+            avail = screen.availableGeometry()
+            x = avail.x() + (avail.width() - width) // 2
+            y = avail.y() + (avail.height() - height) // 2
+            self.move(x, y)
 
     def _setup_menubar(self):
         menubar = self.menuBar()
@@ -381,6 +396,10 @@ class MainWindow(QMainWindow):
 
         self._update_info_label_fast(len(envs))
 
+        # Update package panel env dropdown
+        env_list = [(e.name, self.venv_manager.base_dir / e.name) for e in envs]
+        self.package_panel.populate_env_list(env_list)
+
         if not envs:
             self.loading_label.setVisible(False)
             self.statusBar().showMessage("No environments found")
@@ -580,7 +599,8 @@ class MainWindow(QMainWindow):
         if not name:
             return
         venv_path = self.venv_manager.base_dir / name
-        open_terminal_at(venv_path)
+        terminal_type = self.config.get("default_terminal", "")
+        open_terminal_at(venv_path, terminal_type)
         self.statusBar().showMessage(f"Opened terminal for '{name}'")
 
     def _open_settings(self):

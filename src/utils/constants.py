@@ -168,6 +168,10 @@ PRESETS = {
     "🖥️ GUI Development": ["PySide6", "pyinstaller"],
     "📊 Visualization Suite": ["matplotlib", "seaborn", "plotly", "bokeh", "altair"],
     "🧪 JupyterLab Full": ["jupyterlab", "ipywidgets", "numpy", "pandas", "matplotlib"],
+    "📈 Time Series (Classic)": ["statsmodels", "pmdarima", "prophet", "sktime", "tsfresh", "pandas", "numpy"],
+    "📈 Time Series (Deep Learning)": ["pytorch-forecasting", "darts", "neuralforecast", "gluonts", "transformers", "torch"],
+    "💰 Financial Analysis": ["yfinance", "quantlib", "zipline-reloaded", "pyfolio", "ta-lib", "pandas", "numpy"],
+    "💰 Financial LLM": ["transformers", "datasets", "peft", "bitsandbytes", "accelerate", "sentencepiece", "pandas"],
 }
 
 COMMAND_HINTS = {

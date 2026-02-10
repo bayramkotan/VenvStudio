@@ -74,6 +74,7 @@ class SettingsPage(QWidget):
 
         # Theme
         self.theme_combo = QComboBox()
+        self.theme_combo.setFocusPolicy(Qt.StrongFocus)
         self.theme_combo.addItem("🌙 Dark", "dark")
         self.theme_combo.addItem("☀️ Light", "light")
         appearance_layout.addRow("Theme:", self.theme_combo)
@@ -177,6 +178,7 @@ class SettingsPage(QWidget):
         default_py_label = QLabel("Default Python for new environments:")
         default_py_layout.addWidget(default_py_label)
         self.default_python_combo = QComboBox()
+        self.default_python_combo.setFocusPolicy(Qt.StrongFocus)
         self.default_python_combo.addItem("System Default", "")
         default_py_layout.addWidget(self.default_python_combo, 1)
         python_layout.addLayout(default_py_layout)
@@ -238,6 +240,7 @@ class SettingsPage(QWidget):
 
         # Default terminal
         self.terminal_combo = QComboBox()
+        self.terminal_combo.setFocusPolicy(Qt.StrongFocus)
         platform = get_platform()
         if platform == "windows":
             self.terminal_combo.addItem("PowerShell", "powershell")
@@ -354,6 +357,7 @@ class SettingsPage(QWidget):
 
     def _scan_pythons(self):
         """Scan system for Python installations."""
+        import os
         self.python_table.setRowCount(0)
         self.default_python_combo.clear()
         self.default_python_combo.addItem("System Default", "")
@@ -361,27 +365,29 @@ class SettingsPage(QWidget):
         # System pythons
         system_pythons = find_system_pythons()
         for version, path in system_pythons:
+            norm_path = os.path.normpath(path)
             row = self.python_table.rowCount()
             self.python_table.insertRow(row)
             self.python_table.setItem(row, 0, QTableWidgetItem(version))
-            self.python_table.setItem(row, 1, QTableWidgetItem(path))
+            self.python_table.setItem(row, 1, QTableWidgetItem(norm_path))
             self.python_table.setItem(row, 2, QTableWidgetItem("System"))
-            self.default_python_combo.addItem(f"Python {version}", path)
+            self.default_python_combo.addItem(f"Python {version}", norm_path)
 
         # Custom pythons from config
         custom_pythons = self.config.get("custom_pythons", [])
         for entry in custom_pythons:
+            norm_path = os.path.normpath(entry.get("path", ""))
             row = self.python_table.rowCount()
             self.python_table.insertRow(row)
             self.python_table.setItem(row, 0, QTableWidgetItem(entry.get("version", "?")))
-            self.python_table.setItem(row, 1, QTableWidgetItem(entry.get("path", "")))
+            self.python_table.setItem(row, 1, QTableWidgetItem(norm_path))
 
             source_item = QTableWidgetItem("Custom")
             source_item.setForeground(Qt.cyan)
             self.python_table.setItem(row, 2, source_item)
 
             self.default_python_combo.addItem(
-                f"Python {entry.get('version', '?')} (Custom)", entry.get("path", "")
+                f"Python {entry.get('version', '?')} (Custom)", norm_path
             )
 
         # Set default python selection
@@ -403,6 +409,10 @@ class SettingsPage(QWidget):
         if not filepath:
             return
 
+        # Normalize path for current OS
+        import os
+        filepath = os.path.normpath(filepath)
+
         # Verify it's a valid Python
         import subprocess
         try:
@@ -419,7 +429,7 @@ class SettingsPage(QWidget):
         custom_pythons = self.config.get("custom_pythons", [])
         # Check duplicate
         for entry in custom_pythons:
-            if entry.get("path") == filepath:
+            if os.path.normpath(entry.get("path", "")) == filepath:
                 QMessageBox.information(self, "Info", "This Python path is already added.")
                 return
 

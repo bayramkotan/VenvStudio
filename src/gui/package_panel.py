@@ -101,7 +101,7 @@ class PackagePanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Environment indicator at top
+        # Environment selector at top
         self.env_bar = QFrame()
         self.env_bar.setFixedHeight(44)
         self.env_bar.setStyleSheet(
@@ -111,9 +111,16 @@ class PackagePanel(QWidget):
         env_bar_layout = QHBoxLayout(self.env_bar)
         env_bar_layout.setContentsMargins(16, 0, 16, 0)
 
-        self.env_name_label = QLabel("No environment selected")
-        self.env_name_label.setStyleSheet("font-weight: bold; font-size: 13px;")
-        env_bar_layout.addWidget(self.env_name_label)
+        env_lbl = QLabel("🐍 Environment:")
+        env_lbl.setStyleSheet("font-weight: bold; font-size: 13px;")
+        env_bar_layout.addWidget(env_lbl)
+
+        self.env_selector = QComboBox()
+        self.env_selector.setMinimumWidth(200)
+        self.env_selector.addItem("-- Select Environment --", "")
+        self.env_selector.currentIndexChanged.connect(self._on_env_selector_changed)
+        env_bar_layout.addWidget(self.env_selector, 1)
+
         env_bar_layout.addStretch()
 
         self.env_pkg_count = QLabel("")
@@ -226,12 +233,18 @@ class PackagePanel(QWidget):
             self.category_combo.addItem(cat_name, cat_name)
         self.category_combo.currentIndexChanged.connect(self._populate_catalog)
         cat_layout.addWidget(self.category_combo, 1)
-        cat_layout.addStretch()
+
+        self.catalog_search = QLineEdit()
+        self.catalog_search.setPlaceholderText("🔍 Search catalog...")
+        self.catalog_search.setFixedWidth(200)
+        self.catalog_search.textChanged.connect(self._filter_catalog)
+        cat_layout.addWidget(self.catalog_search)
+
+        layout.addLayout(cat_layout)
 
         legend = QLabel("☑ installed  |  Check→install  Uncheck→remove")
         legend.setStyleSheet("color: #a6adc8; font-size: 11px;")
-        cat_layout.addWidget(legend)
-        layout.addLayout(cat_layout)
+        layout.addWidget(legend)
 
         self.catalog_table = QTableWidget()
         self.catalog_table.setColumnCount(4)
@@ -351,9 +364,45 @@ class PackagePanel(QWidget):
 
     def set_venv(self, venv_path: Path):
         self.pip_manager = PipManager(venv_path)
-        self.env_name_label.setText(f"🐍 Environment: {venv_path.name}")
+        # Select in dropdown
+        name = venv_path.name
+        idx = self.env_selector.findData(str(venv_path))
+        if idx < 0:
+            # Add it if not already
+            self.env_selector.addItem(name, str(venv_path))
+            idx = self.env_selector.count() - 1
+        self.env_selector.blockSignals(True)
+        self.env_selector.setCurrentIndex(idx)
+        self.env_selector.blockSignals(False)
         self.refresh_packages()
-        self.status_label.setText(f"Environment: {venv_path.name}")
+        self.status_label.setText(f"Environment: {name}")
+
+    def populate_env_list(self, env_list):
+        """Populate the environment dropdown from main window."""
+        self.env_selector.blockSignals(True)
+        current_data = self.env_selector.currentData()
+        self.env_selector.clear()
+        self.env_selector.addItem("-- Select Environment --", "")
+        for name, path in env_list:
+            self.env_selector.addItem(name, str(path))
+        # Restore selection
+        if current_data:
+            idx = self.env_selector.findData(current_data)
+            if idx >= 0:
+                self.env_selector.setCurrentIndex(idx)
+        self.env_selector.blockSignals(False)
+
+    def _on_env_selector_changed(self, index):
+        """Handle env dropdown change."""
+        path_str = self.env_selector.currentData()
+        if path_str:
+            self.pip_manager = PipManager(Path(path_str))
+            self.refresh_packages()
+            self.status_label.setText(f"Environment: {self.env_selector.currentText()}")
+        else:
+            self.pip_manager = None
+            self.packages_table.setRowCount(0)
+            self.env_pkg_count.setText("")
 
     def refresh_packages(self):
         """Refresh installed packages list - shows ALL packages."""
@@ -668,12 +717,20 @@ class PackagePanel(QWidget):
         if success:
             self.status_label.setText("Operation completed successfully")
             self.refresh_packages()
-            # Signal main window to also refresh env list (package counts changed)
             self.env_refresh_requested.emit()
         else:
             self.status_label.setText("Operation failed")
             if "cancelled" not in message.lower():
-                QMessageBox.critical(self, "Error", message[:500])
+                # Friendly error for not-found packages
+                if "no matching distribution" in message.lower() or "could not find" in message.lower():
+                    QMessageBox.warning(
+                        self, "Package Not Found",
+                        "One or more packages could not be found on PyPI.\n\n"
+                        "Please check the package names and try again.\n"
+                        "You can search at: https://pypi.org"
+                    )
+                else:
+                    QMessageBox.critical(self, "Error", message[:500])
 
     def _cancel_operation(self):
         if self.current_worker and self.current_worker.isRunning():
@@ -690,6 +747,17 @@ class PackagePanel(QWidget):
                 self._set_busy(False)
                 self.status_label.setText("⛔ Operation cancelled")
                 self.output_log.append("\n⛔ Operation cancelled by user")
+
+    def _filter_catalog(self, text: str):
+        """Filter catalog rows by search text."""
+        for row in range(self.catalog_table.rowCount()):
+            name_item = self.catalog_table.item(row, 1)
+            desc_item = self.catalog_table.item(row, 2)
+            if name_item:
+                match = text.lower() in name_item.text().lower()
+                if desc_item:
+                    match = match or text.lower() in desc_item.text().lower()
+                self.catalog_table.setRowHidden(row, not match)
 
     def _set_busy(self, busy: bool):
         self.progress_bar.setVisible(busy)

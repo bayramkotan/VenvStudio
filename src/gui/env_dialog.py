@@ -93,16 +93,17 @@ class EnvCreateDialog(QDialog):
 
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("e.g., my-project, data-science, web-api")
+        self.name_input.returnPressed.connect(self._create)
         form_layout.addRow("Name:", self.name_input)
 
         loc_layout = QHBoxLayout()
         self.location_label = QLabel(str(self.config.get_venv_base_dir()))
         self.location_label.setStyleSheet("color: #a6adc8; font-size: 12px;")
         loc_layout.addWidget(self.location_label, 1)
-        change_btn = QPushButton("📂")
+        change_btn = QPushButton("...")
         change_btn.setObjectName("secondary")
-        change_btn.setFixedWidth(40)
-        change_btn.setFixedHeight(30)
+        change_btn.setFixedWidth(36)
+        change_btn.setFixedHeight(28)
         change_btn.setToolTip("Browse for a different folder")
         change_btn.clicked.connect(self._change_location)
         loc_layout.addWidget(change_btn)
@@ -111,7 +112,25 @@ class EnvCreateDialog(QDialog):
         self.python_combo = QComboBox()
         self.python_combo.addItem("System Default", "")
         for version, path in self.pythons:
-            self.python_combo.addItem(f"Python {version} ({path})", path)
+            import os
+            norm = os.path.normpath(path)
+            self.python_combo.addItem(f"Python {version} ({norm})", norm)
+
+        # Also add custom pythons from config
+        custom_pythons = self.config.get("custom_pythons", [])
+        for entry in custom_pythons:
+            import os
+            norm = os.path.normpath(entry.get("path", ""))
+            ver = entry.get("version", "?")
+            # Avoid duplicate
+            found = False
+            for i in range(self.python_combo.count()):
+                if self.python_combo.itemData(i) == norm:
+                    found = True
+                    break
+            if not found:
+                self.python_combo.addItem(f"Python {ver} (Custom: {norm})", norm)
+
         form_layout.addRow("Python:", self.python_combo)
 
         form_group.setLayout(form_layout)

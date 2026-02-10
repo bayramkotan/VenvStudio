@@ -117,29 +117,75 @@ def find_system_pythons() -> List[Tuple[str, str]]:
     return pythons
 
 
-def open_terminal_at(path: Path) -> None:
+def open_terminal_at(path: Path, terminal_type: str = "") -> None:
     """Open a terminal/console at the given path with the venv activated."""
     system = get_platform()
-    activate = get_activate_command(path)
 
     try:
         if system == "windows":
-            subprocess.Popen(
-                f'start cmd /k "{activate}"',
-                shell=True, cwd=str(path)
-            )
+            activate_bat = path / "Scripts" / "activate.bat"
+            activate_ps1 = path / "Scripts" / "Activate.ps1"
+
+            if terminal_type == "cmd":
+                cmd = f'start cmd /k "cd /d {path} && {activate_bat}"'
+            elif terminal_type == "wt":
+                cmd = f'start wt -d "{path}" cmd /k "{activate_bat}"'
+            elif terminal_type == "git-bash":
+                git_bash = shutil.which("bash")
+                if git_bash:
+                    activate_sh = path / "Scripts" / "activate"
+                    cmd = f'start "" "{git_bash}" --login -c "cd \'{path}\' && source \'{activate_sh}\' && exec bash"'
+                else:
+                    cmd = f'start cmd /k "cd /d {path} && {activate_bat}"'
+            else:
+                # Default: PowerShell
+                if activate_ps1.exists():
+                    cmd = (
+                        f'start powershell -NoExit -Command "'
+                        f'Set-Location \'{path}\'; '
+                        f'& \'{activate_ps1}\'"'
+                    )
+                else:
+                    cmd = f'start cmd /k "cd /d {path} && {activate_bat}"'
+
+            subprocess.Popen(cmd, shell=True)
+
         elif system == "macos":
-            script = f'tell application "Terminal" to do script "cd {path} && {activate}"'
+            activate = path / "bin" / "activate"
+            if terminal_type == "iterm2":
+                script = (
+                    f'tell application "iTerm" to create window with default profile '
+                    f'command "cd \'{path}\' && source \'{activate}\'"'
+                )
+            else:
+                script = (
+                    f'tell application "Terminal" to do script '
+                    f'"cd \'{path}\' && source \'{activate}\'"'
+                )
             subprocess.Popen(["osascript", "-e", script])
+
         else:  # linux
-            terminals = ["gnome-terminal", "konsole", "xfce4-terminal", "xterm"]
-            for term in terminals:
-                if shutil.which(term):
-                    if term == "gnome-terminal":
-                        subprocess.Popen([term, "--", "bash", "-c", f"cd {path} && {activate} && exec bash"])
-                    else:
-                        subprocess.Popen([term, "-e", f"bash -c 'cd {path} && {activate} && exec bash'"])
-                    break
+            activate = path / "bin" / "activate"
+            bash_cmd = f"cd '{path}' && source '{activate}' && exec bash"
+
+            if terminal_type == "gnome-terminal" and shutil.which("gnome-terminal"):
+                subprocess.Popen(["gnome-terminal", "--", "bash", "-c", bash_cmd])
+            elif terminal_type == "konsole" and shutil.which("konsole"):
+                subprocess.Popen(["konsole", "-e", "bash", "-c", bash_cmd])
+            elif terminal_type == "xterm" and shutil.which("xterm"):
+                subprocess.Popen(["xterm", "-e", f"bash -c \"{bash_cmd}\""])
+            else:
+                # Auto-detect
+                terminals = ["gnome-terminal", "konsole", "xfce4-terminal", "xterm"]
+                for term in terminals:
+                    if shutil.which(term):
+                        if term == "gnome-terminal":
+                            subprocess.Popen([term, "--", "bash", "-c", bash_cmd])
+                        elif term == "konsole":
+                            subprocess.Popen([term, "-e", "bash", "-c", bash_cmd])
+                        else:
+                            subprocess.Popen([term, "-e", f"bash -c \"{bash_cmd}\""])
+                        break
     except Exception as e:
         print(f"Could not open terminal: {e}")
 

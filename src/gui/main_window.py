@@ -295,6 +295,17 @@ class MainWindow(QMainWindow):
         self.env_table.selectionModel().selectionChanged.connect(self._on_env_selected)
         layout.addWidget(self.env_table)
 
+        # Loading indicator (shown during refresh)
+        self.loading_label = QLabel("⏳ Loading environments, please wait...")
+        self.loading_label.setAlignment(Qt.AlignCenter)
+        self.loading_label.setStyleSheet(
+            "color: #f9e2af; font-size: 13px; padding: 8px; "
+            "background-color: rgba(249, 226, 175, 0.1); "
+            "border-radius: 6px;"
+        )
+        self.loading_label.setVisible(False)
+        layout.addWidget(self.loading_label)
+
         action_layout = QHBoxLayout()
 
         self.btn_manage_pkgs = QPushButton("\U0001f4e6 Manage Packages")
@@ -340,6 +351,7 @@ class MainWindow(QMainWindow):
         """Phase 1: Instantly show env names, then load details in background."""
         self.env_table.setRowCount(0)
         self.statusBar().showMessage("Loading environments...")
+        self.loading_label.setVisible(True)
 
         # Fast load - no subprocess, instant
         envs = self.venv_manager.list_venvs_fast()
@@ -369,12 +381,16 @@ class MainWindow(QMainWindow):
 
         self._update_info_label_fast(len(envs))
 
+        if not envs:
+            self.loading_label.setVisible(False)
+            self.statusBar().showMessage("No environments found")
+            return
+
         # Phase 2: Load details in background thread
-        if envs:
-            self._detail_worker = EnvDetailWorker(self.venv_manager, [e.name for e in envs])
-            self._detail_worker.env_detail_ready.connect(self._on_env_detail_ready)
-            self._detail_worker.all_done.connect(self._on_all_details_done)
-            self._detail_worker.start()
+        self._detail_worker = EnvDetailWorker(self.venv_manager, [e.name for e in envs])
+        self._detail_worker.env_detail_ready.connect(self._on_env_detail_ready)
+        self._detail_worker.all_done.connect(self._on_all_details_done)
+        self._detail_worker.start()
 
     def _on_env_detail_ready(self, row, python_version, package_count, size):
         """Update a single row with detailed info from background thread."""
@@ -384,6 +400,7 @@ class MainWindow(QMainWindow):
             self.env_table.setItem(row, 3, QTableWidgetItem(f"  {size}"))
 
     def _on_all_details_done(self):
+        self.loading_label.setVisible(False)
         count = self.env_table.rowCount()
         self.statusBar().showMessage(f"Found {count} environment(s)")
 

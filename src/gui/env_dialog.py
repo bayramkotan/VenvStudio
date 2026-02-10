@@ -99,9 +99,11 @@ class EnvCreateDialog(QDialog):
         self.location_label = QLabel(str(self.config.get_venv_base_dir()))
         self.location_label.setStyleSheet("color: #a6adc8; font-size: 12px;")
         loc_layout.addWidget(self.location_label, 1)
-        change_btn = QPushButton("Change")
+        change_btn = QPushButton("📂")
         change_btn.setObjectName("secondary")
-        change_btn.setFixedWidth(80)
+        change_btn.setFixedWidth(40)
+        change_btn.setFixedHeight(30)
+        change_btn.setToolTip("Browse for a different folder")
         change_btn.clicked.connect(self._change_location)
         loc_layout.addWidget(change_btn)
         form_layout.addRow("Location:", loc_layout)
@@ -141,6 +143,18 @@ class EnvCreateDialog(QDialog):
         self.progress_bar = QProgressBar()
         self.progress_bar.setRange(0, 0)  # indeterminate
         progress_layout.addWidget(self.progress_bar)
+
+        # Command hint (shows equivalent terminal commands)
+        self.cmd_label = QLabel("")
+        self.cmd_label.setStyleSheet(
+            "background-color: #1e1e2e; border: 1px solid #45475a; "
+            "border-radius: 6px; padding: 8px; color: #a6e3a1; "
+            "font-family: Consolas, monospace; font-size: 11px;"
+        )
+        self.cmd_label.setWordWrap(True)
+        self.cmd_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.cmd_label.setVisible(False)
+        progress_layout.addWidget(self.cmd_label)
 
         self.progress_frame.setLayout(progress_layout)
         self.progress_frame.setVisible(False)
@@ -201,6 +215,18 @@ class EnvCreateDialog(QDialog):
         self.cancel_btn.setText("⛔ Cancel")
         self.cancel_btn.setObjectName("danger")
         self.cancel_btn.setStyleSheet("")  # force style refresh
+
+        # Show educational command hints
+        py_exe = python_path or "python"
+        location = self.location_label.text()
+        venv_path = f"{location}/{name}"
+        cmds = [f"💡 Equivalent terminal commands:",
+                f"$ {py_exe} -m venv {venv_path}",
+                f"$ {venv_path}/Scripts/Activate.ps1  # Windows",
+                f"$ source {venv_path}/bin/activate    # Linux/Mac",
+                f"$ pip install --upgrade pip"]
+        self.cmd_label.setText("\n".join(cmds))
+        self.cmd_label.setVisible(True)
 
         # Start worker
         self.worker = CreateWorker(

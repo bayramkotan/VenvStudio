@@ -9,15 +9,19 @@ from PySide6.QtWidgets import (
     QTabWidget, QCheckBox, QFileDialog, QMessageBox,
     QTextEdit, QComboBox, QProgressBar, QFrame, QScrollArea,
     QGridLayout, QGroupBox, QSizePolicy, QDialog, QDialogButtonBox,
+    QToolButton,
 )
-from PySide6.QtCore import Qt, QThread, Signal, QSize
-from PySide6.QtGui import QFont, QColor
+from PySide6.QtCore import Qt, QThread, Signal, QSize, QProcess
+from PySide6.QtGui import QFont, QColor, QIcon
 
 from src.core.pip_manager import PipManager
 from src.utils.constants import PACKAGE_CATALOG, PRESETS, COMMAND_HINTS
 from src.utils.i18n import tr
+from src.utils.platform_utils import get_platform, get_python_executable
 
 from pathlib import Path
+import subprocess
+import os
 
 
 class WorkerThread(QThread):
@@ -131,6 +135,7 @@ class PackagePanel(QWidget):
         layout.addWidget(self.env_bar)
 
         self.tabs = QTabWidget()
+        self.tabs.addTab(self._create_launcher_tab(), f"🚀 {tr('app_launcher')}")
         self.tabs.addTab(self._create_installed_tab(), f"📦 {tr('installed')}")
         self.tabs.addTab(self._create_catalog_tab(), f"🛒 {tr('catalog')}")
         self.tabs.addTab(self._create_presets_tab(), f"⚡ {tr('presets')}")
@@ -163,6 +168,305 @@ class PackagePanel(QWidget):
         layout.addWidget(self.status_bar)
 
     # ── Tab Builders ──
+
+    def _create_launcher_tab(self) -> QWidget:
+        """App Launcher tab — launch Orange, JupyterLab, Notebook from the env."""
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(16)
+
+        info = QLabel(tr("app_launcher_info") if "app_launcher_info" in tr.__code__.co_varnames else
+                      "Launch applications installed in the selected environment.\n"
+                      "If an app is not installed, you can install it with one click.")
+        info.setWordWrap(True)
+        info.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        layout.addWidget(info)
+
+        # App cards grid
+        self.launcher_grid = QGridLayout()
+        self.launcher_grid.setSpacing(16)
+
+        self.app_definitions = [
+            {
+                "name": "JupyterLab",
+                "icon": "🔬",
+                "package": "jupyterlab",
+                "command": ["-m", "jupyter", "lab"],
+                "desc": "Next-generation notebook interface for interactive computing",
+            },
+            {
+                "name": "Jupyter Notebook",
+                "icon": "📓",
+                "package": "notebook",
+                "command": ["-m", "jupyter", "notebook"],
+                "desc": "Classic Jupyter Notebook — simple, document-centric interface",
+            },
+            {
+                "name": "Orange Data Mining",
+                "icon": "🍊",
+                "package": "orange3",
+                "command": ["-m", "Orange.canvas"],
+                "desc": "Visual programming for data mining and machine learning",
+            },
+            {
+                "name": "Spyder IDE",
+                "icon": "🕷️",
+                "package": "spyder",
+                "command": ["-m", "spyder.app.start"],
+                "desc": "Scientific Python development environment",
+            },
+            {
+                "name": "IPython",
+                "icon": "🐍",
+                "package": "ipython",
+                "command": ["-m", "IPython"],
+                "desc": "Enhanced interactive Python shell",
+            },
+            {
+                "name": "Streamlit",
+                "icon": "🎈",
+                "package": "streamlit",
+                "command": ["-m", "streamlit", "hello"],
+                "desc": "Build data apps in minutes — launches demo app",
+            },
+        ]
+
+        self.launcher_cards = {}
+        for i, app in enumerate(self.app_definitions):
+            card = self._create_app_card(app)
+            self.launcher_grid.addWidget(card, i // 3, i % 3)
+            self.launcher_cards[app["name"]] = card
+
+        layout.addLayout(self.launcher_grid)
+        layout.addStretch()
+
+        scroll.setWidget(container)
+        return scroll
+
+    def _create_app_card(self, app_def: dict) -> QFrame:
+        """Create a single app launcher card."""
+        card = QFrame()
+        card.setObjectName("card")
+        card.setMinimumHeight(200)
+        card.setStyleSheet("""
+            QFrame#card {
+                background-color: rgba(137, 180, 250, 0.05);
+                border: 1px solid #313244;
+                border-radius: 12px;
+                padding: 12px;
+            }
+            QFrame#card:hover {
+                border: 1px solid #89b4fa;
+                background-color: rgba(137, 180, 250, 0.1);
+            }
+        """)
+
+        layout = QVBoxLayout(card)
+        layout.setSpacing(8)
+
+        # Icon + Name
+        header = QHBoxLayout()
+        icon_label = QLabel(app_def["icon"])
+        icon_label.setFont(QFont("Segoe UI", 28))
+        header.addWidget(icon_label)
+
+        name_label = QLabel(app_def["name"])
+        name_label.setFont(QFont("Segoe UI", 14, QFont.Bold))
+        header.addWidget(name_label, 1)
+        layout.addLayout(header)
+
+        # Description
+        desc = QLabel(app_def["desc"])
+        desc.setWordWrap(True)
+        desc.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        layout.addWidget(desc)
+
+        # Status label
+        status = QLabel("")
+        status.setObjectName(f"status_{app_def['name']}")
+        status.setStyleSheet("font-size: 11px;")
+        layout.addWidget(status)
+
+        layout.addStretch()
+
+        # Buttons
+        btn_layout = QHBoxLayout()
+
+        launch_btn = QPushButton(f"▶ {tr('launch_app').format(app=app_def['name'])}"
+                                 if '{app}' in tr('launch_app') else f"▶ Launch")
+        launch_btn.setObjectName("success")
+        launch_btn.clicked.connect(lambda checked, a=app_def: self._launch_app(a))
+        btn_layout.addWidget(launch_btn)
+
+        shortcut_btn = QPushButton(f"🖥️")
+        shortcut_btn.setToolTip(tr("create_shortcut"))
+        shortcut_btn.setObjectName("secondary")
+        shortcut_btn.setFixedWidth(36)
+        shortcut_btn.clicked.connect(lambda checked, a=app_def: self._create_desktop_shortcut(a))
+        btn_layout.addWidget(shortcut_btn)
+
+        layout.addLayout(btn_layout)
+
+        # Store refs
+        card._app_def = app_def
+        card._status_label = status
+        card._launch_btn = launch_btn
+
+        return card
+
+    def _update_launcher_status(self):
+        """Update launcher cards to show installed/not-installed status."""
+        for name, card in self.launcher_cards.items():
+            app_def = card._app_def
+            pkg = app_def["package"].lower()
+            is_installed = pkg in self.installed_package_names
+
+            status = card._status_label
+            if is_installed:
+                status.setText("✅ Installed")
+                status.setStyleSheet("color: #a6e3a1; font-size: 11px;")
+                card._launch_btn.setEnabled(True)
+            else:
+                status.setText(f"❌ Not installed — click Launch to install first")
+                status.setStyleSheet("color: #f38ba8; font-size: 11px;")
+                card._launch_btn.setEnabled(True)  # Will prompt install
+
+    def _launch_app(self, app_def: dict):
+        """Launch an app from the selected environment."""
+        if not self.pip_manager:
+            QMessageBox.warning(self, tr("warning"), tr("select_environment"))
+            return
+
+        venv_path = self.pip_manager.venv_path
+        python_exe = get_python_executable(venv_path)
+
+        pkg_name = app_def["package"].lower()
+        is_installed = pkg_name in self.installed_package_names
+
+        if not is_installed:
+            reply = QMessageBox.question(
+                self, app_def["name"],
+                f"{app_def['name']} is not installed in this environment.\n\n"
+                f"Install '{app_def['package']}' now?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+            # Install it
+            self._set_busy(True)
+            self.status_label.setText(f"Installing {app_def['package']}...")
+            self.current_worker = WorkerThread(
+                self.pip_manager.install_packages, [app_def["package"]]
+            )
+            self.current_worker.progress.connect(self._on_progress)
+            self.current_worker.finished.connect(
+                lambda ok, msg, a=app_def: self._on_app_install_finished(ok, msg, a)
+            )
+            self.current_worker.start()
+            return
+
+        # Launch the app
+        cmd = [str(python_exe)] + app_def["command"]
+        try:
+            if get_platform() == "windows":
+                subprocess.Popen(
+                    cmd, cwd=str(venv_path),
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
+                )
+            else:
+                subprocess.Popen(cmd, cwd=str(venv_path))
+
+            self.status_label.setText(f"🚀 Launched {app_def['name']}")
+        except Exception as e:
+            QMessageBox.critical(
+                self, tr("error"),
+                f"Failed to launch {app_def['name']}:\n{e}"
+            )
+
+    def _on_app_install_finished(self, success, message, app_def):
+        """After installing an app package, refresh and launch."""
+        self._set_busy(False)
+        if success:
+            self.refresh_packages()
+            self.status_label.setText(f"✅ {app_def['package']} installed. Launching...")
+            # Now launch
+            self._launch_app(app_def)
+        else:
+            self.status_label.setText(tr("operation_failed"))
+            QMessageBox.critical(self, tr("error"), message[:500])
+
+    def _create_desktop_shortcut(self, app_def: dict):
+        """Create a desktop shortcut for the app."""
+        if not self.pip_manager:
+            QMessageBox.warning(self, tr("warning"), tr("select_environment"))
+            return
+
+        venv_path = self.pip_manager.venv_path
+        python_exe = get_python_executable(venv_path)
+        app_name = app_def["name"]
+        env_name = venv_path.name
+        shortcut_name = f"{app_name} ({env_name})"
+
+        platform = get_platform()
+        desktop = Path.home() / "Desktop"
+
+        try:
+            if platform == "windows":
+                # Create .bat launcher + .vbs for no-console
+                bat_path = desktop / f"{shortcut_name}.bat"
+                cmd_args = " ".join(app_def["command"])
+                bat_content = f'@echo off\n"{python_exe}" {cmd_args}\n'
+                bat_path.write_text(bat_content, encoding="utf-8")
+
+                QMessageBox.information(
+                    self, tr("success"),
+                    tr("shortcut_created").format(app=app_name) + f"\n\n{bat_path}"
+                )
+
+            elif platform == "linux":
+                # Create .desktop file
+                desktop_file = desktop / f"{shortcut_name}.desktop"
+                cmd_args = " ".join(app_def["command"])
+                content = (
+                    f"[Desktop Entry]\n"
+                    f"Type=Application\n"
+                    f"Name={shortcut_name}\n"
+                    f"Exec={python_exe} {cmd_args}\n"
+                    f"Path={venv_path}\n"
+                    f"Terminal=false\n"
+                    f"Comment=Launched via VenvStudio\n"
+                )
+                desktop_file.write_text(content, encoding="utf-8")
+                os.chmod(str(desktop_file), 0o755)
+
+                QMessageBox.information(
+                    self, tr("success"),
+                    tr("shortcut_created").format(app=app_name) + f"\n\n{desktop_file}"
+                )
+
+            elif platform == "macos":
+                # Simple shell script
+                sh_path = desktop / f"{shortcut_name}.command"
+                cmd_args = " ".join(app_def["command"])
+                content = f'#!/bin/bash\n"{python_exe}" {cmd_args}\n'
+                sh_path.write_text(content, encoding="utf-8")
+                os.chmod(str(sh_path), 0o755)
+
+                QMessageBox.information(
+                    self, tr("success"),
+                    tr("shortcut_created").format(app=app_name) + f"\n\n{sh_path}"
+                )
+
+        except Exception as e:
+            QMessageBox.critical(
+                self, tr("error"),
+                f"Failed to create shortcut:\n{e}"
+            )
 
     def _create_installed_tab(self) -> QWidget:
         widget = QWidget()
@@ -444,6 +748,8 @@ class PackagePanel(QWidget):
 
         # Update catalog checkboxes
         self._populate_catalog()
+        # Update launcher app status
+        self._update_launcher_status()
 
     # ── Catalog ──
 

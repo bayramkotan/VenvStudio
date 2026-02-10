@@ -26,6 +26,7 @@ from src.utils.platform_utils import (
     get_activate_command, open_terminal_at, get_platform,
 )
 from src.utils.constants import APP_NAME, APP_VERSION
+from src.utils.i18n import tr
 
 
 class SidebarButton(QPushButton):
@@ -165,36 +166,29 @@ class MainWindow(QMainWindow):
     def _setup_menubar(self):
         menubar = self.menuBar()
 
-        file_menu = menubar.addMenu("&File")
-        new_env_action = QAction("&New Environment", self)
+        file_menu = menubar.addMenu(tr("file"))
+        new_env_action = QAction(f"&{tr('new_environment')}", self)
         new_env_action.setShortcut("Ctrl+N")
         new_env_action.triggered.connect(self._create_env)
         file_menu.addAction(new_env_action)
         file_menu.addSeparator()
-        settings_action = QAction("&Settings", self)
+        settings_action = QAction(f"&{tr('settings')}", self)
         settings_action.triggered.connect(self._open_settings)
         file_menu.addAction(settings_action)
         file_menu.addSeparator()
-        quit_action = QAction("&Quit", self)
+        quit_action = QAction(tr("quit"), self)
         quit_action.setShortcut("Ctrl+Q")
         quit_action.triggered.connect(self.close)
         file_menu.addAction(quit_action)
 
-        view_menu = menubar.addMenu("&View")
-        dark_action = QAction("Dark Theme", self)
-        dark_action.triggered.connect(lambda: self._set_theme("dark"))
-        view_menu.addAction(dark_action)
-        light_action = QAction("Light Theme", self)
-        light_action.triggered.connect(lambda: self._set_theme("light"))
-        view_menu.addAction(light_action)
-        view_menu.addSeparator()
-        refresh_action = QAction("&Refresh", self)
+        view_menu = menubar.addMenu(tr("view"))
+        refresh_action = QAction(f"&{tr('refresh')}", self)
         refresh_action.setShortcut("F5")
         refresh_action.triggered.connect(self._refresh_env_list)
         view_menu.addAction(refresh_action)
 
-        help_menu = menubar.addMenu("&Help")
-        about_action = QAction("&About", self)
+        help_menu = menubar.addMenu(tr("help"))
+        about_action = QAction(tr("about"), self)
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
 
@@ -225,18 +219,18 @@ class MainWindow(QMainWindow):
 
         self.nav_buttons = []
 
-        self.btn_envs = SidebarButton("Environments", "\U0001f4c1")
+        self.btn_envs = SidebarButton(tr("environments"), "\U0001f4c1")
         self.btn_envs.setChecked(True)
         self.btn_envs.clicked.connect(lambda: self._switch_page(0))
         sidebar_layout.addWidget(self.btn_envs)
         self.nav_buttons.append(self.btn_envs)
 
-        self.btn_packages = SidebarButton("Packages", "\U0001f4e6")
+        self.btn_packages = SidebarButton(tr("packages"), "\U0001f4e6")
         self.btn_packages.clicked.connect(lambda: self._switch_page(1))
         sidebar_layout.addWidget(self.btn_packages)
         self.nav_buttons.append(self.btn_packages)
 
-        self.btn_settings = SidebarButton("Settings", "⚙️")
+        self.btn_settings = SidebarButton(tr("settings"), "⚙️")
         self.btn_settings.clicked.connect(lambda: self._switch_page(2))
         sidebar_layout.addWidget(self.btn_settings)
         self.nav_buttons.append(self.btn_settings)
@@ -273,18 +267,18 @@ class MainWindow(QMainWindow):
         layout.setSpacing(16)
 
         header_layout = QHBoxLayout()
-        title = QLabel("Virtual Environments")
+        title = QLabel(tr("virtual_environments"))
         title.setObjectName("header")
         header_layout.addWidget(title)
         header_layout.addStretch()
 
-        refresh_btn = QPushButton("\U0001f504 Refresh")
+        refresh_btn = QPushButton(f"\U0001f504 {tr('refresh')}")
         refresh_btn.setObjectName("secondary")
         refresh_btn.setFixedHeight(40)
         refresh_btn.clicked.connect(self._refresh_env_list)
         header_layout.addWidget(refresh_btn)
 
-        create_btn = QPushButton("  + New Environment  ")
+        create_btn = QPushButton(f"  + {tr('new_environment')}  ")
         create_btn.clicked.connect(self._create_env)
         create_btn.setFixedHeight(40)
         header_layout.addWidget(create_btn)
@@ -311,7 +305,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.env_table)
 
         # Loading indicator (shown during refresh)
-        self.loading_label = QLabel("⏳ Loading environments, please wait...")
+        self.loading_label = QLabel(f"⏳ {tr('loading_environments')}")
         self.loading_label.setAlignment(Qt.AlignCenter)
         self.loading_label.setStyleSheet(
             "color: #f9e2af; font-size: 13px; padding: 8px; "
@@ -323,24 +317,24 @@ class MainWindow(QMainWindow):
 
         action_layout = QHBoxLayout()
 
-        self.btn_manage_pkgs = QPushButton("\U0001f4e6 Manage Packages")
+        self.btn_manage_pkgs = QPushButton(f"\U0001f4e6 {tr('manage_packages')}")
         self.btn_manage_pkgs.clicked.connect(self._open_package_manager)
         self.btn_manage_pkgs.setEnabled(False)
         action_layout.addWidget(self.btn_manage_pkgs)
 
-        self.btn_terminal = QPushButton("\U0001f5a5\ufe0f Open Terminal")
+        self.btn_terminal = QPushButton(f"\U0001f5a5\ufe0f {tr('open_terminal')}")
         self.btn_terminal.setObjectName("secondary")
         self.btn_terminal.clicked.connect(self._open_terminal)
         self.btn_terminal.setEnabled(False)
         action_layout.addWidget(self.btn_terminal)
 
-        self.btn_clone = QPushButton("\U0001f4cb Clone")
+        self.btn_clone = QPushButton(f"\U0001f4cb {tr('clone')}")
         self.btn_clone.setObjectName("secondary")
         self.btn_clone.clicked.connect(self._clone_env)
         self.btn_clone.setEnabled(False)
         action_layout.addWidget(self.btn_clone)
 
-        self.btn_rename = QPushButton("✏️ Rename")
+        self.btn_rename = QPushButton(f"✏️ {tr('rename')}")
         self.btn_rename.setObjectName("secondary")
         self.btn_rename.clicked.connect(self._rename_env)
         self.btn_rename.setEnabled(False)
@@ -348,7 +342,7 @@ class MainWindow(QMainWindow):
 
         action_layout.addStretch()
 
-        self.btn_delete = QPushButton("\U0001f5d1\ufe0f Delete")
+        self.btn_delete = QPushButton(f"\U0001f5d1\ufe0f {tr('delete')}")
         self.btn_delete.setObjectName("danger")
         self.btn_delete.clicked.connect(self._delete_env)
         self.btn_delete.setEnabled(False)

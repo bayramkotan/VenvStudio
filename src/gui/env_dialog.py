@@ -235,15 +235,24 @@ class EnvCreateDialog(QDialog):
         self.cancel_btn.setObjectName("danger")
         self.cancel_btn.setStyleSheet("")  # force style refresh
 
-        # Show educational command hints
+        # Show educational command hints - platform specific
         py_exe = python_path or "python"
         location = self.location_label.text()
-        venv_path = f"{location}/{name}"
-        cmds = [f"💡 Equivalent terminal commands:",
-                f"$ {py_exe} -m venv {venv_path}",
-                f"$ {venv_path}/Scripts/Activate.ps1  # Windows",
-                f"$ source {venv_path}/bin/activate    # Linux/Mac",
-                f"$ pip install --upgrade pip"]
+        import os
+        venv_path = os.path.join(location, name)
+
+        from src.utils.platform_utils import get_platform
+        cmds = [f"💡 Equivalent terminal commands:"]
+        cmds.append(f"$ {py_exe} -m venv {venv_path}")
+
+        if get_platform() == "windows":
+            cmds.append(f"$ {venv_path}\\Scripts\\Activate.ps1")
+        elif get_platform() == "macos":
+            cmds.append(f"$ source {venv_path}/bin/activate")
+        else:
+            cmds.append(f"$ source {venv_path}/bin/activate")
+
+        cmds.append(f"$ pip install --upgrade pip")
         self.cmd_label.setText("\n".join(cmds))
         self.cmd_label.setVisible(True)
 

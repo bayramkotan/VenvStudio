@@ -31,6 +31,13 @@ def main():
 
         from src.gui.main_window import MainWindow
         from src.utils.constants import APP_NAME, APP_VERSION
+        from src.core.config_manager import ConfigManager
+        from src.utils.i18n import set_language
+
+        # Load language setting before creating UI
+        config = ConfigManager()
+        lang = config.get("language", "en")
+        set_language(lang)
 
         # High DPI support
         QApplication.setHighDpiScaleFactorRoundingPolicy(

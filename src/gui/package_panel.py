@@ -15,6 +15,7 @@ from PySide6.QtGui import QFont, QColor
 
 from src.core.pip_manager import PipManager
 from src.utils.constants import PACKAGE_CATALOG, PRESETS, COMMAND_HINTS
+from src.utils.i18n import tr
 
 from pathlib import Path
 
@@ -111,13 +112,13 @@ class PackagePanel(QWidget):
         env_bar_layout = QHBoxLayout(self.env_bar)
         env_bar_layout.setContentsMargins(16, 0, 16, 0)
 
-        env_lbl = QLabel("🐍 Environment:")
+        env_lbl = QLabel(f"🐍 {tr('environment')}")
         env_lbl.setStyleSheet("font-weight: bold; font-size: 13px;")
         env_bar_layout.addWidget(env_lbl)
 
         self.env_selector = QComboBox()
         self.env_selector.setMinimumWidth(200)
-        self.env_selector.addItem("-- Select Environment --", "")
+        self.env_selector.addItem(tr("select_environment"), "")
         self.env_selector.currentIndexChanged.connect(self._on_env_selector_changed)
         env_bar_layout.addWidget(self.env_selector, 1)
 
@@ -130,10 +131,10 @@ class PackagePanel(QWidget):
         layout.addWidget(self.env_bar)
 
         self.tabs = QTabWidget()
-        self.tabs.addTab(self._create_installed_tab(), "📦 Installed")
-        self.tabs.addTab(self._create_catalog_tab(), "🛒 Catalog")
-        self.tabs.addTab(self._create_presets_tab(), "⚡ Presets")
-        self.tabs.addTab(self._create_manual_tab(), "⌨️ Manual Install")
+        self.tabs.addTab(self._create_installed_tab(), f"📦 {tr('installed')}")
+        self.tabs.addTab(self._create_catalog_tab(), f"🛒 {tr('catalog')}")
+        self.tabs.addTab(self._create_presets_tab(), f"⚡ {tr('presets')}")
+        self.tabs.addTab(self._create_manual_tab(), f"⌨️ {tr('manual_install')}")
         layout.addWidget(self.tabs)
 
         # Status bar with cancel button
@@ -304,12 +305,19 @@ class PackagePanel(QWidget):
             pkg_label.setStyleSheet("color: #a6adc8; font-size: 12px;")
             card_layout.addWidget(pkg_label)
 
-            install_btn = QPushButton(f"Install ({len(packages)} packages)")
+            install_btn = QPushButton(f"{tr('install')} ({len(packages)} packages)")
             install_btn.setObjectName("success")
             install_btn.clicked.connect(
                 lambda checked, pkgs=packages, name=preset_name: self._install_packages(pkgs, hint_name=name)
             )
             card_layout.addWidget(install_btn)
+
+            copy_btn = QPushButton(f"📋 {tr('copy_command')}")
+            copy_btn.setObjectName("secondary")
+            copy_btn.clicked.connect(
+                lambda checked, pkgs=packages: self._copy_preset_command(pkgs)
+            )
+            card_layout.addWidget(copy_btn)
 
             grid.addWidget(card, row // 2, row % 2)
             row += 1
@@ -382,7 +390,7 @@ class PackagePanel(QWidget):
         self.env_selector.blockSignals(True)
         current_data = self.env_selector.currentData()
         self.env_selector.clear()
-        self.env_selector.addItem("-- Select Environment --", "")
+        self.env_selector.addItem(tr("select_environment"), "")
         for name, path in env_list:
             self.env_selector.addItem(name, str(path))
         # Restore selection
@@ -747,6 +755,14 @@ class PackagePanel(QWidget):
                 self._set_busy(False)
                 self.status_label.setText("⛔ Operation cancelled")
                 self.output_log.append("\n⛔ Operation cancelled by user")
+
+    def _copy_preset_command(self, packages):
+        """Copy pip install command to clipboard."""
+        cmd = f"pip install {' '.join(packages)}"
+        from PySide6.QtWidgets import QApplication
+        clipboard = QApplication.clipboard()
+        clipboard.setText(cmd)
+        self.status_label.setText(f"📋 {tr('command_copied')}")
 
     def _filter_catalog(self, text: str):
         """Filter catalog rows by search text."""

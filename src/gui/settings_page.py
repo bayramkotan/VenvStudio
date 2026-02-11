@@ -342,6 +342,13 @@ class SettingsPage(QWidget):
         self.custom_catalog_table = QTableWidget()
         self.custom_catalog_table.setColumnCount(3)
         self.custom_catalog_table.setHorizontalHeaderLabels(["Package Name", "Description", "Category"])
+        self.custom_catalog_table.setStyleSheet(
+            "QTableWidget::item:selected { background-color: #45475a; color: #cdd6f4; }"
+            "QLineEdit, QTableWidget QAbstractItemView {"
+            "  background-color: #313244; color: #cdd6f4; "
+            "  selection-background-color: #585b70; selection-color: #cdd6f4;"
+            "}"
+        )
         self.custom_catalog_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Interactive)
         self.custom_catalog_table.setColumnWidth(0, 150)
         self.custom_catalog_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
@@ -479,14 +486,22 @@ class SettingsPage(QWidget):
         self.check_updates_cb.setChecked(self.config.get("check_updates", False))
         self.save_window_cb.setChecked(self.config.get("save_window_geometry", True))
 
-        # Terminal
+        # Terminal — only enable if explicitly set to non-default
         terminal = self.config.get("default_terminal", "")
-        idx = self.terminal_combo.findData(terminal)
-        if idx > 0:
-            self.terminal_cb.setChecked(True)
-            self.terminal_combo.setEnabled(True)
-            self.terminal_combo.setCurrentIndex(idx)
-        elif idx == 0:
+        if terminal and terminal.strip():
+            idx = self.terminal_combo.findData(terminal)
+            if idx > 0:  # index 0 is first/default terminal
+                self.terminal_cb.setChecked(True)
+                self.terminal_combo.setEnabled(True)
+                self.terminal_combo.setCurrentIndex(idx)
+            else:
+                self.terminal_cb.setChecked(False)
+                self.terminal_combo.setEnabled(False)
+                self.terminal_combo.setCurrentIndex(0)
+                self.config.set("default_terminal", "")
+        else:
+            self.terminal_cb.setChecked(False)
+            self.terminal_combo.setEnabled(False)
             self.terminal_combo.setCurrentIndex(0)
 
         # Scan pythons
@@ -533,17 +548,28 @@ class SettingsPage(QWidget):
         # Set default python selection — only enable checkbox if user explicitly changed it
         default_py = self.config.get("default_python", "")
         if default_py and default_py.strip():
-            idx = self.default_python_combo.findData(default_py)
-            if idx > 0:  # index 0 is "System Default" — don't enable for that
+            default_py_norm = os.path.normpath(default_py)
+            # Find matching index (case-insensitive on Windows)
+            found_idx = -1
+            for i in range(self.default_python_combo.count()):
+                item_data = self.default_python_combo.itemData(i) or ""
+                if item_data and os.path.normpath(item_data).lower() == default_py_norm.lower():
+                    found_idx = i
+                    break
+            if found_idx > 0:  # index 0 is "System Default" — don't enable for that
                 self.default_py_cb.setChecked(True)
                 self.default_python_combo.setEnabled(True)
-                self.default_python_combo.setCurrentIndex(idx)
+                self.default_python_combo.setCurrentIndex(found_idx)
             else:
                 self.default_py_cb.setChecked(False)
                 self.default_python_combo.setEnabled(False)
+                self.default_python_combo.setCurrentIndex(0)
+                # Clear invalid config value
+                self.config.set("default_python", "")
         else:
             self.default_py_cb.setChecked(False)
             self.default_python_combo.setEnabled(False)
+            self.default_python_combo.setCurrentIndex(0)
 
     def _add_custom_python(self):
         """Add a custom Python executable path."""
@@ -785,7 +811,11 @@ class SettingsPage(QWidget):
             self.language_changed.emit(new_lang)
 
         # Default Python
-        self.config.set("default_python", self.default_python_combo.currentData() or "")
+        # Default Python — only save if checkbox is enabled
+        if self.default_py_cb.isChecked():
+            self.config.set("default_python", self.default_python_combo.currentData() or "")
+        else:
+            self.config.set("default_python", "")
 
         # Venv directory
         new_dir = self.venv_dir_input.text()
@@ -797,7 +827,11 @@ class SettingsPage(QWidget):
         self.config.set("show_hidden_packages", self.show_hidden_cb.isChecked())
         self.config.set("check_updates", self.check_updates_cb.isChecked())
         self.config.set("save_window_geometry", self.save_window_cb.isChecked())
-        self.config.set("default_terminal", self.terminal_combo.currentData())
+        # Default Terminal — only save if checkbox is enabled
+        if self.terminal_cb.isChecked():
+            self.config.set("default_terminal", self.terminal_combo.currentData())
+        else:
+            self.config.set("default_terminal", "")
 
         # Save custom catalog
         self._save_custom_catalog()

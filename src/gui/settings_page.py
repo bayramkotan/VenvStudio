@@ -342,13 +342,34 @@ class SettingsPage(QWidget):
         self.custom_catalog_table = QTableWidget()
         self.custom_catalog_table.setColumnCount(3)
         self.custom_catalog_table.setHorizontalHeaderLabels(["Package Name", "Description", "Category"])
-        self.custom_catalog_table.setStyleSheet(
-            "QTableWidget::item:selected { background-color: #45475a; color: #cdd6f4; }"
-            "QLineEdit, QTableWidget QAbstractItemView {"
-            "  background-color: #313244; color: #cdd6f4; "
-            "  selection-background-color: #585b70; selection-color: #cdd6f4;"
-            "}"
-        )
+        self.custom_catalog_table.setStyleSheet("""
+            QTableWidget {
+                background-color: #1e1e2e;
+                color: #cdd6f4;
+                gridline-color: #313244;
+                font-size: 13px;
+            }
+            QTableWidget::item {
+                color: #cdd6f4;
+                padding: 4px;
+                font-size: 13px;
+            }
+            QTableWidget::item:selected {
+                background-color: #45475a;
+                color: #cdd6f4;
+            }
+            QTableWidget QLineEdit {
+                background-color: #313244;
+                color: #f5e0dc;
+                border: 2px solid #89b4fa;
+                padding: 4px 6px;
+                font-size: 13px;
+                min-height: 24px;
+            }
+        """)
+        self.custom_catalog_table.verticalHeader().setDefaultSectionSize(32)
+        self.custom_catalog_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.custom_catalog_table.setSelectionMode(QTableWidget.SingleSelection)
         self.custom_catalog_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Interactive)
         self.custom_catalog_table.setColumnWidth(0, 150)
         self.custom_catalog_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
@@ -710,11 +731,19 @@ class SettingsPage(QWidget):
     def _remove_custom_catalog_pkg(self):
         """Remove selected custom catalog package."""
         rows = self.custom_catalog_table.selectionModel().selectedRows()
-        if not rows:
-            QMessageBox.information(self, "Info", "Select a package to remove.")
-            return
-        for r in sorted([r.row() for r in rows], reverse=True):
-            self.custom_catalog_table.removeRow(r)
+        if rows:
+            for r in sorted([r.row() for r in rows], reverse=True):
+                self.custom_catalog_table.removeRow(r)
+        else:
+            # Fallback: use current row
+            row = self.custom_catalog_table.currentRow()
+            if row >= 0:
+                self.custom_catalog_table.removeRow(row)
+            else:
+                QMessageBox.information(self, "Info", "Select a row to remove.")
+                return
+        # Auto-save after removal
+        self._save_custom_catalog()
 
     def _save_custom_catalog(self):
         """Save custom catalog table to config."""

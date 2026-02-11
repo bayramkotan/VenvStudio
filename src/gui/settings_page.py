@@ -713,6 +713,8 @@ class SettingsPage(QWidget):
     def _load_custom_catalog(self):
         """Load custom catalog packages from config into the table."""
         custom_pkgs = self.config.get("custom_catalog", [])
+        print(f"[DEBUG] Loading custom catalog: {custom_pkgs}")
+        print(f"[DEBUG] Config file: {self.config.config_file_path}")
         self.custom_catalog_table.setRowCount(len(custom_pkgs))
         for i, pkg in enumerate(custom_pkgs):
             self.custom_catalog_table.setItem(i, 0, QTableWidgetItem(pkg.get("name", "")))
@@ -747,19 +749,30 @@ class SettingsPage(QWidget):
 
     def _save_custom_catalog(self):
         """Save custom catalog table to config."""
+        # Force commit any active cell editing
+        self.custom_catalog_table.setCurrentItem(None)
+
         pkgs = []
         for row in range(self.custom_catalog_table.rowCount()):
             name_item = self.custom_catalog_table.item(row, 0)
             desc_item = self.custom_catalog_table.item(row, 1)
             cat_item = self.custom_catalog_table.item(row, 2)
             name = name_item.text().strip() if name_item else ""
-            if name:
+            desc = desc_item.text().strip() if desc_item else ""
+            cat = cat_item.text().strip() if cat_item else "⭐ Custom"
+            # Save row if it has any content at all
+            if name or desc:
                 pkgs.append({
                     "name": name,
-                    "desc": desc_item.text().strip() if desc_item else "",
-                    "category": cat_item.text().strip() if cat_item else "⭐ Custom",
+                    "desc": desc,
+                    "category": cat if cat else "⭐ Custom",
                 })
+        print(f"[DEBUG] Saving custom catalog: {pkgs}")
+        print(f"[DEBUG] Config file: {self.config.config_file_path}")
         self.config.set("custom_catalog", pkgs)
+        # Verify it was saved
+        verify = self.config.get("custom_catalog", [])
+        print(f"[DEBUG] Verify after save: {verify}")
 
     def _open_log_folder(self):
         """Open the log directory in file manager."""

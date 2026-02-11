@@ -305,7 +305,7 @@ class VenvManager:
                     callback(f"Installing packages into '{target_name}'...")
 
                 result = subprocess.run(
-                    [str(target_pip), "install", "-r", str(req_file)],
+                    [str(target_pip), "install", "--no-cache-dir", "-r", str(req_file)],
                     capture_output=True, text=True, timeout=300,
                 )
                 req_file.unlink(missing_ok=True)

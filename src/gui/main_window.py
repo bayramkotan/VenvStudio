@@ -172,10 +172,6 @@ class MainWindow(QMainWindow):
         new_env_action.triggered.connect(self._create_env)
         file_menu.addAction(new_env_action)
         file_menu.addSeparator()
-        settings_action = QAction(f"&{tr('settings')}", self)
-        settings_action.triggered.connect(self._open_settings)
-        file_menu.addAction(settings_action)
-        file_menu.addSeparator()
         quit_action = QAction(tr("quit"), self)
         quit_action.setShortcut("Ctrl+Q")
         quit_action.triggered.connect(self.close)
@@ -186,6 +182,17 @@ class MainWindow(QMainWindow):
         refresh_action.setShortcut("F5")
         refresh_action.triggered.connect(self._refresh_env_list)
         view_menu.addAction(refresh_action)
+        view_menu.addSeparator()
+        dark_action = QAction(f"🌙 {tr('dark_theme')}", self)
+        dark_action.triggered.connect(lambda: self._set_theme("dark"))
+        view_menu.addAction(dark_action)
+        light_action = QAction(f"☀️ {tr('light_theme')}", self)
+        light_action.triggered.connect(lambda: self._set_theme("light"))
+        view_menu.addAction(light_action)
+        view_menu.addSeparator()
+        settings_view_action = QAction(f"⚙️ {tr('settings')}", self)
+        settings_view_action.triggered.connect(self._open_settings)
+        view_menu.addAction(settings_view_action)
 
         help_menu = menubar.addMenu(tr("help"))
         about_action = QAction(tr("about"), self)
@@ -393,6 +400,7 @@ class MainWindow(QMainWindow):
         # Update package panel env dropdown
         env_list = [(e.name, self.venv_manager.base_dir / e.name) for e in envs]
         self.package_panel.populate_env_list(env_list)
+        self.settings_page.populate_vscode_envs(env_list)
 
         if not envs:
             self.loading_label.setVisible(False)

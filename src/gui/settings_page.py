@@ -17,6 +17,9 @@ from src.utils.platform_utils import find_system_pythons, get_platform
 from src.utils.constants import APP_NAME, APP_VERSION
 from src.utils.i18n import tr
 
+import os
+from pathlib import Path
+
 # Dil tanımları
 LANGUAGES = {
     "en": "English",
@@ -261,7 +264,96 @@ class SettingsPage(QWidget):
         general_group.setLayout(general_layout)
         layout.addWidget(general_group)
 
-        # ── 6. ABOUT ──
+        # ── 6. VS CODE INTEGRATION ──
+        vscode_group = QGroupBox("💻 VS Code Integration")
+        vscode_layout = QVBoxLayout()
+        vscode_layout.setSpacing(10)
+
+        vscode_info = QLabel("Set the selected environment's Python as VS Code interpreter.")
+        vscode_info.setWordWrap(True)
+        vscode_info.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        vscode_layout.addWidget(vscode_info)
+
+        vscode_btn_layout = QHBoxLayout()
+        self.vscode_env_combo = QComboBox()
+        self.vscode_env_combo.setFocusPolicy(Qt.StrongFocus)
+        self.vscode_env_combo.addItem("-- Select Environment --", "")
+        vscode_btn_layout.addWidget(self.vscode_env_combo, 1)
+
+        vscode_set_btn = QPushButton("🔗 Set as VS Code Interpreter")
+        vscode_set_btn.setObjectName("secondary")
+        vscode_set_btn.clicked.connect(self._set_vscode_interpreter)
+        vscode_btn_layout.addWidget(vscode_set_btn)
+
+        vscode_layout.addLayout(vscode_btn_layout)
+        vscode_group.setLayout(vscode_layout)
+        layout.addWidget(vscode_group)
+
+        # ── 7. CUSTOM CATALOG EDITOR ──
+        catalog_group = QGroupBox("📚 Custom Catalog Packages")
+        catalog_layout = QVBoxLayout()
+        catalog_layout.setSpacing(10)
+
+        catalog_info = QLabel("Add custom packages to the catalog. These appear under '⭐ Custom' category.")
+        catalog_info.setWordWrap(True)
+        catalog_info.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        catalog_layout.addWidget(catalog_info)
+
+        self.custom_catalog_table = QTableWidget()
+        self.custom_catalog_table.setColumnCount(3)
+        self.custom_catalog_table.setHorizontalHeaderLabels(["Package Name", "Description", "Category"])
+        self.custom_catalog_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Interactive)
+        self.custom_catalog_table.setColumnWidth(0, 150)
+        self.custom_catalog_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.custom_catalog_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Interactive)
+        self.custom_catalog_table.setColumnWidth(2, 180)
+        self.custom_catalog_table.setAlternatingRowColors(True)
+        self.custom_catalog_table.verticalHeader().setVisible(False)
+        self.custom_catalog_table.setMaximumHeight(180)
+        catalog_layout.addWidget(self.custom_catalog_table)
+
+        cat_btn_layout = QHBoxLayout()
+        add_cat_btn = QPushButton("+ Add Package")
+        add_cat_btn.setObjectName("secondary")
+        add_cat_btn.clicked.connect(self._add_custom_catalog_pkg)
+        cat_btn_layout.addWidget(add_cat_btn)
+
+        remove_cat_btn = QPushButton("Remove Selected")
+        remove_cat_btn.setObjectName("danger")
+        remove_cat_btn.clicked.connect(self._remove_custom_catalog_pkg)
+        cat_btn_layout.addWidget(remove_cat_btn)
+
+        cat_btn_layout.addStretch()
+        catalog_layout.addLayout(cat_btn_layout)
+        catalog_group.setLayout(catalog_layout)
+        layout.addWidget(catalog_group)
+
+        # ── 8. DIAGNOSTICS & LOGGING ──
+        diag_group = QGroupBox("🔧 Diagnostics")
+        diag_layout = QVBoxLayout()
+
+        diag_btn_layout = QHBoxLayout()
+        open_log_btn = QPushButton("📄 Open Log Folder")
+        open_log_btn.setObjectName("secondary")
+        open_log_btn.clicked.connect(self._open_log_folder)
+        diag_btn_layout.addWidget(open_log_btn)
+
+        open_config_btn = QPushButton("📁 Open Config Folder")
+        open_config_btn.setObjectName("secondary")
+        open_config_btn.clicked.connect(self._open_config_folder)
+        diag_btn_layout.addWidget(open_config_btn)
+
+        add_path_btn = QPushButton("🔗 Add Python to System PATH")
+        add_path_btn.setObjectName("secondary")
+        add_path_btn.clicked.connect(self._add_python_to_path)
+        diag_btn_layout.addWidget(add_path_btn)
+
+        diag_btn_layout.addStretch()
+        diag_layout.addLayout(diag_btn_layout)
+        diag_group.setLayout(diag_layout)
+        layout.addWidget(diag_group)
+
+        # ── 9. ABOUT ──
         about_group = QGroupBox(f"ℹ️ About {APP_NAME}")
         about_layout = QVBoxLayout()
         about_layout.setSpacing(8)
@@ -355,6 +447,9 @@ class SettingsPage(QWidget):
 
         # Scan pythons
         self._scan_pythons()
+
+        # Load custom catalog
+        self._load_custom_catalog()
 
     def _scan_pythons(self):
         """Scan system for Python installations."""
@@ -473,6 +568,145 @@ class SettingsPage(QWidget):
         from src.utils.platform_utils import get_default_venv_base_dir
         self.venv_dir_input.setText(str(get_default_venv_base_dir()))
 
+    def _set_vscode_interpreter(self):
+        """Set VS Code python interpreter path for the selected env."""
+        env_path = self.vscode_env_combo.currentData()
+        if not env_path:
+            QMessageBox.warning(self, tr("warning"), "Please select an environment first.")
+            return
+
+        from src.utils.platform_utils import get_python_executable
+        python_exe = get_python_executable(Path(env_path))
+
+        import os
+        norm_path = os.path.normpath(str(python_exe))
+
+        # Try to write .vscode/settings.json in current working directory
+        vscode_dir = Path.cwd() / ".vscode"
+        vscode_dir.mkdir(exist_ok=True)
+        settings_file = vscode_dir / "settings.json"
+
+        import json
+        settings = {}
+        if settings_file.exists():
+            try:
+                with open(settings_file, "r", encoding="utf-8") as f:
+                    settings = json.load(f)
+            except Exception:
+                settings = {}
+
+        settings["python.defaultInterpreterPath"] = norm_path
+
+        try:
+            with open(settings_file, "w", encoding="utf-8") as f:
+                json.dump(settings, f, indent=4, ensure_ascii=False)
+
+            QMessageBox.information(
+                self, tr("success"),
+                f"VS Code interpreter set to:\n{norm_path}\n\n"
+                f"Settings written to:\n{settings_file}\n\n"
+                f"Tip: Install the 'Python' extension in VS Code if not already installed."
+            )
+        except Exception as e:
+            QMessageBox.critical(self, tr("error"), f"Failed to write VS Code settings:\n{e}")
+
+    def _load_custom_catalog(self):
+        """Load custom catalog packages from config into the table."""
+        custom_pkgs = self.config.get("custom_catalog", [])
+        self.custom_catalog_table.setRowCount(len(custom_pkgs))
+        for i, pkg in enumerate(custom_pkgs):
+            self.custom_catalog_table.setItem(i, 0, QTableWidgetItem(pkg.get("name", "")))
+            self.custom_catalog_table.setItem(i, 1, QTableWidgetItem(pkg.get("desc", "")))
+            self.custom_catalog_table.setItem(i, 2, QTableWidgetItem(pkg.get("category", "⭐ Custom")))
+
+    def _add_custom_catalog_pkg(self):
+        """Add a new custom catalog package row."""
+        row = self.custom_catalog_table.rowCount()
+        self.custom_catalog_table.insertRow(row)
+        self.custom_catalog_table.setItem(row, 0, QTableWidgetItem(""))
+        self.custom_catalog_table.setItem(row, 1, QTableWidgetItem(""))
+        self.custom_catalog_table.setItem(row, 2, QTableWidgetItem("⭐ Custom"))
+        self.custom_catalog_table.editItem(self.custom_catalog_table.item(row, 0))
+
+    def _remove_custom_catalog_pkg(self):
+        """Remove selected custom catalog package."""
+        rows = self.custom_catalog_table.selectionModel().selectedRows()
+        if not rows:
+            QMessageBox.information(self, "Info", "Select a package to remove.")
+            return
+        for r in sorted([r.row() for r in rows], reverse=True):
+            self.custom_catalog_table.removeRow(r)
+
+    def _save_custom_catalog(self):
+        """Save custom catalog table to config."""
+        pkgs = []
+        for row in range(self.custom_catalog_table.rowCount()):
+            name_item = self.custom_catalog_table.item(row, 0)
+            desc_item = self.custom_catalog_table.item(row, 1)
+            cat_item = self.custom_catalog_table.item(row, 2)
+            name = name_item.text().strip() if name_item else ""
+            if name:
+                pkgs.append({
+                    "name": name,
+                    "desc": desc_item.text().strip() if desc_item else "",
+                    "category": cat_item.text().strip() if cat_item else "⭐ Custom",
+                })
+        self.config.set("custom_catalog", pkgs)
+
+    def _open_log_folder(self):
+        """Open the log directory in file manager."""
+        from src.utils.logger import get_log_dir
+        import subprocess
+        log_dir = get_log_dir()
+        log_dir.mkdir(parents=True, exist_ok=True)
+        if get_platform() == "windows":
+            os.startfile(str(log_dir))
+        elif get_platform() == "macos":
+            subprocess.Popen(["open", str(log_dir)])
+        else:
+            subprocess.Popen(["xdg-open", str(log_dir)])
+
+    def _open_config_folder(self):
+        """Open the config directory in file manager."""
+        import subprocess
+        config_dir = self.config.config_file_path.parent
+        if get_platform() == "windows":
+            os.startfile(str(config_dir))
+        elif get_platform() == "macos":
+            subprocess.Popen(["open", str(config_dir)])
+        else:
+            subprocess.Popen(["xdg-open", str(config_dir)])
+
+    def _add_python_to_path(self):
+        """Show instructions or add Python to system PATH."""
+        if get_platform() == "windows":
+            msg = (
+                "To add Python to your System PATH on Windows:\n\n"
+                "1. Open Settings → System → About → Advanced system settings\n"
+                "2. Click 'Environment Variables'\n"
+                "3. Under 'System variables', find 'Path' and click 'Edit'\n"
+                "4. Add the Python installation directory\n\n"
+                "Or run this in PowerShell as Administrator:\n"
+                '[Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\\Python312", "Machine")'
+            )
+        else:
+            msg = (
+                "To add Python to your PATH on Linux/macOS:\n\n"
+                "Add to ~/.bashrc or ~/.zshrc:\n"
+                "  export PATH=\"$HOME/.local/bin:$PATH\"\n\n"
+                "Then run: source ~/.bashrc"
+            )
+        QMessageBox.information(self, "Add Python to PATH", msg)
+
+    def populate_vscode_envs(self, env_list):
+        """Populate VS Code env selector from main window."""
+        self.vscode_env_combo.blockSignals(True)
+        self.vscode_env_combo.clear()
+        self.vscode_env_combo.addItem("-- Select Environment --", "")
+        for name, path in env_list:
+            self.vscode_env_combo.addItem(name, str(path))
+        self.vscode_env_combo.blockSignals(False)
+
     def _save_settings(self):
         """Save all settings."""
         # Theme
@@ -511,6 +745,9 @@ class SettingsPage(QWidget):
         self.config.set("check_updates", self.check_updates_cb.isChecked())
         self.config.set("save_window_geometry", self.save_window_cb.isChecked())
         self.config.set("default_terminal", self.terminal_combo.currentData())
+
+        # Save custom catalog
+        self._save_custom_catalog()
 
         self.settings_saved.emit()
         QMessageBox.information(self, "Settings", "Settings saved successfully! ✅")

@@ -480,12 +480,17 @@ class PackagePanel(QWidget):
         self.search_input.textChanged.connect(self._filter_installed)
         toolbar.addWidget(self.search_input, 1)
 
-        refresh_btn = QPushButton("🔄 Refresh")
+        refresh_btn = QPushButton(f"🔄 {tr('refresh')}")
         refresh_btn.setObjectName("secondary")
         refresh_btn.clicked.connect(self.refresh_packages)
         toolbar.addWidget(refresh_btn)
 
-        uninstall_btn = QPushButton("🗑️ Uninstall Selected")
+        self.update_btn = QPushButton(f"⬆️ {tr('check_outdated')}")
+        self.update_btn.setObjectName("secondary")
+        self.update_btn.clicked.connect(self._check_outdated)
+        toolbar.addWidget(self.update_btn)
+
+        uninstall_btn = QPushButton(f"🗑️ {tr('uninstall_selected')}")
         uninstall_btn.setObjectName("danger")
         uninstall_btn.clicked.connect(self._uninstall_selected)
         toolbar.addWidget(uninstall_btn)
@@ -533,9 +538,10 @@ class PackagePanel(QWidget):
         cat_layout.addWidget(cat_label)
 
         self.category_combo = QComboBox()
-        self.category_combo.addItem("All Categories", "all")
+        self.category_combo.addItem(tr("all_categories"), "all")
         for cat_name in PACKAGE_CATALOG:
             self.category_combo.addItem(cat_name, cat_name)
+        self.category_combo.addItem("⭐ Custom", "⭐ Custom")
         self.category_combo.currentIndexChanged.connect(self._populate_catalog)
         cat_layout.addWidget(self.category_combo, 1)
 
@@ -759,8 +765,22 @@ class PackagePanel(QWidget):
         self._catalog_initial_state = {}
 
         categories = PACKAGE_CATALOG if selected == "all" else {selected: PACKAGE_CATALOG.get(selected, {})}
-        row = 0
 
+        # Include custom catalog packages from config
+        from src.core.config_manager import ConfigManager
+        try:
+            config = ConfigManager()
+            custom_pkgs = config.get("custom_catalog", [])
+        except Exception:
+            custom_pkgs = []
+
+        if custom_pkgs and (selected == "all" or selected == "⭐ Custom"):
+            categories["⭐ Custom"] = {
+                "icon": "⭐",
+                "packages": [{"name": p["name"], "desc": p.get("desc", "")} for p in custom_pkgs],
+            }
+
+        row = 0
         for cat_name, cat_data in categories.items():
             if not cat_data:
                 continue
@@ -1061,6 +1081,54 @@ class PackagePanel(QWidget):
                 self._set_busy(False)
                 self.status_label.setText("⛔ Operation cancelled")
                 self.output_log.append("\n⛔ Operation cancelled by user")
+
+    def _check_outdated(self):
+        """Check for outdated packages and show update option."""
+        if not self.pip_manager:
+            return
+        self._set_busy(True)
+        self.status_label.setText("Checking for updates...")
+
+        class OutdatedWorker(QThread):
+            finished = Signal(list)
+            def __init__(self, pip_mgr):
+                super().__init__()
+                self.pip_mgr = pip_mgr
+            def run(self):
+                outdated = self.pip_mgr.list_outdated()
+                self.finished.emit(outdated)
+
+        self._outdated_worker = OutdatedWorker(self.pip_manager)
+        self._outdated_worker.finished.connect(self._on_outdated_result)
+        self._outdated_worker.start()
+
+    def _on_outdated_result(self, outdated):
+        self._set_busy(False)
+        if not outdated:
+            self.status_label.setText(tr("no_updates"))
+            QMessageBox.information(self, tr("updates"), tr("no_updates"))
+            return
+
+        self.status_label.setText(tr("outdated_packages").format(n=len(outdated)))
+
+        msg = tr("outdated_packages").format(n=len(outdated)) + "\n\n"
+        for pkg in outdated:
+            msg += f"  {pkg.name}: {pkg.version} → {pkg.latest_version}\n"
+        msg += f"\n{tr('update_all')}?"
+
+        reply = QMessageBox.question(
+            self, tr("updates"), msg,
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            pkg_names = [p.name for p in outdated]
+            self._set_busy(True)
+            self.current_worker = WorkerThread(
+                self.pip_manager.install_packages, pkg_names, upgrade=True
+            )
+            self.current_worker.progress.connect(self._on_progress)
+            self.current_worker.finished.connect(self._on_install_finished)
+            self.current_worker.start()
 
     def _copy_preset_command(self, packages):
         """Copy pip install command to clipboard."""

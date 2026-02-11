@@ -33,11 +33,17 @@ def main():
         from src.utils.constants import APP_NAME, APP_VERSION
         from src.core.config_manager import ConfigManager
         from src.utils.i18n import set_language
+        from src.utils.logger import setup_logging
+
+        # Initialize logging
+        logger = setup_logging()
+        logger.info(f"Starting {APP_NAME} v{APP_VERSION}")
 
         # Load language setting before creating UI
         config = ConfigManager()
         lang = config.get("language", "en")
         set_language(lang)
+        logger.info(f"Language: {lang}")
 
         # High DPI support
         QApplication.setHighDpiScaleFactorRoundingPolicy(

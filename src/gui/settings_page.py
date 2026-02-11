@@ -20,6 +20,29 @@ from src.utils.i18n import tr
 import os
 from pathlib import Path
 
+
+class NoScrollComboBox(QComboBox):
+    """ComboBox that ignores mouse wheel events unless explicitly focused by click."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFocusPolicy(Qt.StrongFocus)
+        self._clicked = False
+
+    def mousePressEvent(self, event):
+        self._clicked = True
+        super().mousePressEvent(event)
+
+    def wheelEvent(self, event):
+        if self._clicked and self.hasFocus():
+            super().wheelEvent(event)
+        else:
+            event.ignore()
+
+    def focusOutEvent(self, event):
+        self._clicked = False
+        super().focusOutEvent(event)
+
 # Dil tanımları
 LANGUAGES = {
     "en": "English",
@@ -77,8 +100,7 @@ class SettingsPage(QWidget):
         appearance_layout.setSpacing(12)
 
         # Theme
-        self.theme_combo = QComboBox()
-        self.theme_combo.setFocusPolicy(Qt.StrongFocus)
+        self.theme_combo = NoScrollComboBox()
         self.theme_combo.addItem("🌙 Dark", "dark")
         self.theme_combo.addItem("☀️ Light", "light")
         appearance_layout.addRow(f"{tr('theme')}", self.theme_combo)
@@ -113,8 +135,7 @@ class SettingsPage(QWidget):
         self.lang_enabled_cb.toggled.connect(self._toggle_language)
         lang_row.addWidget(self.lang_enabled_cb)
 
-        self.lang_combo = QComboBox()
-        self.lang_combo.setFocusPolicy(Qt.StrongFocus)  # Prevent scroll hijack
+        self.lang_combo = NoScrollComboBox()
         for code, name in LANGUAGES.items():
             self.lang_combo.addItem(f"{name}", code)
         self.lang_combo.setEnabled(False)  # Disabled until checkbox is checked
@@ -181,9 +202,16 @@ class SettingsPage(QWidget):
         default_py_layout = QHBoxLayout()
         default_py_label = QLabel(f"{tr('default_python')}")
         default_py_layout.addWidget(default_py_label)
-        self.default_python_combo = QComboBox()
-        self.default_python_combo.setFocusPolicy(Qt.StrongFocus)
+
+        self.default_py_cb = QCheckBox()
+        self.default_py_cb.setChecked(False)
+        self.default_py_cb.toggled.connect(lambda on: self.default_python_combo.setEnabled(on))
+        default_py_layout.addWidget(self.default_py_cb)
+
+        self.default_python_combo = NoScrollComboBox()
         self.default_python_combo.addItem(tr("system_default"), "")
+        self.default_python_combo.setEnabled(False)
+        default_py_layout.addWidget(self.default_python_combo, 1)
         default_py_layout.addWidget(self.default_python_combo, 1)
         python_layout.addLayout(default_py_layout)
 
@@ -243,8 +271,14 @@ class SettingsPage(QWidget):
         general_layout.addRow(self.save_window_cb)
 
         # Default terminal
-        self.terminal_combo = QComboBox()
-        self.terminal_combo.setFocusPolicy(Qt.StrongFocus)
+        terminal_row = QHBoxLayout()
+        self.terminal_cb = QCheckBox()
+        self.terminal_cb.setChecked(False)
+        self.terminal_cb.toggled.connect(lambda on: self.terminal_combo.setEnabled(on))
+        terminal_row.addWidget(self.terminal_cb)
+
+        self.terminal_combo = NoScrollComboBox()
+        self.terminal_combo.setEnabled(False)
         platform = get_platform()
         if platform == "windows":
             self.terminal_combo.addItem("PowerShell", "powershell")
@@ -259,7 +293,8 @@ class SettingsPage(QWidget):
             self.terminal_combo.addItem("GNOME Terminal", "gnome-terminal")
             self.terminal_combo.addItem("Konsole", "konsole")
             self.terminal_combo.addItem("xterm", "xterm")
-        general_layout.addRow(f"{tr('default_terminal')}", self.terminal_combo)
+        terminal_row.addWidget(self.terminal_combo, 1)
+        general_layout.addRow(f"{tr('default_terminal')}", terminal_row)
 
         general_group.setLayout(general_layout)
         layout.addWidget(general_group)
@@ -275,9 +310,14 @@ class SettingsPage(QWidget):
         vscode_layout.addWidget(vscode_info)
 
         vscode_btn_layout = QHBoxLayout()
-        self.vscode_env_combo = QComboBox()
-        self.vscode_env_combo.setFocusPolicy(Qt.StrongFocus)
+        self.vscode_cb = QCheckBox()
+        self.vscode_cb.setChecked(False)
+        self.vscode_cb.toggled.connect(lambda on: self.vscode_env_combo.setEnabled(on))
+        vscode_btn_layout.addWidget(self.vscode_cb)
+
+        self.vscode_env_combo = NoScrollComboBox()
         self.vscode_env_combo.addItem("-- Select Environment --", "")
+        self.vscode_env_combo.setEnabled(False)
         vscode_btn_layout.addWidget(self.vscode_env_combo, 1)
 
         vscode_set_btn = QPushButton("🔗 Set as VS Code Interpreter")
@@ -442,8 +482,12 @@ class SettingsPage(QWidget):
         # Terminal
         terminal = self.config.get("default_terminal", "")
         idx = self.terminal_combo.findData(terminal)
-        if idx >= 0:
+        if idx > 0:
+            self.terminal_cb.setChecked(True)
+            self.terminal_combo.setEnabled(True)
             self.terminal_combo.setCurrentIndex(idx)
+        elif idx == 0:
+            self.terminal_combo.setCurrentIndex(0)
 
         # Scan pythons
         self._scan_pythons()
@@ -486,11 +530,20 @@ class SettingsPage(QWidget):
                 f"Python {entry.get('version', '?')} (Custom)", norm_path
             )
 
-        # Set default python selection
+        # Set default python selection — only enable checkbox if user explicitly changed it
         default_py = self.config.get("default_python", "")
-        idx = self.default_python_combo.findData(default_py)
-        if idx >= 0:
-            self.default_python_combo.setCurrentIndex(idx)
+        if default_py and default_py.strip():
+            idx = self.default_python_combo.findData(default_py)
+            if idx > 0:  # index 0 is "System Default" — don't enable for that
+                self.default_py_cb.setChecked(True)
+                self.default_python_combo.setEnabled(True)
+                self.default_python_combo.setCurrentIndex(idx)
+            else:
+                self.default_py_cb.setChecked(False)
+                self.default_python_combo.setEnabled(False)
+        else:
+            self.default_py_cb.setChecked(False)
+            self.default_python_combo.setEnabled(False)
 
     def _add_custom_python(self):
         """Add a custom Python executable path."""

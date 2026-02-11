@@ -108,10 +108,10 @@ class PackagePanel(QWidget):
 
         # Environment selector at top
         self.env_bar = QFrame()
-        self.env_bar.setFixedHeight(44)
+        self.env_bar.setFixedHeight(52)
         self.env_bar.setStyleSheet(
-            "background-color: rgba(137, 180, 250, 0.1); "
-            "border-bottom: 1px solid #313244;"
+            "QFrame { background-color: #181825; "
+            "border-bottom: 2px solid #313244; }"
         )
         env_bar_layout = QHBoxLayout(self.env_bar)
         env_bar_layout.setContentsMargins(16, 0, 16, 0)
@@ -121,7 +121,23 @@ class PackagePanel(QWidget):
         env_bar_layout.addWidget(env_lbl)
 
         self.env_selector = QComboBox()
-        self.env_selector.setMinimumWidth(200)
+        self.env_selector.setMinimumWidth(280)
+        self.env_selector.setFixedHeight(36)
+        self.env_selector.setStyleSheet(
+            "QComboBox {"
+            "  font-size: 14px; font-weight: bold; padding: 4px 12px;"
+            "  background-color: #1e1e2e; color: #cdd6f4;"
+            "  border: 2px solid #89b4fa; border-radius: 6px;"
+            "}"
+            "QComboBox:hover { border-color: #b4befe; }"
+            "QComboBox::drop-down { border: none; width: 30px; }"
+            "QComboBox QAbstractItemView {"
+            "  background-color: #1e1e2e; color: #cdd6f4;"
+            "  selection-background-color: #89b4fa; selection-color: #1e1e2e;"
+            "  font-size: 14px; font-weight: bold;"
+            "  border: 1px solid #89b4fa;"
+            "}"
+        )
         self.env_selector.addItem(tr("select_environment"), "")
         self.env_selector.currentIndexChanged.connect(self._on_env_selector_changed)
         env_bar_layout.addWidget(self.env_selector, 1)
@@ -180,9 +196,10 @@ class PackagePanel(QWidget):
         layout.setContentsMargins(16, 16, 16, 16)
         layout.setSpacing(16)
 
-        info = QLabel(tr("app_launcher_info") if "app_launcher_info" in tr.__code__.co_varnames else
-                      "Launch applications installed in the selected environment.\n"
-                      "If an app is not installed, you can install it with one click.")
+        info = QLabel(
+            "Launch applications installed in the selected environment.\n"
+            "If an app is not installed, you can install it with one click."
+        )
         info.setWordWrap(True)
         info.setStyleSheet("color: #a6adc8; font-size: 12px;")
         layout.addWidget(info)
@@ -703,12 +720,24 @@ class PackagePanel(QWidget):
         self.env_selector.addItem(tr("select_environment"), "")
         for name, path in env_list:
             self.env_selector.addItem(name, str(path))
-        # Restore selection
+
+        # Restore previous selection or auto-select first env
+        restored = False
         if current_data:
             idx = self.env_selector.findData(current_data)
             if idx >= 0:
                 self.env_selector.setCurrentIndex(idx)
+                restored = True
+
+        if not restored and self.env_selector.count() > 1:
+            self.env_selector.setCurrentIndex(1)
+
         self.env_selector.blockSignals(False)
+
+        # Always trigger load for selected env
+        current_idx = self.env_selector.currentIndex()
+        if current_idx > 0:
+            self._on_env_selector_changed(current_idx)
 
     def _on_env_selector_changed(self, index):
         """Handle env dropdown change."""

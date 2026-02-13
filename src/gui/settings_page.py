@@ -99,11 +99,18 @@ class SettingsPage(QWidget):
         appearance_layout = QFormLayout()
         appearance_layout.setSpacing(12)
 
-        # Theme
+        # Theme — protected by checkbox
+        theme_row = QHBoxLayout()
+        self.theme_cb = QCheckBox()
+        self.theme_cb.setChecked(False)
+        self.theme_cb.toggled.connect(lambda on: self.theme_combo.setEnabled(on))
+        theme_row.addWidget(self.theme_cb)
         self.theme_combo = NoScrollComboBox()
         self.theme_combo.addItem("🌙 Dark", "dark")
         self.theme_combo.addItem("☀️ Light", "light")
-        appearance_layout.addRow(f"{tr('theme')}", self.theme_combo)
+        self.theme_combo.setEnabled(False)
+        theme_row.addWidget(self.theme_combo, 1)
+        appearance_layout.addRow(f"{tr('theme')}", theme_row)
 
         # Font family — protected by checkbox
         font_row = QHBoxLayout()
@@ -585,26 +592,37 @@ class SettingsPage(QWidget):
         idx = self.theme_combo.findData(theme)
         if idx >= 0:
             self.theme_combo.setCurrentIndex(idx)
+        if theme != "dark":
+            self.theme_cb.setChecked(True)
+            self.theme_combo.setEnabled(True)
+        else:
+            self.theme_cb.setChecked(False)
+            self.theme_combo.setEnabled(False)
 
-        # Font
+        # Font — ALWAYS start unticked, only tick if config has explicit non-default
         font_family = self.config.get("font_family", "")
-        if font_family and font_family not in ("", "Segoe UI"):
+        # Clear old default values from config
+        default_fonts = ("", "Segoe UI", "Yu Gothic UI", "MS Shell Dlg 2", "Arial", "Tahoma")
+        if not font_family or font_family in default_fonts:
+            self.font_cb.setChecked(False)
+            self.font_combo.setEnabled(False)
+            self.config.set("font_family", "")
+        else:
             self.font_cb.setChecked(True)
             self.font_combo.setEnabled(True)
             self.font_combo.setCurrentFont(QFont(font_family))
-        else:
-            self.font_cb.setChecked(False)
-            self.font_combo.setEnabled(False)
 
-        font_size = self.config.get("font_size", 0)
-        if font_size and font_size not in (0, 13):
-            self.font_size_cb.setChecked(True)
-            self.font_size_spin.setEnabled(True)
-            self.font_size_spin.setValue(font_size)
-        else:
+        font_size = self.config.get("font_size", 13)
+        default_sizes = (0, 12, 13, 14)
+        if not font_size or font_size in default_sizes:
             self.font_size_cb.setChecked(False)
             self.font_size_spin.setEnabled(False)
             self.font_size_spin.setValue(13)
+            self.config.set("font_size", 13)
+        else:
+            self.font_size_cb.setChecked(True)
+            self.font_size_spin.setEnabled(True)
+            self.font_size_spin.setValue(font_size)
 
         # Language
         lang = self.config.get("language", "en")
@@ -1274,7 +1292,10 @@ class SettingsPage(QWidget):
     def _save_settings(self):
         """Save all settings."""
         # Theme
-        new_theme = self.theme_combo.currentData()
+        if self.theme_cb.isChecked():
+            new_theme = self.theme_combo.currentData()
+        else:
+            new_theme = "dark"
         old_theme = self.config.get("theme", "dark")
         self.config.set("theme", new_theme)
         if new_theme != old_theme:
@@ -1285,15 +1306,15 @@ class SettingsPage(QWidget):
             font_family = self.font_combo.currentFont().family()
             self.config.set("font_family", font_family)
         else:
-            font_family = self.config.get("font_family", "Segoe UI") or "Segoe UI"
-            self.config.set("font_family", "")
+            font_family = "Segoe UI"
+            self.config.set("font_family", "")  # empty = default
 
         if self.font_size_cb.isChecked():
             font_size = self.font_size_spin.value()
             self.config.set("font_size", font_size)
         else:
             font_size = 13
-            self.config.set("font_size", 0)
+            self.config.set("font_size", 13)  # 13 = default
 
         self.font_changed.emit(font_family, font_size)
 

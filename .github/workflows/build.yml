@@ -11,6 +11,7 @@ permissions:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
@@ -35,16 +36,22 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install PySide6 pyinstaller Pillow
+          pip install PySide6==6.7.3 pyinstaller==6.11.1 Pillow
 
       - name: Install Linux deps
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxkbcommon0 libxcb-xinerama0 libegl1
+          sudo apt-get install -y libxkbcommon0 libxcb-xinerama0 libegl1 libxcb-cursor0
 
       - name: Build
         run: python build.py
+
+      - name: List dist (debug)
+        if: always()
+        shell: bash
+        continue-on-error: true
+        run: ls -la dist/ || dir dist\\
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -62,8 +69,8 @@ jobs:
 
       - name: Rename binaries
         run: |
-          mv VenvStudio-Linux/VenvStudio VenvStudio-Linux/VenvStudio-Linux
-          mv VenvStudio-macOS/VenvStudio VenvStudio-macOS/VenvStudio-macOS
+          mv VenvStudio-Linux/VenvStudio VenvStudio-Linux/VenvStudio-Linux || true
+          mv VenvStudio-macOS/VenvStudio VenvStudio-macOS/VenvStudio-macOS || true
 
       - name: Create Release
         uses: softprops/action-gh-release@v2

@@ -77,16 +77,27 @@ def get_icon_path():
     if icon.exists():
         return str(icon)
 
+    # Try to create icon
     png = ICON_DIR / "icon.png"
     if not png.exists():
-        _create_icon(png)
+        try:
+            _create_icon(png)
+        except Exception as e:
+            print(f"  ⚠️  İkon oluşturulamadı: {e}")
 
     if IS_WINDOWS and png.exists():
-        _png_to_ico(png, ICON_DIR / "icon.ico")
+        try:
+            _png_to_ico(png, ICON_DIR / "icon.ico")
+        except Exception as e:
+            print(f"  ⚠️  ICO dönüşüm hatası: {e}")
         if (ICON_DIR / "icon.ico").exists():
             return str(ICON_DIR / "icon.ico")
 
-    return str(png) if png.exists() else ""
+    if png.exists():
+        return str(png)
+
+    print("  ⚠️  İkon bulunamadı, ikonsuz devam ediliyor...")
+    return ""
 
 
 def _create_icon(path):
@@ -191,13 +202,10 @@ def build_command(one_file=True, debug=False):
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--name", APP_NAME, "--noconfirm", "--clean",
-        "--windowed",    # GUI app — konsol açma
-        "--noconsole",   # Konsol penceresi yok
+        "--windowed",    # GUI app — no console window
     ]
     if debug:
-        # Debug modunda konsol da açılsın
         cmd.remove("--windowed")
-        cmd.remove("--noconsole")
     cmd.append("--onefile" if one_file else "--onedir")
     cmd.extend(["--collect-submodules", "src"])
 
@@ -319,6 +327,7 @@ permissions:
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
@@ -343,16 +352,23 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install PySide6 pyinstaller Pillow
+          pip install PySide6==6.7.3 pyinstaller==6.11.1 Pillow
 
       - name: Install Linux deps
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxkbcommon0 libxcb-xinerama0 libegl1
+          sudo apt-get install -y libxkbcommon0 libxcb-xinerama0 libegl1 libxcb-cursor0
 
       - name: Build
         run: python build.py
+
+      - name: List dist (debug)
+        if: always()
+        run: |
+          ls -la dist/ || dir dist\\
+        shell: bash
+        continue-on-error: true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
@@ -370,8 +386,8 @@ jobs:
 
       - name: Rename binaries
         run: |
-          mv VenvStudio-Linux/VenvStudio VenvStudio-Linux/VenvStudio-Linux
-          mv VenvStudio-macOS/VenvStudio VenvStudio-macOS/VenvStudio-macOS
+          mv VenvStudio-Linux/VenvStudio VenvStudio-Linux/VenvStudio-Linux || true
+          mv VenvStudio-macOS/VenvStudio VenvStudio-macOS/VenvStudio-macOS || true
 
       - name: Create Release
         uses: softprops/action-gh-release@v2

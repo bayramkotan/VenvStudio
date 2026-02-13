@@ -1,0 +1,75 @@
+name: Build & Release VenvStudio
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: VenvStudio-Windows
+            binary: dist/VenvStudio.exe
+          - os: ubuntu-22.04
+            artifact: VenvStudio-Linux
+            binary: dist/VenvStudio
+          - os: macos-latest
+            artifact: VenvStudio-macOS
+            binary: dist/VenvStudio
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PySide6 pyinstaller Pillow
+
+      - name: Install Linux deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon0 libxcb-xinerama0 libegl1
+
+      - name: Build
+        run: python build.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.binary }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/download-artifact@v4
+
+      - name: Rename binaries
+        run: |
+          mv VenvStudio-Linux/VenvStudio VenvStudio-Linux/VenvStudio-Linux
+          mv VenvStudio-macOS/VenvStudio VenvStudio-macOS/VenvStudio-macOS
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            VenvStudio-Windows/VenvStudio.exe
+            VenvStudio-Linux/VenvStudio-Linux
+            VenvStudio-macOS/VenvStudio-macOS
+          generate_release_notes: true

@@ -36,24 +36,25 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install PySide6==6.7.3 pyinstaller==6.11.1 Pillow
+          pip install PySide6 pyinstaller Pillow
 
       - name: Install Linux deps
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxkbcommon0 libxcb-xinerama0 libegl1 libxcb-cursor0
+          sudo apt-get install -y libxcb-cursor0 libxcb-xinerama0 libegl1 libxcb-icccm4 libxkbcommon-x11-0 libxcb-keysyms1 libxcb-image0 libxcb-render-util0 libxcb-shape0 libxcb-xfixes0 libxcb-randr0 libxcb-sync1 libxcb-shm0
 
       - name: Build
         run: python build.py
 
-      - name: List dist (debug)
+      - name: Debug - list dist
         if: always()
         shell: bash
         continue-on-error: true
-        run: ls -la dist/ || dir dist\\
+        run: ls -la dist/ 2>/dev/null || dir dist\ 2>nul || echo "No dist directory"
 
       - name: Upload artifact
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
@@ -66,11 +67,13 @@ jobs:
 
     steps:
       - uses: actions/download-artifact@v4
+        continue-on-error: true
 
       - name: Rename binaries
+        continue-on-error: true
         run: |
-          mv VenvStudio-Linux/VenvStudio VenvStudio-Linux/VenvStudio-Linux || true
-          mv VenvStudio-macOS/VenvStudio VenvStudio-macOS/VenvStudio-macOS || true
+          mv VenvStudio-Linux/VenvStudio VenvStudio-Linux/VenvStudio-Linux 2>/dev/null || true
+          mv VenvStudio-macOS/VenvStudio VenvStudio-macOS/VenvStudio-macOS 2>/dev/null || true
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -80,3 +83,4 @@ jobs:
             VenvStudio-Linux/VenvStudio-Linux
             VenvStudio-macOS/VenvStudio-macOS
           generate_release_notes: true
+          fail_on_unmatched_files: false

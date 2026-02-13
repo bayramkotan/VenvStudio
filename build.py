@@ -208,9 +208,10 @@ def build_command(one_file=True, debug=False):
         cmd.remove("--windowed")
     cmd.append("--onefile" if one_file else "--onedir")
     cmd.extend(["--collect-submodules", "src"])
+    cmd.extend(["--collect-all", "PySide6"])
 
     icon = get_icon_path()
-    if icon:
+    if icon and os.path.isfile(icon):
         cmd.extend(["--icon", icon])
 
     for imp in get_hidden_imports():
@@ -352,7 +353,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install PySide6==6.7.3 pyinstaller==6.11.1 Pillow
+          pip install PySide6 pyinstaller Pillow
 
       - name: Install Linux deps
         if: runner.os == 'Linux'

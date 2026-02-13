@@ -13,11 +13,23 @@ import traceback
 
 # PyInstaller ile paketlendiğinde doğru path'i bul
 if getattr(sys, 'frozen', False):
-    # PyInstaller .exe olarak çalışıyor
-    # _MEIPASS: --onefile modunda temp dizini
     BASE_DIR = getattr(sys, '_MEIPASS', os.path.dirname(sys.executable))
     sys.path.insert(0, BASE_DIR)
-    os.chdir(BASE_DIR)  # CWD'yi de ayarla
+
+    # Qt plugin path — PyInstaller bundle içindeki doğru yolu ayarla
+    qt_plugin_path = os.path.join(BASE_DIR, "PySide6", "Qt", "plugins")
+    if not os.path.isdir(qt_plugin_path):
+        qt_plugin_path = os.path.join(BASE_DIR, "PySide6", "plugins")
+    if os.path.isdir(qt_plugin_path):
+        os.environ["QT_PLUGIN_PATH"] = qt_plugin_path
+
+    # Linux'ta xcb platform plugin sorunları için
+    if sys.platform == "linux":
+        os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
+        # libxcb-cursor0 yoksa offscreen dene
+        platform_dir = os.path.join(qt_plugin_path, "platforms") if os.path.isdir(qt_plugin_path) else ""
+        if platform_dir and os.path.isdir(platform_dir):
+            os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = platform_dir
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     sys.path.insert(0, BASE_DIR)

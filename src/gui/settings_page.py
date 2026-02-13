@@ -350,33 +350,41 @@ class SettingsPage(QWidget):
         cat_mgr_layout.setSpacing(8)
 
         # Show built-in categories checkbox
-        self.show_builtin_cats_cb = QCheckBox("Show built-in categories for editing (read-only)")
+        self.show_builtin_cats_cb = QCheckBox("Show built-in categories (editable — changes saved to config)")
         self.show_builtin_cats_cb.setChecked(False)
         self.show_builtin_cats_cb.toggled.connect(self._toggle_builtin_categories)
         cat_mgr_layout.addWidget(self.show_builtin_cats_cb)
 
-        # Built-in categories (hidden by default)
+        # Built-in categories (hidden by default, editable)
         self.builtin_cats_table = QTableWidget()
-        self.builtin_cats_table.setColumnCount(2)
-        self.builtin_cats_table.setHorizontalHeaderLabels(["Icon", "Category Name (built-in)"])
+        self.builtin_cats_table.setColumnCount(3)
+        self.builtin_cats_table.setHorizontalHeaderLabels(["Icon", "Category Name", "Packages"])
         self.builtin_cats_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
-        self.builtin_cats_table.setColumnWidth(0, 60)
+        self.builtin_cats_table.setColumnWidth(0, 50)
         self.builtin_cats_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self.builtin_cats_table.setMaximumHeight(150)
-        self.builtin_cats_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.builtin_cats_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
+        self.builtin_cats_table.setColumnWidth(2, 80)
+        self.builtin_cats_table.setMaximumHeight(200)
         self.builtin_cats_table.verticalHeader().setVisible(False)
-        self.builtin_cats_table.verticalHeader().setDefaultSectionSize(24)
+        self.builtin_cats_table.verticalHeader().setDefaultSectionSize(26)
         self.builtin_cats_table.setVisible(False)
-        self.builtin_cats_table.setStyleSheet(
-            "QTableWidget { background-color: #1e1e2e; color: #a6adc8; gridline-color: #313244; font-size: 12px; }"
-        )
+        self.builtin_cats_table.setStyleSheet("""
+            QTableWidget { background-color: #1e1e2e; color: #cdd6f4; gridline-color: #313244; font-size: 12px; }
+            QTableWidget::item { color: #cdd6f4; }
+            QTableWidget QLineEdit { background-color: #313244; color: #f5e0dc; border: 2px solid #89b4fa; padding: 2px; font-size: 12px; }
+        """)
         # Populate built-in
         from src.utils.constants import PACKAGE_CATALOG
         self.builtin_cats_table.setRowCount(len(PACKAGE_CATALOG))
         for i, cat_name in enumerate(PACKAGE_CATALOG):
-            icon = PACKAGE_CATALOG[cat_name].get("icon", "")
+            cat_data = PACKAGE_CATALOG[cat_name]
+            icon = cat_data.get("icon", "")
+            pkg_count = len(cat_data.get("packages", []))
             self.builtin_cats_table.setItem(i, 0, QTableWidgetItem(icon))
             self.builtin_cats_table.setItem(i, 1, QTableWidgetItem(cat_name))
+            count_item = QTableWidgetItem(str(pkg_count))
+            count_item.setFlags(count_item.flags() & ~Qt.ItemIsEditable)
+            self.builtin_cats_table.setItem(i, 2, count_item)
         cat_mgr_layout.addWidget(self.builtin_cats_table)
 
         cat_mgr_info = QLabel("Add your own categories below. These appear in the Catalog dropdown.")
@@ -488,6 +496,11 @@ class SettingsPage(QWidget):
         add_path_btn.clicked.connect(self._add_python_to_path)
         diag_btn_layout.addWidget(add_path_btn)
 
+        add_vs_path_btn = QPushButton("🖥️ Enable 'vs' CLI Commands")
+        add_vs_path_btn.setObjectName("secondary")
+        add_vs_path_btn.clicked.connect(self._toggle_vs_cli)
+        diag_btn_layout.addWidget(add_vs_path_btn)
+
         diag_btn_layout.addStretch()
         diag_layout.addLayout(diag_btn_layout)
 
@@ -575,16 +588,23 @@ class SettingsPage(QWidget):
 
         # Font
         font_family = self.config.get("font_family", "")
-        if font_family:
+        if font_family and font_family not in ("", "Segoe UI"):
             self.font_cb.setChecked(True)
             self.font_combo.setEnabled(True)
             self.font_combo.setCurrentFont(QFont(font_family))
+        else:
+            self.font_cb.setChecked(False)
+            self.font_combo.setEnabled(False)
 
         font_size = self.config.get("font_size", 0)
-        if font_size and font_size != 13:
+        if font_size and font_size not in (0, 13):
             self.font_size_cb.setChecked(True)
             self.font_size_spin.setEnabled(True)
             self.font_size_spin.setValue(font_size)
+        else:
+            self.font_size_cb.setChecked(False)
+            self.font_size_spin.setEnabled(False)
+            self.font_size_spin.setValue(13)
 
         # Language
         lang = self.config.get("language", "en")
@@ -1062,6 +1082,105 @@ class SettingsPage(QWidget):
                 )
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to run PowerShell:\n{e}")
+
+    def _toggle_vs_cli(self):
+        """Copy vs.bat/vs.py to venv base dir and add that dir to User PATH."""
+        import shutil, subprocess
+
+        venv_dir = str(self.config.get_venv_base_dir())
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        project_root = os.path.dirname(project_root)  # up to VenvStudio root
+
+        vs_py_src = os.path.join(project_root, "vs.py")
+        vs_bat_src = os.path.join(project_root, "vs.bat")
+
+        if not os.path.isfile(vs_py_src):
+            QMessageBox.critical(self, "Error", f"vs.py not found at:\n{vs_py_src}")
+            return
+
+        # Copy vs.py and vs.bat to venv base dir
+        vs_py_dst = os.path.join(venv_dir, "vs.py")
+        vs_bat_dst = os.path.join(venv_dir, "vs.bat")
+
+        try:
+            shutil.copy2(vs_py_src, vs_py_dst)
+            if os.path.isfile(vs_bat_src):
+                shutil.copy2(vs_bat_src, vs_bat_dst)
+            else:
+                # Create vs.bat pointing to vs.py in same dir
+                with open(vs_bat_dst, "w") as f:
+                    f.write(f'@echo off\npython "%~dp0vs.py" %*\n')
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to copy CLI files:\n{e}")
+            return
+
+        if get_platform() == "windows":
+            # Check if already in PATH
+            ps_check = (
+                f'$p = [Environment]::GetEnvironmentVariable("Path", "User"); '
+                f'$p -like "*{venv_dir}*"'
+            )
+            result = subprocess.run(
+                ["powershell", "-Command", ps_check],
+                capture_output=True, text=True, timeout=10,
+            )
+            already_in = "True" in result.stdout
+
+            if already_in:
+                QMessageBox.information(
+                    self, "Already Active",
+                    f"'vs' CLI is already active!\n\n"
+                    f"Directory: {venv_dir}\n\n"
+                    f"Usage:\n  vs list\n  vs create myenv\n  vs install myenv numpy"
+                )
+                return
+
+            reply = QMessageBox.question(
+                self, "Enable 'vs' CLI",
+                f"This will:\n\n"
+                f"1. Copy vs.py & vs.bat to:\n   {venv_dir}\n\n"
+                f"2. Add that folder to your User PATH\n\n"
+                f"After this you can use 'vs' from any terminal:\n"
+                f"  vs list\n  vs create myenv\n  vs install myenv numpy\n\n"
+                f"Continue?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+
+            ps_cmd = (
+                f'$userPath = [Environment]::GetEnvironmentVariable("Path", "User"); '
+                f'if ($userPath -notlike "*{venv_dir}*") {{ '
+                f'  [Environment]::SetEnvironmentVariable("Path", "$userPath;{venv_dir}", "User") '
+                f'}}; '
+            )
+            try:
+                result = subprocess.run(
+                    ["powershell", "-Command", ps_cmd],
+                    capture_output=True, text=True, timeout=15,
+                )
+                if result.returncode == 0:
+                    self.config.set("vs_cli_enabled", True)
+                    QMessageBox.information(
+                        self, "Success",
+                        f"'vs' CLI enabled! ✅\n\n"
+                        f"PATH added: {venv_dir}\n\n"
+                        f"Restart your terminal, then try:\n"
+                        f"  vs list\n  vs create myenv\n  vs install myenv numpy pandas"
+                    )
+                else:
+                    QMessageBox.critical(self, "Error", f"Failed:\n{result.stderr}")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed:\n{e}")
+        else:
+            self.config.set("vs_cli_enabled", True)
+            QMessageBox.information(
+                self, "Enable 'vs' CLI",
+                f"Files copied to: {venv_dir}\n\n"
+                f"Add to ~/.bashrc or ~/.zshrc:\n"
+                f'  export PATH="{venv_dir}:$PATH"\n\n'
+                f"Then: source ~/.bashrc"
+            )
 
     def _clear_all_data(self):
         """Remove all config, log, and cache files."""

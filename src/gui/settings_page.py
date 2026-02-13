@@ -418,6 +418,15 @@ class SettingsPage(QWidget):
 
         diag_btn_layout.addStretch()
         diag_layout.addLayout(diag_btn_layout)
+
+        # Second row — destructive actions
+        diag_btn_layout2 = QHBoxLayout()
+        clear_all_btn = QPushButton("🗑️ Remove All Settings & Cache")
+        clear_all_btn.setObjectName("danger")
+        clear_all_btn.clicked.connect(self._clear_all_data)
+        diag_btn_layout2.addWidget(clear_all_btn)
+        diag_btn_layout2.addStretch()
+        diag_layout.addLayout(diag_btn_layout2)
         diag_group.setLayout(diag_layout)
         layout.addWidget(diag_group)
 
@@ -799,25 +808,121 @@ class SettingsPage(QWidget):
             subprocess.Popen(["xdg-open", str(config_dir)])
 
     def _add_python_to_path(self):
-        """Show instructions or add Python to system PATH."""
-        if get_platform() == "windows":
-            msg = (
-                "To add Python to your System PATH on Windows:\n\n"
-                "1. Open Settings → System → About → Advanced system settings\n"
-                "2. Click 'Environment Variables'\n"
-                "3. Under 'System variables', find 'Path' and click 'Edit'\n"
-                "4. Add the Python installation directory\n\n"
-                "Or run this in PowerShell as Administrator:\n"
-                '[Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\\Python312", "Machine")'
-            )
-        else:
-            msg = (
-                "To add Python to your PATH on Linux/macOS:\n\n"
-                "Add to ~/.bashrc or ~/.zshrc:\n"
-                "  export PATH=\"$HOME/.local/bin:$PATH\"\n\n"
+        """Add a Python installation to system PATH automatically."""
+        if get_platform() != "windows":
+            QMessageBox.information(
+                self, "Add Python to PATH",
+                "On Linux/macOS, add to ~/.bashrc or ~/.zshrc:\n\n"
+                '  export PATH="$HOME/.local/bin:$PATH"\n\n'
                 "Then run: source ~/.bashrc"
             )
-        QMessageBox.information(self, "Add Python to PATH", msg)
+            return
+
+        # Collect all known Python paths
+        python_paths = []
+        for row in range(self.python_table.rowCount()):
+            path_item = self.python_table.item(row, 1)
+            ver_item = self.python_table.item(row, 0)
+            if path_item and ver_item:
+                exe_path = path_item.text()
+                folder = os.path.dirname(exe_path)
+                scripts = os.path.join(folder, "Scripts")
+                python_paths.append({
+                    "version": ver_item.text(),
+                    "folder": folder,
+                    "scripts": scripts,
+                })
+
+        if not python_paths:
+            QMessageBox.warning(self, "Warning", "No Python installations found. Run Scan System first.")
+            return
+
+        # Let user choose which one
+        items = [f"Python {p['version']}  —  {p['folder']}" for p in python_paths]
+        item, ok = QInputDialog.getItem(
+            self, "Add Python to PATH",
+            "Select which Python to add to your User PATH:",
+            items, 0, False,
+        )
+        if not ok or not item:
+            return
+
+        idx = items.index(item)
+        selected = python_paths[idx]
+
+        # Confirm
+        reply = QMessageBox.question(
+            self, "Confirm",
+            f"Add these folders to your User PATH?\n\n"
+            f"  {selected['folder']}\n"
+            f"  {selected['scripts']}\n\n"
+            f"This modifies your user environment variables.\n"
+            f"A restart of your terminal/apps may be needed.",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        # Add to User PATH on Windows via PowerShell
+        import subprocess
+        folder = selected['folder']
+        scripts = selected['scripts']
+        ps_cmd = (
+            f'$userPath = [Environment]::GetEnvironmentVariable("Path", "User"); '
+            f'$newPaths = @("{folder}", "{scripts}"); '
+            f'foreach ($p in $newPaths) {{ '
+            f'  if ($userPath -notlike "*$p*") {{ '
+            f'    $userPath = "$userPath;$p" '
+            f'  }} '
+            f'}}; '
+            f'[Environment]::SetEnvironmentVariable("Path", $userPath, "User")'
+        )
+        try:
+            result = subprocess.run(
+                ["powershell", "-Command", ps_cmd],
+                capture_output=True, text=True, timeout=15,
+            )
+            if result.returncode == 0:
+                QMessageBox.information(
+                    self, "Success",
+                    f"Python {selected['version']} added to User PATH!\n\n"
+                    f"  {folder}\n  {scripts}\n\n"
+                    f"Restart your terminal or apps for the change to take effect."
+                )
+            else:
+                QMessageBox.critical(
+                    self, "Error",
+                    f"Failed to update PATH:\n{result.stderr}"
+                )
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to run PowerShell:\n{e}")
+
+    def _clear_all_data(self):
+        """Remove all config, log, and cache files."""
+        import shutil
+        reply = QMessageBox.warning(
+            self, "Remove All Data",
+            "This will delete ALL VenvStudio settings, logs, and cache.\n\n"
+            "Your virtual environments will NOT be deleted.\n\n"
+            "The application will close. Are you sure?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        config_dir = self.config.config_file_path.parent
+        try:
+            # Remove config directory
+            if config_dir.exists():
+                shutil.rmtree(str(config_dir))
+            QMessageBox.information(
+                self, "Done",
+                f"All data removed from:\n{config_dir}\n\nApplication will now close."
+            )
+            from PySide6.QtWidgets import QApplication
+            QApplication.instance().quit()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to remove data:\n{e}")
 
     def populate_vscode_envs(self, env_list):
         """Populate VS Code env selector from main window."""
@@ -846,7 +951,10 @@ class SettingsPage(QWidget):
 
         # Language
         new_lang = self.lang_combo.currentData()
+        if not new_lang:
+            new_lang = "en"
         old_lang = self.config.get("language", "en")
+        print(f"[DEBUG] Language: old={old_lang}, new={new_lang}, checkbox={self.lang_enabled_cb.isChecked()}")
         self.config.set("language", new_lang)
         lang_changed = (new_lang != old_lang and self.lang_enabled_cb.isChecked())
         if lang_changed:
@@ -888,10 +996,12 @@ class SettingsPage(QWidget):
                 QMessageBox.Yes | QMessageBox.No,
             )
             if reply == QMessageBox.Yes:
-                import sys, os
+                import sys, subprocess
                 from PySide6.QtWidgets import QApplication
-                QApplication.quit()
-                os.execv(sys.executable, [sys.executable] + sys.argv)
+                # Find the main script
+                main_script = sys.argv[0] if sys.argv else "main.py"
+                subprocess.Popen([sys.executable, main_script])
+                QApplication.instance().quit()
 
     def _reset_all(self):
         """Reset all settings to defaults."""

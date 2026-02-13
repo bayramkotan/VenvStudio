@@ -120,18 +120,26 @@ class EnvCreateDialog(QDialog):
 
         # Also add custom pythons from config
         custom_pythons = self.config.get("custom_pythons", [])
+        print(f"[DEBUG] EnvDialog custom_pythons from config: {custom_pythons}")
         for entry in custom_pythons:
             import os
-            norm = os.path.normpath(entry.get("path", ""))
+            raw_path = entry.get("path", "")
+            if not raw_path:
+                continue
+            norm = os.path.normpath(raw_path)
             ver = entry.get("version", "?")
-            # Avoid duplicate
+            # Avoid duplicate (case-insensitive on Windows)
             found = False
             for i in range(self.python_combo.count()):
-                if self.python_combo.itemData(i) == norm:
+                existing = self.python_combo.itemData(i) or ""
+                if existing and os.path.normpath(existing).lower() == norm.lower():
                     found = True
                     break
             if not found:
                 self.python_combo.addItem(f"Python {ver} (Custom: {norm})", norm)
+                print(f"[DEBUG] Added custom python to env dialog: {ver} → {norm}")
+            else:
+                print(f"[DEBUG] Skipped duplicate: {norm}")
 
         form_layout.addRow("Python:", self.python_combo)
 

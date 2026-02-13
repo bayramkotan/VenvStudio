@@ -558,7 +558,21 @@ class PackagePanel(QWidget):
         self.category_combo.addItem(tr("all_categories"), "all")
         for cat_name in PACKAGE_CATALOG:
             self.category_combo.addItem(cat_name, cat_name)
-        self.category_combo.addItem("⭐ Custom", "⭐ Custom")
+        # Add custom categories from config
+        from src.core.config_manager import ConfigManager
+        try:
+            _cfg = ConfigManager()
+            custom_cats = _cfg.get("custom_categories", [])
+            for c in custom_cats:
+                name = c.get("name", "")
+                icon = c.get("icon", "⭐")
+                full = f"{icon} {name}"
+                if full not in [self.category_combo.itemData(i) for i in range(self.category_combo.count())]:
+                    self.category_combo.addItem(full, full)
+        except Exception:
+            pass
+        if self.category_combo.findData("⭐ Custom") < 0:
+            self.category_combo.addItem("⭐ Custom", "⭐ Custom")
         self.category_combo.currentIndexChanged.connect(self._populate_catalog)
         cat_layout.addWidget(self.category_combo, 1)
 
@@ -803,11 +817,22 @@ class PackagePanel(QWidget):
         except Exception:
             custom_pkgs = []
 
-        if custom_pkgs and (selected == "all" or selected == "⭐ Custom"):
-            categories["⭐ Custom"] = {
-                "icon": "⭐",
-                "packages": [{"name": p["name"], "desc": p.get("desc", "")} for p in custom_pkgs],
-            }
+        if custom_pkgs:
+            # Group custom packages by category
+            custom_groups = {}
+            for p in custom_pkgs:
+                cat = p.get("category", "⭐ Custom")
+                if cat not in custom_groups:
+                    custom_groups[cat] = {"icon": "⭐", "packages": []}
+                custom_groups[cat]["packages"].append({"name": p["name"], "desc": p.get("desc", "")})
+
+            for cat_name, cat_data in custom_groups.items():
+                if selected == "all" or selected == cat_name:
+                    if cat_name not in categories:
+                        categories[cat_name] = cat_data
+                    else:
+                        # Merge into existing category
+                        categories[cat_name]["packages"].extend(cat_data["packages"])
 
         row = 0
         for cat_name, cat_data in categories.items():

@@ -329,12 +329,57 @@ class SettingsPage(QWidget):
         vscode_group.setLayout(vscode_layout)
         layout.addWidget(vscode_group)
 
-        # ── 7. CUSTOM CATALOG EDITOR ──
+        # ── 7. CUSTOM CATEGORIES ──
+        cat_mgr_group = QGroupBox("📂 Custom Categories")
+        cat_mgr_layout = QVBoxLayout()
+        cat_mgr_layout.setSpacing(8)
+
+        cat_mgr_info = QLabel("Manage custom categories. These appear in the Catalog dropdown.")
+        cat_mgr_info.setWordWrap(True)
+        cat_mgr_info.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        cat_mgr_layout.addWidget(cat_mgr_info)
+
+        self.custom_categories_list = QTableWidget()
+        self.custom_categories_list.setColumnCount(2)
+        self.custom_categories_list.setHorizontalHeaderLabels(["Icon", "Category Name"])
+        self.custom_categories_list.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
+        self.custom_categories_list.setColumnWidth(0, 60)
+        self.custom_categories_list.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.custom_categories_list.setMaximumHeight(120)
+        self.custom_categories_list.setSelectionBehavior(QTableWidget.SelectRows)
+        self.custom_categories_list.setSelectionMode(QTableWidget.SingleSelection)
+        self.custom_categories_list.verticalHeader().setVisible(False)
+        self.custom_categories_list.verticalHeader().setDefaultSectionSize(28)
+        self.custom_categories_list.setStyleSheet("""
+            QTableWidget { background-color: #1e1e2e; color: #cdd6f4; gridline-color: #313244; font-size: 13px; }
+            QTableWidget::item { color: #cdd6f4; padding: 4px; }
+            QTableWidget::item:selected { background-color: #45475a; color: #cdd6f4; }
+            QTableWidget QLineEdit { background-color: #313244; color: #f5e0dc; border: 2px solid #89b4fa; padding: 2px 4px; font-size: 13px; }
+        """)
+        cat_mgr_layout.addWidget(self.custom_categories_list)
+
+        cat_mgr_btns = QHBoxLayout()
+        add_category_btn = QPushButton("+ Add Category")
+        add_category_btn.setObjectName("secondary")
+        add_category_btn.clicked.connect(self._add_custom_category)
+        cat_mgr_btns.addWidget(add_category_btn)
+
+        remove_category_btn = QPushButton("Remove Category")
+        remove_category_btn.setObjectName("danger")
+        remove_category_btn.clicked.connect(self._remove_custom_category)
+        cat_mgr_btns.addWidget(remove_category_btn)
+
+        cat_mgr_btns.addStretch()
+        cat_mgr_layout.addLayout(cat_mgr_btns)
+        cat_mgr_group.setLayout(cat_mgr_layout)
+        layout.addWidget(cat_mgr_group)
+
+        # ── 8. CUSTOM CATALOG PACKAGES ──
         catalog_group = QGroupBox("📚 Custom Catalog Packages")
         catalog_layout = QVBoxLayout()
         catalog_layout.setSpacing(10)
 
-        catalog_info = QLabel("Add custom packages to the catalog. These appear under '⭐ Custom' category.")
+        catalog_info = QLabel("Add custom packages. Category column uses a dropdown from built-in + custom categories.")
         catalog_info.setWordWrap(True)
         catalog_info.setStyleSheet("color: #a6adc8; font-size: 12px;")
         catalog_layout.addWidget(catalog_info)
@@ -343,41 +388,23 @@ class SettingsPage(QWidget):
         self.custom_catalog_table.setColumnCount(3)
         self.custom_catalog_table.setHorizontalHeaderLabels(["Package Name", "Description", "Category"])
         self.custom_catalog_table.setStyleSheet("""
-            QTableWidget {
-                background-color: #1e1e2e;
-                color: #cdd6f4;
-                gridline-color: #313244;
-                font-size: 13px;
-            }
-            QTableWidget::item {
-                color: #cdd6f4;
-                padding: 4px;
-                font-size: 13px;
-            }
-            QTableWidget::item:selected {
-                background-color: #45475a;
-                color: #cdd6f4;
-            }
-            QTableWidget QLineEdit {
-                background-color: #313244;
-                color: #f5e0dc;
-                border: 2px solid #89b4fa;
-                padding: 4px 6px;
-                font-size: 13px;
-                min-height: 24px;
-            }
+            QTableWidget { background-color: #1e1e2e; color: #cdd6f4; gridline-color: #313244; font-size: 13px; }
+            QTableWidget::item { color: #cdd6f4; padding: 4px; font-size: 13px; }
+            QTableWidget::item:selected { background-color: #45475a; color: #cdd6f4; }
+            QTableWidget QLineEdit { background-color: #313244; color: #f5e0dc; border: 2px solid #89b4fa; padding: 4px 6px; font-size: 13px; min-height: 24px; }
+            QComboBox { background-color: #313244; color: #cdd6f4; border: 1px solid #585b70; padding: 3px; font-size: 12px; }
         """)
-        self.custom_catalog_table.verticalHeader().setDefaultSectionSize(32)
+        self.custom_catalog_table.verticalHeader().setDefaultSectionSize(34)
         self.custom_catalog_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.custom_catalog_table.setSelectionMode(QTableWidget.SingleSelection)
         self.custom_catalog_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Interactive)
-        self.custom_catalog_table.setColumnWidth(0, 150)
+        self.custom_catalog_table.setColumnWidth(0, 160)
         self.custom_catalog_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.custom_catalog_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Interactive)
-        self.custom_catalog_table.setColumnWidth(2, 180)
+        self.custom_catalog_table.setColumnWidth(2, 200)
         self.custom_catalog_table.setAlternatingRowColors(True)
         self.custom_catalog_table.verticalHeader().setVisible(False)
-        self.custom_catalog_table.setMaximumHeight(180)
+        self.custom_catalog_table.setMaximumHeight(200)
         catalog_layout.addWidget(self.custom_catalog_table)
 
         cat_btn_layout = QHBoxLayout()
@@ -536,6 +563,9 @@ class SettingsPage(QWidget):
 
         # Scan pythons
         self._scan_pythons()
+
+        # Load custom categories
+        self._load_custom_categories()
 
         # Load custom catalog
         self._load_custom_catalog()
@@ -719,16 +749,91 @@ class SettingsPage(QWidget):
         except Exception as e:
             QMessageBox.critical(self, tr("error"), f"Failed to write VS Code settings:\n{e}")
 
+    def _get_all_categories(self):
+        """Get built-in + custom category names."""
+        from src.utils.constants import PACKAGE_CATALOG
+        cats = list(PACKAGE_CATALOG.keys())
+        custom_cats = self.config.get("custom_categories", [])
+        for c in custom_cats:
+            name = c.get("name", "")
+            if name:
+                icon = c.get("icon", "⭐")
+                full = f"{icon} {name}"
+                if full not in cats:
+                    cats.append(full)
+        # Always include ⭐ Custom as fallback
+        if "⭐ Custom" not in cats:
+            cats.append("⭐ Custom")
+        return cats
+
+    def _load_custom_categories(self):
+        """Load custom categories from config."""
+        custom_cats = self.config.get("custom_categories", [])
+        self.custom_categories_list.setRowCount(len(custom_cats))
+        for i, c in enumerate(custom_cats):
+            self.custom_categories_list.setItem(i, 0, QTableWidgetItem(c.get("icon", "⭐")))
+            self.custom_categories_list.setItem(i, 1, QTableWidgetItem(c.get("name", "")))
+
+    def _save_custom_categories(self):
+        """Save custom categories to config."""
+        self.custom_categories_list.setCurrentItem(None)
+        cats = []
+        for row in range(self.custom_categories_list.rowCount()):
+            icon_item = self.custom_categories_list.item(row, 0)
+            name_item = self.custom_categories_list.item(row, 1)
+            icon = icon_item.text().strip() if icon_item else "⭐"
+            name = name_item.text().strip() if name_item else ""
+            if name:
+                cats.append({"icon": icon or "⭐", "name": name})
+        self.config.set("custom_categories", cats)
+
+    def _add_custom_category(self):
+        """Add a new custom category."""
+        row = self.custom_categories_list.rowCount()
+        self.custom_categories_list.insertRow(row)
+        self.custom_categories_list.setItem(row, 0, QTableWidgetItem("⭐"))
+        self.custom_categories_list.setItem(row, 1, QTableWidgetItem(""))
+        self.custom_categories_list.editItem(self.custom_categories_list.item(row, 1))
+
+    def _remove_custom_category(self):
+        """Remove selected custom category."""
+        row = self.custom_categories_list.currentRow()
+        if row >= 0:
+            self.custom_categories_list.removeRow(row)
+            self._save_custom_categories()
+        else:
+            QMessageBox.information(self, "Info", "Select a category to remove.")
+
+    def _make_category_combo(self, current_value="⭐ Custom"):
+        """Create a category dropdown for catalog table."""
+        combo = QComboBox()
+        combo.setStyleSheet(
+            "background-color: #313244; color: #cdd6f4; border: 1px solid #585b70; "
+            "padding: 3px; font-size: 12px;"
+        )
+        categories = self._get_all_categories()
+        for cat in categories:
+            combo.addItem(cat)
+        # Set current
+        idx = combo.findText(current_value)
+        if idx >= 0:
+            combo.setCurrentIndex(idx)
+        else:
+            combo.addItem(current_value)
+            combo.setCurrentIndex(combo.count() - 1)
+        return combo
+
     def _load_custom_catalog(self):
         """Load custom catalog packages from config into the table."""
         custom_pkgs = self.config.get("custom_catalog", [])
         print(f"[DEBUG] Loading custom catalog: {custom_pkgs}")
-        print(f"[DEBUG] Config file: {self.config.config_file_path}")
         self.custom_catalog_table.setRowCount(len(custom_pkgs))
         for i, pkg in enumerate(custom_pkgs):
             self.custom_catalog_table.setItem(i, 0, QTableWidgetItem(pkg.get("name", "")))
             self.custom_catalog_table.setItem(i, 1, QTableWidgetItem(pkg.get("desc", "")))
-            self.custom_catalog_table.setItem(i, 2, QTableWidgetItem(pkg.get("category", "⭐ Custom")))
+            # Category as dropdown
+            cat_combo = self._make_category_combo(pkg.get("category", "⭐ Custom"))
+            self.custom_catalog_table.setCellWidget(i, 2, cat_combo)
 
     def _add_custom_catalog_pkg(self):
         """Add a new custom catalog package row."""
@@ -736,7 +841,8 @@ class SettingsPage(QWidget):
         self.custom_catalog_table.insertRow(row)
         self.custom_catalog_table.setItem(row, 0, QTableWidgetItem(""))
         self.custom_catalog_table.setItem(row, 1, QTableWidgetItem(""))
-        self.custom_catalog_table.setItem(row, 2, QTableWidgetItem("⭐ Custom"))
+        cat_combo = self._make_category_combo("⭐ Custom")
+        self.custom_catalog_table.setCellWidget(row, 2, cat_combo)
         self.custom_catalog_table.editItem(self.custom_catalog_table.item(row, 0))
 
     def _remove_custom_catalog_pkg(self):
@@ -746,30 +852,30 @@ class SettingsPage(QWidget):
             for r in sorted([r.row() for r in rows], reverse=True):
                 self.custom_catalog_table.removeRow(r)
         else:
-            # Fallback: use current row
             row = self.custom_catalog_table.currentRow()
             if row >= 0:
                 self.custom_catalog_table.removeRow(row)
             else:
                 QMessageBox.information(self, "Info", "Select a row to remove.")
                 return
-        # Auto-save after removal
         self._save_custom_catalog()
 
     def _save_custom_catalog(self):
         """Save custom catalog table to config."""
-        # Force commit any active cell editing
         self.custom_catalog_table.setCurrentItem(None)
 
         pkgs = []
         for row in range(self.custom_catalog_table.rowCount()):
             name_item = self.custom_catalog_table.item(row, 0)
             desc_item = self.custom_catalog_table.item(row, 1)
-            cat_item = self.custom_catalog_table.item(row, 2)
+            cat_widget = self.custom_catalog_table.cellWidget(row, 2)
             name = name_item.text().strip() if name_item else ""
             desc = desc_item.text().strip() if desc_item else ""
-            cat = cat_item.text().strip() if cat_item else "⭐ Custom"
-            # Save row if it has any content at all
+            if isinstance(cat_widget, QComboBox):
+                cat = cat_widget.currentText()
+            else:
+                cat_item = self.custom_catalog_table.item(row, 2)
+                cat = cat_item.text().strip() if cat_item else "⭐ Custom"
             if name or desc:
                 pkgs.append({
                     "name": name,
@@ -777,9 +883,7 @@ class SettingsPage(QWidget):
                     "category": cat if cat else "⭐ Custom",
                 })
         print(f"[DEBUG] Saving custom catalog: {pkgs}")
-        print(f"[DEBUG] Config file: {self.config.config_file_path}")
         self.config.set("custom_catalog", pkgs)
-        # Verify it was saved
         verify = self.config.get("custom_catalog", [])
         print(f"[DEBUG] Verify after save: {verify}")
 
@@ -982,6 +1086,9 @@ class SettingsPage(QWidget):
             self.config.set("default_terminal", self.terminal_combo.currentData())
         else:
             self.config.set("default_terminal", "")
+
+        # Save custom categories
+        self._save_custom_categories()
 
         # Save custom catalog
         self._save_custom_catalog()

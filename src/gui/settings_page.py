@@ -105,16 +105,31 @@ class SettingsPage(QWidget):
         self.theme_combo.addItem("☀️ Light", "light")
         appearance_layout.addRow(f"{tr('theme')}", self.theme_combo)
 
-        # Font family
+        # Font family — protected by checkbox
+        font_row = QHBoxLayout()
+        self.font_cb = QCheckBox()
+        self.font_cb.setChecked(False)
+        self.font_cb.toggled.connect(lambda on: self.font_combo.setEnabled(on))
+        font_row.addWidget(self.font_cb)
         self.font_combo = QFontComboBox()
-        appearance_layout.addRow(f"{tr('font')}", self.font_combo)
+        self.font_combo.setEnabled(False)
+        self.font_combo.setFocusPolicy(Qt.StrongFocus)
+        font_row.addWidget(self.font_combo, 1)
+        appearance_layout.addRow(f"{tr('font')}", font_row)
 
-        # Font size
+        # Font size — protected by checkbox
+        size_row = QHBoxLayout()
+        self.font_size_cb = QCheckBox()
+        self.font_size_cb.setChecked(False)
+        self.font_size_cb.toggled.connect(lambda on: self.font_size_spin.setEnabled(on))
+        size_row.addWidget(self.font_size_cb)
         self.font_size_spin = QSpinBox()
         self.font_size_spin.setRange(8, 24)
         self.font_size_spin.setValue(13)
         self.font_size_spin.setSuffix(" px")
-        appearance_layout.addRow(f"{tr('font_size')}", self.font_size_spin)
+        self.font_size_spin.setEnabled(False)
+        size_row.addWidget(self.font_size_spin, 1)
+        appearance_layout.addRow(f"{tr('font_size')}", size_row)
 
         # UI Scale info
         scale_label = QLabel("UI scaling follows your system display settings.")
@@ -334,7 +349,37 @@ class SettingsPage(QWidget):
         cat_mgr_layout = QVBoxLayout()
         cat_mgr_layout.setSpacing(8)
 
-        cat_mgr_info = QLabel("Manage custom categories. These appear in the Catalog dropdown.")
+        # Show built-in categories checkbox
+        self.show_builtin_cats_cb = QCheckBox("Show built-in categories for editing (read-only)")
+        self.show_builtin_cats_cb.setChecked(False)
+        self.show_builtin_cats_cb.toggled.connect(self._toggle_builtin_categories)
+        cat_mgr_layout.addWidget(self.show_builtin_cats_cb)
+
+        # Built-in categories (hidden by default)
+        self.builtin_cats_table = QTableWidget()
+        self.builtin_cats_table.setColumnCount(2)
+        self.builtin_cats_table.setHorizontalHeaderLabels(["Icon", "Category Name (built-in)"])
+        self.builtin_cats_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
+        self.builtin_cats_table.setColumnWidth(0, 60)
+        self.builtin_cats_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.builtin_cats_table.setMaximumHeight(150)
+        self.builtin_cats_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.builtin_cats_table.verticalHeader().setVisible(False)
+        self.builtin_cats_table.verticalHeader().setDefaultSectionSize(24)
+        self.builtin_cats_table.setVisible(False)
+        self.builtin_cats_table.setStyleSheet(
+            "QTableWidget { background-color: #1e1e2e; color: #a6adc8; gridline-color: #313244; font-size: 12px; }"
+        )
+        # Populate built-in
+        from src.utils.constants import PACKAGE_CATALOG
+        self.builtin_cats_table.setRowCount(len(PACKAGE_CATALOG))
+        for i, cat_name in enumerate(PACKAGE_CATALOG):
+            icon = PACKAGE_CATALOG[cat_name].get("icon", "")
+            self.builtin_cats_table.setItem(i, 0, QTableWidgetItem(icon))
+            self.builtin_cats_table.setItem(i, 1, QTableWidgetItem(cat_name))
+        cat_mgr_layout.addWidget(self.builtin_cats_table)
+
+        cat_mgr_info = QLabel("Add your own categories below. These appear in the Catalog dropdown.")
         cat_mgr_info.setWordWrap(True)
         cat_mgr_info.setStyleSheet("color: #a6adc8; font-size: 12px;")
         cat_mgr_layout.addWidget(cat_mgr_info)
@@ -452,6 +497,17 @@ class SettingsPage(QWidget):
         clear_all_btn.setObjectName("danger")
         clear_all_btn.clicked.connect(self._clear_all_data)
         diag_btn_layout2.addWidget(clear_all_btn)
+
+        export_settings_btn = QPushButton("📤 Export Settings")
+        export_settings_btn.setObjectName("secondary")
+        export_settings_btn.clicked.connect(self._export_settings)
+        diag_btn_layout2.addWidget(export_settings_btn)
+
+        import_settings_btn = QPushButton("📥 Import Settings")
+        import_settings_btn.setObjectName("secondary")
+        import_settings_btn.clicked.connect(self._import_settings)
+        diag_btn_layout2.addWidget(import_settings_btn)
+
         diag_btn_layout2.addStretch()
         diag_layout.addLayout(diag_btn_layout2)
         diag_group.setLayout(diag_layout)
@@ -518,11 +574,17 @@ class SettingsPage(QWidget):
             self.theme_combo.setCurrentIndex(idx)
 
         # Font
-        font_family = self.config.get("font_family", "Segoe UI")
-        self.font_combo.setCurrentFont(QFont(font_family))
+        font_family = self.config.get("font_family", "")
+        if font_family:
+            self.font_cb.setChecked(True)
+            self.font_combo.setEnabled(True)
+            self.font_combo.setCurrentFont(QFont(font_family))
 
-        font_size = self.config.get("font_size", 13)
-        self.font_size_spin.setValue(font_size)
+        font_size = self.config.get("font_size", 0)
+        if font_size and font_size != 13:
+            self.font_size_cb.setChecked(True)
+            self.font_size_spin.setEnabled(True)
+            self.font_size_spin.setValue(font_size)
 
         # Language
         lang = self.config.get("language", "en")
@@ -1037,6 +1099,59 @@ class SettingsPage(QWidget):
             self.vscode_env_combo.addItem(name, str(path))
         self.vscode_env_combo.blockSignals(False)
 
+    def _toggle_builtin_categories(self, visible):
+        """Show/hide built-in categories table."""
+        self.builtin_cats_table.setVisible(visible)
+
+    def _export_settings(self):
+        """Export settings to a JSON file."""
+        import json
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, "Export Settings", "venvstudio_settings.json",
+            "JSON Files (*.json);;All Files (*)"
+        )
+        if not filepath:
+            return
+        try:
+            # Read current config file
+            config_path = self.config.config_file_path
+            with open(config_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            QMessageBox.information(self, "Success", f"Settings exported to:\n{filepath}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to export:\n{e}")
+
+    def _import_settings(self):
+        """Import settings from a JSON file."""
+        import json
+        filepath, _ = QFileDialog.getOpenFileName(
+            self, "Import Settings", "",
+            "JSON Files (*.json);;All Files (*)"
+        )
+        if not filepath:
+            return
+        reply = QMessageBox.question(
+            self, "Import Settings",
+            "This will overwrite your current settings.\n\nContinue?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            # Write to config
+            config_path = self.config.config_file_path
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            self.config.load()
+            self._load_current_settings()
+            QMessageBox.information(self, "Success", "Settings imported! Some changes may need a restart.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to import:\n{e}")
+
     def _save_settings(self):
         """Save all settings."""
         # Theme
@@ -1047,10 +1162,20 @@ class SettingsPage(QWidget):
             self.theme_changed.emit(new_theme)
 
         # Font
-        font_family = self.font_combo.currentFont().family()
-        font_size = self.font_size_spin.value()
-        self.config.set("font_family", font_family)
-        self.config.set("font_size", font_size)
+        if self.font_cb.isChecked():
+            font_family = self.font_combo.currentFont().family()
+            self.config.set("font_family", font_family)
+        else:
+            font_family = self.config.get("font_family", "Segoe UI") or "Segoe UI"
+            self.config.set("font_family", "")
+
+        if self.font_size_cb.isChecked():
+            font_size = self.font_size_spin.value()
+            self.config.set("font_size", font_size)
+        else:
+            font_size = 13
+            self.config.set("font_size", 0)
+
         self.font_changed.emit(font_family, font_size)
 
         # Language

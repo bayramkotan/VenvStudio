@@ -23,6 +23,22 @@ import subprocess
 import argparse
 from pathlib import Path
 
+# Windows'ta emoji/unicode print crash'ini önle
+# CI ortamında sys.stdout pipe olabilir — env var ile UTF-8 zorla
+import io
+os.environ["PYTHONIOENCODING"] = "utf-8"
+if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+if sys.stderr.encoding and sys.stderr.encoding.lower() not in ("utf-8", "utf8"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+os.environ["PYTHONIOENCODING"] = "utf-8"
+
 APP_NAME = "VenvStudio"
 APP_VERSION = "1.2.0"
 MAIN_SCRIPT = "main.py"

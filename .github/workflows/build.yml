@@ -8,6 +8,10 @@ on:
 permissions:
   contents: write
 
+env:
+  PYTHONUTF8: 1
+  PYTHONIOENCODING: utf-8
+
 jobs:
   build:
     strategy:
@@ -45,13 +49,7 @@ jobs:
           sudo apt-get install -y libxcb-cursor0 libxcb-xinerama0 libegl1 libxcb-icccm4 libxkbcommon-x11-0 libxcb-keysyms1 libxcb-image0 libxcb-render-util0 libxcb-shape0 libxcb-xfixes0 libxcb-randr0 libxcb-sync1 libxcb-shm0
 
       - name: Build
-        id: build1
         run: python build.py
-        continue-on-error: true
-
-      - name: Retry build without windowed (fallback)
-        if: steps.build1.outcome == 'failure'
-        run: python build.py --debug
 
       - name: Debug - list dist
         if: always()

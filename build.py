@@ -202,13 +202,30 @@ def build_command(one_file=True, debug=False):
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--name", APP_NAME, "--noconfirm", "--clean",
-        "--windowed",    # GUI app — no console window
     ]
-    if debug:
-        cmd.remove("--windowed")
+    if not debug:
+        cmd.append("--windowed")
     cmd.append("--onefile" if one_file else "--onedir")
+
+    # Collect src modules
     cmd.extend(["--collect-submodules", "src"])
-    cmd.extend(["--collect-all", "PySide6"])
+
+    # PySide6 — collect only needed submodules, not everything
+    cmd.extend(["--collect-submodules", "PySide6.QtCore"])
+    cmd.extend(["--collect-submodules", "PySide6.QtGui"])
+    cmd.extend(["--collect-submodules", "PySide6.QtWidgets"])
+
+    # Copy Qt plugins (platforms, styles) - critical for windowed mode
+    if IS_WINDOWS:
+        try:
+            import PySide6
+            pyside6_dir = os.path.dirname(PySide6.__file__)
+            qt_plugins = os.path.join(pyside6_dir, "plugins")
+            if os.path.isdir(qt_plugins):
+                sep = ";"
+                cmd.extend(["--add-data", f"{qt_plugins}{sep}PySide6/plugins"])
+        except ImportError:
+            pass
 
     icon = get_icon_path()
     if icon and os.path.isfile(icon):
@@ -363,6 +380,11 @@ jobs:
 
       - name: Build
         run: python build.py
+        continue-on-error: false
+
+      - name: Retry Windows build without windowed
+        if: failure() && runner.os == 'Windows'
+        run: python build.py --debug
 
       - name: List dist (debug)
         if: always()

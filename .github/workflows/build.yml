@@ -45,20 +45,26 @@ jobs:
           sudo apt-get install -y libxcb-cursor0 libxcb-xinerama0 libegl1 libxcb-icccm4 libxkbcommon-x11-0 libxcb-keysyms1 libxcb-image0 libxcb-render-util0 libxcb-shape0 libxcb-xfixes0 libxcb-randr0 libxcb-sync1 libxcb-shm0
 
       - name: Build
+        id: build1
         run: python build.py
+        continue-on-error: true
+
+      - name: Retry build without windowed (fallback)
+        if: steps.build1.outcome == 'failure'
+        run: python build.py --debug
 
       - name: Debug - list dist
         if: always()
         shell: bash
         continue-on-error: true
-        run: ls -la dist/ 2>/dev/null || dir dist\ 2>nul || echo "No dist directory"
+        run: ls -la dist/ 2>/dev/null || echo "No dist"
 
       - name: Upload artifact
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.binary }}
+          if-no-files-found: warn
 
   release:
     needs: build

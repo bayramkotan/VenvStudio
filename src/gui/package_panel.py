@@ -229,6 +229,8 @@ class PackagePanel(QWidget):
                 "package": "orange3",
                 "command": ["-m", "Orange.canvas"],
                 "desc": "Visual programming for data mining and machine learning",
+                "min_python": "3.9",
+                "note": "Requires Python ≥3.9 and C compiler. Windows: install Visual C++ Build Tools first.",
             },
             {
                 "name": "Spyder IDE",
@@ -366,10 +368,36 @@ class PackagePanel(QWidget):
         is_installed = pkg_name in self.installed_package_names
 
         if not is_installed:
+            # Check minimum Python version if specified
+            min_py = app_def.get("min_python")
+            note = app_def.get("note", "")
+            if min_py:
+                try:
+                    from src.utils.platform_utils import subprocess_args
+                    result = subprocess.run(
+                        [str(python_exe), "--version"],
+                        **subprocess_args(capture_output=True, text=True, timeout=5)
+                    )
+                    ver_str = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
+                    ver_parts = tuple(int(x) for x in ver_str.split(".")[:2])
+                    min_parts = tuple(int(x) for x in min_py.split(".")[:2])
+                    if ver_parts < min_parts:
+                        QMessageBox.warning(
+                            self, app_def["name"],
+                            f"{app_def['name']} requires Python ≥{min_py}\n"
+                            f"This environment uses Python {ver_str}.\n\n"
+                            f"Create a new environment with Python ≥{min_py} and try again."
+                        )
+                        return
+                except Exception:
+                    pass
+
+            msg = f"{app_def['name']} is not installed in this environment.\n\nInstall '{app_def['package']}' now?"
+            if note:
+                msg += f"\n\nNote: {note}"
+
             reply = QMessageBox.question(
-                self, app_def["name"],
-                f"{app_def['name']} is not installed in this environment.\n\n"
-                f"Install '{app_def['package']}' now?",
+                self, app_def["name"], msg,
                 QMessageBox.Yes | QMessageBox.No,
             )
             if reply != QMessageBox.Yes:
@@ -430,11 +458,32 @@ class PackagePanel(QWidget):
         if success:
             self.refresh_packages()
             self.status_label.setText(f"✅ {app_def['package']} installed. Launching...")
-            # Now launch
             self._launch_app(app_def)
         else:
             self.status_label.setText(tr("operation_failed"))
-            QMessageBox.critical(self, tr("error"), message[:500])
+            # Parse error for a helpful summary
+            short_msg = f"Failed to install {app_def['package']}.\n\n"
+            if "No matching distribution" in message:
+                short_msg += "This package is not available for your Python version or platform."
+            elif "error: subprocess-exited-with-error" in message or "build" in message.lower():
+                short_msg += (
+                    "A C/C++ build dependency failed to compile.\n"
+                    "Windows: Install Visual C++ Build Tools.\n"
+                    "Linux: sudo apt install build-essential python3-dev"
+                )
+            elif "Permission" in message:
+                short_msg += "Permission denied. Try running as administrator."
+            else:
+                # Show last meaningful lines
+                lines = [l.strip() for l in message.strip().splitlines() if l.strip()]
+                tail = "\n".join(lines[-5:]) if len(lines) > 5 else "\n".join(lines)
+                short_msg += tail
+
+            note = app_def.get("note", "")
+            if note:
+                short_msg += f"\n\nNote: {note}"
+
+            QMessageBox.critical(self, tr("error"), short_msg)
 
     def _create_desktop_shortcut(self, app_def: dict):
         """Create a desktop shortcut for the app."""

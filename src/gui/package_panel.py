@@ -227,10 +227,11 @@ class PackagePanel(QWidget):
                 "name": "Orange Data Mining",
                 "icon": "🍊",
                 "package": "orange3",
+                "install_packages": ["orange3", "PyQt5", "PyQtWebEngine"],
                 "command": ["-m", "Orange.canvas"],
                 "desc": "Visual programming for data mining and machine learning",
                 "min_python": "3.9",
-                "note": "Requires Python ≥3.9 and C compiler. Windows: install Visual C++ Build Tools first.",
+                "note": "Requires PyQt5. May need C compiler on some platforms.",
             },
             {
                 "name": "Spyder IDE",
@@ -245,6 +246,7 @@ class PackagePanel(QWidget):
                 "package": "ipython",
                 "command": ["-m", "IPython"],
                 "desc": "Enhanced interactive Python shell",
+                "needs_console": True,
             },
             {
                 "name": "Streamlit",
@@ -326,6 +328,8 @@ class PackagePanel(QWidget):
         console_cb = QCheckBox()
         console_cb.setToolTip("Show console / Konsolu göster")
         console_cb.setFixedWidth(20)
+        if app_def.get("needs_console", False):
+            console_cb.setChecked(True)
         btn_layout.addWidget(console_cb)
 
         shortcut_btn = QPushButton(f"🖥️")
@@ -409,11 +413,12 @@ class PackagePanel(QWidget):
             )
             if reply != QMessageBox.Yes:
                 return
-            # Install it
+            # Install it — use install_packages list if available
+            pkgs_to_install = app_def.get("install_packages", [app_def["package"]])
             self._set_busy(True)
-            self.status_label.setText(f"Installing {app_def['package']}...")
+            self.status_label.setText(f"Installing {', '.join(pkgs_to_install)}...")
             self.current_worker = WorkerThread(
-                self.pip_manager.install_packages, [app_def["package"]]
+                self.pip_manager.install_packages, pkgs_to_install
             )
             self.current_worker.progress.connect(self._on_progress)
             self.current_worker.finished.connect(
@@ -425,11 +430,12 @@ class PackagePanel(QWidget):
         # Launch the app — check console toggle
         cmd = [str(python_exe)] + app_def["command"]
 
-        # Check if console checkbox is ticked
-        show_console = False
+        # Check if console checkbox is ticked OR app needs console
+        show_console = app_def.get("needs_console", False)
         card = self.launcher_cards.get(app_def["name"])
         if card and hasattr(card, '_console_cb'):
-            show_console = card._console_cb.isChecked()
+            if card._console_cb.isChecked():
+                show_console = True
 
         # Working directory: user's home, not venv path
         if get_platform() == "windows":
@@ -785,12 +791,21 @@ class PackagePanel(QWidget):
         """Update 'Installed' badge on presets."""
         if not hasattr(self, '_preset_cards'):
             return
+
+        # Normalize installed names once
+        if self.installed_package_names:
+            normalized_installed = set()
+            for p in self.installed_package_names:
+                normalized_installed.add(p.lower().replace("-", "_").replace(".", "_"))
+        else:
+            normalized_installed = set()
+
         for preset_name, info in self._preset_cards.items():
             packages = info["packages"]
             badge = info["badge"]
             install_btn = info["install_btn"]
 
-            if not self.installed_package_names:
+            if not normalized_installed:
                 badge.setText("")
                 install_btn.setText(f"{tr('install')} ({len(packages)} packages)")
                 install_btn.setEnabled(True)
@@ -798,11 +813,9 @@ class PackagePanel(QWidget):
                 install_btn.setStyleSheet("")
                 continue
 
-            # Normalize: pip uses hyphens/underscores interchangeably
-            normalized_installed = {p.replace("-", "_") for p in self.installed_package_names}
             installed_count = sum(
                 1 for p in packages
-                if p.lower().replace("-", "_") in normalized_installed
+                if p.lower().replace("-", "_").replace(".", "_") in normalized_installed
             )
 
             if installed_count == len(packages):

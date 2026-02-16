@@ -313,7 +313,7 @@ class PackagePanel(QWidget):
 
         layout.addStretch()
 
-        # Buttons
+        # Buttons row
         btn_layout = QHBoxLayout()
 
         launch_btn = QPushButton(f"▶ {tr('launch_app').format(app=app_def['name'])}"
@@ -321,6 +321,12 @@ class PackagePanel(QWidget):
         launch_btn.setObjectName("success")
         launch_btn.clicked.connect(lambda checked, a=app_def: self._launch_app(a))
         btn_layout.addWidget(launch_btn)
+
+        # Console toggle
+        console_cb = QCheckBox()
+        console_cb.setToolTip("Show console / Konsolu göster")
+        console_cb.setFixedWidth(20)
+        btn_layout.addWidget(console_cb)
 
         shortcut_btn = QPushButton(f"🖥️")
         shortcut_btn.setToolTip(tr("create_shortcut"))
@@ -335,6 +341,7 @@ class PackagePanel(QWidget):
         card._app_def = app_def
         card._status_label = status
         card._launch_btn = launch_btn
+        card._console_cb = console_cb
 
         return card
 
@@ -415,8 +422,14 @@ class PackagePanel(QWidget):
             self.current_worker.start()
             return
 
-        # Launch the app — NO terminal window
+        # Launch the app — check console toggle
         cmd = [str(python_exe)] + app_def["command"]
+
+        # Check if console checkbox is ticked
+        show_console = False
+        card = self.launcher_cards.get(app_def["name"])
+        if card and hasattr(card, '_console_cb'):
+            show_console = card._console_cb.isChecked()
 
         # Working directory: user's home, not venv path
         if get_platform() == "windows":
@@ -426,24 +439,40 @@ class PackagePanel(QWidget):
 
         try:
             if get_platform() == "windows":
-                # DETACHED_PROCESS: no console window at all
-                DETACHED_PROCESS = 0x00000008
-                CREATE_NO_WINDOW = 0x08000000
-                subprocess.Popen(
-                    cmd, cwd=work_dir,
-                    creationflags=DETACHED_PROCESS | CREATE_NO_WINDOW,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    stdin=subprocess.DEVNULL,
-                )
+                if show_console:
+                    subprocess.Popen(
+                        cmd, cwd=work_dir,
+                        creationflags=subprocess.CREATE_NEW_CONSOLE,
+                    )
+                else:
+                    DETACHED_PROCESS = 0x00000008
+                    CREATE_NO_WINDOW = 0x08000000
+                    subprocess.Popen(
+                        cmd, cwd=work_dir,
+                        creationflags=DETACHED_PROCESS | CREATE_NO_WINDOW,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        stdin=subprocess.DEVNULL,
+                    )
             else:
-                subprocess.Popen(
-                    cmd, cwd=work_dir,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    stdin=subprocess.DEVNULL,
-                    start_new_session=True,
-                )
+                if show_console:
+                    # Open in terminal
+                    cmd_str = " ".join(f'"{c}"' for c in cmd)
+                    try:
+                        subprocess.Popen(
+                            ["x-terminal-emulator", "-e", f"bash -c '{cmd_str}; read -p Press_Enter'"],
+                            cwd=work_dir,
+                        )
+                    except FileNotFoundError:
+                        subprocess.Popen(cmd, cwd=work_dir)
+                else:
+                    subprocess.Popen(
+                        cmd, cwd=work_dir,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        stdin=subprocess.DEVNULL,
+                        start_new_session=True,
+                    )
 
             self.status_label.setText(f"🚀 Launched {app_def['name']}")
         except Exception as e:
@@ -502,15 +531,18 @@ class PackagePanel(QWidget):
 
         try:
             if platform == "windows":
-                # Create .bat launcher + .vbs for no-console
-                bat_path = desktop / f"{shortcut_name}.bat"
+                # Create .vbs launcher (no console window)
                 cmd_args = " ".join(app_def["command"])
-                bat_content = f'@echo off\n"{python_exe}" {cmd_args}\n'
-                bat_path.write_text(bat_content, encoding="utf-8")
+                vbs_path = desktop / f"{shortcut_name}.vbs"
+                vbs_content = (
+                    f'Set WshShell = CreateObject("WScript.Shell")\n'
+                    f'WshShell.Run """{python_exe}"" {cmd_args}", 0, False\n'
+                )
+                vbs_path.write_text(vbs_content, encoding="utf-8")
 
                 QMessageBox.information(
                     self, tr("success"),
-                    tr("shortcut_created").format(app=app_name) + f"\n\n{bat_path}"
+                    tr("shortcut_created").format(app=app_name) + f"\n\n{vbs_path}"
                 )
 
             elif platform == "linux":
@@ -694,19 +726,27 @@ class PackagePanel(QWidget):
         scroll.setFrameShape(QFrame.NoFrame)
 
         container = QWidget()
-        grid = QGridLayout(container)
-        grid.setSpacing(12)
-        grid.setContentsMargins(12, 12, 12, 12)
+        self._presets_grid = QGridLayout(container)
+        self._presets_grid.setSpacing(12)
+        self._presets_grid.setContentsMargins(12, 12, 12, 12)
 
+        self._preset_cards = {}
         row = 0
         for preset_name, packages in PRESETS.items():
             card = QFrame()
             card.setObjectName("card")
             card_layout = QVBoxLayout(card)
 
+            # Header with name + installed badge
+            header = QHBoxLayout()
             name_label = QLabel(preset_name)
             name_label.setFont(QFont("Segoe UI", 14, QFont.Bold))
-            card_layout.addWidget(name_label)
+            header.addWidget(name_label, 1)
+
+            badge = QLabel("")
+            badge.setStyleSheet("color: #a6e3a1; font-size: 11px; font-weight: bold;")
+            header.addWidget(badge)
+            card_layout.addLayout(header)
 
             pkg_text = ", ".join(packages)
             pkg_label = QLabel(pkg_text)
@@ -728,12 +768,63 @@ class PackagePanel(QWidget):
             )
             card_layout.addWidget(copy_btn)
 
-            grid.addWidget(card, row // 2, row % 2)
+            self._preset_cards[preset_name] = {
+                "badge": badge,
+                "install_btn": install_btn,
+                "packages": packages,
+            }
+
+            self._presets_grid.addWidget(card, row // 2, row % 2)
             row += 1
 
-        grid.setRowStretch(row // 2 + 1, 1)
+        self._presets_grid.setRowStretch(row // 2 + 1, 1)
         scroll.setWidget(container)
         return scroll
+
+    def _update_preset_badges(self):
+        """Update 'Installed' badge on presets."""
+        if not hasattr(self, '_preset_cards'):
+            return
+        for preset_name, info in self._preset_cards.items():
+            packages = info["packages"]
+            badge = info["badge"]
+            install_btn = info["install_btn"]
+
+            if not self.installed_package_names:
+                badge.setText("")
+                install_btn.setText(f"{tr('install')} ({len(packages)} packages)")
+                install_btn.setEnabled(True)
+                install_btn.setObjectName("success")
+                install_btn.setStyleSheet("")
+                continue
+
+            # Normalize: pip uses hyphens/underscores interchangeably
+            normalized_installed = {p.replace("-", "_") for p in self.installed_package_names}
+            installed_count = sum(
+                1 for p in packages
+                if p.lower().replace("-", "_") in normalized_installed
+            )
+
+            if installed_count == len(packages):
+                badge.setText("✅ Installed")
+                badge.setStyleSheet("color: #a6e3a1; font-size: 12px; font-weight: bold;")
+                install_btn.setText(f"✅ {tr('installed') if tr('installed') != 'installed' else 'Installed'}")
+                install_btn.setEnabled(False)
+                install_btn.setStyleSheet("background-color: #313244; color: #a6e3a1; font-weight: bold;")
+            elif installed_count > 0:
+                badge.setText(f"⚡ {installed_count}/{len(packages)}")
+                badge.setStyleSheet("color: #f9e2af; font-size: 12px; font-weight: bold;")
+                remaining = len(packages) - installed_count
+                install_btn.setText(f"{tr('install')} ({remaining} remaining)")
+                install_btn.setEnabled(True)
+                install_btn.setObjectName("success")
+                install_btn.setStyleSheet("")
+            else:
+                badge.setText("")
+                install_btn.setText(f"{tr('install')} ({len(packages)} packages)")
+                install_btn.setEnabled(True)
+                install_btn.setObjectName("success")
+                install_btn.setStyleSheet("")
 
     def _create_manual_tab(self) -> QWidget:
         widget = QWidget()
@@ -897,6 +988,7 @@ class PackagePanel(QWidget):
 
         self._populate_catalog()
         self._update_launcher_status()
+        self._update_preset_badges()
 
     def refresh_packages(self):
         """Refresh installed packages list - shows ALL packages."""
@@ -932,6 +1024,8 @@ class PackagePanel(QWidget):
         self._populate_catalog()
         # Update launcher app status
         self._update_launcher_status()
+        # Update preset badges
+        self._update_preset_badges()
 
     # ── Catalog ──
 

@@ -227,11 +227,11 @@ class PackagePanel(QWidget):
                 "name": "Orange Data Mining",
                 "icon": "🍊",
                 "package": "orange3",
-                "install_packages": ["orange3", "PyQt6", "PyQt6-WebEngine"],
+                "install_packages": ["PyQt5", "PyQtWebEngine", "orange3"],
                 "command": ["-m", "Orange.canvas"],
                 "desc": "Visual programming for data mining and machine learning",
                 "min_python": "3.9",
-                "note": "Installs with PyQt6. May conflict with PySide6 in same env.",
+                "note": "Requires PyQt5 (installed automatically). Best in a dedicated env.",
             },
             {
                 "name": "Spyder IDE",

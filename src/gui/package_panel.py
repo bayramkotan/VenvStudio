@@ -315,7 +315,7 @@ class PackagePanel(QWidget):
 
         layout.addStretch()
 
-        # Buttons row
+        # Buttons row 1: Launch + Console
         btn_layout = QHBoxLayout()
 
         launch_btn = QPushButton(f"▶ {tr('launch_app').format(app=app_def['name'])}"
@@ -332,20 +332,32 @@ class PackagePanel(QWidget):
             console_cb.setChecked(True)
         btn_layout.addWidget(console_cb)
 
-        shortcut_btn = QPushButton("📌")
-        shortcut_btn.setToolTip(tr("create_shortcut") + " / Create Desktop Shortcut")
-        shortcut_btn.setObjectName("secondary")
-        shortcut_btn.setFixedWidth(36)
-        shortcut_btn.clicked.connect(lambda checked, a=app_def: self._create_desktop_shortcut(a))
-        btn_layout.addWidget(shortcut_btn)
-
         layout.addLayout(btn_layout)
+
+        # Buttons row 2: Uninstall + Shortcut
+        btn_layout2 = QHBoxLayout()
+
+        uninstall_btn = QPushButton(f"🗑 {tr('uninstall') if tr('uninstall') != 'uninstall' else 'Uninstall'}")
+        uninstall_btn.setObjectName("danger")
+        uninstall_btn.setVisible(False)
+        uninstall_btn.clicked.connect(lambda checked, a=app_def: self._uninstall_app(a))
+        btn_layout2.addWidget(uninstall_btn)
+
+        shortcut_btn = QPushButton(f"📌 {tr('create_shortcut') if tr('create_shortcut') != 'create_shortcut' else 'Shortcut'}")
+        shortcut_btn.setObjectName("secondary")
+        shortcut_btn.setVisible(False)
+        shortcut_btn.clicked.connect(lambda checked, a=app_def: self._create_desktop_shortcut(a))
+        btn_layout2.addWidget(shortcut_btn)
+
+        layout.addLayout(btn_layout2)
 
         # Store refs
         card._app_def = app_def
         card._status_label = status
         card._launch_btn = launch_btn
         card._console_cb = console_cb
+        card._uninstall_btn = uninstall_btn
+        card._shortcut_btn = shortcut_btn
 
         return card
 
@@ -361,10 +373,14 @@ class PackagePanel(QWidget):
                 status.setText("✅ Installed")
                 status.setStyleSheet("color: #a6e3a1; font-size: 11px;")
                 card._launch_btn.setEnabled(True)
+                card._uninstall_btn.setVisible(True)
+                card._shortcut_btn.setVisible(True)
             else:
                 status.setText(f"❌ Not installed — click Launch to install first")
                 status.setStyleSheet("color: #f38ba8; font-size: 11px;")
                 card._launch_btn.setEnabled(True)  # Will prompt install
+                card._uninstall_btn.setVisible(False)
+                card._shortcut_btn.setVisible(False)
 
     def _launch_app(self, app_def: dict):
         """Launch an app from the selected environment."""
@@ -519,6 +535,35 @@ class PackagePanel(QWidget):
                 short_msg += f"\n\nNote: {note}"
 
             QMessageBox.critical(self, tr("error"), short_msg)
+
+    def _uninstall_app(self, app_def: dict):
+        """Uninstall an app from the selected environment with confirmation."""
+        if not self.pip_manager:
+            QMessageBox.warning(self, tr("warning"), tr("select_environment"))
+            return
+
+        pkg_name = app_def["package"]
+        # Get all packages to uninstall (main + deps if install_packages defined)
+        pkgs_to_remove = app_def.get("install_packages", [pkg_name])
+
+        reply = QMessageBox.question(
+            self, f"Uninstall {app_def['name']}",
+            f"Are you sure you want to uninstall {app_def['name']}?\n\n"
+            f"Packages to remove: {', '.join(pkgs_to_remove)}\n\n"
+            f"This action cannot be undone.",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        self._set_busy(True)
+        self.status_label.setText(f"Uninstalling {app_def['name']}...")
+        self.current_worker = WorkerThread(
+            self.pip_manager.uninstall_packages, pkgs_to_remove
+        )
+        self.current_worker.progress.connect(self._on_progress)
+        self.current_worker.finished.connect(self._on_install_finished)
+        self.current_worker.start()
 
     def _create_desktop_shortcut(self, app_def: dict):
         """Create a desktop shortcut for the app."""
@@ -767,6 +812,14 @@ class PackagePanel(QWidget):
             )
             card_layout.addWidget(install_btn)
 
+            uninstall_btn = QPushButton(f"🗑 {tr('uninstall') if tr('uninstall') != 'uninstall' else 'Uninstall'}")
+            uninstall_btn.setObjectName("danger")
+            uninstall_btn.setVisible(False)
+            uninstall_btn.clicked.connect(
+                lambda checked, pkgs=packages, name=preset_name: self._uninstall_preset(pkgs, name)
+            )
+            card_layout.addWidget(uninstall_btn)
+
             copy_btn = QPushButton(f"📋 {tr('copy_command')}")
             copy_btn.setObjectName("secondary")
             copy_btn.clicked.connect(
@@ -777,6 +830,7 @@ class PackagePanel(QWidget):
             self._preset_cards[preset_name] = {
                 "badge": badge,
                 "install_btn": install_btn,
+                "uninstall_btn": uninstall_btn,
                 "packages": packages,
             }
 
@@ -804,6 +858,7 @@ class PackagePanel(QWidget):
             packages = info["packages"]
             badge = info["badge"]
             install_btn = info["install_btn"]
+            uninstall_btn = info.get("uninstall_btn")
 
             if not normalized_installed:
                 badge.setText("")
@@ -811,6 +866,8 @@ class PackagePanel(QWidget):
                 install_btn.setEnabled(True)
                 install_btn.setObjectName("success")
                 install_btn.setStyleSheet("")
+                if uninstall_btn:
+                    uninstall_btn.setVisible(False)
                 continue
 
             installed_count = sum(
@@ -824,6 +881,8 @@ class PackagePanel(QWidget):
                 install_btn.setText(f"✅ {tr('installed') if tr('installed') != 'installed' else 'Installed'}")
                 install_btn.setEnabled(False)
                 install_btn.setStyleSheet("background-color: #313244; color: #a6e3a1; font-weight: bold;")
+                if uninstall_btn:
+                    uninstall_btn.setVisible(True)
             elif installed_count > 0:
                 badge.setText(f"⚡ {installed_count}/{len(packages)}")
                 badge.setStyleSheet("color: #f9e2af; font-size: 12px; font-weight: bold;")
@@ -832,12 +891,16 @@ class PackagePanel(QWidget):
                 install_btn.setEnabled(True)
                 install_btn.setObjectName("success")
                 install_btn.setStyleSheet("")
+                if uninstall_btn:
+                    uninstall_btn.setVisible(True)
             else:
                 badge.setText("")
                 install_btn.setText(f"{tr('install')} ({len(packages)} packages)")
                 install_btn.setEnabled(True)
                 install_btn.setObjectName("success")
                 install_btn.setStyleSheet("")
+                if uninstall_btn:
+                    uninstall_btn.setVisible(False)
 
     def _create_manual_tab(self) -> QWidget:
         widget = QWidget()
@@ -1431,6 +1494,42 @@ class PackagePanel(QWidget):
         clipboard = QApplication.clipboard()
         clipboard.setText(cmd)
         self.status_label.setText(f"📋 {tr('command_copied')}")
+
+    def _uninstall_preset(self, packages: list, preset_name: str):
+        """Uninstall all packages in a preset with confirmation."""
+        if not self.pip_manager:
+            QMessageBox.warning(self, tr("warning"), tr("select_environment"))
+            return
+
+        # Find which packages are actually installed
+        normalized_installed = {p.lower().replace("-", "_").replace(".", "_") for p in self.installed_package_names}
+        installed_pkgs = [
+            p for p in packages
+            if p.lower().replace("-", "_").replace(".", "_") in normalized_installed
+        ]
+
+        if not installed_pkgs:
+            QMessageBox.information(self, preset_name, "No packages from this preset are installed.")
+            return
+
+        reply = QMessageBox.question(
+            self, f"Uninstall {preset_name}",
+            f"Are you sure you want to uninstall these packages?\n\n"
+            f"{', '.join(installed_pkgs)}\n\n"
+            f"This action cannot be undone.",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        self._set_busy(True)
+        self.status_label.setText(f"Uninstalling {preset_name}...")
+        self.current_worker = WorkerThread(
+            self.pip_manager.uninstall_packages, installed_pkgs
+        )
+        self.current_worker.progress.connect(self._on_progress)
+        self.current_worker.finished.connect(self._on_install_finished)
+        self.current_worker.start()
 
     def _filter_catalog(self, text: str):
         """Filter catalog rows by search text."""

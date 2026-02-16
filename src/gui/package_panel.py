@@ -227,11 +227,11 @@ class PackagePanel(QWidget):
                 "name": "Orange Data Mining",
                 "icon": "🍊",
                 "package": "orange3",
-                "install_packages": ["orange3", "PyQt5", "PyQtWebEngine"],
+                "install_packages": ["orange3", "PyQt6", "PyQt6-WebEngine"],
                 "command": ["-m", "Orange.canvas"],
                 "desc": "Visual programming for data mining and machine learning",
                 "min_python": "3.9",
-                "note": "Requires PyQt5. May need C compiler on some platforms.",
+                "note": "Installs with PyQt6. May conflict with PySide6 in same env.",
             },
             {
                 "name": "Spyder IDE",
@@ -332,8 +332,8 @@ class PackagePanel(QWidget):
             console_cb.setChecked(True)
         btn_layout.addWidget(console_cb)
 
-        shortcut_btn = QPushButton(f"🖥️")
-        shortcut_btn.setToolTip(tr("create_shortcut"))
+        shortcut_btn = QPushButton("📌")
+        shortcut_btn.setToolTip(tr("create_shortcut") + " / Create Desktop Shortcut")
         shortcut_btn.setObjectName("secondary")
         shortcut_btn.setFixedWidth(36)
         shortcut_btn.clicked.connect(lambda checked, a=app_def: self._create_desktop_shortcut(a))

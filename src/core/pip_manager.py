@@ -29,11 +29,44 @@ class PipManager:
         self.venv_path = venv_path
         self.pip_exe = get_pip_executable(venv_path)
         self.python_exe = get_python_executable(venv_path)
+        self._ssl_available = None  # cached SSL check
+
+    def _check_ssl(self) -> bool:
+        """Check if SSL is available in this environment's Python."""
+        if self._ssl_available is not None:
+            return self._ssl_available
+        try:
+            from src.utils.platform_utils import subprocess_args
+            result = subprocess.run(
+                [str(self.python_exe), "-c", "import ssl; print('OK')"],
+                **subprocess_args(capture_output=True, text=True, timeout=5)
+            )
+            self._ssl_available = result.returncode == 0 and "OK" in result.stdout
+        except Exception:
+            self._ssl_available = False
+        return self._ssl_available
 
     def _run_pip(self, args: List[str], timeout: int = 120) -> subprocess.CompletedProcess:
         """Run a pip command and return the result."""
         from src.utils.platform_utils import subprocess_args
         cmd = [str(self.python_exe), "-m", "pip"] + args
+
+        # SSL yoksa --trusted-host ekle
+        if not self._check_ssl():
+            # install, download, search gibi network komutlarında
+            network_cmds = ("install", "download", "search", "list --outdated")
+            if args and args[0] in ("install", "download", "search"):
+                cmd.extend([
+                    "--trusted-host", "pypi.org",
+                    "--trusted-host", "pypi.python.org",
+                    "--trusted-host", "files.pythonhosted.org",
+                ])
+            elif len(args) >= 2 and args[0] == "list" and "--outdated" in args:
+                cmd.extend([
+                    "--trusted-host", "pypi.org",
+                    "--trusted-host", "pypi.python.org",
+                    "--trusted-host", "files.pythonhosted.org",
+                ])
         return subprocess.run(
             cmd,
             **subprocess_args(
@@ -101,9 +134,29 @@ class PipManager:
             result = self._run_pip(cmd, timeout=300)
 
             output = result.stdout + result.stderr
+
+            # SSL hatası varsa --trusted-host ile tekrar dene
+            if result.returncode != 0 and ("SSL" in output or "ssl" in output or "CERTIFICATE" in output):
+                if callback:
+                    callback("SSL error detected, retrying with --trusted-host...")
+                retry_cmd = cmd + [
+                    "--trusted-host", "pypi.org",
+                    "--trusted-host", "pypi.python.org",
+                    "--trusted-host", "files.pythonhosted.org",
+                ]
+                result = self._run_pip(retry_cmd, timeout=300)
+                output = result.stdout + result.stderr
+
             if result.returncode == 0:
                 return True, output
             else:
+                # "Package Not Found" tespiti
+                if "No matching distribution" in output or "Could not find" in output:
+                    return False, (
+                        "One or more packages could not be found on PyPI.\n\n"
+                        "Please check the package names and try again.\n"
+                        "You can search at: https://pypi.org"
+                    )
                 return False, f"Installation failed:\n{output}"
 
         except subprocess.TimeoutExpired:

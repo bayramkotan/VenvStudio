@@ -106,8 +106,15 @@ class VenvManager:
             if with_pip and pip_exe.exists():
                 if callback:
                     callback("Upgrading pip...")
+                # SSL olmayabilir — trusted-host ekle
+                pip_upgrade_cmd = [
+                    str(python_in_venv), "-m", "pip", "install", "--upgrade", "pip",
+                    "--trusted-host", "pypi.org",
+                    "--trusted-host", "pypi.python.org",
+                    "--trusted-host", "files.pythonhosted.org",
+                ]
                 subprocess.run(
-                    [str(python_in_venv), "-m", "pip", "install", "--upgrade", "pip"],
+                    pip_upgrade_cmd,
                     **subprocess_args(capture_output=True, text=True, timeout=60)
                     )
 

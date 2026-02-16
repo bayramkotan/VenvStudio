@@ -72,6 +72,12 @@ class VenvManager:
         """
         venv_path = self.base_dir / name
 
+        # Ensure base directory exists
+        try:
+            self.base_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            return False, f"Cannot create directory '{self.base_dir}': {e}"
+
         if venv_path.exists():
             return False, f"Environment '{name}' already exists at {venv_path}"
 

@@ -10,6 +10,10 @@ Usage:
 import sys
 import os
 import traceback
+import multiprocessing
+
+# PyInstaller freeze support — Windows'ta subprocess yeni pencere açmasını engeller
+multiprocessing.freeze_support()
 
 # PyInstaller ile paketlendiğinde doğru path'i bul
 if getattr(sys, 'frozen', False):

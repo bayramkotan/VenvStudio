@@ -387,16 +387,35 @@ class PackagePanel(QWidget):
             self.current_worker.start()
             return
 
-        # Launch the app
+        # Launch the app — NO terminal window
         cmd = [str(python_exe)] + app_def["command"]
+
+        # Working directory: user's home, not venv path
+        if get_platform() == "windows":
+            work_dir = os.environ.get("USERPROFILE", "C:\\")
+        else:
+            work_dir = os.environ.get("HOME", os.path.expanduser("~"))
+
         try:
             if get_platform() == "windows":
+                # DETACHED_PROCESS: no console window at all
+                DETACHED_PROCESS = 0x00000008
+                CREATE_NO_WINDOW = 0x08000000
                 subprocess.Popen(
-                    cmd, cwd=str(venv_path),
-                    creationflags=subprocess.CREATE_NEW_CONSOLE,
+                    cmd, cwd=work_dir,
+                    creationflags=DETACHED_PROCESS | CREATE_NO_WINDOW,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    stdin=subprocess.DEVNULL,
                 )
             else:
-                subprocess.Popen(cmd, cwd=str(venv_path))
+                subprocess.Popen(
+                    cmd, cwd=work_dir,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    stdin=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
 
             self.status_label.setText(f"🚀 Launched {app_def['name']}")
         except Exception as e:

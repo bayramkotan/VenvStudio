@@ -1,20 +1,18 @@
 #!/usr/bin/env python3
 """
-VenvStudio - Cross-Platform Build Script
-=========================================
-Bu script PyInstaller kullanarak VenvStudio'yu paketler:
-  - Windows: .exe (tek dosya)
-  - macOS:   .app bundle
-  - Linux:   tek dosya binary
-
+VenvStudio v1.2.0 - Cross-Platform Build Script
+================================================
 Kullanım:
     python build.py            # Mevcut platform için build
-    python build.py --onefile  # Tek dosya (varsayılan)
+    python build.py --debug    # Konsol açık (hata tespiti)
     python build.py --onedir   # Klasör bazlı build
-    python build.py --clean    # Önceki build dosyalarını temizle
+    python build.py --clean    # Temizlik
+    python build.py --ci       # GitHub Actions workflow oluştur
+    python build.py --installer # Platform installer scriptleri
 
 Gereksinimler:
     pip install pyinstaller PySide6
+    pip install Pillow         # (isteğe bağlı, ikon için)
 """
 
 import os
@@ -25,76 +23,66 @@ import subprocess
 import argparse
 from pathlib import Path
 
+# Windows'ta emoji/unicode print crash'ini önle
+# CI ortamında sys.stdout pipe olabilir — env var ile UTF-8 zorla
+import io
+os.environ["PYTHONIOENCODING"] = "utf-8"
+if sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+if sys.stderr.encoding and sys.stderr.encoding.lower() not in ("utf-8", "utf8"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+os.environ["PYTHONIOENCODING"] = "utf-8"
 
-# ── Sabitler ──
 APP_NAME = "VenvStudio"
-APP_VERSION = "1.0.0"
+APP_VERSION = "1.2.0"
 MAIN_SCRIPT = "main.py"
 ICON_DIR = Path("assets")
 
-# Platform tespiti
 SYSTEM = platform.system().lower()
 IS_WINDOWS = SYSTEM == "windows"
 IS_MACOS = SYSTEM == "darwin"
 IS_LINUX = SYSTEM == "linux"
 
-# Build çıktı klasörü
 BUILD_DIR = Path("build")
 DIST_DIR = Path("dist")
 
 
-def get_platform_name() -> str:
-    if IS_WINDOWS:
-        return "Windows"
-    elif IS_MACOS:
-        return "macOS"
-    return "Linux"
+def get_platform_name():
+    return {"windows": "Windows", "darwin": "macOS"}.get(SYSTEM, "Linux")
 
 
 def check_dependencies():
-    """PyInstaller ve PySide6 yüklü mü kontrol et."""
     print("🔍 Bağımlılıklar kontrol ediliyor...\n")
-
-    # PyInstaller
-    try:
-        import PyInstaller
-        print(f"  ✅ PyInstaller {PyInstaller.__version__}")
-    except ImportError:
-        print("  ❌ PyInstaller bulunamadı!")
-        print("     Yüklemek için: pip install pyinstaller")
-        sys.exit(1)
-
-    # PySide6
-    try:
-        import PySide6
-        print(f"  ✅ PySide6 {PySide6.__version__}")
-    except ImportError:
-        print("  ❌ PySide6 bulunamadı!")
-        print("     Yüklemek için: pip install PySide6")
-        sys.exit(1)
-
+    for mod, name in [("PyInstaller", "pyinstaller"), ("PySide6", "PySide6")]:
+        try:
+            m = __import__(mod)
+            print(f"  ✅ {mod} {getattr(m, '__version__', '')}")
+        except ImportError:
+            print(f"  ❌ {mod} bulunamadı! → pip install {name}")
+            sys.exit(1)
     print()
 
 
 def clean_build():
-    """Önceki build dosyalarını temizle."""
-    print("🧹 Önceki build dosyaları temizleniyor...\n")
-
+    print("🧹 Temizlik...\n")
     for d in [BUILD_DIR, DIST_DIR]:
         if d.exists():
             shutil.rmtree(d)
             print(f"  🗑️  {d}/ silindi")
-
-    spec_files = list(Path(".").glob("*.spec"))
-    for f in spec_files:
+    for f in Path(".").glob("*.spec"):
         f.unlink()
         print(f"  🗑️  {f} silindi")
-
     print()
 
 
-def get_icon_path() -> str:
-    """Platform'a uygun ikon dosyasını bul."""
+def get_icon_path():
+    ICON_DIR.mkdir(exist_ok=True)
     if IS_WINDOWS:
         icon = ICON_DIR / "icon.ico"
     elif IS_MACOS:
@@ -105,239 +93,230 @@ def get_icon_path() -> str:
     if icon.exists():
         return str(icon)
 
-    print(f"  ⚠️  İkon dosyası bulunamadı: {icon}")
-    print(f"      İkonsuz devam ediliyor...\n")
+    # Try to create icon
+    png = ICON_DIR / "icon.png"
+    if not png.exists():
+        try:
+            _create_icon(png)
+        except Exception as e:
+            print(f"  ⚠️  İkon oluşturulamadı: {e}")
+
+    if IS_WINDOWS and png.exists():
+        try:
+            _png_to_ico(png, ICON_DIR / "icon.ico")
+        except Exception as e:
+            print(f"  ⚠️  ICO dönüşüm hatası: {e}")
+        if (ICON_DIR / "icon.ico").exists():
+            return str(ICON_DIR / "icon.ico")
+
+    if png.exists():
+        return str(png)
+
+    print("  ⚠️  İkon bulunamadı, ikonsuz devam ediliyor...")
     return ""
 
 
-def get_hidden_imports() -> list:
-    """PySide6 ve src modülleri için gerekli hidden import'lar."""
+def _create_icon(path):
+    """Pillow ile VenvStudio ikonu oluştur."""
+    try:
+        from PIL import Image, ImageDraw, ImageFont
+    except ImportError:
+        print("  ⚠️  Pillow yok, ikon oluşturulamadı (pip install Pillow)")
+        return
+
+    img = Image.new("RGBA", (256, 256), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    # Arka plan
+    draw.rounded_rectangle([0, 0, 255, 255], radius=40, fill=(30, 30, 46))
+
+    # Font bul
+    font_paths = [
+        "C:/Windows/Fonts/segoeui.ttf",
+        "C:/Windows/Fonts/arial.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/System/Library/Fonts/Helvetica.ttc",
+    ]
+    font_big = font_sm = None
+    for fp in font_paths:
+        if os.path.exists(fp):
+            try:
+                font_big = ImageFont.truetype(fp, 80)
+                font_sm = ImageFont.truetype(fp, 22)
+                break
+            except Exception:
+                continue
+    if not font_big:
+        font_big = ImageFont.load_default()
+        font_sm = ImageFont.load_default()
+
+    # VS yazısı
+    draw.text((128, 55), "VS", fill=(137, 180, 250), font=font_big, anchor="mt")
+
+    # Python yılanı
+    draw.text((128, 148), "🐍 venv", fill=(166, 227, 161), font=font_sm, anchor="mt")
+
+    # Progress bar
+    draw.rounded_rectangle([48, 185, 208, 191], radius=3, fill=(49, 50, 68))
+    draw.rounded_rectangle([48, 185, 158, 191], radius=3, fill=(137, 180, 250))
+
+    # Renkli noktalar
+    for cx, color in [(80, (243, 139, 168)), (128, (166, 227, 161)), (176, (249, 226, 175))]:
+        draw.ellipse([cx - 8, 210, cx + 8, 226], fill=color)
+
+    img.save(str(path), "PNG")
+    print(f"  ✅ İkon oluşturuldu: {path}")
+
+
+def _png_to_ico(png, ico):
+    try:
+        from PIL import Image
+        img = Image.open(str(png))
+        img.save(str(ico), format="ICO",
+                 sizes=[(256, 256), (128, 128), (64, 64), (48, 48), (32, 32), (16, 16)])
+        print(f"  ✅ ICO: {ico}")
+    except Exception as e:
+        print(f"  ⚠️  ICO dönüştürme hatası: {e}")
+
+
+def get_hidden_imports():
     return [
-        # PySide6
-        "PySide6.QtCore",
-        "PySide6.QtGui",
-        "PySide6.QtWidgets",
-        # VenvStudio src modülleri - bunlar OLMADAN exe çalışmaz!
-        "src",
-        "src.gui",
-        "src.gui.main_window",
-        "src.gui.env_dialog",
-        "src.gui.package_panel",
-        "src.gui.settings_page",
-        "src.gui.styles",
-        "src.core",
+        "PySide6.QtCore", "PySide6.QtGui", "PySide6.QtWidgets",
+        "src", "src.core", "src.core.config_manager", "src.core.pip_manager",
         "src.core.venv_manager",
-        "src.core.pip_manager",
-        "src.core.config_manager",
-        "src.utils",
-        "src.utils.platform_utils",
-        "src.utils.constants",
+        "src.gui", "src.gui.main_window", "src.gui.env_dialog",
+        "src.gui.package_panel", "src.gui.settings_page", "src.gui.styles",
+        "src.utils", "src.utils.constants", "src.utils.i18n",
+        "src.utils.logger", "src.utils.platform_utils",
     ]
 
 
-def get_excludes() -> list:
-    """Paket boyutunu küçültmek için hariç tutulanlar."""
+def get_excludes():
     return [
-        # Kullanılmayan Qt modülleri
-        "PySide6.QtNetwork",
-        "PySide6.QtWebEngine",
-        "PySide6.QtWebEngineCore",
-        "PySide6.QtWebEngineWidgets",
-        "PySide6.QtMultimedia",
-        "PySide6.QtMultimediaWidgets",
-        "PySide6.Qt3DCore",
-        "PySide6.Qt3DRender",
-        "PySide6.Qt3DInput",
-        "PySide6.Qt3DLogic",
-        "PySide6.Qt3DExtras",
-        "PySide6.Qt3DAnimation",
-        "PySide6.QtBluetooth",
-        "PySide6.QtNfc",
-        "PySide6.QtPositioning",
-        "PySide6.QtLocation",
-        "PySide6.QtSensors",
-        "PySide6.QtSerialPort",
-        "PySide6.QtSql",
-        "PySide6.QtTest",
-        "PySide6.QtXml",
-        "PySide6.QtDesigner",
-        "PySide6.QtHelp",
-        "PySide6.QtOpenGL",
-        "PySide6.QtOpenGLWidgets",
-        "PySide6.QtPdf",
-        "PySide6.QtPdfWidgets",
-        "PySide6.QtQml",
-        "PySide6.QtQuick",
-        "PySide6.QtQuickWidgets",
-        "PySide6.QtRemoteObjects",
-        "PySide6.QtScxml",
-        "PySide6.QtSvg",
-        "PySide6.QtSvgWidgets",
-        "PySide6.QtCharts",
-        "PySide6.QtDataVisualization",
-        # Kullanılmayan standart kütüphaneler
-        "tkinter",
-        "unittest",
-        "email",
-        "html",
-        "http",
-        "xml",
-        "pydoc",
-        "doctest",
-        "ftplib",
-        "imaplib",
-        "mailbox",
-        "smtplib",
-        "xmlrpc",
+        "PySide6.QtWebEngine", "PySide6.QtWebEngineCore", "PySide6.QtWebEngineWidgets",
+        "PySide6.QtMultimedia", "PySide6.QtMultimediaWidgets",
+        "PySide6.Qt3DCore", "PySide6.Qt3DRender", "PySide6.Qt3DInput",
+        "PySide6.Qt3DLogic", "PySide6.Qt3DExtras", "PySide6.Qt3DAnimation",
+        "PySide6.QtBluetooth", "PySide6.QtNfc", "PySide6.QtPositioning",
+        "PySide6.QtLocation", "PySide6.QtSensors", "PySide6.QtSerialPort",
+        "PySide6.QtSql", "PySide6.QtTest", "PySide6.QtXml",
+        "PySide6.QtDesigner", "PySide6.QtHelp",
+        "PySide6.QtOpenGL", "PySide6.QtOpenGLWidgets",
+        "PySide6.QtPdf", "PySide6.QtPdfWidgets",
+        "PySide6.QtQml", "PySide6.QtQuick", "PySide6.QtQuickWidgets",
+        "PySide6.QtRemoteObjects", "PySide6.QtScxml",
+        "PySide6.QtSvg", "PySide6.QtSvgWidgets",
+        "PySide6.QtCharts", "PySide6.QtDataVisualization",
+        "PySide6.QtNetworkAuth",
+        "tkinter", "unittest", "email", "html", "http", "xml",
+        "pydoc", "doctest", "ftplib", "imaplib", "smtplib", "xmlrpc",
+        "turtle", "turtledemo",
     ]
 
 
-def build_pyinstaller_command(one_file: bool = True, debug: bool = False) -> list:
-    """PyInstaller komutunu oluştur."""
+def build_command(one_file=True, debug=False):
     cmd = [
         sys.executable, "-m", "PyInstaller",
-        "--name", APP_NAME,
-        "--noconfirm",          # Önceki dist/ üzerine yaz
-        "--clean",              # Cache temizle
+        "--name", APP_NAME, "--noconfirm", "--clean",
     ]
-
-    # Debug modunda konsol açık kalır (hataları görmek için)
     if not debug:
-        cmd.append("--windowed")    # Konsol penceresi açma (GUI app)
+        cmd.append("--windowed")
+    cmd.append("--onefile" if one_file else "--onedir")
 
-    # Tek dosya mı klasör mü
-    if one_file:
-        cmd.append("--onefile")
-    else:
-        cmd.append("--onedir")
-
-    # src/ paketini topla - EN ÖNEMLİ KISIM
+    # Collect src modules
     cmd.extend(["--collect-submodules", "src"])
 
-    # İkon
+    # PySide6 — collect only needed submodules, not everything
+    cmd.extend(["--collect-submodules", "PySide6.QtCore"])
+    cmd.extend(["--collect-submodules", "PySide6.QtGui"])
+    cmd.extend(["--collect-submodules", "PySide6.QtWidgets"])
+
+    # Copy Qt plugins (platforms, styles) - critical for windowed mode
+    if IS_WINDOWS:
+        try:
+            import PySide6
+            pyside6_dir = os.path.dirname(PySide6.__file__)
+            qt_plugins = os.path.join(pyside6_dir, "plugins")
+            if os.path.isdir(qt_plugins):
+                sep = ";"
+                cmd.extend(["--add-data", f"{qt_plugins}{sep}PySide6/plugins"])
+        except ImportError:
+            pass
+
     icon = get_icon_path()
-    if icon:
+    if icon and os.path.isfile(icon):
         cmd.extend(["--icon", icon])
 
-    # Hidden imports
     for imp in get_hidden_imports():
         cmd.extend(["--hidden-import", imp])
-
-    # Exclude'lar
     for exc in get_excludes():
         cmd.extend(["--exclude-module", exc])
 
-    # Veri dosyaları - config klasörü
+    sep = ";" if IS_WINDOWS else ":"
     if Path("config").exists():
-        sep = ";" if IS_WINDOWS else ":"
         cmd.extend(["--add-data", f"config{sep}config"])
-
-    # Assets klasörü
     if ICON_DIR.exists():
-        sep = ";" if IS_WINDOWS else ":"
         cmd.extend(["--add-data", f"assets{sep}assets"])
 
-    # macOS özel ayarlar
     if IS_MACOS:
-        cmd.extend([
-            "--osx-bundle-identifier", "com.venvstudio.app",
-        ])
+        cmd.extend(["--osx-bundle-identifier", "com.venvstudio.app"])
 
-    # Ana script
     cmd.append(MAIN_SCRIPT)
-
     return cmd
 
 
-def post_build_info():
-    """Build sonrası bilgi göster."""
+def post_build():
     print("\n" + "=" * 60)
-    print(f"✅ BUILD BAŞARILI - {get_platform_name()}")
+    print(f"✅ BUILD BAŞARILI — {get_platform_name()}")
     print("=" * 60)
 
     if IS_WINDOWS:
-        exe_path = DIST_DIR / f"{APP_NAME}.exe"
-        if exe_path.exists():
-            size_mb = exe_path.stat().st_size / (1024 * 1024)
-            print(f"\n  📦 Çıktı: {exe_path}")
-            print(f"  📏 Boyut: {size_mb:.1f} MB")
-            print(f"\n  Çalıştırmak için:")
-            print(f"    {exe_path}")
-        else:
-            dir_path = DIST_DIR / APP_NAME
-            if dir_path.exists():
-                print(f"\n  📦 Çıktı klasörü: {dir_path}/")
-                print(f"    Çalıştırmak için: {dir_path / (APP_NAME + '.exe')}")
-
+        p = DIST_DIR / f"{APP_NAME}.exe"
+        if p.exists():
+            print(f"\n  📦 {p}  ({p.stat().st_size / 1024 / 1024:.1f} MB)")
+            print(f"  ▶️  .\\dist\\{APP_NAME}.exe")
     elif IS_MACOS:
-        app_path = DIST_DIR / f"{APP_NAME}.app"
-        if app_path.exists():
-            print(f"\n  📦 Çıktı: {app_path}")
-            print(f"\n  Çalıştırmak için:")
-            print(f"    open {app_path}")
-            print(f"\n  Applications'a taşımak için:")
-            print(f"    cp -r {app_path} /Applications/")
+        p = DIST_DIR / f"{APP_NAME}.app"
+        if p.exists():
+            print(f"\n  📦 {p}")
+            print(f"  ▶️  open {p}")
         else:
-            binary = DIST_DIR / APP_NAME
-            if binary.exists():
-                size_mb = binary.stat().st_size / (1024 * 1024)
-                print(f"\n  📦 Çıktı: {binary}")
-                print(f"  📏 Boyut: {size_mb:.1f} MB")
-
-    else:  # Linux
-        binary = DIST_DIR / APP_NAME
-        if binary.exists():
-            size_mb = binary.stat().st_size / (1024 * 1024)
-            print(f"\n  📦 Çıktı: {binary}")
-            print(f"  📏 Boyut: {size_mb:.1f} MB")
-            print(f"\n  Çalıştırmak için:")
-            print(f"    chmod +x {binary}")
-            print(f"    ./{binary}")
-            print(f"\n  /usr/local/bin'e kopyalamak için:")
-            print(f"    sudo cp {binary} /usr/local/bin/{APP_NAME.lower()}")
-        else:
-            dir_path = DIST_DIR / APP_NAME
-            if dir_path.exists():
-                print(f"\n  📦 Çıktı klasörü: {dir_path}/")
-
+            p = DIST_DIR / APP_NAME
+            if p.exists():
+                print(f"\n  📦 {p}  ({p.stat().st_size / 1024 / 1024:.1f} MB)")
+    else:
+        p = DIST_DIR / APP_NAME
+        if p.exists():
+            print(f"\n  📦 {p}  ({p.stat().st_size / 1024 / 1024:.1f} MB)")
+            print(f"  ▶️  chmod +x {p} && ./{p}")
     print()
 
 
 def create_desktop_file():
-    """Linux için .desktop dosyası oluştur."""
     if not IS_LINUX:
         return
-
-    desktop_content = f"""[Desktop Entry]
+    content = f"""[Desktop Entry]
 Name={APP_NAME}
-Comment=Lightweight Python Virtual Environment Manager
+Comment=Python Virtual Environment Manager
 Exec={Path.cwd() / DIST_DIR / APP_NAME}
 Icon={Path.cwd() / ICON_DIR / 'icon.png' if (ICON_DIR / 'icon.png').exists() else ''}
 Terminal=false
 Type=Application
 Categories=Development;IDE;
-Keywords=python;venv;virtualenv;environment;
 """
-    desktop_file = DIST_DIR / f"{APP_NAME.lower()}.desktop"
-    with open(desktop_file, "w") as f:
-        f.write(desktop_content)
-    os.chmod(desktop_file, 0o755)
-    print(f"  📝 Desktop dosyası oluşturuldu: {desktop_file}")
-    print(f"     Kopyalamak için: cp {desktop_file} ~/.local/share/applications/\n")
+    f = DIST_DIR / f"{APP_NAME.lower()}.desktop"
+    f.write_text(content)
+    os.chmod(f, 0o755)
+    print(f"  📝 {f} → cp {f} ~/.local/share/applications/\n")
 
 
-def create_innosetup_script():
-    """Windows için Inno Setup script oluştur (isteğe bağlı installer)."""
+def create_innosetup():
     if not IS_WINDOWS:
         return
-
-    iss_content = f"""; VenvStudio Inno Setup Script
-; Inno Setup: https://jrsoftware.org/isinfo.php
-
+    content = f"""; VenvStudio Inno Setup Script
 [Setup]
 AppName={APP_NAME}
 AppVersion={APP_VERSION}
-AppPublisher=VenvStudio Team
 DefaultDirName={{autopf}}\\{APP_NAME}
 DefaultGroupName={APP_NAME}
 OutputDir=installer
@@ -348,86 +327,169 @@ WizardStyle=modern
 
 [Files]
 Source: "dist\\{APP_NAME}.exe"; DestDir: "{{app}}"; Flags: ignoreversion
+Source: "vs.py"; DestDir: "{{app}}"; Flags: ignoreversion
+Source: "vs.bat"; DestDir: "{{app}}"; Flags: ignoreversion
 
 [Icons]
 Name: "{{group}}\\{APP_NAME}"; Filename: "{{app}}\\{APP_NAME}.exe"
 Name: "{{autodesktop}}\\{APP_NAME}"; Filename: "{{app}}\\{APP_NAME}.exe"; Tasks: desktopicon
 
 [Tasks]
-Name: "desktopicon"; Description: "Masaüstüne kısayol oluştur"; GroupDescription: "Ek görevler:"
+Name: "desktopicon"; Description: "Create desktop shortcut"
 
 [Run]
-Filename: "{{app}}\\{APP_NAME}.exe"; Description: "{APP_NAME}'yu başlat"; Flags: postinstall nowait skipifsilent
+Filename: "{{app}}\\{APP_NAME}.exe"; Description: "Launch {APP_NAME}"; Flags: postinstall nowait skipifsilent
 """
-    iss_file = Path("installer.iss")
-    with open(iss_file, "w", encoding="utf-8") as f:
-        f.write(iss_content)
-    print(f"  📝 Inno Setup script oluşturuldu: {iss_file}")
-    print(f"     Windows installer oluşturmak için Inno Setup ile derleyin.\n")
+    Path("installer.iss").write_text(content, encoding="utf-8")
+    print(f"  📝 installer.iss oluşturuldu\n")
+
+
+def create_ci():
+    """GitHub Actions — 3 platform otomatik build + release."""
+    d = Path(".github/workflows")
+    d.mkdir(parents=True, exist_ok=True)
+    content = """name: Build & Release VenvStudio
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            artifact: VenvStudio-Windows
+            binary: dist/VenvStudio.exe
+          - os: ubuntu-22.04
+            artifact: VenvStudio-Linux
+            binary: dist/VenvStudio
+          - os: macos-latest
+            artifact: VenvStudio-macOS
+            binary: dist/VenvStudio
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install PySide6 pyinstaller Pillow
+
+      - name: Install Linux deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon0 libxcb-xinerama0 libegl1 libxcb-cursor0
+
+      - name: Build
+        run: python build.py
+        continue-on-error: false
+
+      - name: Retry Windows build without windowed
+        if: failure() && runner.os == 'Windows'
+        run: python build.py --debug
+
+      - name: List dist (debug)
+        if: always()
+        run: |
+          ls -la dist/ || dir dist\\
+        shell: bash
+        continue-on-error: true
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.binary }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - uses: actions/download-artifact@v4
+
+      - name: Rename binaries
+        run: |
+          mv VenvStudio-Linux/VenvStudio VenvStudio-Linux/VenvStudio-Linux || true
+          mv VenvStudio-macOS/VenvStudio VenvStudio-macOS/VenvStudio-macOS || true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            VenvStudio-Windows/VenvStudio.exe
+            VenvStudio-Linux/VenvStudio-Linux
+            VenvStudio-macOS/VenvStudio-macOS
+          generate_release_notes: true
+"""
+    f = d / "build.yml"
+    f.write_text(content)
+    print(f"  ✅ {f}")
+    return f
 
 
 def main():
-    parser = argparse.ArgumentParser(description=f"{APP_NAME} Build Script")
-    parser.add_argument("--onefile", action="store_true", default=True,
-                        help="Tek dosya olarak paketle (varsayılan)")
-    parser.add_argument("--onedir", action="store_true",
-                        help="Klasör bazlı paketle")
-    parser.add_argument("--clean", action="store_true",
-                        help="Sadece temizlik yap, build yapma")
-    parser.add_argument("--installer", action="store_true",
-                        help="Platform-spesifik installer scriptleri de oluştur")
-    parser.add_argument("--debug", action="store_true",
-                        help="Debug modu: konsol açık kalır, hataları görebilirsin")
+    parser = argparse.ArgumentParser(description=f"{APP_NAME} v{APP_VERSION} Build")
+    parser.add_argument("--onedir", action="store_true", help="Klasör bazlı")
+    parser.add_argument("--clean", action="store_true", help="Temizlik")
+    parser.add_argument("--debug", action="store_true", help="Konsol açık")
+    parser.add_argument("--installer", action="store_true", help="Installer scriptleri")
+    parser.add_argument("--ci", action="store_true", help="GitHub Actions oluştur")
     args = parser.parse_args()
 
-    print()
-    print("=" * 60)
-    print(f"🐍 {APP_NAME} v{APP_VERSION} - Build Script")
-    print(f"   Platform: {get_platform_name()} ({platform.machine()})")
-    print(f"   Python:   {platform.python_version()}")
-    print("=" * 60)
-    print()
+    print(f"\n{'='*60}")
+    print(f"🐍 {APP_NAME} v{APP_VERSION} — {get_platform_name()} ({platform.machine()})")
+    print(f"   Python {platform.python_version()}")
+    print(f"{'='*60}\n")
 
-    # Temizlik
-    if args.clean:
-        clean_build()
-        print("✅ Temizlik tamamlandı.")
+    if args.ci:
+        f = create_ci()
+        print(f"\n  Sonraki adımlar:")
+        print(f"    git add .github/")
+        print(f"    git commit -m 'Add CI/CD'")
+        print(f"    git push")
+        print(f"\n  Release için:")
+        print(f"    git tag v{APP_VERSION}")
+        print(f"    git push origin v{APP_VERSION}")
+        print(f"\n  → Otomatik: Windows .exe + Linux binary + macOS binary")
+        print(f"  → GitHub Releases'a yüklenir!\n")
         return
 
-    # Bağımlılık kontrolü
-    check_dependencies()
+    if args.clean:
+        clean_build()
+        return
 
-    # Önceki build'i temizle
+    check_dependencies()
     clean_build()
 
-    # Build komutu
-    one_file = not args.onedir
-    cmd = build_pyinstaller_command(one_file=one_file, debug=args.debug)
+    cmd = build_command(one_file=not args.onedir, debug=args.debug)
+    print(f"🔨 Build başlıyor...\n")
 
-    mode_str = 'tek dosya' if one_file else 'klasör'
-    if args.debug:
-        mode_str += ' + DEBUG (konsol açık)'
-    print(f"🔨 Build başlıyor ({mode_str})...\n")
-    print(f"   Komut: {' '.join(cmd)}\n")
-
-    # PyInstaller'ı çalıştır
     result = subprocess.run(cmd, cwd=str(Path(__file__).parent))
-
     if result.returncode != 0:
         print("\n❌ BUILD BAŞARISIZ!")
-        print("   PyInstaller hata verdi. Yukarıdaki çıktıyı kontrol edin.")
         sys.exit(1)
 
-    # Post-build
-    post_build_info()
-
-    # Platform-spesifik extras
+    post_build()
     if IS_LINUX:
         create_desktop_file()
-
     if args.installer:
-        if IS_WINDOWS:
-            create_innosetup_script()
+        create_innosetup()
 
     print("🎉 Tamamlandı!\n")
 

@@ -736,14 +736,14 @@ class PackagePanel(QWidget):
         name = venv_path.name
         idx = self.env_selector.findData(str(venv_path))
         if idx < 0:
-            # Add it if not already
             self.env_selector.addItem(name, str(venv_path))
             idx = self.env_selector.count() - 1
         self.env_selector.blockSignals(True)
         self.env_selector.setCurrentIndex(idx)
         self.env_selector.blockSignals(False)
-        self.refresh_packages()
-        self.status_label.setText(f"Environment: {name}")
+        self.status_label.setText(f"Loading packages for {name}...")
+        # Async refresh — UI hemen görünür, paketler arka planda yüklenir
+        self._async_refresh_packages()
 
     def populate_env_list(self, env_list):
         """Populate the environment dropdown from main window."""
@@ -777,12 +777,77 @@ class PackagePanel(QWidget):
         path_str = self.env_selector.currentData()
         if path_str:
             self.pip_manager = PipManager(Path(path_str))
-            self.refresh_packages()
-            self.status_label.setText(f"Environment: {self.env_selector.currentText()}")
+            self.status_label.setText(f"Loading packages...")
+            self._async_refresh_packages()
         else:
             self.pip_manager = None
             self.packages_table.setRowCount(0)
             self.env_pkg_count.setText("")
+
+    def _async_refresh_packages(self):
+        """Load packages in background — UI stays responsive."""
+        if not self.pip_manager:
+            return
+
+        # Show loading state immediately
+        self.packages_table.setRowCount(1)
+        loading_item = QTableWidgetItem("Loading...")
+        loading_item.setFlags(loading_item.flags() & ~Qt.ItemIsEditable)
+        self.packages_table.setItem(0, 0, loading_item)
+        self.packages_table.setItem(0, 1, QTableWidgetItem(""))
+        self.pkg_count_label.setText("Loading...")
+        self.env_pkg_count.setText("Loading packages...")
+
+        # Use QThread for background loading
+        class PkgLoader(QThread):
+            done = Signal(list)
+            def __init__(self, pip_mgr):
+                super().__init__()
+                self.pip_mgr = pip_mgr
+            def run(self):
+                try:
+                    pkgs = self.pip_mgr.list_packages()
+                    self.done.emit(pkgs)
+                except Exception:
+                    self.done.emit([])
+
+        self._pkg_loader = PkgLoader(self.pip_manager)
+        self._pkg_loader.done.connect(self._on_packages_loaded)
+        self._pkg_loader.start()
+
+    def _on_packages_loaded(self, packages):
+        """Called when async package loading finishes."""
+        if not self.pip_manager:
+            return
+
+        self.installed_package_names = {pkg.name.lower() for pkg in packages}
+
+        self.packages_table.setRowCount(len(packages))
+        for i, pkg in enumerate(packages):
+            name_item = QTableWidgetItem(pkg.name)
+            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
+            self.packages_table.setItem(i, 0, name_item)
+
+            ver_item = QTableWidgetItem(pkg.version)
+            ver_item.setFlags(ver_item.flags() & ~Qt.ItemIsEditable)
+            self.packages_table.setItem(i, 1, ver_item)
+
+            cb = QCheckBox()
+            cb_widget = QWidget()
+            cb_layout = QHBoxLayout(cb_widget)
+            cb_layout.addWidget(cb)
+            cb_layout.setAlignment(Qt.AlignCenter)
+            cb_layout.setContentsMargins(0, 0, 0, 0)
+            self.packages_table.setCellWidget(i, 2, cb_widget)
+
+        count = len(packages)
+        self.pkg_count_label.setText(f"{count} packages")
+        self.env_pkg_count.setText(f"{count} packages installed")
+        env_name = self.env_selector.currentText()
+        self.status_label.setText(f"Environment: {env_name}")
+
+        self._populate_catalog()
+        self._update_launcher_status()
 
     def refresh_packages(self):
         """Refresh installed packages list - shows ALL packages."""

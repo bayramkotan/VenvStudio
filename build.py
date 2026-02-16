@@ -40,9 +40,21 @@ if sys.stderr.encoding and sys.stderr.encoding.lower() not in ("utf-8", "utf8"):
 os.environ["PYTHONIOENCODING"] = "utf-8"
 
 APP_NAME = "VenvStudio"
-APP_VERSION = "1.2.0"
 MAIN_SCRIPT = "main.py"
 ICON_DIR = Path("assets")
+
+# Version: tek kaynak constants.py
+def _read_version():
+    try:
+        with open(Path("src/utils/constants.py"), "r", encoding="utf-8") as f:
+            for line in f:
+                if line.startswith("APP_VERSION"):
+                    return line.split('"')[1]
+    except Exception:
+        pass
+    return "0.0.0"
+
+APP_VERSION = _read_version()
 
 SYSTEM = platform.system().lower()
 IS_WINDOWS = SYSTEM == "windows"

@@ -753,7 +753,7 @@ class SettingsPage(QWidget):
         try:
             result = subprocess.run(
                 [filepath, "--version"],
-                capture_output=True, text=True, timeout=5,
+                **subprocess_args(capture_output=True, text=True, timeout=5)
             )
             version = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
         except Exception as e:
@@ -1084,7 +1084,7 @@ class SettingsPage(QWidget):
         try:
             result = subprocess.run(
                 ["powershell", "-Command", ps_cmd],
-                capture_output=True, text=True, timeout=15,
+                **subprocess_args(capture_output=True, text=True, timeout=15)
             )
             if result.returncode == 0:
                 QMessageBox.information(
@@ -1140,7 +1140,7 @@ class SettingsPage(QWidget):
             )
             result = subprocess.run(
                 ["powershell", "-Command", ps_check],
-                capture_output=True, text=True, timeout=10,
+                **subprocess_args(capture_output=True, text=True, timeout=10)
             )
             already_in = "True" in result.stdout
 
@@ -1175,7 +1175,7 @@ class SettingsPage(QWidget):
             try:
                 result = subprocess.run(
                     ["powershell", "-Command", ps_cmd],
-                    capture_output=True, text=True, timeout=15,
+                    **subprocess_args(capture_output=True, text=True, timeout=15)
                 )
                 if result.returncode == 0:
                     self.config.set("vs_cli_enabled", True)

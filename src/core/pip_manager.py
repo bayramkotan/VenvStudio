@@ -32,12 +32,15 @@ class PipManager:
 
     def _run_pip(self, args: List[str], timeout: int = 120) -> subprocess.CompletedProcess:
         """Run a pip command and return the result."""
+        from src.utils.platform_utils import subprocess_args
         cmd = [str(self.python_exe), "-m", "pip"] + args
         return subprocess.run(
             cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
+            **subprocess_args(
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+            )
         )
 
     def list_packages(self) -> List[PackageInfo]:

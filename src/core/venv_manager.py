@@ -13,6 +13,8 @@ from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from src.utils.platform_utils import subprocess_args
+
 from src.utils.platform_utils import (
     get_python_executable,
     get_pip_executable,
@@ -89,10 +91,8 @@ class VenvManager:
 
             result = subprocess.run(
                 cmd,
-                capture_output=True,
-                text=True,
-                timeout=120,
-            )
+                **subprocess_args(capture_output=True, text=True, timeout=120)
+                )
 
             if result.returncode != 0:
                 # Clean up on failure
@@ -108,10 +108,8 @@ class VenvManager:
                     callback("Upgrading pip...")
                 subprocess.run(
                     [str(python_in_venv), "-m", "pip", "install", "--upgrade", "pip"],
-                    capture_output=True,
-                    text=True,
-                    timeout=60,
-                )
+                    **subprocess_args(capture_output=True, text=True, timeout=60)
+                    )
 
             # Save creation metadata
             meta = {
@@ -224,7 +222,7 @@ class VenvManager:
             try:
                 result = subprocess.run(
                     [str(python_exe), "--version"],
-                    capture_output=True, text=True, timeout=5,
+                    **subprocess_args(capture_output=True, text=True, timeout=5)
                 )
                 ver = result.stdout.strip() or result.stderr.strip()
                 info.python_version = ver.replace("Python ", "")
@@ -258,7 +256,7 @@ class VenvManager:
                 try:
                     result = subprocess.run(
                         [str(pip_exe), "list", "--format=json"],
-                        capture_output=True, text=True, timeout=10,
+                        **subprocess_args(capture_output=True, text=True, timeout=10)
                     )
                     if result.returncode == 0:
                         packages = json.loads(result.stdout)
@@ -285,7 +283,7 @@ class VenvManager:
             # Get requirements from source
             result = subprocess.run(
                 [str(source_pip), "freeze"],
-                capture_output=True, text=True, timeout=15,
+                **subprocess_args(capture_output=True, text=True, timeout=15)
             )
             requirements = result.stdout
 
@@ -306,7 +304,7 @@ class VenvManager:
 
                 result = subprocess.run(
                     [str(target_pip), "install", "--no-cache-dir", "-r", str(req_file)],
-                    capture_output=True, text=True, timeout=300,
+                    **subprocess_args(capture_output=True, text=True, timeout=300)
                 )
                 req_file.unlink(missing_ok=True)
 
@@ -338,7 +336,7 @@ class VenvManager:
             if pip_exe.exists():
                 result = subprocess.run(
                     [str(pip_exe), "freeze"],
-                    capture_output=True, text=True, timeout=15,
+                    **subprocess_args(capture_output=True, text=True, timeout=15)
                 )
                 requirements = result.stdout
 
@@ -361,7 +359,7 @@ class VenvManager:
 
                 result = subprocess.run(
                     [str(target_pip), "install", "-r", str(req_file)],
-                    capture_output=True, text=True, timeout=300,
+                    **subprocess_args(capture_output=True, text=True, timeout=300)
                 )
                 req_file.unlink(missing_ok=True)
 

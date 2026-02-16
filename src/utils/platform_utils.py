@@ -12,6 +12,19 @@ from pathlib import Path
 from typing import Optional, List, Tuple
 
 
+# ── Windows console suppression ──
+# Windows'ta subprocess çağrılarında konsol penceresi açılmasını engelle
+CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
+
+def subprocess_args(**kwargs):
+    """Add CREATE_NO_WINDOW on Windows to suppress console flashing.
+    Use: subprocess.run(cmd, **subprocess_args(capture_output=True, text=True))
+    """
+    if sys.platform == "win32":
+        kwargs.setdefault("creationflags", CREATE_NO_WINDOW)
+    return kwargs
+
+
 def get_platform() -> str:
     """Return normalized platform name."""
     system = platform.system().lower()
@@ -98,7 +111,7 @@ def find_system_pythons() -> List[Tuple[str, str]]:
         try:
             result = subprocess.run(
                 [exe_path, "--version"],
-                capture_output=True, text=True, timeout=5
+                **subprocess_args(capture_output=True, text=True, timeout=5)
             )
             version = result.stdout.strip() or result.stderr.strip()
             version = version.replace("Python ", "")

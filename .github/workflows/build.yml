@@ -8,64 +8,159 @@ on:
 permissions:
   contents: write
 
-env:
-  PYTHONUTF8: 1
-  PYTHONIOENCODING: utf-8
-
 jobs:
-  build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            artifact: VenvStudio-Windows
-            binary: dist/VenvStudio.exe
-          - os: ubuntu-22.04
-            artifact: VenvStudio-Linux
-            binary: dist/VenvStudio
-          - os: macos-latest
-            artifact: VenvStudio-macOS
-            binary: dist/VenvStudio
-
-    runs-on: ${{ matrix.os }}
-
+  build-windows:
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install PySide6 pyinstaller Pillow
+      - name: Build
+        id: build1
+        run: python build.py
+        continue-on-error: true
+      - name: Retry without windowed
+        if: steps.build1.outcome == 'failure'
+        run: python build.py --debug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VenvStudio-Windows
+          path: dist/VenvStudio.exe
+          if-no-files-found: warn
 
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install deps
+        run: |
+          python -m pip install --upgrade pip
+          pip install PySide6 pyinstaller Pillow
+      - name: Build
+        run: python build.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VenvStudio-macOS
+          path: dist/VenvStudio
+          if-no-files-found: warn
+
+  build-linux-appimage:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Install dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install PySide6 pyinstaller Pillow
-
-      - name: Install Linux deps
-        if: runner.os == 'Linux'
+      - name: Install system deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y libxcb-cursor0 libxcb-xinerama0 libegl1 libxcb-icccm4 libxkbcommon-x11-0 libxcb-keysyms1 libxcb-image0 libxcb-render-util0 libxcb-shape0 libxcb-xfixes0 libxcb-randr0 libxcb-sync1 libxcb-shm0
+          sudo apt-get install -y libxcb-cursor0 libxcb-xinerama0 libegl1 \
+            libxcb-icccm4 libxkbcommon-x11-0 libxcb-keysyms1 libxcb-image0 \
+            libxcb-render-util0 libxcb-shape0 libxcb-xfixes0 libxcb-randr0 \
+            libxcb-sync1 libxcb-shm0 fuse libfuse2
 
-      - name: Build
-        run: python build.py
+      - name: Install Python deps
+        run: |
+          pip install PySide6 pyinstaller Pillow
 
-      - name: Debug - list dist
-        if: always()
-        shell: bash
-        continue-on-error: true
-        run: ls -la dist/ 2>/dev/null || echo "No dist"
+      - name: Build with PyInstaller (onedir for AppImage)
+        run: python build.py --onedir
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Create AppImage
+        run: |
+          # Download linuxdeploy + Qt plugin
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x linuxdeploy*.AppImage
+
+          # Create AppDir structure
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+
+          # Copy PyInstaller output
+          cp -r dist/VenvStudio/* AppDir/usr/bin/
+
+          # Desktop file
+          cat > AppDir/usr/share/applications/venvstudio.desktop << 'DESKTOP'
+          [Desktop Entry]
+          Name=VenvStudio
+          Comment=Python Virtual Environment Manager
+          Exec=VenvStudio
+          Icon=venvstudio
+          Type=Application
+          Categories=Development;IDE;
+          Keywords=python;venv;virtualenv;
+          DESKTOP
+          # Fix indentation
+          sed -i 's/^          //' AppDir/usr/share/applications/venvstudio.desktop
+
+          # Icon
+          if [ -f assets/icon.png ]; then
+            cp assets/icon.png AppDir/usr/share/icons/hicolor/256x256/apps/venvstudio.png
+            cp assets/icon.png AppDir/venvstudio.png
+          fi
+
+          # Desktop file in root too
+          cp AppDir/usr/share/applications/venvstudio.desktop AppDir/venvstudio.desktop
+
+          # Build AppImage
+          export LDAI_UPDATE_INFORMATION="zsync|https://github.com/${{ github.repository }}/releases/latest/download/VenvStudio-x86_64.AppImage.zsync"
+          DEPLOY_GTK_VERSION=3 ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --executable AppDir/usr/bin/VenvStudio \
+            --desktop-file AppDir/usr/share/applications/venvstudio.desktop \
+            --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/venvstudio.png \
+            --output appimage || true
+
+          # Fallback: if linuxdeploy fails, use appimagetool directly
+          if ! ls VenvStudio*.AppImage 1>/dev/null 2>&1; then
+            echo "linuxdeploy failed, trying appimagetool..."
+            wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
+            chmod +x appimagetool-x86_64.AppImage
+
+            # AppRun script
+            cat > AppDir/AppRun << 'APPRUN'
+          #!/bin/bash
+          SELF=$(readlink -f "$0")
+          HERE=${SELF%/*}
+          export PATH="${HERE}/usr/bin:${PATH}"
+          export LD_LIBRARY_PATH="${HERE}/usr/bin:${HERE}/usr/lib:${LD_LIBRARY_PATH}"
+          export QT_PLUGIN_PATH="${HERE}/usr/bin/PySide6/Qt/plugins"
+          export QT_QPA_PLATFORM_PLUGIN_PATH="${HERE}/usr/bin/PySide6/Qt/plugins/platforms"
+          exec "${HERE}/usr/bin/VenvStudio" "$@"
+          APPRUN
+            sed -i 's/^          //' AppDir/AppRun
+            chmod +x AppDir/AppRun
+            ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir VenvStudio-x86_64.AppImage
+          fi
+
+          ls -la *.AppImage 2>/dev/null || echo "No AppImage created"
+
+      - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.binary }}
+          name: VenvStudio-Linux-AppImage
+          path: VenvStudio*.AppImage
+          if-no-files-found: warn
+
+      # Also upload raw binary as fallback
+      - uses: actions/upload-artifact@v4
+        with:
+          name: VenvStudio-Linux
+          path: dist/VenvStudio/VenvStudio
           if-no-files-found: warn
 
   release:
-    needs: build
+    needs: [build-windows, build-macos, build-linux-appimage]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
 
@@ -73,10 +168,10 @@ jobs:
       - uses: actions/download-artifact@v4
         continue-on-error: true
 
-      - name: Rename binaries
+      - name: Prepare files
         continue-on-error: true
         run: |
-          mv VenvStudio-Linux/VenvStudio VenvStudio-Linux/VenvStudio-Linux 2>/dev/null || true
+          ls -laR
           mv VenvStudio-macOS/VenvStudio VenvStudio-macOS/VenvStudio-macOS 2>/dev/null || true
 
       - name: Create Release
@@ -84,7 +179,7 @@ jobs:
         with:
           files: |
             VenvStudio-Windows/VenvStudio.exe
-            VenvStudio-Linux/VenvStudio-Linux
+            VenvStudio-Linux-AppImage/VenvStudio*.AppImage
             VenvStudio-macOS/VenvStudio-macOS
           generate_release_notes: true
           fail_on_unmatched_files: false

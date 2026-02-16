@@ -3,7 +3,7 @@ VenvStudio - Constants and Popular Package Catalog
 """
 
 APP_NAME = "VenvStudio"
-APP_VERSION = "1.3.1"
+APP_VERSION = "1.3.2"
 APP_DESCRIPTION = "Lightweight Python Virtual Environment Manager"
 APP_AUTHOR = "VenvStudio Team"
 
@@ -215,6 +215,7 @@ PRESETS = {
     "🌐 Web App (Django)": ["django", "psycopg2-binary", "django-rest-framework", "celery"],
     "🌐 Web App (Flask)": ["flask", "sqlalchemy", "flask-cors", "gunicorn"],
     "🤖 ML Starter": ["numpy", "pandas", "scikit-learn", "matplotlib", "jupyter", "xgboost"],
+    "👁️ Computer Vision": ["opencv-python", "pillow", "scikit-image", "ultralytics", "torch", "torchvision"],
     "🧪 Testing Suite": ["pytest", "pytest-cov", "pytest-asyncio", "factory-boy", "faker"],
     "🛠️ Dev Essentials": ["black", "flake8", "mypy", "isort", "pre-commit", "pytest"],
     "🔬 NLP Toolkit": ["transformers", "nltk", "spacy", "pandas", "numpy"],

@@ -372,7 +372,17 @@ permissions:
 
 jobs:
   build-windows:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: windows-latest
+            arch: x64
+            artifact: VenvStudio-Windows-x64
+          - runner: windows-11-arm
+            arch: arm64
+            artifact: VenvStudio-Windows-arm64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -391,12 +401,22 @@ jobs:
         run: python build.py --debug
       - uses: actions/upload-artifact@v4
         with:
-          name: VenvStudio-Windows
+          name: ${{ matrix.artifact }}
           path: dist/VenvStudio.exe
           if-no-files-found: warn
 
   build-macos:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-latest
+            arch: arm64
+            artifact: VenvStudio-macOS-arm64
+          - runner: macos-13
+            arch: x86_64
+            artifact: VenvStudio-macOS-x86_64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -410,12 +430,22 @@ jobs:
         run: python build.py
       - uses: actions/upload-artifact@v4
         with:
-          name: VenvStudio-macOS
+          name: ${{ matrix.artifact }}
           path: dist/VenvStudio
           if-no-files-found: warn
 
   build-linux-appimage:
-    runs-on: ubuntu-22.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-22.04
+            arch: x86_64
+            artifact: VenvStudio-Linux-x86_64
+          - runner: ubuntu-22.04-arm
+            arch: aarch64
+            artifact: VenvStudio-Linux-aarch64
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -439,10 +469,10 @@ jobs:
 
       - name: Create AppImage
         run: |
+          ARCH=$(uname -m)
           # Download linuxdeploy + Qt plugin
-          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          wget -q https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
-          chmod +x linuxdeploy*.AppImage
+          wget -q https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-${ARCH}.AppImage || true
+          chmod +x linuxdeploy*.AppImage 2>/dev/null || true
 
           # Create AppDir structure
           mkdir -p AppDir/usr/bin
@@ -476,19 +506,21 @@ jobs:
           cp AppDir/usr/share/applications/venvstudio.desktop AppDir/venvstudio.desktop
 
           # Build AppImage
-          export LDAI_UPDATE_INFORMATION="zsync|https://github.com/${{ github.repository }}/releases/latest/download/VenvStudio-x86_64.AppImage.zsync"
-          DEPLOY_GTK_VERSION=3 ./linuxdeploy-x86_64.AppImage \\
-            --appdir AppDir \\
-            --executable AppDir/usr/bin/VenvStudio \\
-            --desktop-file AppDir/usr/share/applications/venvstudio.desktop \\
-            --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/venvstudio.png \\
-            --output appimage || true
+          export LDAI_UPDATE_INFORMATION="zsync|https://github.com/${{ github.repository }}/releases/latest/download/VenvStudio-${ARCH}.AppImage.zsync"
+          if [ -f linuxdeploy-${ARCH}.AppImage ]; then
+            DEPLOY_GTK_VERSION=3 ./linuxdeploy-${ARCH}.AppImage \\
+              --appdir AppDir \\
+              --executable AppDir/usr/bin/VenvStudio \\
+              --desktop-file AppDir/usr/share/applications/venvstudio.desktop \\
+              --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/venvstudio.png \\
+              --output appimage || true
+          fi
 
           # Fallback: if linuxdeploy fails, use appimagetool directly
           if ! ls VenvStudio*.AppImage 1>/dev/null 2>&1; then
             echo "linuxdeploy failed, trying appimagetool..."
-            wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-x86_64.AppImage
-            chmod +x appimagetool-x86_64.AppImage
+            wget -q https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-${ARCH}.AppImage || true
+            chmod +x appimagetool-*.AppImage 2>/dev/null || true
 
             # AppRun script
             cat > AppDir/AppRun << 'APPRUN'
@@ -503,21 +535,20 @@ jobs:
           APPRUN
             sed -i 's/^          //' AppDir/AppRun
             chmod +x AppDir/AppRun
-            ARCH=x86_64 ./appimagetool-x86_64.AppImage AppDir VenvStudio-x86_64.AppImage
+            ARCH=${ARCH} ./appimagetool-*.AppImage AppDir VenvStudio-${ARCH}.AppImage || true
           fi
 
           ls -la *.AppImage 2>/dev/null || echo "No AppImage created"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: VenvStudio-Linux-AppImage
+          name: ${{ matrix.artifact }}-AppImage
           path: VenvStudio*.AppImage
           if-no-files-found: warn
 
-      # Also upload raw binary as fallback
       - uses: actions/upload-artifact@v4
         with:
-          name: VenvStudio-Linux
+          name: ${{ matrix.artifact }}
           path: dist/VenvStudio/VenvStudio
           if-no-files-found: warn
 
@@ -534,15 +565,21 @@ jobs:
         continue-on-error: true
         run: |
           ls -laR
-          mv VenvStudio-macOS/VenvStudio VenvStudio-macOS/VenvStudio-macOS 2>/dev/null || true
+          mv VenvStudio-Windows-x64/VenvStudio.exe VenvStudio-Windows-x64/VenvStudio-x64.exe 2>/dev/null || true
+          mv VenvStudio-Windows-arm64/VenvStudio.exe VenvStudio-Windows-arm64/VenvStudio-arm64.exe 2>/dev/null || true
+          mv VenvStudio-macOS-arm64/VenvStudio VenvStudio-macOS-arm64/VenvStudio-macOS-arm64 2>/dev/null || true
+          mv VenvStudio-macOS-x86_64/VenvStudio VenvStudio-macOS-x86_64/VenvStudio-macOS-x86_64 2>/dev/null || true
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            VenvStudio-Windows/VenvStudio.exe
-            VenvStudio-Linux-AppImage/VenvStudio*.AppImage
-            VenvStudio-macOS/VenvStudio-macOS
+            VenvStudio-Windows-x64/VenvStudio-x64.exe
+            VenvStudio-Windows-arm64/VenvStudio-arm64.exe
+            VenvStudio-Linux-x86_64-AppImage/VenvStudio*.AppImage
+            VenvStudio-Linux-aarch64-AppImage/VenvStudio*.AppImage
+            VenvStudio-macOS-arm64/VenvStudio-macOS-arm64
+            VenvStudio-macOS-x86_64/VenvStudio-macOS-x86_64
           generate_release_notes: true
           fail_on_unmatched_files: false
 """

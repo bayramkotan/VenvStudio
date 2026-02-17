@@ -1316,6 +1316,8 @@ class PackagePanel(QWidget):
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
+            # Replace commas with spaces so "seaborn, numpy, baby" works
+            line = line.replace(",", " ").replace(";", " ").replace("|", " ")
             for token in line.split():
                 t = token.strip()
                 # Skip empty

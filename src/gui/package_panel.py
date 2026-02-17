@@ -315,7 +315,7 @@ class PackagePanel(QWidget):
 
         layout.addStretch()
 
-        # Buttons row 1: Launch + Console
+        # Buttons row 1: Launch
         btn_layout = QHBoxLayout()
 
         launch_btn = QPushButton(f"▶ {tr('launch_app').format(app=app_def['name'])}"
@@ -323,14 +323,6 @@ class PackagePanel(QWidget):
         launch_btn.setObjectName("success")
         launch_btn.clicked.connect(lambda checked, a=app_def: self._launch_app(a))
         btn_layout.addWidget(launch_btn)
-
-        # Console toggle
-        console_cb = QCheckBox()
-        console_cb.setToolTip("Show console / Konsolu göster")
-        console_cb.setFixedWidth(20)
-        if app_def.get("needs_console", False):
-            console_cb.setChecked(True)
-        btn_layout.addWidget(console_cb)
 
         layout.addLayout(btn_layout)
 
@@ -355,7 +347,6 @@ class PackagePanel(QWidget):
         card._app_def = app_def
         card._status_label = status
         card._launch_btn = launch_btn
-        card._console_cb = console_cb
         card._uninstall_btn = uninstall_btn
         card._shortcut_btn = shortcut_btn
 
@@ -446,12 +437,8 @@ class PackagePanel(QWidget):
         # Launch the app — check console toggle
         cmd = [str(python_exe)] + app_def["command"]
 
-        # Check if console checkbox is ticked OR app needs console
+        # Check if app needs console (e.g. IPython)
         show_console = app_def.get("needs_console", False)
-        card = self.launcher_cards.get(app_def["name"])
-        if card and hasattr(card, '_console_cb'):
-            if card._console_cb.isChecked():
-                show_console = True
 
         # Working directory: user's home, not venv path
         if get_platform() == "windows":

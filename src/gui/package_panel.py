@@ -1301,25 +1301,59 @@ class PackagePanel(QWidget):
         text = self.manual_input.toPlainText().strip()
         if not text:
             return
-        # Trim common prefixes users might paste
-        for prefix in ("pip install ", "pip3 install ", "python -m pip install ", "python3 -m pip install "):
-            if text.lower().startswith(prefix.lower()):
-                text = text[len(prefix):]
-                break
-        # Also handle multiple lines with pip install
-        lines = text.splitlines()
+
+        # Noise words to filter out
+        noise = {"pip", "pip3", "python", "python3", "-m", "install", "uninstall",
+                 "--upgrade", "--user", "-U", "-r", "--force-reinstall", "--no-cache-dir",
+                 "--break-system-packages", "sudo", "&&", "||", "|", ";",
+                 "list", "freeze", "show", "search", "check", "download",
+                 "wheel", "hash", "config", "cache", "debug", "index",
+                 "requirements.txt", "setup.py", "pyproject.toml"}
+
         cleaned = []
-        for line in lines:
+        seen = set()
+        for line in text.splitlines():
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            for prefix in ("pip install ", "pip3 install ", "python -m pip install ", "python3 -m pip install "):
-                if line.lower().startswith(prefix.lower()):
-                    line = line[len(prefix):]
-                    break
-            cleaned.extend(line.split())
+            for token in line.split():
+                t = token.strip()
+                # Skip empty
+                if not t:
+                    continue
+                # Skip noise words
+                if t.lower() in noise:
+                    continue
+                # Skip pure numbers
+                if t.isdigit():
+                    continue
+                # Skip flags (--something, -x)
+                if t.startswith("-"):
+                    continue
+                # Skip tokens that are only special chars (###, **, //, etc)
+                import re
+                if not re.search(r'[a-zA-Z]', t):
+                    continue
+                # Valid package name: must start with letter/digit, can have -, _, ., ==, >=, etc.
+                # Skip if it looks like garbage (no alphanumeric at all)
+                pkg_name = re.split(r'[><=!~;]', t)[0]
+                if not pkg_name or not re.match(r'^[a-zA-Z0-9]', pkg_name):
+                    continue
+                # Deduplicate (case-insensitive)
+                key = t.lower()
+                if key not in seen:
+                    seen.add(key)
+                    cleaned.append(t)
+
         if not cleaned:
+            QMessageBox.information(
+                self, "Info",
+                "No valid package names found.\n\n"
+                "Just enter package names, e.g.:\n"
+                "numpy pandas matplotlib"
+            )
             return
+
         self._install_packages(cleaned)
 
     def _uninstall_selected(self):
@@ -1415,18 +1449,20 @@ class PackagePanel(QWidget):
             self.refresh_packages()
             self.env_refresh_requested.emit()
         else:
-            self.status_label.setText("Operation failed")
             if "cancelled" not in message.lower():
-                # Friendly error for not-found packages
+                # Friendly log message instead of popup
                 if "no matching distribution" in message.lower() or "could not find" in message.lower():
-                    QMessageBox.warning(
-                        self, "Package Not Found",
-                        "One or more packages could not be found on PyPI.\n\n"
+                    self.status_label.setText("⚠️ Some packages could not be found on PyPI")
+                    self.output_log.append(
+                        "\n⚠️ Some packages could not be found on PyPI.\n"
                         "Please check the package names and try again.\n"
                         "You can search at: https://pypi.org"
                     )
                 else:
-                    QMessageBox.critical(self, "Error", message[:500])
+                    self.status_label.setText("❌ Operation failed")
+                    self.output_log.append(f"\n❌ {message[:500]}")
+            else:
+                self.status_label.setText("⛔ Operation cancelled")
 
     def _cancel_operation(self):
         if self.current_worker and self.current_worker.isRunning():

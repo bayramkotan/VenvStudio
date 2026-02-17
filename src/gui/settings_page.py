@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
 
-from src.utils.platform_utils import find_system_pythons, get_platform
+from src.utils.platform_utils import find_system_pythons, get_platform, subprocess_args
 from src.utils.constants import APP_NAME, APP_VERSION
 from src.utils.i18n import tr
 
@@ -774,6 +774,10 @@ class SettingsPage(QWidget):
 
     def _add_custom_python(self):
         """Add a custom Python executable path."""
+        import os
+        import subprocess
+        from src.utils.platform_utils import subprocess_args as sp_args
+
         if get_platform() == "windows":
             filter_str = "Python Executable (python.exe);;All Files (*)"
         else:
@@ -785,17 +789,55 @@ class SettingsPage(QWidget):
         if not filepath:
             return
 
-        # Normalize path for current OS
-        import os
         filepath = os.path.normpath(filepath)
 
+        # If user selected a directory or a non-exe file, try to find python inside
+        if os.path.isdir(filepath):
+            candidates = []
+            if get_platform() == "windows":
+                candidates = [
+                    os.path.join(filepath, "python.exe"),
+                    os.path.join(filepath, "Scripts", "python.exe"),
+                ]
+            else:
+                candidates = [
+                    os.path.join(filepath, "bin", "python3"),
+                    os.path.join(filepath, "bin", "python"),
+                    os.path.join(filepath, "python3"),
+                    os.path.join(filepath, "python"),
+                ]
+            found = None
+            for c in candidates:
+                if os.path.isfile(c):
+                    found = c
+                    break
+            if not found:
+                QMessageBox.warning(self, "Error", f"Could not find python executable in:\n{filepath}")
+                return
+            filepath = os.path.normpath(found)
+
+        # If selected file is not named python*, try to find it in parent dir
+        basename = os.path.basename(filepath).lower()
+        if not basename.startswith("python") and os.path.isfile(filepath):
+            parent = os.path.dirname(filepath)
+            if get_platform() == "windows":
+                alt = os.path.join(parent, "python.exe")
+            else:
+                alt = os.path.join(parent, "python3")
+                if not os.path.isfile(alt):
+                    alt = os.path.join(parent, "python")
+            if os.path.isfile(alt):
+                filepath = os.path.normpath(alt)
+
         # Verify it's a valid Python
-        import subprocess
         try:
             result = subprocess.run(
                 [filepath, "--version"],
-                **subprocess_args(capture_output=True, text=True, timeout=5)
+                **sp_args(capture_output=True, text=True, timeout=5)
             )
+            if result.returncode != 0:
+                QMessageBox.critical(self, "Error", f"Not a valid Python executable:\n{filepath}")
+                return
             version = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Not a valid Python executable:\n{e}")
@@ -803,7 +845,6 @@ class SettingsPage(QWidget):
 
         # Save to config
         custom_pythons = self.config.get("custom_pythons", [])
-        # Check duplicate
         for entry in custom_pythons:
             if os.path.normpath(entry.get("path", "")) == filepath:
                 QMessageBox.information(self, "Info", "This Python path is already added.")

@@ -227,12 +227,11 @@ class PackagePanel(QWidget):
                 "name": "Orange Data Mining",
                 "icon": "🍊",
                 "package": "orange3",
-                "install_packages_pyqt5": ["PyQt5", "PyQtWebEngine", "orange3"],
-                "install_packages_pyqt6": ["PyQt6", "PyQt6-WebEngine", "orange3"],
+                "install_packages": ["PyQt6", "PyQt6-WebEngine", "orange3"],
                 "command": ["-m", "Orange.canvas"],
                 "desc": "Visual programming for data mining and machine learning",
                 "min_python": "3.9",
-                "note": "PyQt version is selected automatically based on Python version.",
+                "note": "Requires PyQt6 (installed automatically). Best in a dedicated env.",
             },
             {
                 "name": "Spyder IDE",
@@ -479,23 +478,6 @@ class PackagePanel(QWidget):
                 return
             # Install it — determine packages to install
             pkgs_to_install = app_def.get("install_packages", [app_def["package"]])
-
-            # Dynamic PyQt selection based on Python version
-            if "install_packages_pyqt5" in app_def and "install_packages_pyqt6" in app_def:
-                try:
-                    from src.utils.platform_utils import subprocess_args
-                    result = subprocess.run(
-                        [str(python_exe), "--version"],
-                        **subprocess_args(capture_output=True, text=True, timeout=5)
-                    )
-                    ver_str = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
-                    ver_parts = tuple(int(x) for x in ver_str.split(".")[:2])
-                    if ver_parts >= (3, 10):
-                        pkgs_to_install = app_def["install_packages_pyqt6"]
-                    else:
-                        pkgs_to_install = app_def["install_packages_pyqt5"]
-                except Exception:
-                    pkgs_to_install = app_def["install_packages_pyqt6"]  # default to PyQt6
             self._set_busy(True)
             self.status_label.setText(f"Installing {', '.join(pkgs_to_install)}...")
             self.current_worker = WorkerThread(
@@ -644,17 +626,6 @@ class PackagePanel(QWidget):
         pkg_name = app_def["package"]
         # Get all packages to uninstall
         pkgs_to_remove = app_def.get("install_packages", [pkg_name])
-
-        # Dynamic PyQt selection
-        if "install_packages_pyqt5" in app_def and "install_packages_pyqt6" in app_def:
-            # Check which PyQt is actually installed
-            installed_lower = {p.lower() for p in self.installed_package_names}
-            if "pyqt6" in installed_lower:
-                pkgs_to_remove = app_def["install_packages_pyqt6"]
-            elif "pyqt5" in installed_lower:
-                pkgs_to_remove = app_def["install_packages_pyqt5"]
-            else:
-                pkgs_to_remove = [pkg_name]
 
         reply = QMessageBox.question(
             self, f"Uninstall {app_def['name']}",

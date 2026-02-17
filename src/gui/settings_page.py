@@ -152,10 +152,15 @@ class SettingsPage(QWidget):
         lang_layout.setSpacing(12)
 
         lang_row = QHBoxLayout()
+        self.lang_enabled_cb = QCheckBox()
+        self.lang_enabled_cb.setChecked(False)
+        self.lang_enabled_cb.toggled.connect(self._toggle_language)
+        lang_row.addWidget(self.lang_enabled_cb)
 
         self.lang_combo = NoScrollComboBox()
         for code, name in LANGUAGES.items():
             self.lang_combo.addItem(f"{name}", code)
+        self.lang_combo.setEnabled(False)
         lang_row.addWidget(self.lang_combo, 1)
 
         lang_layout.addRow(f"{tr('interface_language')}", lang_row)
@@ -267,7 +272,37 @@ class SettingsPage(QWidget):
         paths_group.setLayout(paths_layout)
         layout.addWidget(paths_group)
 
-        # ── 5. GENERAL ──
+        # ── 5. PACKAGE MANAGER ──
+        pkg_mgr_group = QGroupBox("📦 Package Manager")
+        pkg_mgr_layout = QFormLayout()
+        pkg_mgr_layout.setSpacing(12)
+
+        pkg_mgr_row = QHBoxLayout()
+        self.pkg_mgr_cb = QCheckBox()
+        self.pkg_mgr_cb.setChecked(False)
+        self.pkg_mgr_cb.toggled.connect(lambda on: self.pkg_manager_combo.setEnabled(on))
+        pkg_mgr_row.addWidget(self.pkg_mgr_cb)
+
+        self.pkg_manager_combo = NoScrollComboBox()
+        self.pkg_manager_combo.setEnabled(False)
+        self.pkg_manager_combo.addItem("pip (default)", "pip")
+        self.pkg_manager_combo.addItem("uv (fast, pip-compatible)", "uv")
+        pkg_mgr_row.addWidget(self.pkg_manager_combo, 1)
+        pkg_mgr_layout.addRow("Backend:", pkg_mgr_row)
+
+        # uv auto-install info
+        uv_note = QLabel(
+            "uv is 10-100x faster than pip.\n"
+            "If uv is not installed, VenvStudio will auto-install it."
+        )
+        uv_note.setStyleSheet("color: #6c7086; font-size: 11px;")
+        uv_note.setWordWrap(True)
+        pkg_mgr_layout.addRow("", uv_note)
+
+        pkg_mgr_group.setLayout(pkg_mgr_layout)
+        layout.addWidget(pkg_mgr_group)
+
+        # ── 6. GENERAL ──
         general_group = QGroupBox(f"⚙️ {tr('general')}")
         general_layout = QFormLayout()
         general_layout.setSpacing(10)
@@ -576,6 +611,10 @@ class SettingsPage(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addWidget(scroll)
 
+    def _toggle_language(self, enabled):
+        """Enable/disable language combo based on checkbox."""
+        self.lang_combo.setEnabled(enabled)
+
     def _load_current_settings(self):
         """Load current settings into UI widgets."""
         # Theme
@@ -620,6 +659,9 @@ class SettingsPage(QWidget):
         idx = self.lang_combo.findData(lang)
         if idx >= 0:
             self.lang_combo.setCurrentIndex(idx)
+        # Always start unticked — user must tick to change language
+        self.lang_enabled_cb.setChecked(False)
+        self.lang_combo.setEnabled(False)
 
         # Venv dir
         self.venv_dir_input.setText(str(self.config.get_venv_base_dir()))
@@ -631,11 +673,23 @@ class SettingsPage(QWidget):
         self.check_updates_cb.setChecked(self.config.get("check_updates", False))
         self.save_window_cb.setChecked(self.config.get("save_window_geometry", True))
 
+        # Package manager
+        pkg_mgr = self.config.get("package_manager", "pip")
+        idx = self.pkg_manager_combo.findData(pkg_mgr)
+        if idx >= 0:
+            self.pkg_manager_combo.setCurrentIndex(idx)
+        if pkg_mgr != "pip":
+            self.pkg_mgr_cb.setChecked(True)
+            self.pkg_manager_combo.setEnabled(True)
+        else:
+            self.pkg_mgr_cb.setChecked(False)
+            self.pkg_manager_combo.setEnabled(False)
+
         # Terminal — only enable if explicitly set to non-default
         terminal = self.config.get("default_terminal", "")
         if terminal and terminal.strip():
             idx = self.terminal_combo.findData(terminal)
-            if idx > 0:  # index 0 is first/default terminal
+            if idx > 0:
                 self.terminal_cb.setChecked(True)
                 self.terminal_combo.setEnabled(True)
                 self.terminal_combo.setCurrentIndex(idx)
@@ -643,7 +697,6 @@ class SettingsPage(QWidget):
                 self.terminal_cb.setChecked(False)
                 self.terminal_combo.setEnabled(False)
                 self.terminal_combo.setCurrentIndex(0)
-                self.config.set("default_terminal", "")
         else:
             self.terminal_cb.setChecked(False)
             self.terminal_combo.setEnabled(False)
@@ -1312,7 +1365,7 @@ class SettingsPage(QWidget):
             new_lang = "en"
         old_lang = self.config.get("language", "en")
         self.config.set("language", new_lang)
-        lang_changed = (new_lang != old_lang)
+        lang_changed = (new_lang != old_lang and self.lang_enabled_cb.isChecked())
         if lang_changed:
             self.language_changed.emit(new_lang)
 
@@ -1333,6 +1386,12 @@ class SettingsPage(QWidget):
         self.config.set("show_hidden_packages", self.show_hidden_cb.isChecked())
         self.config.set("check_updates", self.check_updates_cb.isChecked())
         self.config.set("save_window_geometry", self.save_window_cb.isChecked())
+
+        # Package manager — only save if checkbox is enabled
+        if self.pkg_mgr_cb.isChecked():
+            self.config.set("package_manager", self.pkg_manager_combo.currentData() or "pip")
+        else:
+            self.config.set("package_manager", "pip")
         # Default Terminal — only save if checkbox is enabled
         if self.terminal_cb.isChecked():
             self.config.set("default_terminal", self.terminal_combo.currentData())

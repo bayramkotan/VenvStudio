@@ -23,13 +23,65 @@ class PackageInfo:
 
 
 class PipManager:
-    """Manages pip operations for a specific virtual environment."""
+    """Manages pip/uv operations for a specific virtual environment."""
 
-    def __init__(self, venv_path: Path):
+    def __init__(self, venv_path: Path, backend: str = "pip"):
         self.venv_path = venv_path
         self.pip_exe = get_pip_executable(venv_path)
         self.python_exe = get_python_executable(venv_path)
         self._ssl_available = None  # cached SSL check
+        self._backend = backend  # "pip" or "uv"
+        self._uv_exe = None  # cached uv path
+
+    def _find_uv(self) -> Optional[str]:
+        """Find uv executable — check venv, then system PATH."""
+        if self._uv_exe is not None:
+            return self._uv_exe if self._uv_exe else None
+        import shutil
+        # Check venv Scripts/bin first
+        from src.utils.platform_utils import get_platform
+        if get_platform() == "windows":
+            venv_uv = self.venv_path / "Scripts" / "uv.exe"
+        else:
+            venv_uv = self.venv_path / "bin" / "uv"
+        if venv_uv.exists():
+            self._uv_exe = str(venv_uv)
+            return self._uv_exe
+        # Then system PATH
+        found = shutil.which("uv")
+        if found:
+            self._uv_exe = found
+            return self._uv_exe
+        self._uv_exe = ""
+        return None
+
+    def _ensure_uv(self, callback=None) -> bool:
+        """Ensure uv is available, install globally if not."""
+        if self._find_uv():
+            return True
+        # Try to install uv via pip (into venv)
+        try:
+            if callback:
+                callback("Installing uv (one-time setup)...")
+            from src.utils.platform_utils import subprocess_args
+            result = subprocess.run(
+                [str(self.python_exe), "-m", "pip", "install", "uv"],
+                **subprocess_args(capture_output=True, text=True, timeout=120)
+            )
+            if result.returncode == 0:
+                self._uv_exe = None  # reset cache
+                return self._find_uv() is not None
+        except Exception:
+            pass
+        return False
+
+    @property
+    def backend(self) -> str:
+        return self._backend
+
+    @backend.setter
+    def backend(self, value: str):
+        self._backend = value if value in ("pip", "uv") else "pip"
 
     def _check_ssl(self) -> bool:
         """Check if SSL is available in this environment's Python."""
@@ -47,26 +99,32 @@ class PipManager:
         return self._ssl_available
 
     def _run_pip(self, args: List[str], timeout: int = 120) -> subprocess.CompletedProcess:
-        """Run a pip command and return the result."""
+        """Run a pip/uv command and return the result."""
         from src.utils.platform_utils import subprocess_args
-        cmd = [str(self.python_exe), "-m", "pip"] + args
 
-        # SSL yoksa --trusted-host ekle
-        if not self._check_ssl():
-            # install, download, search gibi network komutlarında
-            network_cmds = ("install", "download", "search", "list --outdated")
-            if args and args[0] in ("install", "download", "search"):
-                cmd.extend([
-                    "--trusted-host", "pypi.org",
-                    "--trusted-host", "pypi.python.org",
-                    "--trusted-host", "files.pythonhosted.org",
-                ])
-            elif len(args) >= 2 and args[0] == "list" and "--outdated" in args:
-                cmd.extend([
-                    "--trusted-host", "pypi.org",
-                    "--trusted-host", "pypi.python.org",
-                    "--trusted-host", "files.pythonhosted.org",
-                ])
+        # Use uv if selected and available
+        if self._backend == "uv" and self._find_uv():
+            uv_exe = self._find_uv()
+            # uv pip install/list/uninstall/freeze — same interface
+            cmd = [uv_exe, "pip"] + args + ["--python", str(self.python_exe)]
+        else:
+            cmd = [str(self.python_exe), "-m", "pip"] + args
+
+            # SSL yoksa --trusted-host ekle (only for pip, uv handles this)
+            if not self._check_ssl():
+                if args and args[0] in ("install", "download", "search"):
+                    cmd.extend([
+                        "--trusted-host", "pypi.org",
+                        "--trusted-host", "pypi.python.org",
+                        "--trusted-host", "files.pythonhosted.org",
+                    ])
+                elif len(args) >= 2 and args[0] == "list" and "--outdated" in args:
+                    cmd.extend([
+                        "--trusted-host", "pypi.org",
+                        "--trusted-host", "pypi.python.org",
+                        "--trusted-host", "files.pythonhosted.org",
+                    ])
+
         return subprocess.run(
             cmd,
             **subprocess_args(
@@ -121,6 +179,13 @@ class PipManager:
         """
         if not packages:
             return False, "No packages specified"
+
+        # If uv backend selected, ensure it's available
+        if self._backend == "uv":
+            if not self._ensure_uv(callback):
+                if callback:
+                    callback("uv not available, falling back to pip...")
+                self._backend = "pip"  # temporary fallback
 
         cmd = ["install"]
         if upgrade:

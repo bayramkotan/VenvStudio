@@ -934,7 +934,13 @@ class PackagePanel(QWidget):
     # ── Public Methods ──
 
     def set_venv(self, venv_path: Path):
-        self.pip_manager = PipManager(venv_path)
+        backend = "pip"
+        try:
+            from src.core.config_manager import ConfigManager
+            backend = ConfigManager().get("package_manager", "pip")
+        except Exception:
+            pass
+        self.pip_manager = PipManager(venv_path, backend=backend)
         # Select in dropdown
         name = venv_path.name
         idx = self.env_selector.findData(str(venv_path))
@@ -979,7 +985,13 @@ class PackagePanel(QWidget):
         """Handle env dropdown change."""
         path_str = self.env_selector.currentData()
         if path_str:
-            self.pip_manager = PipManager(Path(path_str))
+            backend = "pip"
+            try:
+                from src.core.config_manager import ConfigManager
+                backend = ConfigManager().get("package_manager", "pip")
+            except Exception:
+                pass
+            self.pip_manager = PipManager(Path(path_str), backend=backend)
             self.status_label.setText(f"Loading packages...")
             self._async_refresh_packages()
         else:

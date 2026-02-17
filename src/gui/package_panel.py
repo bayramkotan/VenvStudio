@@ -231,7 +231,8 @@ class PackagePanel(QWidget):
                 "command": ["-m", "Orange.canvas"],
                 "desc": "Visual programming for data mining and machine learning",
                 "min_python": "3.9",
-                "note": "Requires PyQt5 (installed automatically). Best in a dedicated env.",
+                "max_python": "3.12",
+                "note": "Requires PyQt5 (installed automatically). Best in a dedicated env.\nSupports Python 3.9–3.12 only.",
             },
             {
                 "name": "Spyder IDE",
@@ -354,13 +355,55 @@ class PackagePanel(QWidget):
 
     def _update_launcher_status(self):
         """Update launcher cards to show installed/not-installed status."""
+        # Get current env Python version once
+        env_py_version = None
+        if self.pip_manager:
+            try:
+                python_exe = get_python_executable(self.pip_manager.venv_path)
+                from src.utils.platform_utils import subprocess_args
+                result = subprocess.run(
+                    [str(python_exe), "--version"],
+                    **subprocess_args(capture_output=True, text=True, timeout=5)
+                )
+                ver_str = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
+                env_py_version = tuple(int(x) for x in ver_str.split(".")[:2])
+            except Exception:
+                pass
+
         for name, card in self.launcher_cards.items():
             app_def = card._app_def
             pkg = app_def["package"].lower()
             is_installed = pkg in self.installed_package_names
 
+            # Check Python version compatibility
+            py_incompatible = False
+            if env_py_version:
+                max_py = app_def.get("max_python")
+                min_py = app_def.get("min_python")
+                if max_py:
+                    max_parts = tuple(int(x) for x in max_py.split(".")[:2])
+                    if env_py_version > max_parts:
+                        py_incompatible = True
+                if min_py:
+                    min_parts = tuple(int(x) for x in min_py.split(".")[:2])
+                    if env_py_version < min_parts:
+                        py_incompatible = True
+
             status = card._status_label
-            if is_installed:
+            if py_incompatible and not is_installed:
+                py_range = ""
+                if min_py and max_py:
+                    py_range = f"Python {min_py}–{max_py}"
+                elif max_py:
+                    py_range = f"Python ≤{max_py}"
+                elif min_py:
+                    py_range = f"Python ≥{min_py}"
+                status.setText(f"⚠️ Requires {py_range}")
+                status.setStyleSheet("color: #f9e2af; font-size: 11px;")
+                card._launch_btn.setEnabled(False)
+                card._uninstall_btn.setVisible(False)
+                card._shortcut_btn.setVisible(False)
+            elif is_installed:
                 status.setText("✅ Installed")
                 status.setStyleSheet("color: #a6e3a1; font-size: 11px;")
                 card._launch_btn.setEnabled(True)
@@ -386,10 +429,11 @@ class PackagePanel(QWidget):
         is_installed = pkg_name in self.installed_package_names
 
         if not is_installed:
-            # Check minimum Python version if specified
+            # Check min/max Python version if specified
             min_py = app_def.get("min_python")
+            max_py = app_def.get("max_python")
             note = app_def.get("note", "")
-            if min_py:
+            if min_py or max_py:
                 try:
                     from src.utils.platform_utils import subprocess_args
                     result = subprocess.run(
@@ -398,15 +442,28 @@ class PackagePanel(QWidget):
                     )
                     ver_str = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
                     ver_parts = tuple(int(x) for x in ver_str.split(".")[:2])
-                    min_parts = tuple(int(x) for x in min_py.split(".")[:2])
-                    if ver_parts < min_parts:
-                        QMessageBox.warning(
-                            self, app_def["name"],
-                            f"{app_def['name']} requires Python ≥{min_py}\n"
-                            f"This environment uses Python {ver_str}.\n\n"
-                            f"Create a new environment with Python ≥{min_py} and try again."
-                        )
-                        return
+
+                    if min_py:
+                        min_parts = tuple(int(x) for x in min_py.split(".")[:2])
+                        if ver_parts < min_parts:
+                            QMessageBox.warning(
+                                self, app_def["name"],
+                                f"{app_def['name']} requires Python ≥{min_py}\n"
+                                f"This environment uses Python {ver_str}.\n\n"
+                                f"Create a new environment with Python ≥{min_py} and try again."
+                            )
+                            return
+
+                    if max_py:
+                        max_parts = tuple(int(x) for x in max_py.split(".")[:2])
+                        if ver_parts > max_parts:
+                            QMessageBox.warning(
+                                self, app_def["name"],
+                                f"{app_def['name']} supports Python {min_py or '3.x'}–{max_py} only.\n"
+                                f"This environment uses Python {ver_str}.\n\n"
+                                f"Create a new environment with Python ≤{max_py} and try again."
+                            )
+                            return
                 except Exception:
                     pass
 

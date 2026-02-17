@@ -227,12 +227,10 @@ class PackagePanel(QWidget):
                 "name": "Orange Data Mining",
                 "icon": "🍊",
                 "package": "orange3",
-                "install_packages": ["PyQt6", "PyQt6-WebEngine", "orange3"],
                 "command": ["-m", "Orange.canvas"],
                 "desc": "Visual programming for data mining and machine learning",
-                "min_python": "3.10",
-                "max_python": "3.13",
-                "note": "Requires PyQt6 (installed automatically).\nSupports Python 3.10–3.13.",
+                "min_python": "3.9",
+                "note": "PyQt and Orange3 version selected automatically based on Python version.",
             },
             {
                 "name": "Spyder IDE",
@@ -419,6 +417,29 @@ class PackagePanel(QWidget):
                 card._uninstall_btn.setVisible(False)
                 card._shortcut_btn.setVisible(False)
 
+    def _get_orange3_packages(self, python_exe) -> list:
+        """Return the right Orange3 + PyQt packages based on Python version."""
+        try:
+            from src.utils.platform_utils import subprocess_args
+            result = subprocess.run(
+                [str(python_exe), "--version"],
+                **subprocess_args(capture_output=True, text=True, timeout=5)
+            )
+            ver_str = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
+            ver_parts = tuple(int(x) for x in ver_str.split(".")[:2])
+        except Exception:
+            ver_parts = (3, 12)  # safe default
+
+        if ver_parts <= (3, 9):
+            # Orange3 <=3.36.x has cp39 wheels, use PyQt5
+            return ["PyQt5", "PyQtWebEngine", "orange3<=3.36.2"]
+        elif ver_parts >= (3, 14):
+            # No wheels yet for 3.14+, try latest anyway
+            return ["PyQt6", "PyQt6-WebEngine", "orange3"]
+        else:
+            # 3.10-3.13: latest Orange3 with PyQt6
+            return ["PyQt6", "PyQt6-WebEngine", "orange3"]
+
     def _launch_app(self, app_def: dict):
         """Launch an app from the selected environment."""
         if not self.pip_manager:
@@ -482,6 +503,10 @@ class PackagePanel(QWidget):
                 return
             # Install it — determine packages to install
             pkgs_to_install = app_def.get("install_packages", [app_def["package"]])
+
+            # Dynamic package resolution for Orange3 based on Python version
+            if app_def["package"] == "orange3":
+                pkgs_to_install = self._get_orange3_packages(python_exe)
             self._set_busy(True)
             self.status_label.setText(f"Installing {', '.join(pkgs_to_install)}...")
             self.current_worker = WorkerThread(

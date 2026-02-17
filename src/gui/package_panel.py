@@ -431,13 +431,10 @@ class PackagePanel(QWidget):
             ver_parts = (3, 12)  # safe default
 
         if ver_parts <= (3, 9):
-            # Orange3 <=3.36.x has cp39 wheels, use PyQt5
-            return ["PyQt5", "PyQtWebEngine", "orange3<=3.36.2"]
-        elif ver_parts >= (3, 14):
-            # No wheels yet for 3.14+, try latest anyway
-            return ["PyQt6", "PyQt6-WebEngine", "orange3"]
+            # Orange3 v3.40+ dropped cp39 wheels, use older version
+            return ["PyQt6", "PyQt6-WebEngine", "orange3<=3.36.2"]
         else:
-            # 3.10-3.13: latest Orange3 with PyQt6
+            # 3.10+: latest Orange3 with PyQt6
             return ["PyQt6", "PyQt6-WebEngine", "orange3"]
 
     def _launch_app(self, app_def: dict):

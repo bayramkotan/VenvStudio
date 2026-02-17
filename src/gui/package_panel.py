@@ -401,18 +401,21 @@ class PackagePanel(QWidget):
                 status.setText(f"⚠️ Requires {py_range}")
                 status.setStyleSheet("color: #f9e2af; font-size: 11px;")
                 card._launch_btn.setEnabled(False)
+                card._launch_btn.setStyleSheet("background-color: #45475a; color: #6c7086;")
                 card._uninstall_btn.setVisible(False)
                 card._shortcut_btn.setVisible(False)
             elif is_installed:
                 status.setText("✅ Installed")
                 status.setStyleSheet("color: #a6e3a1; font-size: 11px;")
                 card._launch_btn.setEnabled(True)
+                card._launch_btn.setStyleSheet("")
                 card._uninstall_btn.setVisible(True)
                 card._shortcut_btn.setVisible(True)
             else:
                 status.setText(f"❌ Not installed — click Launch to install first")
                 status.setStyleSheet("color: #f38ba8; font-size: 11px;")
                 card._launch_btn.setEnabled(True)  # Will prompt install
+                card._launch_btn.setStyleSheet("")
                 card._uninstall_btn.setVisible(False)
                 card._shortcut_btn.setVisible(False)
 

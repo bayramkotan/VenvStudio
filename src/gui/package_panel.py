@@ -573,20 +573,58 @@ class PackagePanel(QWidget):
             self._launch_app(app_def)
         else:
             self.status_label.setText(tr("operation_failed"))
-            # Parse error for a helpful summary
-            short_msg = f"Failed to install {app_def['package']}.\n\n"
-            if "No matching distribution" in message:
-                short_msg += "This package is not available for your Python version or platform."
-            elif "error: subprocess-exited-with-error" in message or "build" in message.lower():
-                short_msg += (
-                    "A C/C++ build dependency failed to compile.\n"
-                    "Windows: Install Visual C++ Build Tools.\n"
-                    "Linux: sudo apt install build-essential python3-dev"
+            from src.utils.platform_utils import get_platform
+            platform = get_platform()
+
+            # Detect Python version for better error messages
+            py_ver_str = ""
+            try:
+                python_exe = get_python_executable(self.pip_manager.venv_path)
+                from src.utils.platform_utils import subprocess_args
+                result = subprocess.run(
+                    [str(python_exe), "--version"],
+                    **subprocess_args(capture_output=True, text=True, timeout=5)
                 )
+                py_ver_str = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
+            except Exception:
+                pass
+
+            short_msg = f"Failed to install {app_def['package']}.\n\n"
+
+            if "No matching distribution" in message or "Could not find" in message:
+                short_msg += (
+                    f"No compatible version found for Python {py_ver_str}.\n\n"
+                    f"This package may not support your Python version yet.\n"
+                    f"Try creating an environment with Python 3.12 or 3.13."
+                )
+            elif "error: subprocess-exited-with-error" in message or "build" in message.lower():
+                if platform == "windows":
+                    short_msg += (
+                        "A C/C++ build dependency failed to compile.\n\n"
+                        "Install Visual C++ Build Tools:\n"
+                        "https://visualstudio.microsoft.com/visual-cpp-build-tools/"
+                    )
+                elif platform == "macos":
+                    short_msg += (
+                        "A C/C++ build dependency failed to compile.\n\n"
+                        "Install Xcode Command Line Tools:\n"
+                        "xcode-select --install"
+                    )
+                else:
+                    short_msg += (
+                        "A C/C++ build dependency failed to compile.\n\n"
+                        "Install build tools:\n"
+                        "sudo apt install build-essential python3-dev"
+                    )
+                if py_ver_str and tuple(int(x) for x in py_ver_str.split(".")[:2]) >= (3, 14):
+                    short_msg += (
+                        f"\n\n⚠️ Python {py_ver_str} is very new.\n"
+                        f"Many packages don't have pre-built wheels yet.\n"
+                        f"Consider using Python 3.12 or 3.13."
+                    )
             elif "Permission" in message:
                 short_msg += "Permission denied. Try running as administrator."
             else:
-                # Show last meaningful lines
                 lines = [l.strip() for l in message.strip().splitlines() if l.strip()]
                 tail = "\n".join(lines[-5:]) if len(lines) > 5 else "\n".join(lines)
                 short_msg += tail

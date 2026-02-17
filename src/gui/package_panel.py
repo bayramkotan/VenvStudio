@@ -230,8 +230,9 @@ class PackagePanel(QWidget):
                 "install_packages": ["PyQt6", "PyQt6-WebEngine", "orange3"],
                 "command": ["-m", "Orange.canvas"],
                 "desc": "Visual programming for data mining and machine learning",
-                "min_python": "3.9",
-                "note": "Requires PyQt6 (installed automatically). Best in a dedicated env.",
+                "min_python": "3.10",
+                "max_python": "3.13",
+                "note": "Requires PyQt6 (installed automatically).\nSupports Python 3.10–3.13.",
             },
             {
                 "name": "Spyder IDE",

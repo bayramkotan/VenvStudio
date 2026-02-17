@@ -1301,8 +1301,26 @@ class PackagePanel(QWidget):
         text = self.manual_input.toPlainText().strip()
         if not text:
             return
-        packages = text.split()
-        self._install_packages(packages)
+        # Trim common prefixes users might paste
+        for prefix in ("pip install ", "pip3 install ", "python -m pip install ", "python3 -m pip install "):
+            if text.lower().startswith(prefix.lower()):
+                text = text[len(prefix):]
+                break
+        # Also handle multiple lines with pip install
+        lines = text.splitlines()
+        cleaned = []
+        for line in lines:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            for prefix in ("pip install ", "pip3 install ", "python -m pip install ", "python3 -m pip install "):
+                if line.lower().startswith(prefix.lower()):
+                    line = line[len(prefix):]
+                    break
+            cleaned.extend(line.split())
+        if not cleaned:
+            return
+        self._install_packages(cleaned)
 
     def _uninstall_selected(self):
         if not self.pip_manager:

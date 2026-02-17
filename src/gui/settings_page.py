@@ -152,15 +152,10 @@ class SettingsPage(QWidget):
         lang_layout.setSpacing(12)
 
         lang_row = QHBoxLayout()
-        self.lang_enabled_cb = QCheckBox()
-        self.lang_enabled_cb.setChecked(False)
-        self.lang_enabled_cb.toggled.connect(self._toggle_language)
-        lang_row.addWidget(self.lang_enabled_cb)
 
         self.lang_combo = NoScrollComboBox()
         for code, name in LANGUAGES.items():
             self.lang_combo.addItem(f"{name}", code)
-        self.lang_combo.setEnabled(False)  # Disabled until checkbox is checked
         lang_row.addWidget(self.lang_combo, 1)
 
         lang_layout.addRow(f"{tr('interface_language')}", lang_row)
@@ -581,10 +576,6 @@ class SettingsPage(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addWidget(scroll)
 
-    def _toggle_language(self, enabled):
-        """Enable/disable language combo based on checkbox."""
-        self.lang_combo.setEnabled(enabled)
-
     def _load_current_settings(self):
         """Load current settings into UI widgets."""
         # Theme
@@ -629,9 +620,6 @@ class SettingsPage(QWidget):
         idx = self.lang_combo.findData(lang)
         if idx >= 0:
             self.lang_combo.setCurrentIndex(idx)
-        # If non-default language, enable the checkbox
-        if lang != "en":
-            self.lang_enabled_cb.setChecked(True)
 
         # Venv dir
         self.venv_dir_input.setText(str(self.config.get_venv_base_dir()))
@@ -1323,9 +1311,8 @@ class SettingsPage(QWidget):
         if not new_lang:
             new_lang = "en"
         old_lang = self.config.get("language", "en")
-        print(f"[DEBUG] Language: old={old_lang}, new={new_lang}, checkbox={self.lang_enabled_cb.isChecked()}")
         self.config.set("language", new_lang)
-        lang_changed = (new_lang != old_lang and self.lang_enabled_cb.isChecked())
+        lang_changed = (new_lang != old_lang)
         if lang_changed:
             self.language_changed.emit(new_lang)
 

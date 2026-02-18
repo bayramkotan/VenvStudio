@@ -217,6 +217,12 @@ class SettingsPage(QWidget):
         remove_py_btn.clicked.connect(self._remove_custom_python)
         py_btn_layout.addWidget(remove_py_btn)
 
+        set_default_btn = QPushButton("⭐ Set as System Default")
+        set_default_btn.setObjectName("secondary")
+        set_default_btn.setToolTip("Add selected Python to the top of your User PATH")
+        set_default_btn.clicked.connect(self._set_system_default_python)
+        py_btn_layout.addWidget(set_default_btn)
+
         py_btn_layout.addStretch()
         python_layout.addLayout(py_btn_layout)
 
@@ -874,6 +880,91 @@ class SettingsPage(QWidget):
         custom_pythons = [e for e in custom_pythons if e.get("path") != path]
         self.config.set("custom_pythons", custom_pythons)
         self._scan_pythons()
+
+    def _set_system_default_python(self):
+        """Set selected Python as system default by adding it to top of User PATH (Windows only)."""
+        import os
+        from src.utils.platform_utils import get_platform
+
+        if get_platform() != "windows":
+            QMessageBox.information(
+                self, "Info",
+                "This feature is currently available on Windows only.\n"
+                "On Linux/macOS, use your shell config or update-alternatives."
+            )
+            return
+
+        rows = self.python_table.selectionModel().selectedRows()
+        if not rows:
+            QMessageBox.information(self, "Info", "Select a Python version first.")
+            return
+
+        row = rows[0].row()
+        version = self.python_table.item(row, 0).text()
+        python_path = self.python_table.item(row, 1).text()
+        python_dir = os.path.dirname(python_path)
+        scripts_dir = os.path.join(python_dir, "Scripts")
+
+        confirm = QMessageBox.question(
+            self, "Set System Default",
+            f"This will add Python {version} to the top of your User PATH:\n\n"
+            f"  📂 {python_dir}\n"
+            f"  📂 {scripts_dir}\n\n"
+            f"When you type 'python' in a new terminal, it will use this version.\n\n"
+            f"Continue?",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if confirm != QMessageBox.Yes:
+            return
+
+        try:
+            import subprocess
+            from src.utils.platform_utils import subprocess_args
+
+            # Read current User PATH from registry
+            result = subprocess.run(
+                ["powershell", "-Command",
+                 "[Environment]::GetEnvironmentVariable('Path', 'User')"],
+                capture_output=True, text=True, timeout=10,
+                **subprocess_args()
+            )
+            current_path = result.stdout.strip() or ""
+
+            # Remove any existing entries for this Python version
+            path_parts = [p for p in current_path.split(";") if p.strip()]
+            cleaned = [p for p in path_parts
+                       if os.path.normcase(p.strip()) not in
+                       (os.path.normcase(python_dir), os.path.normcase(scripts_dir))]
+
+            # Prepend new Python paths at the top
+            new_path = ";".join([python_dir, scripts_dir] + cleaned)
+
+            # Write to User PATH via PowerShell
+            # Escape single quotes in path
+            escaped_path = new_path.replace("'", "''")
+            result = subprocess.run(
+                ["powershell", "-Command",
+                 f"[Environment]::SetEnvironmentVariable('Path', '{escaped_path}', 'User')"],
+                capture_output=True, text=True, timeout=10,
+                **subprocess_args()
+            )
+
+            if result.returncode == 0:
+                QMessageBox.information(
+                    self, "✅ Success",
+                    f"Python {version} is now the system default!\n\n"
+                    f"Open a new terminal and type:\n"
+                    f"  python --version\n\n"
+                    f"It should show: Python {version}"
+                )
+            else:
+                raise RuntimeError(result.stderr.strip())
+
+        except Exception as e:
+            QMessageBox.critical(
+                self, "Error",
+                f"Failed to update PATH:\n{e}"
+            )
 
     def _browse_venv_dir(self):
         """Browse for environment base directory."""

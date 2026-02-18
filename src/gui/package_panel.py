@@ -125,6 +125,8 @@ class PackagePanel(QWidget):
         self.env_selector.setMinimumWidth(280)
         self.env_selector.setMaximumWidth(500)
         self.env_selector.setFixedHeight(36)
+        # Disable mouse wheel scrolling on env selector to prevent accidental switches
+        self.env_selector.wheelEvent = lambda e: e.ignore()
         self.env_selector.setStyleSheet(
             "QComboBox {"
             "  font-size: 14px; font-weight: bold; padding: 4px 12px;"
@@ -1220,6 +1222,12 @@ $s.Save()
         if not self.pip_manager:
             return
 
+        # Cancel / wait for any previous loader to avoid QThread crash
+        if hasattr(self, '_pkg_loader') and self._pkg_loader is not None:
+            if self._pkg_loader.isRunning():
+                self._pkg_loader.done.disconnect()
+                self._pkg_loader.wait(2000)  # wait up to 2s
+
         # Show loading state immediately
         self.packages_table.setRowCount(1)
         loading_item = QTableWidgetItem("Loading...")
@@ -1232,8 +1240,8 @@ $s.Save()
         # Use QThread for background loading
         class PkgLoader(QThread):
             done = Signal(list)
-            def __init__(self, pip_mgr):
-                super().__init__()
+            def __init__(self, pip_mgr, parent=None):
+                super().__init__(parent)
                 self.pip_mgr = pip_mgr
             def run(self):
                 try:
@@ -1242,7 +1250,7 @@ $s.Save()
                 except Exception:
                     self.done.emit([])
 
-        self._pkg_loader = PkgLoader(self.pip_manager)
+        self._pkg_loader = PkgLoader(self.pip_manager, parent=self)
         self._pkg_loader.done.connect(self._on_packages_loaded)
         self._pkg_loader.start()
 

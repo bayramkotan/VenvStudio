@@ -181,5 +181,39 @@ jobs:
             VenvStudio-Windows/VenvStudio.exe
             VenvStudio-Linux-AppImage/VenvStudio*.AppImage
             VenvStudio-macOS/VenvStudio-macOS
-          generate_release_notes: true
+          body: |
+            ## What's New in v1.3.5
+
+            ### 🚀 Launch & Shortcuts
+            - Desktop shortcuts now create real `.lnk` files on Windows (was `.vbs`)
+            - App-specific icons for JupyterLab, Jupyter Notebook, Orange3, Spyder, IPython, Streamlit
+            - GUI apps launch without console window
+
+            ### 🐍 Environment Info Bar
+            - Python version displayed next to environment selector
+            - Info bar showing: disk size, pip/uv backend, shortened path, last used date
+            - Environment dropdown resized, mouse wheel disabled to prevent accidental switches
+
+            ### ⭐ Python PATH Management
+            - **Set User Default** — add Python to User PATH (no admin needed)
+            - **Set System Default** — add Python to System PATH (admin elevation)
+            - Both modes clean conflicting Python entries from User AND System PATH
+            - Full row selection in Python versions table
+            - Auto-deduplicate custom Python entries that match system-detected ones
+
+            ### 🍊 Orange3 Compatibility
+            - Dynamic package resolution: `orange3<=3.36.2` for Python 3.9, latest for 3.10+
+            - PyQt6 used for all Python versions (3.9+)
+            - Platform-specific build error messages (Windows/macOS/Linux)
+
+            ### 🔧 Stability
+            - Fixed QThread crash on rapid environment switching
+            - Fixed `subprocess_args` import in settings page
+
+            ### Download
+            | Platform | File |
+            |----------|------|
+            | Windows | `VenvStudio.exe` |
+            | Linux | `VenvStudio-x86_64.AppImage` |
+            | macOS | `VenvStudio-macOS` |
           fail_on_unmatched_files: false

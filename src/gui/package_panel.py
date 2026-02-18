@@ -17,11 +17,12 @@ from PySide6.QtGui import QFont, QColor, QIcon
 from src.core.pip_manager import PipManager
 from src.utils.constants import PACKAGE_CATALOG, PRESETS, COMMAND_HINTS
 from src.utils.i18n import tr
-from src.utils.platform_utils import get_platform, get_python_executable
+from src.utils.platform_utils import get_platform, get_python_executable, subprocess_args
 
 from pathlib import Path
 import subprocess
 import os
+import sys
 
 
 class WorkerThread(QThread):
@@ -212,6 +213,7 @@ class PackagePanel(QWidget):
             {
                 "name": "JupyterLab",
                 "icon": "🔬",
+                "icon_key": "jupyterlab",
                 "package": "jupyterlab",
                 "command": ["-m", "jupyter", "lab"],
                 "desc": "Next-generation notebook interface for interactive computing",
@@ -219,6 +221,7 @@ class PackagePanel(QWidget):
             {
                 "name": "Jupyter Notebook",
                 "icon": "📓",
+                "icon_key": "jupyter_notebook",
                 "package": "notebook",
                 "command": ["-m", "jupyter", "notebook"],
                 "desc": "Classic Jupyter Notebook — simple, document-centric interface",
@@ -226,6 +229,7 @@ class PackagePanel(QWidget):
             {
                 "name": "Orange Data Mining",
                 "icon": "🍊",
+                "icon_key": "orange3",
                 "package": "orange3",
                 "command": ["-m", "Orange.canvas"],
                 "desc": "Visual programming for data mining and machine learning",
@@ -235,6 +239,7 @@ class PackagePanel(QWidget):
             {
                 "name": "Spyder IDE",
                 "icon": "🕷️",
+                "icon_key": "spyder",
                 "package": "spyder",
                 "command": ["-m", "spyder.app.start"],
                 "desc": "Scientific Python development environment",
@@ -242,6 +247,7 @@ class PackagePanel(QWidget):
             {
                 "name": "IPython",
                 "icon": "🐍",
+                "icon_key": "ipython",
                 "package": "ipython",
                 "command": ["-m", "IPython"],
                 "desc": "Enhanced interactive Python shell",
@@ -250,6 +256,7 @@ class PackagePanel(QWidget):
             {
                 "name": "Streamlit",
                 "icon": "🎈",
+                "icon_key": "streamlit",
                 "package": "streamlit",
                 "command": ["-m", "streamlit", "hello"],
                 "desc": "Build data apps in minutes — launches demo app",
@@ -672,8 +679,28 @@ class PackagePanel(QWidget):
         self.current_worker.finished.connect(self._on_install_finished)
         self.current_worker.start()
 
+    def _get_app_icon_path(self, app_def: dict) -> str | None:
+        """Return the absolute path to the app's .ico (Windows) or .png (Linux/macOS) icon."""
+        icon_key = app_def.get("icon_key", "")
+        if not icon_key:
+            return None
+
+        # Determine base dir: frozen (PyInstaller) vs source
+        if getattr(sys, 'frozen', False):
+            base = Path(sys._MEIPASS) / "assets" / "app_icons"
+        else:
+            base = Path(__file__).resolve().parent.parent.parent / "assets" / "app_icons"
+
+        platform = get_platform()
+        if platform == "windows":
+            icon = base / f"{icon_key}.ico"
+        else:
+            icon = base / f"{icon_key}_256.png"
+
+        return str(icon) if icon.exists() else None
+
     def _create_desktop_shortcut(self, app_def: dict):
-        """Create a desktop shortcut for the app."""
+        """Create a desktop shortcut for the app — .lnk (Windows), .desktop (Linux), .command (macOS)."""
         if not self.pip_manager:
             QMessageBox.warning(self, tr("warning"), tr("select_environment"))
             return
@@ -683,65 +710,109 @@ class PackagePanel(QWidget):
         app_name = app_def["name"]
         env_name = venv_path.name
         shortcut_name = f"{app_name} ({env_name})"
+        icon_path = self._get_app_icon_path(app_def)
+        needs_console = app_def.get("needs_console", False)
 
         platform = get_platform()
         desktop = Path.home() / "Desktop"
 
         try:
             if platform == "windows":
-                # Create .vbs launcher (no console window)
-                cmd_args = " ".join(app_def["command"])
-                vbs_path = desktop / f"{shortcut_name}.vbs"
-                vbs_content = (
-                    f'Set WshShell = CreateObject("WScript.Shell")\n'
-                    f'WshShell.Run """{python_exe}"" {cmd_args}", 0, False\n'
+                self._create_windows_shortcut(
+                    desktop, shortcut_name, python_exe,
+                    app_def["command"], icon_path, needs_console, venv_path
                 )
-                vbs_path.write_text(vbs_content, encoding="utf-8")
-
-                QMessageBox.information(
-                    self, tr("success"),
-                    tr("shortcut_created").format(app=app_name) + f"\n\n{vbs_path}"
-                )
-
             elif platform == "linux":
-                # Create .desktop file
-                desktop_file = desktop / f"{shortcut_name}.desktop"
-                cmd_args = " ".join(app_def["command"])
-                content = (
-                    f"[Desktop Entry]\n"
-                    f"Type=Application\n"
-                    f"Name={shortcut_name}\n"
-                    f"Exec={python_exe} {cmd_args}\n"
-                    f"Path={venv_path}\n"
-                    f"Terminal=false\n"
-                    f"Comment=Launched via VenvStudio\n"
+                self._create_linux_shortcut(
+                    desktop, shortcut_name, python_exe,
+                    app_def["command"], icon_path, venv_path
                 )
-                desktop_file.write_text(content, encoding="utf-8")
-                os.chmod(str(desktop_file), 0o755)
-
-                QMessageBox.information(
-                    self, tr("success"),
-                    tr("shortcut_created").format(app=app_name) + f"\n\n{desktop_file}"
-                )
-
             elif platform == "macos":
-                # Simple shell script
-                sh_path = desktop / f"{shortcut_name}.command"
-                cmd_args = " ".join(app_def["command"])
-                content = f'#!/bin/bash\n"{python_exe}" {cmd_args}\n'
-                sh_path.write_text(content, encoding="utf-8")
-                os.chmod(str(sh_path), 0o755)
-
-                QMessageBox.information(
-                    self, tr("success"),
-                    tr("shortcut_created").format(app=app_name) + f"\n\n{sh_path}"
+                self._create_macos_shortcut(
+                    desktop, shortcut_name, python_exe,
+                    app_def["command"], icon_path, venv_path
                 )
+
+            # Show success
+            QMessageBox.information(
+                self, tr("success"),
+                tr("shortcut_created").format(app=app_name) + f"\n\n📁 Desktop / {shortcut_name}"
+            )
 
         except Exception as e:
             QMessageBox.critical(
                 self, tr("error"),
                 f"Failed to create shortcut:\n{e}"
             )
+
+    def _create_windows_shortcut(self, desktop, name, python_exe, cmd_args, icon_path, needs_console, venv_path):
+        """Create Windows .lnk shortcut via PowerShell (no COM dependency)."""
+        args_str = " ".join(cmd_args)
+        lnk_path = desktop / f"{name}.lnk"
+
+        # Use PowerShell to create .lnk — works without pywin32
+        # WindowStyle: 1=Normal, 7=Minimized; for GUI apps we hide console
+        window_style = 1 if needs_console else 7
+        icon_line = f'$s.IconLocation = "{icon_path}"' if icon_path else ""
+
+        ps_script = f'''
+$ws = New-Object -ComObject WScript.Shell
+$s = $ws.CreateShortcut("{lnk_path}")
+$s.TargetPath = "{python_exe}"
+$s.Arguments = "{args_str}"
+$s.WorkingDirectory = "{venv_path}"
+$s.WindowStyle = {window_style}
+{icon_line}
+$s.Description = "Launched via VenvStudio"
+$s.Save()
+'''
+        # Write temp .ps1 and execute
+        ps_file = desktop / f"_venvstudio_shortcut_tmp.ps1"
+        ps_file.write_text(ps_script, encoding="utf-8")
+        try:
+            result = subprocess.run(
+                ["powershell", "-ExecutionPolicy", "Bypass", "-File", str(ps_file)],
+                capture_output=True, text=True, timeout=15,
+                **subprocess_args()
+            )
+            if result.returncode != 0:
+                raise RuntimeError(f"PowerShell error: {result.stderr.strip()}")
+        finally:
+            ps_file.unlink(missing_ok=True)
+
+        # For GUI apps, also create a hidden-console .bat wrapper
+        if not needs_console:
+            bat_path = venv_path / "scripts" / f"launch_{name.replace(' ', '_')}.bat"
+            bat_path.parent.mkdir(parents=True, exist_ok=True)
+            bat_content = f'@echo off\nstart "" /B "{python_exe}" {args_str}\n'
+            bat_path.write_text(bat_content, encoding="utf-8")
+
+    def _create_linux_shortcut(self, desktop, name, python_exe, cmd_args, icon_path, venv_path):
+        """Create Linux .desktop file with icon."""
+        desktop_file = desktop / f"{name}.desktop"
+        args_str = " ".join(cmd_args)
+
+        icon_line = f"Icon={icon_path}" if icon_path else ""
+        content = (
+            f"[Desktop Entry]\n"
+            f"Type=Application\n"
+            f"Name={name}\n"
+            f"Exec={python_exe} {args_str}\n"
+            f"Path={venv_path}\n"
+            f"Terminal=false\n"
+            f"{icon_line}\n"
+            f"Comment=Launched via VenvStudio\n"
+        )
+        desktop_file.write_text(content, encoding="utf-8")
+        os.chmod(str(desktop_file), 0o755)
+
+    def _create_macos_shortcut(self, desktop, name, python_exe, cmd_args, icon_path, venv_path):
+        """Create macOS .command script."""
+        sh_path = desktop / f"{name}.command"
+        args_str = " ".join(cmd_args)
+        content = f'#!/bin/bash\ncd "{venv_path}"\n"{python_exe}" {args_str}\n'
+        sh_path.write_text(content, encoding="utf-8")
+        os.chmod(str(sh_path), 0o755)
 
     def _create_installed_tab(self) -> QWidget:
         widget = QWidget()

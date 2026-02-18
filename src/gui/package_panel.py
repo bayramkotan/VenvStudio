@@ -107,24 +107,29 @@ class PackagePanel(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
 
-        # Environment selector at top
+        # Environment selector at top (2-row bar)
         self.env_bar = QFrame()
-        self.env_bar.setFixedHeight(52)
+        self.env_bar.setFixedHeight(72)
         self.env_bar.setStyleSheet(
             "QFrame { background-color: #181825; "
             "border-bottom: 2px solid #313244; }"
         )
-        env_bar_layout = QHBoxLayout(self.env_bar)
-        env_bar_layout.setContentsMargins(16, 0, 16, 0)
+        env_bar_outer = QVBoxLayout(self.env_bar)
+        env_bar_outer.setContentsMargins(16, 6, 16, 4)
+        env_bar_outer.setSpacing(2)
+
+        # ── Row 1: Environment selector + Python version ──
+        row1 = QHBoxLayout()
+        row1.setSpacing(8)
 
         env_lbl = QLabel(f"🐍 {tr('environment')}")
         env_lbl.setStyleSheet("font-weight: bold; font-size: 13px;")
-        env_bar_layout.addWidget(env_lbl)
+        row1.addWidget(env_lbl)
 
         self.env_selector = QComboBox()
         self.env_selector.setMinimumWidth(280)
         self.env_selector.setMaximumWidth(500)
-        self.env_selector.setFixedHeight(36)
+        self.env_selector.setFixedHeight(34)
         # Disable mouse wheel scrolling on env selector to prevent accidental switches
         self.env_selector.wheelEvent = lambda e: e.ignore()
         self.env_selector.setStyleSheet(
@@ -144,20 +149,70 @@ class PackagePanel(QWidget):
         )
         self.env_selector.addItem(tr("select_environment"), "")
         self.env_selector.currentIndexChanged.connect(self._on_env_selector_changed)
-        env_bar_layout.addWidget(self.env_selector)
+        row1.addWidget(self.env_selector)
 
         # Python version label (bold, large)
         self.python_version_label = QLabel("")
         self.python_version_label.setStyleSheet(
-            "font-size: 15px; font-weight: bold; color: #a6e3a1; padding-left: 12px;"
+            "font-size: 15px; font-weight: bold; color: #a6e3a1; padding-left: 8px;"
         )
-        env_bar_layout.addWidget(self.python_version_label)
+        row1.addWidget(self.python_version_label)
 
-        env_bar_layout.addStretch()
+        row1.addStretch()
 
         self.env_pkg_count = QLabel("")
-        self.env_pkg_count.setStyleSheet("color: #a6adc8; font-size: 12px;")
-        env_bar_layout.addWidget(self.env_pkg_count)
+        self.env_pkg_count.setStyleSheet("color: #a6adc8; font-size: 12px; font-weight: bold;")
+        row1.addWidget(self.env_pkg_count)
+
+        env_bar_outer.addLayout(row1)
+
+        # ── Row 2: Info bar — path | disk size | backend | last used ──
+        row2 = QHBoxLayout()
+        row2.setSpacing(16)
+
+        info_style = "color: #6c7086; font-size: 11px;"
+        separator_style = "color: #45475a; font-size: 11px;"
+
+        self.env_path_label = QLabel("")
+        self.env_path_label.setStyleSheet(info_style)
+        row2.addWidget(self.env_path_label)
+
+        self._info_sep1 = QLabel("│")
+        self._info_sep1.setStyleSheet(separator_style)
+        row2.addWidget(self._info_sep1)
+
+        self.env_disk_label = QLabel("")
+        self.env_disk_label.setStyleSheet(info_style)
+        row2.addWidget(self.env_disk_label)
+
+        self._info_sep2 = QLabel("│")
+        self._info_sep2.setStyleSheet(separator_style)
+        row2.addWidget(self._info_sep2)
+
+        self.env_backend_label = QLabel("")
+        self.env_backend_label.setStyleSheet(info_style)
+        row2.addWidget(self.env_backend_label)
+
+        self._info_sep3 = QLabel("│")
+        self._info_sep3.setStyleSheet(separator_style)
+        row2.addWidget(self._info_sep3)
+
+        self.env_last_used_label = QLabel("")
+        self.env_last_used_label.setStyleSheet(info_style)
+        row2.addWidget(self.env_last_used_label)
+
+        row2.addStretch()
+
+        # Hide info row initially
+        self._info_labels = [
+            self.env_path_label, self.env_disk_label,
+            self.env_backend_label, self.env_last_used_label,
+            self._info_sep1, self._info_sep2, self._info_sep3,
+        ]
+        for lbl in self._info_labels:
+            lbl.setVisible(False)
+
+        env_bar_outer.addLayout(row2)
 
         layout.addWidget(self.env_bar)
 
@@ -1152,6 +1207,7 @@ $s.Save()
         self.env_selector.setCurrentIndex(idx)
         self.env_selector.blockSignals(False)
         self.status_label.setText(f"Loading packages for {name}...")
+        self._update_env_info_bar(venv_path, backend)
         # Async refresh — UI hemen görünür, paketler arka planda yüklenir
         self._async_refresh_packages()
 
@@ -1194,16 +1250,22 @@ $s.Save()
                 pass
             self.pip_manager = PipManager(Path(path_str), backend=backend)
             self.status_label.setText(f"Loading packages...")
-            self._update_python_version_label(Path(path_str))
+            self._update_env_info_bar(Path(path_str), backend)
             self._async_refresh_packages()
         else:
             self.pip_manager = None
             self.packages_table.setRowCount(0)
             self.env_pkg_count.setText("")
             self.python_version_label.setText("")
+            self._hide_env_info_bar()
 
-    def _update_python_version_label(self, venv_path):
-        """Detect and display the Python version for the selected environment."""
+    def _update_env_info_bar(self, venv_path, backend="pip"):
+        """Update all info labels for the selected environment."""
+        # Show info labels
+        for lbl in self._info_labels:
+            lbl.setVisible(True)
+
+        # 1) Python version
         try:
             python_exe = get_python_executable(venv_path)
             result = subprocess.run(
@@ -1212,10 +1274,81 @@ $s.Save()
                 **subprocess_args()
             )
             ver_text = result.stdout.strip() or result.stderr.strip()
-            # ver_text like "Python 3.12.4"
             self.python_version_label.setText(f"🐍 {ver_text}")
         except Exception:
             self.python_version_label.setText("")
+
+        # 2) Shortened path
+        try:
+            full_path = str(venv_path)
+            home = str(Path.home())
+            if full_path.startswith(home):
+                display_path = "~" + full_path[len(home):]
+            else:
+                display_path = full_path
+            # Truncate if too long
+            if len(display_path) > 60:
+                display_path = "..." + display_path[-57:]
+            self.env_path_label.setText(f"📂 {display_path}")
+            self.env_path_label.setToolTip(full_path)
+        except Exception:
+            self.env_path_label.setText("")
+
+        # 3) Disk size (async-friendly but quick for most envs)
+        try:
+            total_size = 0
+            for dirpath, dirnames, filenames in os.walk(str(venv_path)):
+                for f in filenames:
+                    fp = os.path.join(dirpath, f)
+                    try:
+                        total_size += os.path.getsize(fp)
+                    except OSError:
+                        pass
+                # Limit depth to avoid very slow scans
+                if total_size > 10 * 1024 * 1024 * 1024:  # cap at 10GB scan
+                    break
+            if total_size < 1024 * 1024:
+                size_str = f"{total_size / 1024:.0f} KB"
+            elif total_size < 1024 * 1024 * 1024:
+                size_str = f"{total_size / (1024 * 1024):.1f} MB"
+            else:
+                size_str = f"{total_size / (1024 * 1024 * 1024):.2f} GB"
+            self.env_disk_label.setText(f"💾 {size_str}")
+        except Exception:
+            self.env_disk_label.setText("💾 ?")
+
+        # 4) Backend (pip/uv)
+        backend_display = backend.upper() if backend else "PIP"
+        self.env_backend_label.setText(f"⚙️ {backend_display}")
+
+        # 5) Last used (modification time of pyvenv.cfg or activate script)
+        try:
+            candidates = [
+                venv_path / "pyvenv.cfg",
+                venv_path / "Scripts" / "activate.bat",
+                venv_path / "bin" / "activate",
+            ]
+            latest_mtime = 0
+            for c in candidates:
+                if c.exists():
+                    mt = c.stat().st_mtime
+                    if mt > latest_mtime:
+                        latest_mtime = mt
+            if latest_mtime > 0:
+                from datetime import datetime
+                dt = datetime.fromtimestamp(latest_mtime)
+                self.env_last_used_label.setText(f"🕐 {dt.strftime('%Y-%m-%d %H:%M')}")
+            else:
+                self.env_last_used_label.setText("")
+                self._info_sep3.setVisible(False)
+        except Exception:
+            self.env_last_used_label.setText("")
+            self._info_sep3.setVisible(False)
+
+    def _hide_env_info_bar(self):
+        """Hide all info bar labels when no env is selected."""
+        for lbl in self._info_labels:
+            lbl.setVisible(False)
 
     def _async_refresh_packages(self):
         """Load packages in background — UI stays responsive."""

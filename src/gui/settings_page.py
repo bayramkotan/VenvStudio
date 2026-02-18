@@ -728,8 +728,10 @@ class SettingsPage(QWidget):
 
         # System pythons
         system_pythons = find_system_pythons()
+        system_paths = set()
         for version, path in system_pythons:
             norm_path = os.path.normpath(path)
+            system_paths.add(os.path.normcase(norm_path))
             row = self.python_table.rowCount()
             self.python_table.insertRow(row)
             self.python_table.setItem(row, 0, QTableWidgetItem(version))
@@ -737,10 +739,14 @@ class SettingsPage(QWidget):
             self.python_table.setItem(row, 2, QTableWidgetItem("System"))
             self.default_python_combo.addItem(f"Python {version}", norm_path)
 
-        # Custom pythons from config
+        # Custom pythons from config (skip duplicates of system pythons)
         custom_pythons = self.config.get("custom_pythons", [])
+        cleaned_custom = []
         for entry in custom_pythons:
             norm_path = os.path.normpath(entry.get("path", ""))
+            if os.path.normcase(norm_path) in system_paths:
+                continue  # already listed as System — skip duplicate
+            cleaned_custom.append(entry)
             row = self.python_table.rowCount()
             self.python_table.insertRow(row)
             self.python_table.setItem(row, 0, QTableWidgetItem(entry.get("version", "?")))
@@ -753,6 +759,10 @@ class SettingsPage(QWidget):
             self.default_python_combo.addItem(
                 f"Python {entry.get('version', '?')} (Custom)", norm_path
             )
+
+        # Auto-clean config if duplicates were removed
+        if len(cleaned_custom) != len(custom_pythons):
+            self.config.set("custom_pythons", cleaned_custom)
 
         # Set default python selection — only enable checkbox if user explicitly changed it
         default_py = self.config.get("default_python", "")

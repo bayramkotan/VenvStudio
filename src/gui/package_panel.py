@@ -123,6 +123,7 @@ class PackagePanel(QWidget):
 
         self.env_selector = QComboBox()
         self.env_selector.setMinimumWidth(280)
+        self.env_selector.setMaximumWidth(500)
         self.env_selector.setFixedHeight(36)
         self.env_selector.setStyleSheet(
             "QComboBox {"
@@ -141,7 +142,14 @@ class PackagePanel(QWidget):
         )
         self.env_selector.addItem(tr("select_environment"), "")
         self.env_selector.currentIndexChanged.connect(self._on_env_selector_changed)
-        env_bar_layout.addWidget(self.env_selector, 1)
+        env_bar_layout.addWidget(self.env_selector)
+
+        # Python version label (bold, large)
+        self.python_version_label = QLabel("")
+        self.python_version_label.setStyleSheet(
+            "font-size: 15px; font-weight: bold; color: #a6e3a1; padding-left: 12px;"
+        )
+        env_bar_layout.addWidget(self.python_version_label)
 
         env_bar_layout.addStretch()
 
@@ -1184,11 +1192,28 @@ $s.Save()
                 pass
             self.pip_manager = PipManager(Path(path_str), backend=backend)
             self.status_label.setText(f"Loading packages...")
+            self._update_python_version_label(Path(path_str))
             self._async_refresh_packages()
         else:
             self.pip_manager = None
             self.packages_table.setRowCount(0)
             self.env_pkg_count.setText("")
+            self.python_version_label.setText("")
+
+    def _update_python_version_label(self, venv_path):
+        """Detect and display the Python version for the selected environment."""
+        try:
+            python_exe = get_python_executable(venv_path)
+            result = subprocess.run(
+                [str(python_exe), "--version"],
+                capture_output=True, text=True, timeout=10,
+                **subprocess_args()
+            )
+            ver_text = result.stdout.strip() or result.stderr.strip()
+            # ver_text like "Python 3.12.4"
+            self.python_version_label.setText(f"🐍 {ver_text}")
+        except Exception:
+            self.python_version_label.setText("")
 
     def _async_refresh_packages(self):
         """Load packages in background — UI stays responsive."""

@@ -219,11 +219,17 @@ class SettingsPage(QWidget):
         remove_py_btn.clicked.connect(self._remove_custom_python)
         py_btn_layout.addWidget(remove_py_btn)
 
-        set_default_btn = QPushButton("⭐ Set as System Default")
-        set_default_btn.setObjectName("secondary")
-        set_default_btn.setToolTip("Add selected Python to the top of your User PATH")
-        set_default_btn.clicked.connect(self._set_system_default_python)
-        py_btn_layout.addWidget(set_default_btn)
+        set_user_btn = QPushButton("👤 Set User Default")
+        set_user_btn.setObjectName("secondary")
+        set_user_btn.setToolTip("Add selected Python to User PATH (no admin required)")
+        set_user_btn.clicked.connect(lambda: self._set_python_default("user"))
+        py_btn_layout.addWidget(set_user_btn)
+
+        set_system_btn = QPushButton("🖥️ Set System Default")
+        set_system_btn.setObjectName("secondary")
+        set_system_btn.setToolTip("Add selected Python to System PATH (requires admin)")
+        set_system_btn.clicked.connect(lambda: self._set_python_default("system"))
+        py_btn_layout.addWidget(set_system_btn)
 
         py_btn_layout.addStretch()
         python_layout.addLayout(py_btn_layout)
@@ -893,10 +899,16 @@ class SettingsPage(QWidget):
         self.config.set("custom_pythons", custom_pythons)
         self._scan_pythons()
 
-    def _set_system_default_python(self):
-        """Set selected Python as system default by updating PATH (Windows only)."""
-        import os
-        from src.utils.platform_utils import get_platform
+
+    def _set_python_default(self, scope="user"):
+        """
+        Set selected Python as default.
+        scope='user'   → Update User PATH (no admin needed if System PATH is clean)
+        scope='system' → Update System PATH (admin required)
+        Both modes remove OTHER Python entries from BOTH scopes.
+        """
+        import os, subprocess, tempfile
+        from src.utils.platform_utils import get_platform, subprocess_args
 
         if get_platform() != "windows":
             QMessageBox.information(
@@ -917,232 +929,223 @@ class SettingsPage(QWidget):
         python_dir = os.path.normpath(os.path.dirname(python_path))
         scripts_dir = os.path.join(python_dir, "Scripts")
 
+        scope_label = "User" if scope == "user" else "System"
+
+        # Read both PATHs
         try:
-            import subprocess
-            from src.utils.platform_utils import subprocess_args
+            user_path = subprocess.run(
+                ["powershell", "-NoProfile", "-Command",
+                 "[Environment]::GetEnvironmentVariable('Path', 'User')"],
+                capture_output=True, text=True, timeout=10, **subprocess_args()
+            ).stdout.strip() or ""
 
-            # Check System PATH for OTHER Python installations
-            result = subprocess.run(
-                ["powershell", "-Command",
+            system_path = subprocess.run(
+                ["powershell", "-NoProfile", "-Command",
                  "[Environment]::GetEnvironmentVariable('Path', 'Machine')"],
-                capture_output=True, text=True, timeout=10,
-                **subprocess_args()
-            )
-            system_path = result.stdout.strip() or ""
-            system_parts = [p.strip() for p in system_path.split(";") if p.strip()]
-
-            # Find conflicting Python dirs in System PATH
-            conflicting = []
-            for p in system_parts:
-                p_lower = os.path.normcase(p)
-                # Check if this is a Python directory (but not our target)
-                if os.path.normcase(python_dir) == p_lower:
-                    continue  # our target — skip
-                if os.path.normcase(scripts_dir) == p_lower:
-                    continue
-                # Check if it contains python.exe
-                candidate = os.path.join(p, "python.exe")
-                if os.path.exists(candidate):
-                    conflicting.append(p)
-
-            if conflicting:
-                # System PATH has other Python — need admin to fix
-                conflict_list = "\n".join(f"  ❌ {c}" for c in conflicting)
-                choice = QMessageBox.question(
-                    self, "⚠️ System PATH Conflict",
-                    f"System PATH contains other Python installations:\n\n"
-                    f"{conflict_list}\n\n"
-                    f"System PATH takes priority over User PATH.\n"
-                    f"To make Python {version} the default, these need to be\n"
-                    f"removed from System PATH (requires Admin).\n\n"
-                    f"Fix System PATH? (Admin prompt will appear)",
-                    QMessageBox.Yes | QMessageBox.No
-                )
-                if choice == QMessageBox.Yes:
-                    self._fix_system_path_admin(python_dir, scripts_dir, conflicting, version)
-                return
-
-            # No conflicts — just update User PATH
-            confirm = QMessageBox.question(
-                self, "Set System Default",
-                f"Add Python {version} to the top of your User PATH:\n\n"
-                f"  📂 {python_dir}\n"
-                f"  📂 {scripts_dir}\n\n"
-                f"Continue?",
-                QMessageBox.Yes | QMessageBox.No
-            )
-            if confirm != QMessageBox.Yes:
-                return
-
-            self._update_user_path(python_dir, scripts_dir, version)
-
+                capture_output=True, text=True, timeout=10, **subprocess_args()
+            ).stdout.strip() or ""
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to update PATH:\n{e}")
+            QMessageBox.critical(self, "Error", f"Failed to read PATH:\n{e}")
+            return
 
-    def _update_user_path(self, python_dir, scripts_dir, version):
-        """Add Python to top of User PATH."""
-        import os, subprocess
-        from src.utils.platform_utils import subprocess_args
+        # Find ALL Python dirs in a PATH string (excluding our target)
+        def find_python_dirs(path_str, exclude_dirs):
+            exclude_set = {os.path.normcase(d.rstrip("\\")) for d in exclude_dirs}
+            found = []
+            for p in path_str.split(";"):
+                p = p.strip()
+                if not p:
+                    continue
+                p_norm = os.path.normcase(p.rstrip("\\"))
+                if p_norm in exclude_set:
+                    continue
+                # Direct python.exe check
+                if os.path.exists(os.path.join(p, "python.exe")):
+                    found.append(p)
+                    continue
+                # Scripts dir of a Python installation
+                if os.path.basename(p).lower() == "scripts":
+                    parent = os.path.dirname(p)
+                    if os.path.exists(os.path.join(parent, "python.exe")):
+                        found.append(p)
+            return found
 
-        result = subprocess.run(
-            ["powershell", "-Command",
-             "[Environment]::GetEnvironmentVariable('Path', 'User')"],
-            capture_output=True, text=True, timeout=10,
-            **subprocess_args()
+        target_dirs = [python_dir, scripts_dir]
+        other_in_user = find_python_dirs(user_path, target_dirs)
+        other_in_system = find_python_dirs(system_path, target_dirs)
+
+        # Build confirmation message
+        changes = [f"✅ Add to {scope_label} PATH:\n   📂 {python_dir}\n   📂 {scripts_dir}"]
+
+        if other_in_user:
+            changes.append("🗑️ Remove from User PATH:\n" +
+                          "\n".join(f"   ❌ {p}" for p in other_in_user))
+        if other_in_system:
+            changes.append("🗑️ Remove from System PATH:\n" +
+                          "\n".join(f"   ❌ {p}" for p in other_in_system))
+
+        needs_admin = scope == "system" or bool(other_in_system)
+        admin_note = "\n\n🔒 Admin permission required." if needs_admin else ""
+
+        confirm = QMessageBox.question(
+            self, f"Set {scope_label} Default",
+            f"Set Python {version} as {scope_label} default?\n\n" +
+            "\n\n".join(changes) + admin_note,
+            QMessageBox.Yes | QMessageBox.No
         )
-        current_path = result.stdout.strip() or ""
+        if confirm != QMessageBox.Yes:
+            return
 
-        path_parts = [p for p in current_path.split(";") if p.strip()]
-        cleaned = [p for p in path_parts
-                   if os.path.normcase(p.strip()) not in
-                   (os.path.normcase(python_dir), os.path.normcase(scripts_dir))]
+        # Build set of ALL dirs to remove (+ their Scripts counterparts)
+        all_remove = set()
+        for p in other_in_user + other_in_system:
+            norm = os.path.normcase(p.rstrip("\\"))
+            all_remove.add(norm)
+            all_remove.add(os.path.normcase(os.path.join(p, "Scripts").rstrip("\\")))
+            if os.path.basename(p).lower() == "scripts":
+                all_remove.add(os.path.normcase(os.path.dirname(p).rstrip("\\")))
 
-        new_path = ";".join([python_dir, scripts_dir] + cleaned)
-        escaped_path = new_path.replace("'", "''")
+        # Also include target dirs in removal filter (we re-add them at top)
+        all_remove.add(os.path.normcase(python_dir.rstrip("\\")))
+        all_remove.add(os.path.normcase(scripts_dir.rstrip("\\")))
 
-        result = subprocess.run(
-            ["powershell", "-Command",
-             f"[Environment]::SetEnvironmentVariable('Path', '{escaped_path}', 'User')"],
-            capture_output=True, text=True, timeout=10,
-            **subprocess_args()
-        )
+        def build_ps_filter(dirs):
+            conds = []
+            for d in sorted(dirs):
+                escaped = d.replace("'", "''")
+                conds.append(f"($lower -ne '{escaped}')")
+            return " -and ".join(conds) if conds else "$true"
 
-        if result.returncode == 0:
-            QMessageBox.information(
-                self, "✅ Success",
-                f"Python {version} is now the system default!\n\n"
-                f"Open a new terminal and type:\n"
-                f"  python --version\n\n"
-                f"It should show: Python {version}"
-            )
-        else:
-            raise RuntimeError(result.stderr.strip())
-
-    def _fix_system_path_admin(self, python_dir, scripts_dir, conflicting, version):
-        """Remove conflicting Python entries from System PATH and add target (requires Admin)."""
-        import os, subprocess, tempfile
-        from src.utils.platform_utils import subprocess_args
-
-        # Build list of dirs to remove (conflicting + their Scripts)
-        remove_dirs = []
-        for c in conflicting:
-            remove_dirs.append(c)
-            remove_dirs.append(os.path.join(c, "Scripts"))
-
-        # Build PowerShell script with result file for verification
+        ps_filter = build_ps_filter(all_remove)
         result_file = os.path.join(tempfile.gettempdir(), "_venvstudio_path_result.txt")
 
-        # Build filter conditions
-        conditions = []
-        for d in remove_dirs:
-            escaped = d.replace("'", "''").lower()
-            conditions.append(f"($lower -ne '{escaped}')")
-        filter_expr = " -and ".join(conditions)
-
-        ps_script = f'''
+        # Target scope gets Python added at top; other scope just gets cleaned
+        if scope == "user":
+            ps_script = f'''
 try {{
-    # Read current System PATH
-    $sysPath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
-    $parts = ($sysPath -split ';') | Where-Object {{ $_.Trim() -ne '' }}
-
-    # Filter out conflicting Python directories
-    $cleaned = $parts | Where-Object {{
+    $f = '{ps_filter}'
+    # Clean + prepend User PATH
+    $uPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    $uParts = ($uPath -split ';') | Where-Object {{ $_.Trim() -ne '' }} | Where-Object {{
         $lower = $_.ToLower().TrimEnd('\\')
-        {filter_expr}
+        {ps_filter}
     }}
-    $newSysPath = ($cleaned -join ';')
-    [Environment]::SetEnvironmentVariable('Path', $newSysPath, 'Machine')
+    $newUser = ('{python_dir};{scripts_dir};' + ($uParts -join ';'))
+    [Environment]::SetEnvironmentVariable('Path', $newUser, 'User')
 
-    # Also update User PATH
-    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-    $uParts = ($userPath -split ';') | Where-Object {{ $_.Trim() -ne '' }}
-    $uCleaned = $uParts | Where-Object {{
+    # Clean System PATH
+    $sPath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+    $sParts = ($sPath -split ';') | Where-Object {{ $_.Trim() -ne '' }} | Where-Object {{
         $lower = $_.ToLower().TrimEnd('\\')
-        ($lower -ne '{python_dir.lower()}') -and ($lower -ne '{scripts_dir.lower()}')
+        {ps_filter}
     }}
-    $newUserPath = ('{python_dir};{scripts_dir};' + ($uCleaned -join ';'))
-    [Environment]::SetEnvironmentVariable('Path', $newUserPath, 'User')
+    [Environment]::SetEnvironmentVariable('Path', ($sParts -join ';'), 'Machine')
 
     'OK' | Out-File -FilePath '{result_file}' -Encoding utf8
 }} catch {{
     $_.Exception.Message | Out-File -FilePath '{result_file}' -Encoding utf8
 }}
 '''
-        # Write script to temp file
+        else:  # system
+            ps_script = f'''
+try {{
+    # Clean + prepend System PATH
+    $sPath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+    $sParts = ($sPath -split ';') | Where-Object {{ $_.Trim() -ne '' }} | Where-Object {{
+        $lower = $_.ToLower().TrimEnd('\\')
+        {ps_filter}
+    }}
+    $newSys = ('{python_dir};{scripts_dir};' + ($sParts -join ';'))
+    [Environment]::SetEnvironmentVariable('Path', $newSys, 'Machine')
+
+    # Clean User PATH
+    $uPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    $uParts = ($uPath -split ';') | Where-Object {{ $_.Trim() -ne '' }} | Where-Object {{
+        $lower = $_.ToLower().TrimEnd('\\')
+        {ps_filter}
+    }}
+    [Environment]::SetEnvironmentVariable('Path', ($uParts -join ';'), 'User')
+
+    'OK' | Out-File -FilePath '{result_file}' -Encoding utf8
+}} catch {{
+    $_.Exception.Message | Out-File -FilePath '{result_file}' -Encoding utf8
+}}
+'''
+
+        # Write and execute
         ps_file = os.path.join(tempfile.gettempdir(), "_venvstudio_set_path.ps1")
         with open(ps_file, 'w', encoding='utf-8') as f:
             f.write(ps_script)
 
-        # Clean up any previous result
         if os.path.exists(result_file):
             os.unlink(result_file)
 
         try:
-            # Launch elevated PowerShell via Start-Process
-            subprocess.run(
-                [
-                    "powershell", "-NoProfile", "-Command",
-                    f"Start-Process -FilePath 'powershell.exe' "
-                    f"-ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','\"{ps_file}\"' "
-                    f"-Verb RunAs -Wait"
-                ],
-                capture_output=True, text=True, timeout=120,
-                **subprocess_args()
-            )
+            if needs_admin:
+                subprocess.run(
+                    [
+                        "powershell", "-NoProfile", "-Command",
+                        f"Start-Process -FilePath 'powershell.exe' "
+                        f"-ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','\"{ps_file}\"' "
+                        f"-Verb RunAs -Wait"
+                    ],
+                    capture_output=True, text=True, timeout=120,
+                    **subprocess_args()
+                )
+            else:
+                subprocess.run(
+                    ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                     "-File", ps_file],
+                    capture_output=True, text=True, timeout=30,
+                    **subprocess_args()
+                )
 
-            # Check result file
             import time
-            time.sleep(1)  # small delay for file write
+            time.sleep(1)
 
+            success = False
             if os.path.exists(result_file):
                 with open(result_file, 'r', encoding='utf-8') as f:
                     result_text = f.read().strip()
-
                 if result_text.startswith("OK"):
-                    QMessageBox.information(
-                        self, "✅ Success",
-                        f"Python {version} is now the system default!\n\n"
-                        f"Conflicting paths removed from System PATH.\n"
-                        f"Open a new terminal and type:\n"
-                        f"  python --version\n\n"
-                        f"It should show: Python {version}"
-                    )
-                    return
+                    success = True
                 else:
                     raise RuntimeError(result_text)
 
-            # Fallback: verify by reading System PATH directly
-            verify = subprocess.run(
-                ["powershell", "-Command",
-                 "[Environment]::GetEnvironmentVariable('Path', 'Machine')"],
-                capture_output=True, text=True, timeout=10,
-                **subprocess_args()
-            )
-            new_sys_path = verify.stdout.strip().lower()
-
-            still_there = [c for c in conflicting if c.lower().rstrip("\\") in new_sys_path]
-            if still_there:
-                QMessageBox.warning(
-                    self, "⚠️ Partial",
-                    f"Some entries could not be removed (admin may have been denied):\n\n"
-                    + "\n".join(f"  • {s}" for s in still_there)
+            if not success:
+                target_scope_name = 'Machine' if scope == 'system' else 'User'
+                verify = subprocess.run(
+                    ["powershell", "-NoProfile", "-Command",
+                     f"[Environment]::GetEnvironmentVariable('Path', '{target_scope_name}')"],
+                    capture_output=True, text=True, timeout=10,
+                    **subprocess_args()
                 )
-            else:
+                if python_dir.lower() in verify.stdout.strip().lower():
+                    success = True
+
+            if success:
                 QMessageBox.information(
                     self, "✅ Success",
-                    f"Python {version} is now the system default!\n\n"
-                    f"Conflicting paths removed from System PATH.\n"
+                    f"Python {version} is now the {scope_label} default!\n\n"
+                    f"Other Python entries cleaned from both User and System PATH.\n\n"
                     f"Open a new terminal and type:\n"
                     f"  python --version\n\n"
                     f"It should show: Python {version}"
                 )
+            else:
+                QMessageBox.warning(
+                    self, "⚠️ Partial",
+                    f"Could not verify the change.\n"
+                    f"Admin permission may have been denied.\n\n"
+                    f"Check Environment Variables manually."
+                )
 
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Admin operation failed:\n{e}")
+            QMessageBox.critical(self, "Error", f"Failed to update PATH:\n{e}")
         finally:
-            for f in [ps_file, result_file]:
+            for fp in [ps_file, result_file]:
                 try:
-                    os.unlink(f)
+                    os.unlink(fp)
                 except Exception:
                     pass
 

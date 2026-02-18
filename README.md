@@ -6,8 +6,7 @@
 
 <p align="center">
   <strong>Lightweight Python Virtual Environment Manager</strong><br>
-  A modern, cross-platform alternative to Anaconda
-</p>
+  </p>
 
 <p align="center">
   <a href="https://github.com/bayramkotan/VenvStudio/releases/latest">

@@ -1710,7 +1710,7 @@ try {{
         from src.utils.platform_utils import get_python_executable, subprocess_args
 
         vm = VenvManager(Path(self.config.get_venv_base_dir()))
-        envs = vm.list_envs()
+        envs = vm.list_venvs()
         if not envs:
             QMessageBox.warning(self, "Warning", "No environments found.")
             return None, None

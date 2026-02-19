@@ -42,8 +42,21 @@ else:
 def main():
     try:
         from PySide6.QtWidgets import QApplication
-        from PySide6.QtCore import Qt
+        from PySide6.QtCore import Qt, QtMsgType, qInstallMessageHandler
         from PySide6.QtGui import QFont
+
+        # Suppress noisy QFont::setPointSize warnings (caused by px-based stylesheets)
+        def _qt_message_handler(mode, context, message):
+            if "QFont::setPointSize" in message:
+                return  # suppress
+            if mode == QtMsgType.QtWarningMsg:
+                print(f"[Qt Warning] {message}")
+            elif mode == QtMsgType.QtCriticalMsg:
+                print(f"[Qt Critical] {message}")
+            elif mode == QtMsgType.QtFatalMsg:
+                print(f"[Qt Fatal] {message}")
+
+        qInstallMessageHandler(_qt_message_handler)
 
         from src.gui.main_window import MainWindow
         from src.utils.constants import APP_NAME, APP_VERSION

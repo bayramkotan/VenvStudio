@@ -53,7 +53,7 @@ def main():
         app.setApplicationVersion(APP_VERSION)
 
         config = ConfigManager()
-        window = MainWindow(config)
+        window = MainWindow()
         window.show()
 
         sys.exit(app.exec())

@@ -8,10 +8,11 @@ from PySide6.QtWidgets import (
     QComboBox, QLineEdit, QSpinBox, QCheckBox, QGroupBox,
     QFormLayout, QFileDialog, QMessageBox, QScrollArea,
     QFrame, QFontComboBox, QTableWidget, QTableWidgetItem,
-    QHeaderView, QInputDialog,
+    QHeaderView, QInputDialog, QDialog, QDialogButtonBox,
+    QProgressBar, QListWidget, QListWidgetItem,
 )
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont
+from PySide6.QtCore import Qt, Signal, QThread
+from PySide6.QtGui import QFont, QColor
 
 from src.utils.platform_utils import find_system_pythons, get_platform, subprocess_args
 from src.utils.constants import APP_NAME, APP_VERSION
@@ -230,6 +231,12 @@ class SettingsPage(QWidget):
         set_system_btn.setToolTip("Add selected Python to System PATH (requires admin)")
         set_system_btn.clicked.connect(lambda: self._set_python_default("system"))
         py_btn_layout.addWidget(set_system_btn)
+
+        download_py_btn = QPushButton("⬇️ Download Python")
+        download_py_btn.setObjectName("secondary")
+        download_py_btn.setToolTip("Download standalone Python from python-build-standalone")
+        download_py_btn.clicked.connect(self._download_python)
+        py_btn_layout.addWidget(download_py_btn)
 
         py_btn_layout.addStretch()
         python_layout.addLayout(py_btn_layout)
@@ -770,6 +777,32 @@ class SettingsPage(QWidget):
         if len(cleaned_custom) != len(custom_pythons):
             self.config.set("custom_pythons", cleaned_custom)
 
+        # Standalone (downloaded) Pythons
+        try:
+            from src.core.python_downloader import get_installed_pythons
+            all_listed_paths = system_paths.copy()
+            for entry in cleaned_custom:
+                all_listed_paths.add(os.path.normcase(os.path.normpath(entry.get("path", ""))))
+
+            for py in get_installed_pythons():
+                exe_path = os.path.normpath(str(py["python_exe"]))
+                if os.path.normcase(exe_path) in all_listed_paths:
+                    continue
+                row = self.python_table.rowCount()
+                self.python_table.insertRow(row)
+                self.python_table.setItem(row, 0, QTableWidgetItem(py["version"]))
+                self.python_table.setItem(row, 1, QTableWidgetItem(exe_path))
+
+                source_item = QTableWidgetItem("Downloaded")
+                source_item.setForeground(QColor("#a6e3a1"))
+                self.python_table.setItem(row, 2, source_item)
+
+                self.default_python_combo.addItem(
+                    f"Python {py['version']} (Downloaded)", exe_path
+                )
+        except Exception:
+            pass  # downloader module may not be available
+
         # Set default python selection — only enable checkbox if user explicitly changed it
         default_py = self.config.get("default_python", "")
         if default_py and default_py.strip():
@@ -1148,6 +1181,12 @@ try {{
                     os.unlink(fp)
                 except Exception:
                     pass
+
+    def _download_python(self):
+        """Open dialog to download a standalone Python version."""
+        dlg = PythonDownloadDialog(self)
+        if dlg.exec() == QDialog.Accepted:
+            self._scan_pythons()
 
     def _browse_venv_dir(self):
         """Browse for environment base directory."""
@@ -1751,3 +1790,228 @@ try {{
             self._load_current_settings()
             self.theme_changed.emit("dark")
             QMessageBox.information(self, "Settings", "All settings reset to defaults.")
+
+
+class _DownloadWorker(QThread):
+    """Background worker for downloading Python."""
+    progress = Signal(str)
+    finished = Signal(bool, str)  # success, message
+
+    def __init__(self, version_info, parent=None):
+        super().__init__(parent)
+        self.version_info = version_info
+
+    def run(self):
+        try:
+            from src.core.python_downloader import download_python
+            result = download_python(self.version_info, progress_callback=self.progress.emit)
+            self.finished.emit(True, str(result))
+        except Exception as e:
+            self.finished.emit(False, str(e))
+
+
+class _FetchWorker(QThread):
+    """Background worker for fetching available versions."""
+    progress = Signal(str)
+    finished = Signal(list)
+
+    def run(self):
+        try:
+            from src.core.python_downloader import get_available_versions
+            versions = get_available_versions(progress_callback=self.progress.emit)
+            self.finished.emit(versions)
+        except Exception:
+            self.finished.emit([])
+
+
+class PythonDownloadDialog(QDialog):
+    """Dialog for downloading standalone Python builds."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("⬇️ Download Python")
+        self.setMinimumSize(550, 420)
+        self._versions = []
+        self._setup_ui()
+        self._fetch_versions()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+
+        # Header
+        header = QLabel(
+            "Download standalone Python builds from\n"
+            "astral-sh/python-build-standalone (same builds used by uv)"
+        )
+        header.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        header.setWordWrap(True)
+        layout.addWidget(header)
+
+        # Version list
+        self.version_list = QListWidget()
+        self.version_list.setStyleSheet(
+            "QListWidget { font-size: 13px; }"
+            "QListWidget::item { padding: 6px; }"
+            "QListWidget::item:selected { background-color: #89b4fa; color: #1e1e2e; }"
+        )
+        layout.addWidget(self.version_list)
+
+        # Progress
+        self.progress_label = QLabel("Fetching available versions...")
+        self.progress_label.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        layout.addWidget(self.progress_label)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 0)  # indeterminate
+        self.progress_bar.setFixedHeight(6)
+        layout.addWidget(self.progress_bar)
+
+        # Install location
+        from src.core.python_downloader import get_pythons_dir
+        loc_label = QLabel(f"📂 Install location: {get_pythons_dir()}")
+        loc_label.setStyleSheet("color: #6c7086; font-size: 11px;")
+        loc_label.setWordWrap(True)
+        layout.addWidget(loc_label)
+
+        # Buttons
+        btn_layout = QHBoxLayout()
+
+        self.download_btn = QPushButton("⬇️ Download && Install")
+        self.download_btn.setEnabled(False)
+        self.download_btn.clicked.connect(self._start_download)
+        btn_layout.addWidget(self.download_btn)
+
+        self.remove_btn = QPushButton("🗑️ Remove Selected")
+        self.remove_btn.setObjectName("danger")
+        self.remove_btn.setEnabled(False)
+        self.remove_btn.clicked.connect(self._remove_selected)
+        btn_layout.addWidget(self.remove_btn)
+
+        btn_layout.addStretch()
+
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(close_btn)
+
+        layout.addLayout(btn_layout)
+
+        self.version_list.currentRowChanged.connect(self._on_selection_changed)
+
+    def _fetch_versions(self):
+        """Fetch available versions in background."""
+        self._fetch_worker = _FetchWorker(parent=self)
+        self._fetch_worker.progress.connect(self._on_progress)
+        self._fetch_worker.finished.connect(self._on_versions_fetched)
+        self._fetch_worker.start()
+
+    def _on_versions_fetched(self, versions):
+        self._versions = versions
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(100)
+
+        if not versions:
+            self.progress_label.setText("❌ Could not fetch versions. Check your internet connection.")
+            return
+
+        # Also get installed versions
+        from src.core.python_downloader import get_installed_pythons
+        installed = {py["version"] for py in get_installed_pythons()}
+
+        self.version_list.clear()
+        for v in versions:
+            size_mb = v.get("size", 0) / (1024 * 1024)
+            is_installed = v["version"] in installed
+
+            if is_installed:
+                text = f"✅ Python {v['version']}  —  {size_mb:.0f} MB  (installed)"
+            else:
+                text = f"🐍 Python {v['version']}  —  {size_mb:.0f} MB"
+
+            item = QListWidgetItem(text)
+            item.setData(Qt.UserRole, v)
+            if is_installed:
+                item.setForeground(QColor("#a6e3a1"))
+            self.version_list.addItem(item)
+
+        self.progress_label.setText(f"Found {len(versions)} available versions.")
+        self.download_btn.setEnabled(True)
+
+    def _on_selection_changed(self, row):
+        if row < 0:
+            self.download_btn.setEnabled(False)
+            self.remove_btn.setEnabled(False)
+            return
+        item = self.version_list.item(row)
+        v = item.data(Qt.UserRole)
+        from src.core.python_downloader import get_installed_pythons
+        installed = {py["version"] for py in get_installed_pythons()}
+        is_installed = v["version"] in installed
+        self.download_btn.setEnabled(not is_installed)
+        self.remove_btn.setEnabled(is_installed)
+
+    def _on_progress(self, text):
+        self.progress_label.setText(text)
+        # Parse percentage if available
+        if "%" in text:
+            try:
+                pct_str = text.split("(")[-1].split("%")[0]
+                pct = int(float(pct_str))
+                self.progress_bar.setRange(0, 100)
+                self.progress_bar.setValue(pct)
+            except (ValueError, IndexError):
+                pass
+
+    def _start_download(self):
+        row = self.version_list.currentRow()
+        if row < 0:
+            return
+
+        item = self.version_list.item(row)
+        version_info = item.data(Qt.UserRole)
+
+        self.download_btn.setEnabled(False)
+        self.progress_bar.setRange(0, 0)
+
+        self._dl_worker = _DownloadWorker(version_info, parent=self)
+        self._dl_worker.progress.connect(self._on_progress)
+        self._dl_worker.finished.connect(self._on_download_finished)
+        self._dl_worker.start()
+
+    def _on_download_finished(self, success, message):
+        self.progress_bar.setRange(0, 100)
+        if success:
+            self.progress_bar.setValue(100)
+            self.progress_label.setText("✅ Download complete!")
+            QMessageBox.information(self, "✅ Success", f"Python installed to:\n{message}")
+            # Refresh list
+            self._fetch_versions()
+        else:
+            self.progress_bar.setValue(0)
+            self.progress_label.setText(f"❌ Download failed")
+            QMessageBox.critical(self, "Error", f"Download failed:\n{message}")
+            self.download_btn.setEnabled(True)
+
+    def _remove_selected(self):
+        row = self.version_list.currentRow()
+        if row < 0:
+            return
+
+        item = self.version_list.item(row)
+        version_info = item.data(Qt.UserRole)
+        version = version_info["version"]
+
+        confirm = QMessageBox.question(
+            self, "Remove Python",
+            f"Remove Python {version}?\nThis will delete the standalone installation.",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if confirm != QMessageBox.Yes:
+            return
+
+        from src.core.python_downloader import get_installed_pythons, remove_python
+        for py in get_installed_pythons():
+            if py["version"] == version:
+                remove_python(py["path"])
+                break
+
+        self._fetch_versions()

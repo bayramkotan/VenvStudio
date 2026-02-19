@@ -6,7 +6,8 @@
 
 <p align="center">
   <strong>Lightweight Python Virtual Environment Manager</strong><br>
-  </p>
+  A modern, cross-platform virtual environment manager
+</p>
 
 <p align="center">
   <a href="https://github.com/bayramkotan/VenvStudio/releases/latest">

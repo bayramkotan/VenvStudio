@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 VenvStudio - Lightweight Python Virtual Environment Manager
-A modern, cross-platform alternative to Anaconda.
+A modern, cross-platform virtual environment manager.
 
 Usage:
     python main.py

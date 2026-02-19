@@ -1,0 +1,91 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "venvstudio"
+version = "1.3.6"
+description = "Lightweight Python Virtual Environment Manager — A modern, cross-platform alternative to Anaconda"
+readme = "README.md"
+license = {text = "LGPL-3.0-or-later"}
+authors = [
+    {name = "Bayram Kotan", email = "bayramkotan@outlook.com"},
+]
+keywords = [
+    "python", "virtual-environment", "venv", "pip", "uv",
+    "package-manager", "gui", "desktop", "qt", "pyside6",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: X11 Applications :: Qt",
+    "Environment :: Win32 (MS Windows)",
+    "Environment :: MacOS X",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Education",
+    "License :: OSI Approved :: GNU Lesser General Public License v3 or later (LGPLv3+)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Installation/Setup",
+    "Topic :: Utilities",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "PySide6>=6.5.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pyinstaller>=6.0",
+    "Pillow",
+    "pytest",
+    "ruff",
+]
+fast = [
+    "uv",
+]
+
+[project.urls]
+Homepage = "https://github.com/bayramkotan/VenvStudio"
+Repository = "https://github.com/bayramkotan/VenvStudio"
+Documentation = "https://github.com/bayramkotan/VenvStudio#readme"
+"Bug Tracker" = "https://github.com/bayramkotan/VenvStudio/issues"
+"Release Notes" = "https://github.com/bayramkotan/VenvStudio/releases"
+
+[project.scripts]
+venvstudio = "src.main:main"
+
+[project.gui-scripts]
+venvstudio-gui = "src.main:main"
+
+[tool.setuptools]
+packages = ["src", "src.core", "src.gui", "src.utils"]
+
+[tool.setuptools.package-data]
+"*" = [
+    "assets/*.ico",
+    "assets/*.icns",
+    "assets/*.png",
+    "assets/app_icons/*.ico",
+    "assets/app_icons/*.png",
+    "config/*.json",
+    "src/utils/*.json",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

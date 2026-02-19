@@ -182,33 +182,34 @@ jobs:
             VenvStudio-Linux-AppImage/VenvStudio*.AppImage
             VenvStudio-macOS/VenvStudio-macOS
           body: |
-            ## What's New in v1.3.5
+            ## What's New in v1.3.6
 
-            ### 🚀 Launch & Shortcuts
-            - Desktop shortcuts now create real `.lnk` files on Windows (was `.vbs`)
-            - App-specific icons for JupyterLab, Jupyter Notebook, Orange3, Spyder, IPython, Streamlit
-            - GUI apps launch without console window
+            ### ⬇️ Python Downloader
+            - Download standalone Python builds from astral-sh/python-build-standalone
+            - **User Install** — no admin, stored in VenvStudio config dir
+            - **System Install** — Windows (Program Files), Linux (/opt/python), macOS (/usr/local/python)
+            - Real-time download progress with percentage
+            - Downloaded Pythons auto-detected in Python Versions table
 
-            ### 🐍 Environment Info Bar
-            - Python version displayed next to environment selector
-            - Info bar showing: disk size, pip/uv backend, shortened path, last used date
-            - Environment dropdown resized, mouse wheel disabled to prevent accidental switches
+            ### 📤 Export (6 Formats)
+            - Available on **3 pages**: Environments, Packages, Settings
+            - requirements.txt, Dockerfile, docker-compose.yml, pyproject.toml, environment.yml (Conda), Clipboard
+            - Auto-detects Python version for all export formats
 
-            ### ⭐ Python PATH Management
-            - **Set User Default** — add Python to User PATH (no admin needed)
-            - **Set System Default** — add Python to System PATH (admin elevation)
-            - Both modes clean conflicting Python entries from User AND System PATH
-            - Full row selection in Python versions table
-            - Auto-deduplicate custom Python entries that match system-detected ones
+            ### 📦 PyPI Support
+            - `pip install venvstudio` now works!
+            - `venvstudio` command launches GUI
+            - `venvstudio -V` shows version
 
-            ### 🍊 Orange3 Compatibility
-            - Dynamic package resolution: `orange3<=3.36.2` for Python 3.9, latest for 3.10+
-            - PyQt6 used for all Python versions (3.9+)
-            - Platform-specific build error messages (Windows/macOS/Linux)
+            ### 🖥️ PATH Management
+            - Separate **User Default** / **System Default** buttons
+            - Both clean conflicting Python entries from both PATH scopes
+            - Cross-platform admin elevation (UAC / sudo / pkexec)
 
-            ### 🔧 Stability
-            - Fixed QThread crash on rapid environment switching
-            - Fixed `subprocess_args` import in settings page
+            ### 🎨 UI Improvements
+            - Environment table: larger font (14px), 38px row height
+            - Desktop shortcuts with real .lnk files and app icons
+            - Environment info bar: path, disk size, backend, last used
 
             ### Download
             | Platform | File |
@@ -216,4 +217,30 @@ jobs:
             | Windows | `VenvStudio.exe` |
             | Linux | `VenvStudio-x86_64.AppImage` |
             | macOS | `VenvStudio-macOS` |
+            | PyPI | `pip install venvstudio` |
           fail_on_unmatched_files: false
+
+  publish-pypi:
+    needs: [build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build tools
+        run: pip install build twine
+
+      - name: Build package
+        run: python -m build
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true

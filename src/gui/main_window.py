@@ -307,6 +307,12 @@ class MainWindow(QMainWindow):
         self.env_table.setAlternatingRowColors(True)
         self.env_table.verticalHeader().setVisible(False)
         self.env_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.env_table.verticalHeader().setDefaultSectionSize(38)
+        self.env_table.setStyleSheet(
+            "QTableWidget { font-size: 14px; }"
+            "QTableWidget::item { padding: 4px 8px; }"
+            "QHeaderView::section { font-size: 13px; font-weight: bold; padding: 6px; }"
+        )
         self.env_table.doubleClicked.connect(self._on_env_double_click)
         self.env_table.selectionModel().selectionChanged.connect(self._on_env_selected)
         layout.addWidget(self.env_table)

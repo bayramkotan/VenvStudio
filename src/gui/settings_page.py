@@ -1876,12 +1876,19 @@ class PythonDownloadDialog(QDialog):
         # Buttons
         btn_layout = QHBoxLayout()
 
-        self.download_btn = QPushButton("⬇️ Download && Install")
+        self.download_btn = QPushButton("👤 User Install")
+        self.download_btn.setToolTip("Install to VenvStudio pythons folder (no admin)")
         self.download_btn.setEnabled(False)
-        self.download_btn.clicked.connect(self._start_download)
+        self.download_btn.clicked.connect(lambda: self._start_download("user"))
         btn_layout.addWidget(self.download_btn)
 
-        self.remove_btn = QPushButton("🗑️ Remove Selected")
+        self.system_download_btn = QPushButton("🖥️ System Install")
+        self.system_download_btn.setToolTip("Install to Program Files (admin required)")
+        self.system_download_btn.setEnabled(False)
+        self.system_download_btn.clicked.connect(lambda: self._start_download("system"))
+        btn_layout.addWidget(self.system_download_btn)
+
+        self.remove_btn = QPushButton("🗑️ Remove")
         self.remove_btn.setObjectName("danger")
         self.remove_btn.setEnabled(False)
         self.remove_btn.clicked.connect(self._remove_selected)
@@ -1935,10 +1942,12 @@ class PythonDownloadDialog(QDialog):
 
         self.progress_label.setText(f"Found {len(versions)} available versions.")
         self.download_btn.setEnabled(True)
+        self.system_download_btn.setEnabled(True)
 
     def _on_selection_changed(self, row):
         if row < 0:
             self.download_btn.setEnabled(False)
+            self.system_download_btn.setEnabled(False)
             self.remove_btn.setEnabled(False)
             return
         item = self.version_list.item(row)
@@ -1947,6 +1956,7 @@ class PythonDownloadDialog(QDialog):
         installed = {py["version"] for py in get_installed_pythons()}
         is_installed = v["version"] in installed
         self.download_btn.setEnabled(not is_installed)
+        self.system_download_btn.setEnabled(not is_installed)
         self.remove_btn.setEnabled(is_installed)
 
     def _on_progress(self, text):
@@ -1961,35 +1971,167 @@ class PythonDownloadDialog(QDialog):
             except (ValueError, IndexError):
                 pass
 
-    def _start_download(self):
+    def _start_download(self, mode="user"):
         row = self.version_list.currentRow()
         if row < 0:
             return
 
         item = self.version_list.item(row)
-        version_info = item.data(Qt.UserRole)
+        version_info = item.data(Qt.UserRole).copy()
+        version_info["_install_mode"] = mode
+
+        if mode == "system":
+            from src.utils.platform_utils import get_platform
+            if get_platform() != "windows":
+                QMessageBox.information(
+                    self, "Info",
+                    "System install is currently available on Windows only."
+                )
+                return
+
+            version = version_info["version"]
+            target_dir = f"C:\\Program Files\\Python{version.replace('.', '')[:3]}"
+            confirm = QMessageBox.question(
+                self, "🖥️ System Install",
+                f"Install Python {version} to:\n\n"
+                f"  📂 {target_dir}\n\n"
+                f"This requires admin permission.\n"
+                f"Continue?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if confirm != QMessageBox.Yes:
+                return
 
         self.download_btn.setEnabled(False)
+        self.system_download_btn.setEnabled(False)
         self.progress_bar.setRange(0, 0)
 
         self._dl_worker = _DownloadWorker(version_info, parent=self)
         self._dl_worker.progress.connect(self._on_progress)
-        self._dl_worker.finished.connect(self._on_download_finished)
+        self._dl_worker.finished.connect(
+            lambda ok, msg: self._on_download_finished(ok, msg, mode)
+        )
         self._dl_worker.start()
 
-    def _on_download_finished(self, success, message):
+    def _on_download_finished(self, success, message, mode="user"):
         self.progress_bar.setRange(0, 100)
         if success:
-            self.progress_bar.setValue(100)
-            self.progress_label.setText("✅ Download complete!")
-            QMessageBox.information(self, "✅ Success", f"Python installed to:\n{message}")
-            # Refresh list
-            self._fetch_versions()
+            if mode == "system":
+                # Move from user dir to Program Files via admin
+                self._move_to_system(message)
+            else:
+                self.progress_bar.setValue(100)
+                self.progress_label.setText("✅ Download complete!")
+                QMessageBox.information(self, "✅ Success", f"Python installed to:\n{message}")
+                self._fetch_versions()
         else:
             self.progress_bar.setValue(0)
             self.progress_label.setText(f"❌ Download failed")
             QMessageBox.critical(self, "Error", f"Download failed:\n{message}")
             self.download_btn.setEnabled(True)
+            self.system_download_btn.setEnabled(True)
+
+    def _move_to_system(self, source_dir):
+        """Move downloaded Python to Program Files (admin required)."""
+        import subprocess, tempfile, os
+        from src.utils.platform_utils import subprocess_args
+        from pathlib import Path
+
+        source = Path(source_dir)
+        # Find python.exe to detect version
+        from src.core.python_downloader import get_python_exe
+        exe = get_python_exe(source)
+        if not exe:
+            QMessageBox.critical(self, "Error", "Could not find python.exe in downloaded files.")
+            return
+
+        try:
+            result = subprocess.run(
+                [str(exe), "--version"],
+                capture_output=True, text=True, timeout=10,
+                **subprocess_args()
+            )
+            ver = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
+        except Exception:
+            ver = source.name.replace("cpython-", "")
+
+        # Target: C:\Program Files\Python314 (major+minor only)
+        ver_short = ver.replace(".", "")[:3]  # "314" from "3.14.3"
+        target = Path(f"C:\\Program Files\\Python{ver_short}")
+
+        self.progress_label.setText(f"Moving to {target} (admin required)...")
+
+        # PowerShell script to copy with admin
+        result_file = os.path.join(tempfile.gettempdir(), "_venvstudio_install_result.txt")
+        # The extracted content has a 'python' subfolder
+        python_subdir = source / "python"
+        actual_source = str(python_subdir) if python_subdir.exists() else str(source)
+
+        ps_script = f'''
+try {{
+    if (Test-Path '{target}') {{ Remove-Item -Recurse -Force '{target}' }}
+    Copy-Item -Recurse '{actual_source}' '{target}'
+    'OK' | Out-File -FilePath '{result_file}' -Encoding utf8
+}} catch {{
+    $_.Exception.Message | Out-File -FilePath '{result_file}' -Encoding utf8
+}}
+'''
+        ps_file = os.path.join(tempfile.gettempdir(), "_venvstudio_install_py.ps1")
+        with open(ps_file, 'w', encoding='utf-8') as f:
+            f.write(ps_script)
+
+        if os.path.exists(result_file):
+            os.unlink(result_file)
+
+        try:
+            subprocess.run(
+                [
+                    "powershell", "-NoProfile", "-Command",
+                    f"Start-Process -FilePath 'powershell.exe' "
+                    f"-ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','\"{ps_file}\"' "
+                    f"-Verb RunAs -Wait"
+                ],
+                capture_output=True, text=True, timeout=300,
+                **subprocess_args()
+            )
+
+            import time
+            time.sleep(1)
+
+            if os.path.exists(result_file):
+                with open(result_file, 'r', encoding='utf-8') as f:
+                    result_text = f.read().strip()
+                if result_text.startswith("OK"):
+                    # Clean up user-dir copy
+                    import shutil
+                    shutil.rmtree(str(source), ignore_errors=True)
+
+                    self.progress_bar.setRange(0, 100)
+                    self.progress_bar.setValue(100)
+                    self.progress_label.setText("✅ System install complete!")
+                    QMessageBox.information(
+                        self, "✅ Success",
+                        f"Python {ver} installed to:\n{target}\n\n"
+                        f"You may want to use 'Set System Default' to add it to PATH."
+                    )
+                    self._fetch_versions()
+                    return
+                else:
+                    raise RuntimeError(result_text)
+
+            raise RuntimeError("Admin operation may have been cancelled.")
+
+        except Exception as e:
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setValue(0)
+            self.progress_label.setText("❌ System install failed")
+            QMessageBox.critical(self, "Error", f"System install failed:\n{e}")
+        finally:
+            for fp in [ps_file, result_file]:
+                try:
+                    os.unlink(fp)
+                except Exception:
+                    pass
 
     def _remove_selected(self):
         row = self.version_list.currentRow()

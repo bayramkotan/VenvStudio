@@ -1982,20 +1982,22 @@ class PythonDownloadDialog(QDialog):
 
         if mode == "system":
             from src.utils.platform_utils import get_platform
-            if get_platform() != "windows":
-                QMessageBox.information(
-                    self, "Info",
-                    "System install is currently available on Windows only."
-                )
-                return
-
             version = version_info["version"]
-            target_dir = f"C:\\Program Files\\Python{version.replace('.', '')[:3]}"
+            plat = get_platform()
+
+            if plat == "windows":
+                ver_short = version.replace(".", "")[:3]
+                target_dir = f"C:\\Program Files\\Python{ver_short}"
+            elif plat == "macos":
+                target_dir = f"/usr/local/python/{version}"
+            else:  # linux
+                target_dir = f"/opt/python/{version}"
+
             confirm = QMessageBox.question(
                 self, "🖥️ System Install",
                 f"Install Python {version} to:\n\n"
                 f"  📂 {target_dir}\n\n"
-                f"This requires admin permission.\n"
+                f"This requires {'admin' if plat == 'windows' else 'sudo'} permission.\n"
                 f"Continue?",
                 QMessageBox.Yes | QMessageBox.No
             )
@@ -2032,17 +2034,19 @@ class PythonDownloadDialog(QDialog):
             self.system_download_btn.setEnabled(True)
 
     def _move_to_system(self, source_dir):
-        """Move downloaded Python to Program Files (admin required)."""
-        import subprocess, tempfile, os
-        from src.utils.platform_utils import subprocess_args
+        """Move downloaded Python to system directory (admin/sudo required)."""
+        import subprocess, tempfile, os, shutil
+        from src.utils.platform_utils import get_platform, subprocess_args
         from pathlib import Path
 
         source = Path(source_dir)
-        # Find python.exe to detect version
+        plat = get_platform()
+
+        # Find python executable to detect version
         from src.core.python_downloader import get_python_exe
         exe = get_python_exe(source)
         if not exe:
-            QMessageBox.critical(self, "Error", "Could not find python.exe in downloaded files.")
+            QMessageBox.critical(self, "Error", "Could not find python executable in downloaded files.")
             return
 
         try:
@@ -2055,18 +2059,38 @@ class PythonDownloadDialog(QDialog):
         except Exception:
             ver = source.name.replace("cpython-", "")
 
-        # Target: C:\Program Files\Python314 (major+minor only)
-        ver_short = ver.replace(".", "")[:3]  # "314" from "3.14.3"
-        target = Path(f"C:\\Program Files\\Python{ver_short}")
-
-        self.progress_label.setText(f"Moving to {target} (admin required)...")
-
-        # PowerShell script to copy with admin
-        result_file = os.path.join(tempfile.gettempdir(), "_venvstudio_install_result.txt")
         # The extracted content has a 'python' subfolder
         python_subdir = source / "python"
         actual_source = str(python_subdir) if python_subdir.exists() else str(source)
 
+        # Determine target based on platform
+        if plat == "windows":
+            ver_short = ver.replace(".", "")[:3]
+            target = Path(f"C:\\Program Files\\Python{ver_short}")
+        elif plat == "macos":
+            target = Path(f"/usr/local/python/{ver}")
+        else:  # linux
+            target = Path(f"/opt/python/{ver}")
+
+        self.progress_label.setText(f"Installing to {target}...")
+
+        try:
+            if plat == "windows":
+                self._system_install_windows(actual_source, target, ver, source)
+            else:
+                self._system_install_unix(actual_source, target, ver, source, plat)
+        except Exception as e:
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setValue(0)
+            self.progress_label.setText("❌ System install failed")
+            QMessageBox.critical(self, "Error", f"System install failed:\n{e}")
+
+    def _system_install_windows(self, actual_source, target, ver, source):
+        """Windows system install via PowerShell admin elevation."""
+        import subprocess, tempfile, os, shutil
+        from src.utils.platform_utils import subprocess_args
+
+        result_file = os.path.join(tempfile.gettempdir(), "_venvstudio_install_result.txt")
         ps_script = f'''
 try {{
     if (Test-Path '{target}') {{ Remove-Item -Recurse -Force '{target}' }}
@@ -2102,36 +2126,102 @@ try {{
                 with open(result_file, 'r', encoding='utf-8') as f:
                     result_text = f.read().strip()
                 if result_text.startswith("OK"):
-                    # Clean up user-dir copy
-                    import shutil
                     shutil.rmtree(str(source), ignore_errors=True)
-
-                    self.progress_bar.setRange(0, 100)
-                    self.progress_bar.setValue(100)
-                    self.progress_label.setText("✅ System install complete!")
-                    QMessageBox.information(
-                        self, "✅ Success",
-                        f"Python {ver} installed to:\n{target}\n\n"
-                        f"You may want to use 'Set System Default' to add it to PATH."
-                    )
-                    self._fetch_versions()
+                    self._show_system_install_success(ver, target)
                     return
                 else:
                     raise RuntimeError(result_text)
 
             raise RuntimeError("Admin operation may have been cancelled.")
-
-        except Exception as e:
-            self.progress_bar.setRange(0, 100)
-            self.progress_bar.setValue(0)
-            self.progress_label.setText("❌ System install failed")
-            QMessageBox.critical(self, "Error", f"System install failed:\n{e}")
         finally:
             for fp in [ps_file, result_file]:
                 try:
                     os.unlink(fp)
                 except Exception:
                     pass
+
+    def _system_install_unix(self, actual_source, target, ver, source, plat):
+        """Linux/macOS system install via sudo."""
+        import subprocess, shutil
+
+        # Build shell script
+        script = f'''#!/bin/bash
+set -e
+if [ -d "{target}" ]; then
+    rm -rf "{target}"
+fi
+mkdir -p "{target}"
+cp -a "{actual_source}/." "{target}/"
+
+# Create symlinks in /usr/local/bin
+PYTHON_EXE=""
+if [ -f "{target}/bin/python3" ]; then
+    PYTHON_EXE="{target}/bin/python3"
+elif [ -f "{target}/bin/python" ]; then
+    PYTHON_EXE="{target}/bin/python"
+fi
+
+if [ -n "$PYTHON_EXE" ]; then
+    VER_SHORT=$(echo "{ver}" | cut -d. -f1,2)
+    ln -sf "$PYTHON_EXE" "/usr/local/bin/python$VER_SHORT" 2>/dev/null || true
+fi
+
+echo "OK"
+'''
+        import tempfile, os
+        script_file = os.path.join(tempfile.gettempdir(), "_venvstudio_install_py.sh")
+        with open(script_file, 'w') as f:
+            f.write(script)
+        os.chmod(script_file, 0o755)
+
+        try:
+            # Try pkexec first (graphical sudo), fallback to sudo in terminal
+            sudo_cmds = [
+                ["pkexec", "bash", script_file],
+                ["sudo", "bash", script_file],
+            ]
+
+            success = False
+            for cmd in sudo_cmds:
+                try:
+                    result = subprocess.run(
+                        cmd, capture_output=True, text=True, timeout=120
+                    )
+                    if result.returncode == 0 and "OK" in result.stdout:
+                        success = True
+                        break
+                except FileNotFoundError:
+                    continue
+
+            if success:
+                shutil.rmtree(str(source), ignore_errors=True)
+                symlink_note = ""
+                if plat == "linux":
+                    ver_short = ".".join(ver.split(".")[:2])
+                    symlink_note = f"\n\nSymlink created: /usr/local/bin/python{ver_short}"
+                self._show_system_install_success(ver, target, symlink_note)
+            else:
+                raise RuntimeError(
+                    "sudo/pkexec failed. You can manually install with:\n"
+                    f"  sudo cp -a {actual_source} {target}"
+                )
+        finally:
+            try:
+                os.unlink(script_file)
+            except Exception:
+                pass
+
+    def _show_system_install_success(self, ver, target, extra_note=""):
+        """Show success message after system install."""
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(100)
+        self.progress_label.setText("✅ System install complete!")
+        QMessageBox.information(
+            self, "✅ Success",
+            f"Python {ver} installed to:\n{target}{extra_note}\n\n"
+            f"You may want to add it to PATH or use 'Set System Default'."
+        )
+        self._fetch_versions()
 
     def _remove_selected(self):
         row = self.version_list.currentRow()

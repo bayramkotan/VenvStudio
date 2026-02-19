@@ -238,7 +238,10 @@ jobs:
         run: pip install build twine
 
       - name: Build package
-        run: python -m build
+        run: |
+          mv build.py _pyinstaller_build.py.bak
+          pyproject-build
+          mv _pyinstaller_build.py.bak build.py
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1

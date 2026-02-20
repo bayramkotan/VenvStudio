@@ -3,10 +3,8 @@
 **Lightweight Python Virtual Environment Manager**  
 A modern, cross-platform virtual environment manager
 
-[![Release](https://img.shields.io/github/v/release/bayramkotan/VenvStudio?style=for-the-badge&color=89b4fa&logo=github)](https://github.com/bayramkotan/VenvStudio/releases/latest)
-[![PyPI](https://img.shields.io/pypi/v/venvstudio?style=for-the-badge&color=a6e3a1&logo=pypi&logoColor=white)](https://pypi.org/project/venvstudio/)
 [![Python](https://img.shields.io/pypi/pyversions/venvstudio?style=for-the-badge&color=f9e2af&logo=python&logoColor=white)](https://pypi.org/project/venvstudio/)
-[![License](https://img.shields.io/github/license/bayramkotan/VenvStudio?style=for-the-badge&color=cba6f7)](LICENSE)
+[![License](https://img.shields.io/badge/License-LGPL--3.0-cba6f7?style=for-the-badge)](https://github.com/bayramkotan/VenvStudio/blob/main/LICENSE)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=for-the-badge)
 
 ---

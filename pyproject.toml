@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "venvstudio"
-version = "1.3.7"
+version = "1.3.9"
 description = "Lightweight Python Virtual Environment Manager with modern GUI"
 readme = "README.md"
 license = {text = "LGPL-3.0-or-later"}

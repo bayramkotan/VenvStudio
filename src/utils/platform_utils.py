@@ -37,11 +37,11 @@ def get_default_venv_base_dir() -> Path:
     """Return the default base directory for virtual environments."""
     system = get_platform()
     if system == "windows":
-        return Path("C:/venvstudio_envs")
+        return Path("C:/venv")
     elif system == "macos":
-        return Path.home() / "venvstudio_envs"
+        return Path.home() / "venv"
     else:  # linux
-        return Path.home() / "venvstudio_envs"
+        return Path.home() / "venv"
 
 
 def get_config_dir() -> Path:

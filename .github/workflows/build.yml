@@ -182,34 +182,7 @@ jobs:
             VenvStudio-Linux-AppImage/VenvStudio*.AppImage
             VenvStudio-macOS/VenvStudio-macOS
           body: |
-            ## What's New in v1.3.6
-
-            ### ⬇️ Python Downloader
-            - Download standalone Python builds from astral-sh/python-build-standalone
-            - **User Install** — no admin, stored in VenvStudio config dir
-            - **System Install** — Windows (Program Files), Linux (/opt/python), macOS (/usr/local/python)
-            - Real-time download progress with percentage
-            - Downloaded Pythons auto-detected in Python Versions table
-
-            ### 📤 Export (6 Formats)
-            - Available on **3 pages**: Environments, Packages, Settings
-            - requirements.txt, Dockerfile, docker-compose.yml, pyproject.toml, environment.yml (Conda), Clipboard
-            - Auto-detects Python version for all export formats
-
-            ### 📦 PyPI Support
-            - `pip install venvstudio` now works!
-            - `venvstudio` command launches GUI
-            - `venvstudio -V` shows version
-
-            ### 🖥️ PATH Management
-            - Separate **User Default** / **System Default** buttons
-            - Both clean conflicting Python entries from both PATH scopes
-            - Cross-platform admin elevation (UAC / sudo / pkexec)
-
-            ### 🎨 UI Improvements
-            - Environment table: larger font (14px), 38px row height
-            - Desktop shortcuts with real .lnk files and app icons
-            - Environment info bar: path, disk size, backend, last used
+            ## ${{ github.ref_name }}
 
             ### Download
             | Platform | File |

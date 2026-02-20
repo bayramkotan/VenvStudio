@@ -938,6 +938,8 @@ $s.Save()
         self.packages_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.packages_table.setAlternatingRowColors(True)
         self.packages_table.verticalHeader().setVisible(False)
+        self.packages_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.packages_table.customContextMenuRequested.connect(self._pkg_table_context_menu)
         layout.addWidget(self.packages_table)
 
         bottom = QHBoxLayout()
@@ -1176,6 +1178,12 @@ $s.Save()
 
         btn_layout = QHBoxLayout()
         btn_layout.addStretch()
+
+        copy_cmd_btn = QPushButton("📋 Copy Command")
+        copy_cmd_btn.setObjectName("secondary")
+        copy_cmd_btn.setToolTip("Copy the pip install command to clipboard")
+        copy_cmd_btn.clicked.connect(self._copy_install_command)
+        btn_layout.addWidget(copy_cmd_btn)
 
         clear_btn = QPushButton("Clear")
         clear_btn.setObjectName("secondary")
@@ -1676,6 +1684,43 @@ $s.Save()
         self.current_worker.finished.connect(self._on_install_finished)
         self.current_worker.start()
 
+    def _copy_install_command(self):
+        """Copy the pip install command for entered packages."""
+        text = self.manual_input.toPlainText().strip()
+        if not text:
+            self.status_label.setText("⚠️ No packages entered")
+            return
+
+        # Clean the input (same logic as _install_manual)
+        import re
+        noise = {"pip", "pip3", "python", "python3", "-m", "install", "uninstall",
+                 "--upgrade", "--user", "-U", "-r", "--force-reinstall", "--no-cache-dir",
+                 "--break-system-packages", "sudo", "&&", "||", "|", ";"}
+        cleaned = []
+        seen = set()
+        for line in text.splitlines():
+            line = line.strip().replace(",", " ")
+            if not line or line.startswith("#"):
+                continue
+            for token in line.split():
+                t = token.strip()
+                if not t or t.lower() in noise or t.startswith("-") or t.isdigit():
+                    continue
+                if not re.search(r'[a-zA-Z]', t):
+                    continue
+                key = t.lower()
+                if key not in seen:
+                    seen.add(key)
+                    cleaned.append(t)
+
+        if cleaned:
+            cmd = f"pip install {' '.join(cleaned)}"
+            from PySide6.QtWidgets import QApplication
+            QApplication.clipboard().setText(cmd)
+            self.status_label.setText(f"📋 Copied: {cmd}")
+        else:
+            self.status_label.setText("⚠️ No valid package names found")
+
     def _install_manual(self):
         text = self.manual_input.toPlainText().strip()
         if not text:
@@ -2037,6 +2082,51 @@ dependencies:
             self.current_worker.progress.connect(self._on_progress)
             self.current_worker.finished.connect(self._on_install_finished)
             self.current_worker.start()
+
+    def _pkg_table_context_menu(self, position):
+        """Right-click context menu for packages table."""
+        rows = self.packages_table.selectionModel().selectedRows()
+        if not rows:
+            return
+
+        menu = QMenu(self)
+
+        # Gather selected package names
+        selected_pkgs = []
+        for idx in rows:
+            item = self.packages_table.item(idx.row(), 0)
+            ver_item = self.packages_table.item(idx.row(), 1)
+            if item:
+                pkg = item.text().strip()
+                ver = ver_item.text().strip() if ver_item else ""
+                selected_pkgs.append((pkg, ver))
+
+        if len(selected_pkgs) == 1:
+            pkg, ver = selected_pkgs[0]
+            menu.addAction(f"📋 Copy: pip install {pkg}", lambda: self._copy_to_clipboard(f"pip install {pkg}"))
+            menu.addAction(f"📋 Copy: pip install {pkg}=={ver}", lambda: self._copy_to_clipboard(f"pip install {pkg}=={ver}"))
+            menu.addSeparator()
+            menu.addAction(f"📋 Copy package name", lambda: self._copy_to_clipboard(pkg))
+            menu.addAction(f"🌐 Open on PyPI", lambda: self._open_pypi(pkg))
+        else:
+            names = " ".join(p for p, _ in selected_pkgs)
+            menu.addAction(f"📋 Copy: pip install {names}", lambda: self._copy_to_clipboard(f"pip install {names}"))
+            pinned = " ".join(f"{p}=={v}" for p, v in selected_pkgs if v)
+            if pinned:
+                menu.addAction(f"📋 Copy with versions", lambda: self._copy_to_clipboard(f"pip install {pinned}"))
+
+        menu.exec(self.packages_table.viewport().mapToGlobal(position))
+
+    def _copy_to_clipboard(self, text):
+        """Copy text to clipboard."""
+        from PySide6.QtWidgets import QApplication
+        QApplication.clipboard().setText(text)
+        self.status_label.setText(f"📋 Copied: {text}")
+
+    def _open_pypi(self, package_name):
+        """Open package page on PyPI."""
+        import webbrowser
+        webbrowser.open(f"https://pypi.org/project/{package_name}/")
 
     def _filter_installed(self, text: str):
         for row in range(self.packages_table.rowCount()):

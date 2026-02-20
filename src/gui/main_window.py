@@ -142,6 +142,31 @@ class MainWindow(QMainWindow):
         self._apply_theme()
         self._refresh_env_list()
 
+        # Auto-check for updates on startup (if enabled)
+        if self.config.get("check_updates", False):
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(3000, self._auto_check_update)
+
+    def _auto_check_update(self):
+        """Silently check for updates on startup."""
+        try:
+            from src.core.updater import check_for_update
+            result = check_for_update()
+            if result.get("update_available"):
+                reply = QMessageBox.information(
+                    self, "🆕 Update Available",
+                    f"VenvStudio v{result['latest_version']} is available!\n"
+                    f"You have v{result['current_version']}.\n\n"
+                    f"Update: pip install --upgrade venvstudio\n\n"
+                    f"Open download page?",
+                    QMessageBox.Yes | QMessageBox.No
+                )
+                if reply == QMessageBox.Yes:
+                    import webbrowser
+                    webbrowser.open(result["release_url"])
+        except Exception:
+            pass  # Silent fail on startup
+
     def _setup_window(self):
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
         width = self.config.get("window_width", 1100)

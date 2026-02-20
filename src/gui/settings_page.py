@@ -617,6 +617,19 @@ class SettingsPage(QWidget):
         about_text.setTextFormat(Qt.RichText)
         about_layout.addWidget(about_text)
 
+        # Update check section
+        update_row = QHBoxLayout()
+        self.update_status_label = QLabel("")
+        self.update_status_label.setStyleSheet("font-size: 12px;")
+        update_row.addWidget(self.update_status_label, 1)
+
+        check_update_btn = QPushButton("🔄 Check for Updates")
+        check_update_btn.setObjectName("secondary")
+        check_update_btn.clicked.connect(self._check_for_updates)
+        update_row.addWidget(check_update_btn)
+
+        about_layout.addLayout(update_row)
+
         about_group.setLayout(about_layout)
         layout.addWidget(about_group)
 
@@ -1651,6 +1664,47 @@ try {{
         """Show/hide built-in categories table."""
         self.builtin_cats_table.setVisible(visible)
 
+    def _check_for_updates(self):
+        """Check PyPI for new version."""
+        self.update_status_label.setText("🔍 Checking...")
+        self.update_status_label.setStyleSheet("color: #a6adc8; font-size: 12px;")
+
+        # Run in background thread
+        self._update_worker = _UpdateCheckWorker(parent=self)
+        self._update_worker.finished.connect(self._on_update_check_done)
+        self._update_worker.start()
+
+    def _on_update_check_done(self, result):
+        """Handle update check result."""
+        if result.get("error"):
+            self.update_status_label.setText(f"⚠️ {result['error']}")
+            self.update_status_label.setStyleSheet("color: #f9e2af; font-size: 12px;")
+            return
+
+        if result["update_available"]:
+            self.update_status_label.setText(
+                f"🆕 New version available: v{result['latest_version']} (current: v{result['current_version']})"
+            )
+            self.update_status_label.setStyleSheet("color: #a6e3a1; font-size: 12px;")
+
+            reply = QMessageBox.question(
+                self, "🆕 Update Available",
+                f"VenvStudio v{result['latest_version']} is available!\n"
+                f"You have v{result['current_version']}.\n\n"
+                f"Update with:\n  pip install --upgrade venvstudio\n\n"
+                f"Or download from GitHub Releases.\n\n"
+                f"Open download page?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply == QMessageBox.Yes:
+                import webbrowser
+                webbrowser.open(result["release_url"])
+        else:
+            self.update_status_label.setText(
+                f"✅ You're up to date! (v{result['current_version']})"
+            )
+            self.update_status_label.setStyleSheet("color: #a6e3a1; font-size: 12px;")
+
     def _export_settings(self):
         """Export settings to a JSON file."""
         import json
@@ -1987,6 +2041,19 @@ class _DownloadWorker(QThread):
             self.finished.emit(True, str(result))
         except Exception as e:
             self.finished.emit(False, str(e))
+
+
+class _UpdateCheckWorker(QThread):
+    """Background worker for checking PyPI updates."""
+    finished = Signal(dict)
+
+    def run(self):
+        try:
+            from src.core.updater import check_for_update
+            result = check_for_update()
+            self.finished.emit(result)
+        except Exception as e:
+            self.finished.emit({"error": str(e), "update_available": False})
 
 
 class _FetchWorker(QThread):

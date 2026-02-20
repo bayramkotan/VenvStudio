@@ -10,17 +10,11 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/bayramkotan/VenvStudio/releases/latest">
-    <img src="https://img.shields.io/github/v/release/bayramkotan/VenvStudio?style=for-the-badge&color=89b4fa&logo=github" alt="Release">
-  </a>
-  <a href="https://pypi.org/project/venvstudio/">
-    <img src="https://img.shields.io/pypi/v/venvstudio?style=for-the-badge&color=a6e3a1&logo=pypi&logoColor=white" alt="PyPI">
-  </a>
   <a href="https://pypi.org/project/venvstudio/">
     <img src="https://img.shields.io/pypi/pyversions/venvstudio?style=for-the-badge&color=f9e2af&logo=python&logoColor=white" alt="Python">
   </a>
   <a href="LICENSE">
-    <img src="https://img.shields.io/github/license/bayramkotan/VenvStudio?style=for-the-badge&color=cba6f7" alt="License">
+    <img src="https://img.shields.io/badge/License-LGPL--3.0-cba6f7?style=for-the-badge" alt="License">
   </a>
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=for-the-badge" alt="Platform">
 </p>

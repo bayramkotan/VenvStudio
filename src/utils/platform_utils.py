@@ -181,24 +181,44 @@ def open_terminal_at(path: Path, terminal_type: str = "") -> None:
             activate = path / "bin" / "activate"
             bash_cmd = f"cd '{path}' && source '{activate}' && exec bash"
 
-            if terminal_type == "gnome-terminal" and shutil.which("gnome-terminal"):
-                subprocess.Popen(["gnome-terminal", "--", "bash", "-c", bash_cmd])
-            elif terminal_type == "konsole" and shutil.which("konsole"):
-                subprocess.Popen(["konsole", "-e", "bash", "-c", bash_cmd])
-            elif terminal_type == "xterm" and shutil.which("xterm"):
-                subprocess.Popen(["xterm", "-e", f"bash -c \"{bash_cmd}\""])
-            else:
-                # Auto-detect
-                terminals = ["gnome-terminal", "konsole", "xfce4-terminal", "xterm"]
-                for term in terminals:
-                    if shutil.which(term):
-                        if term == "gnome-terminal":
-                            subprocess.Popen([term, "--", "bash", "-c", bash_cmd])
-                        elif term == "konsole":
-                            subprocess.Popen([term, "-e", "bash", "-c", bash_cmd])
-                        else:
-                            subprocess.Popen([term, "-e", f"bash -c \"{bash_cmd}\""])
-                        break
+            def _launch_linux_terminal(term: str) -> bool:
+                """Try to launch a specific terminal. Returns True on success."""
+                if not shutil.which(term):
+                    return False
+                try:
+                    if term == "gnome-terminal":
+                        subprocess.Popen([term, "--", "bash", "-c", bash_cmd])
+                    elif term in ("konsole", "yakuake"):
+                        subprocess.Popen([term, "--noclose", "-e", "bash", "-c", bash_cmd])
+                    elif term in ("xfce4-terminal", "mate-terminal", "lxterminal", "tilix"):
+                        subprocess.Popen([term, "-e", f"bash -c '{bash_cmd}'"])
+                    elif term == "kitty":
+                        subprocess.Popen([term, "bash", "-c", bash_cmd])
+                    elif term == "alacritty":
+                        subprocess.Popen([term, "-e", "bash", "-c", bash_cmd])
+                    elif term == "wezterm":
+                        subprocess.Popen([term, "start", "--", "bash", "-c", bash_cmd])
+                    else:
+                        # xterm, x-terminal-emulator and others
+                        subprocess.Popen([term, "-e", f"bash -c '{bash_cmd}'"])
+                    return True
+                except Exception:
+                    return False
+
+            # Explicit terminal selected (not "default" or empty)
+            if terminal_type and terminal_type not in ("", "default"):
+                if _launch_linux_terminal(terminal_type):
+                    return  # success, done
+
+            # Auto-detect: try common terminals in order of preference
+            auto_order = [
+                "gnome-terminal", "konsole", "xfce4-terminal",
+                "tilix", "mate-terminal", "alacritty", "kitty",
+                "wezterm", "lxterminal", "xterm", "x-terminal-emulator",
+            ]
+            for term in auto_order:
+                if _launch_linux_terminal(term):
+                    break
     except Exception as e:
         print(f"Could not open terminal: {e}")
 

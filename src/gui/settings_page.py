@@ -373,6 +373,16 @@ class SettingsPage(QWidget):
             self.terminal_combo.addItem("WezTerm", "wezterm")
             self.terminal_combo.addItem("xterm", "xterm")
         terminal_row.addWidget(self.terminal_combo, 1)
+
+        # Detect button (Linux only)
+        if platform == "linux":
+            detect_btn = QPushButton("🔍 Detect")
+            detect_btn.setObjectName("secondary")
+            detect_btn.setFixedWidth(90)
+            detect_btn.setToolTip("Scan system for installed terminals and install missing ones")
+            detect_btn.clicked.connect(self._detect_terminals)
+            terminal_row.addWidget(detect_btn)
+
         general_layout.addRow(f"{tr('default_terminal')}", terminal_row)
 
         general_group.setLayout(general_layout)
@@ -666,6 +676,101 @@ class SettingsPage(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addWidget(scroll)
+
+    def _detect_terminals(self):
+        """Scan for installed terminals on Linux, offer to install missing ones via pkexec."""
+        import shutil
+
+        ALL_TERMINALS = [
+            ("GNOME Terminal", "gnome-terminal", "gnome-terminal"),
+            ("Konsole", "konsole", "konsole"),
+            ("Xfce4 Terminal", "xfce4-terminal", "xfce4-terminal"),
+            ("Tilix", "tilix", "tilix"),
+            ("Mate Terminal", "mate-terminal", "mate-terminal"),
+            ("Alacritty", "alacritty", "alacritty"),
+            ("Kitty", "kitty", "kitty"),
+            ("xterm", "xterm", "xterm"),
+        ]
+
+        installed = [(label, data) for label, data, cmd in ALL_TERMINALS if shutil.which(cmd)]
+        not_installed = [(label, data, cmd) for label, data, cmd in ALL_TERMINALS if not shutil.which(cmd)]
+
+        # Update dropdown — show only installed + System Default
+        current_data = self.terminal_combo.currentData()
+        self.terminal_combo.blockSignals(True)
+        self.terminal_combo.clear()
+        self.terminal_combo.addItem("System Default", "default")
+        for label, data in installed:
+            self.terminal_combo.addItem(f"✅ {label}", data)
+        for label, data, _ in not_installed:
+            self.terminal_combo.addItem(f"❌ {label} (not installed)", data)
+        # Restore selection
+        idx = self.terminal_combo.findData(current_data)
+        self.terminal_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self.terminal_combo.blockSignals(False)
+
+        if not installed:
+            msg = "No supported terminals found on your system.\n\n"
+        else:
+            names = ", ".join(l for l, _ in installed)
+            msg = f"Found: {names}\n\n"
+
+        if not not_installed:
+            QMessageBox.information(self, "Terminal Detection", msg + "All supported terminals are installed.")
+            return
+
+        missing_names = "\n".join(f"  • {l}" for l, _, _ in not_installed)
+        reply = QMessageBox.question(
+            self, "Terminal Detection",
+            msg + f"Not installed:\n{missing_names}\n\n"
+            f"Install a terminal? (requires admin password)",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        # Let user pick which one to install
+        items = [l for l, _, _ in not_installed]
+        from PySide6.QtWidgets import QInputDialog
+        choice, ok = QInputDialog.getItem(
+            self, "Install Terminal",
+            "Select a terminal to install:",
+            items, 0, False,
+        )
+        if not ok or not choice:
+            return
+
+        pkg = next((cmd for l, _, cmd in not_installed if l == choice), None)
+        if not pkg:
+            return
+
+        # Try pkexec first, fallback to sudo
+        import subprocess
+        success = False
+        for sudo_cmd in [["pkexec"], ["sudo"]]:
+            try:
+                result = subprocess.run(
+                    sudo_cmd + ["apt-get", "install", "-y", pkg],
+                    capture_output=True, text=True, timeout=120,
+                )
+                if result.returncode == 0:
+                    success = True
+                    break
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                continue
+
+        if success:
+            QMessageBox.information(
+                self, "✅ Installed",
+                f"{choice} installed successfully!\n\nIt has been added to the terminal list.",
+            )
+            self._detect_terminals()  # Refresh dropdown
+        else:
+            QMessageBox.critical(
+                self, "❌ Failed",
+                f"Could not install {choice}.\n\n"
+                f"Try manually:\n  sudo apt-get install {pkg}",
+            )
 
     def _toggle_language(self, enabled):
         """Enable/disable language combo based on checkbox."""

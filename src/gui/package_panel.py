@@ -1245,9 +1245,14 @@ $s.Save()
             if idx >= 0:
                 self.env_selector.setCurrentIndex(idx)
                 restored = True
+            else:
+                # Previously selected env was deleted — clear state safely
+                self._safe_clear_env_state()
 
         if not restored and self.env_selector.count() > 1:
             self.env_selector.setCurrentIndex(1)
+        elif not restored:
+            self.env_selector.setCurrentIndex(0)
 
         self.env_selector.blockSignals(False)
 
@@ -1255,6 +1260,32 @@ $s.Save()
         current_idx = self.env_selector.currentIndex()
         if current_idx > 0:
             self._on_env_selector_changed(current_idx)
+        else:
+            self._safe_clear_env_state()
+
+    def _safe_clear_env_state(self):
+        """Safely clear all env-related state when no env is selected or env was deleted."""
+        # Stop any running loader thread first
+        if hasattr(self, '_pkg_loader') and self._pkg_loader is not None:
+            if self._pkg_loader.isRunning():
+                try:
+                    self._pkg_loader.done.disconnect()
+                except Exception:
+                    pass
+                self._pkg_loader.quit()
+                if not self._pkg_loader.wait(2000):
+                    self._pkg_loader.terminate()
+                    self._pkg_loader.wait(500)
+            self._pkg_loader = None
+
+        self.pip_manager = None
+        self.installed_package_names = set()
+        self.packages_table.setRowCount(0)
+        self.env_pkg_count.setText("")
+        self.python_version_label.setText("")
+        self.pkg_count_label.setText("0 packages")
+        self.status_label.setText("Select an environment to manage packages")
+        self._hide_env_info_bar()
 
     def _on_env_selector_changed(self, index):
         """Handle env dropdown change."""
@@ -1271,11 +1302,7 @@ $s.Save()
             self._update_env_info_bar(Path(path_str), backend)
             self._async_refresh_packages()
         else:
-            self.pip_manager = None
-            self.packages_table.setRowCount(0)
-            self.env_pkg_count.setText("")
-            self.python_version_label.setText("")
-            self._hide_env_info_bar()
+            self._safe_clear_env_state()
 
     def _update_env_info_bar(self, venv_path, backend="pip"):
         """Update all info labels for the selected environment."""
@@ -1376,8 +1403,15 @@ $s.Save()
         # Cancel / wait for any previous loader to avoid QThread crash
         if hasattr(self, '_pkg_loader') and self._pkg_loader is not None:
             if self._pkg_loader.isRunning():
-                self._pkg_loader.done.disconnect()
-                self._pkg_loader.wait(2000)  # wait up to 2s
+                try:
+                    self._pkg_loader.done.disconnect()
+                except Exception:
+                    pass
+                self._pkg_loader.quit()
+                if not self._pkg_loader.wait(3000):
+                    self._pkg_loader.terminate()
+                    self._pkg_loader.wait(1000)
+            self._pkg_loader = None
 
         # Show loading state immediately
         self.packages_table.setRowCount(1)
@@ -1387,6 +1421,9 @@ $s.Save()
         self.packages_table.setItem(0, 1, QTableWidgetItem(""))
         self.pkg_count_label.setText("Loading...")
         self.env_pkg_count.setText("Loading packages...")
+
+        # Capture pip_manager reference (env may change before thread finishes)
+        pip_mgr_snapshot = self.pip_manager
 
         # Use QThread for background loading
         class PkgLoader(QThread):
@@ -1401,7 +1438,7 @@ $s.Save()
                 except Exception:
                     self.done.emit([])
 
-        self._pkg_loader = PkgLoader(self.pip_manager, parent=self)
+        self._pkg_loader = PkgLoader(pip_mgr_snapshot, parent=self)
         self._pkg_loader.done.connect(self._on_packages_loaded)
         self._pkg_loader.start()
 

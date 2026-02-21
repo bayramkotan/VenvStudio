@@ -861,7 +861,9 @@ class MainWindow(QMainWindow):
     def _on_font_changed(self, family, size):
         """Handle font change from settings page."""
         from PySide6.QtWidgets import QApplication
-        font = QFont(family, size)
+        if not family or size <= 0:
+            return
+        font = QFont(family, max(8, size))  # minimum 8pt, never 0 or negative
         QApplication.instance().setFont(font)
 
     def _on_settings_saved(self):

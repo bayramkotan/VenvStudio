@@ -40,6 +40,15 @@ class SidebarButton(QPushButton):
         self.setFixedHeight(44)
         self.setCursor(Qt.PointingHandCursor)
 
+        # Linux: use Noto Color Emoji for colored, properly-sized emoji icons
+        import platform as _platform
+        if _platform.system().lower() == "linux":
+            from PySide6.QtGui import QFont as _QFont
+            font = self.font()
+            font.setFamily("Noto Color Emoji")
+            font.setPixelSize(20)
+            self.setFont(font)
+
 
 class CloneWorker(QThread):
     """Worker thread for cloning environments with progress."""
@@ -140,6 +149,7 @@ class MainWindow(QMainWindow):
         self._setup_menubar()
         self._setup_ui()
         self._apply_theme()
+        self._apply_linux_emoji_fix()
         self._refresh_env_list()
 
         # Auto-check for updates on startup (if enabled)
@@ -863,8 +873,49 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QApplication
         if not family or size <= 0:
             return
-        font = QFont(family, max(8, size))  # minimum 8pt, never 0 or negative
+        font = QFont(family, max(8, size))
         QApplication.instance().setFont(font)
+
+    def _apply_linux_emoji_fix(self):
+        """On Linux, install Noto Color Emoji as fallback and resize emoji in buttons."""
+        import platform as _platform
+        if _platform.system().lower() != "linux":
+            return
+
+        import shutil, subprocess
+        # Check if Noto Color Emoji is installed, offer to install if missing
+        try:
+            result = subprocess.run(
+                ["fc-list", ":family=Noto Color Emoji"],
+                capture_output=True, text=True, timeout=5
+            )
+            emoji_available = bool(result.stdout.strip())
+        except Exception:
+            emoji_available = False
+
+        if not emoji_available:
+            from PySide6.QtWidgets import QMessageBox
+            reply = QMessageBox.question(
+                self, "Emoji Font Missing",
+                "Noto Color Emoji font is not installed.\n"
+                "Without it, icons in buttons will appear grey/black.\n\n"
+                "Install now? (requires admin password)",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply == QMessageBox.Yes:
+                for sudo in [["pkexec"], ["sudo"]]:
+                    try:
+                        r = subprocess.run(
+                            sudo + ["apt-get", "install", "-y", "fonts-noto-color-emoji"],
+                            capture_output=True, text=True, timeout=120
+                        )
+                        if r.returncode == 0:
+                            # Rebuild font cache
+                            subprocess.run(["fc-cache", "-f"], timeout=30)
+                            emoji_available = True
+                            break
+                    except (FileNotFoundError, subprocess.TimeoutExpired):
+                        continue
 
     def _on_settings_saved(self):
         """Handle settings saved - refresh env list with potentially new base dir."""

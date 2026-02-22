@@ -46,7 +46,7 @@ class SidebarButton(QPushButton):
             from PySide6.QtGui import QFont as _QFont
             font = self.font()
             font.setFamily("Noto Color Emoji")
-            font.setPixelSize(20)
+            font.setPixelSize(28)  # default; overridden by config in _apply_linux_emoji_fix
             self.setFont(font)
 
 
@@ -881,6 +881,16 @@ class MainWindow(QMainWindow):
         import platform as _platform
         if _platform.system().lower() != "linux":
             return
+
+        # Apply saved emoji size to all sidebar buttons
+        emoji_size = self.config.get("emoji_icon_size", 28)
+        for btn in self.findChildren(QPushButton):
+            if btn.parent() and getattr(btn.parent(), "objectName", lambda: "")() == "sidebar":
+                font = btn.font()
+                font.setFamily("Noto Color Emoji")
+                font.setPixelSize(emoji_size)
+                btn.setFont(font)
+
 
         import shutil, subprocess
         # Check if Noto Color Emoji is installed, offer to install if missing

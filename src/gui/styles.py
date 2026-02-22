@@ -13,7 +13,7 @@ QWidget {
     background-color: #1e1e2e;
     color: #cdd6f4;
     font-family: "Segoe UI", "SF Pro Display", "Ubuntu", "Noto Color Emoji", sans-serif;
-    font-size: 16px;
+    font-size: 13px;
 }
 
 /* Sidebar */
@@ -352,7 +352,7 @@ QWidget {
     background-color: #eff1f5;
     color: #4c4f69;
     font-family: "Segoe UI", "SF Pro Display", "Ubuntu", "Noto Color Emoji", sans-serif;
-    font-size: 16px;
+    font-size: 13px;
 }
 
 #sidebar {

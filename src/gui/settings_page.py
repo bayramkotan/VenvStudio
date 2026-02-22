@@ -677,6 +677,141 @@ class SettingsPage(QWidget):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addWidget(scroll)
 
+    def _set_python_default_unix(self, version, python_path, scope):
+        """Set default Python on Linux/macOS using update-alternatives or symlinks."""
+        import subprocess, shutil
+
+        platform = get_platform()
+        ver_short = ".".join(version.split(".")[:2])  # e.g. "3.12"
+        ver_nodot = ver_short.replace(".", "")          # e.g. "312"
+
+        if platform == "linux":
+            # Use update-alternatives if available
+            if shutil.which("update-alternatives"):
+                priority = 100
+
+                reply = QMessageBox.question(
+                    self, f"Set Default Python",
+                    f"Register Python {version} as system default?\n\n"
+                    f"  python3   → {python_path}\n"
+                    f"  python3.{ver_short.split('.')[-1]} → {python_path}\n\n"
+                    f"Uses update-alternatives (requires admin password).",
+                    QMessageBox.Yes | QMessageBox.No,
+                )
+                if reply != QMessageBox.Yes:
+                    return
+
+                cmds = [
+                    ["update-alternatives", "--install",
+                     "/usr/bin/python3", "python3", python_path, str(priority)],
+                    ["update-alternatives", "--install",
+                     "/usr/bin/python", "python", python_path, str(priority)],
+                    ["update-alternatives", "--set", "python3", python_path],
+                    ["update-alternatives", "--set", "python", python_path],
+                ]
+
+                success = True
+                for cmd in cmds:
+                    for sudo in [["pkexec"], ["sudo"]]:
+                        try:
+                            r = subprocess.run(
+                                sudo + cmd,
+                                capture_output=True, text=True, timeout=30
+                            )
+                            if r.returncode == 0:
+                                break
+                        except (FileNotFoundError, subprocess.TimeoutExpired):
+                            continue
+                    else:
+                        success = False
+                        break
+
+                if success:
+                    QMessageBox.information(
+                        self, "✅ Success",
+                        f"Python {version} set as system default!\n\n"
+                        f"Verify with:  python3 --version"
+                    )
+                else:
+                    QMessageBox.critical(
+                        self, "❌ Failed",
+                        f"Could not set default Python.\n\n"
+                        f"Try manually:\n"
+                        f"  sudo update-alternatives --install /usr/bin/python3 python3 {python_path} 100\n"
+                        f"  sudo update-alternatives --set python3 {python_path}"
+                    )
+            else:
+                # No update-alternatives — create symlink in /usr/local/bin
+                reply = QMessageBox.question(
+                    self, "Set Default Python",
+                    f"Create symlinks for Python {version}?\n\n"
+                    f"  /usr/local/bin/python3  → {python_path}\n"
+                    f"  /usr/local/bin/python   → {python_path}\n\n"
+                    f"Requires admin password.",
+                    QMessageBox.Yes | QMessageBox.No,
+                )
+                if reply != QMessageBox.Yes:
+                    return
+
+                script = (
+                    f"ln -sf '{python_path}' /usr/local/bin/python3 && "
+                    f"ln -sf '{python_path}' /usr/local/bin/python"
+                )
+                success = False
+                for sudo in [["pkexec", "bash", "-c"], ["sudo", "bash", "-c"]]:
+                    try:
+                        r = subprocess.run(sudo + [script], capture_output=True, text=True, timeout=30)
+                        if r.returncode == 0:
+                            success = True
+                            break
+                    except (FileNotFoundError, subprocess.TimeoutExpired):
+                        continue
+
+                if success:
+                    QMessageBox.information(
+                        self, "✅ Success",
+                        f"Symlinks created for Python {version}.\n\nVerify: python3 --version"
+                    )
+                else:
+                    QMessageBox.critical(
+                        self, "❌ Failed",
+                        f"Could not create symlinks.\n\nTry manually:\n"
+                        f"  sudo ln -sf {python_path} /usr/local/bin/python3"
+                    )
+
+        elif platform == "macos":
+            # macOS: symlink in /usr/local/bin
+            reply = QMessageBox.question(
+                self, "Set Default Python",
+                f"Create symlinks for Python {version}?\n\n"
+                f"  /usr/local/bin/python3  → {python_path}\n"
+                f"  /usr/local/bin/python   → {python_path}\n\n"
+                f"Requires admin password.",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+
+            script = (
+                f"ln -sf '{python_path}' /usr/local/bin/python3 && "
+                f"ln -sf '{python_path}' /usr/local/bin/python"
+            )
+            try:
+                r = subprocess.run(
+                    ["osascript", "-e",
+                     f'do shell script "{script}" with administrator privileges'],
+                    capture_output=True, text=True, timeout=60
+                )
+                if r.returncode == 0:
+                    QMessageBox.information(
+                        self, "✅ Success",
+                        f"Symlinks created for Python {version}.\n\nVerify: python3 --version"
+                    )
+                else:
+                    QMessageBox.critical(self, "❌ Failed", f"Could not create symlinks:\n{r.stderr}")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", str(e))
+
     def _detect_terminals(self):
         """Scan for installed terminals on Linux, offer to install missing ones via pkexec."""
         import shutil
@@ -1083,14 +1218,6 @@ class SettingsPage(QWidget):
         import os, subprocess, tempfile
         from src.utils.platform_utils import get_platform, subprocess_args
 
-        if get_platform() != "windows":
-            QMessageBox.information(
-                self, "Info",
-                "This feature is currently available on Windows only.\n"
-                "On Linux/macOS, use your shell config or update-alternatives."
-            )
-            return
-
         rows = self.python_table.selectionModel().selectedRows()
         if not rows:
             QMessageBox.information(self, "Info", "Select a Python version first.")
@@ -1099,6 +1226,14 @@ class SettingsPage(QWidget):
         row = rows[0].row()
         version = self.python_table.item(row, 0).text()
         python_path = self.python_table.item(row, 1).text()
+
+        platform = get_platform()
+
+        # ── Linux / macOS ──
+        if platform != "windows":
+            self._set_python_default_unix(version, python_path, scope)
+            return
+
         python_dir = os.path.normpath(os.path.dirname(python_path))
         scripts_dir = os.path.join(python_dir, "Scripts")
 

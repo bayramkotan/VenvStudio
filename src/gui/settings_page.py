@@ -1548,28 +1548,21 @@ try {{
 
     def _add_python_to_path(self):
         """Add a Python installation to system PATH automatically."""
-        if get_platform() != "windows":
-            QMessageBox.information(
-                self, "Add Python to PATH",
-                "On Linux/macOS, add to ~/.bashrc or ~/.zshrc:\n\n"
-                '  export PATH="$HOME/.local/bin:$PATH"\n\n'
-                "Then run: source ~/.bashrc"
-            )
-            return
+        import subprocess
 
-        # Collect all known Python paths
+        platform = get_platform()
+
+        # Collect all known Python paths from table
         python_paths = []
         for row in range(self.python_table.rowCount()):
             path_item = self.python_table.item(row, 1)
             ver_item = self.python_table.item(row, 0)
             if path_item and ver_item:
                 exe_path = path_item.text()
-                folder = os.path.dirname(exe_path)
-                scripts = os.path.join(folder, "Scripts")
                 python_paths.append({
                     "version": ver_item.text(),
-                    "folder": folder,
-                    "scripts": scripts,
+                    "exe": exe_path,
+                    "folder": os.path.dirname(exe_path),
                 })
 
         if not python_paths:
@@ -1580,61 +1573,126 @@ try {{
         items = [f"Python {p['version']}  —  {p['folder']}" for p in python_paths]
         item, ok = QInputDialog.getItem(
             self, "Add Python to PATH",
-            "Select which Python to add to your User PATH:",
+            "Select which Python to add to PATH:",
             items, 0, False,
         )
         if not ok or not item:
             return
 
-        idx = items.index(item)
-        selected = python_paths[idx]
-
-        # Confirm
-        reply = QMessageBox.question(
-            self, "Confirm",
-            f"Add these folders to your User PATH?\n\n"
-            f"  {selected['folder']}\n"
-            f"  {selected['scripts']}\n\n"
-            f"This modifies your user environment variables.\n"
-            f"A restart of your terminal/apps may be needed.",
-            QMessageBox.Yes | QMessageBox.No,
-        )
-        if reply != QMessageBox.Yes:
-            return
-
-        # Add to User PATH on Windows via PowerShell
-        import subprocess
+        selected = python_paths[items.index(item)]
         folder = selected['folder']
-        scripts = selected['scripts']
-        ps_cmd = (
-            f'$userPath = [Environment]::GetEnvironmentVariable("Path", "User"); '
-            f'$newPaths = @("{folder}", "{scripts}"); '
-            f'foreach ($p in $newPaths) {{ '
-            f'  if ($userPath -notlike "*$p*") {{ '
-            f'    $userPath = "$userPath;$p" '
-            f'  }} '
-            f'}}; '
-            f'[Environment]::SetEnvironmentVariable("Path", $userPath, "User")'
-        )
-        try:
-            result = subprocess.run(
-                ["powershell", "-Command", ps_cmd],
-                **subprocess_args(capture_output=True, text=True, timeout=15)
+        version = selected['version']
+
+        if platform == "windows":
+            scripts = os.path.join(folder, "Scripts")
+            reply = QMessageBox.question(
+                self, "Confirm",
+                f"Add to User PATH?\n\n  {folder}\n  {scripts}\n\n"
+                f"A terminal restart may be needed.",
+                QMessageBox.Yes | QMessageBox.No,
             )
-            if result.returncode == 0:
+            if reply != QMessageBox.Yes:
+                return
+
+            ps_cmd = (
+                f'$userPath = [Environment]::GetEnvironmentVariable("Path", "User"); '
+                f'$newPaths = @("{folder}", "{scripts}"); '
+                f'foreach ($p in $newPaths) {{ '
+                f'  if ($userPath -notlike "*$p*") {{ '
+                f'    $userPath = "$userPath;$p" '
+                f'  }} '
+                f'}}; '
+                f'[Environment]::SetEnvironmentVariable("Path", $userPath, "User")'
+            )
+            try:
+                result = subprocess.run(
+                    ["powershell", "-Command", ps_cmd],
+                    **subprocess_args(capture_output=True, text=True, timeout=15)
+                )
+                if result.returncode == 0:
+                    QMessageBox.information(
+                        self, "✅ Success",
+                        f"Python {version} added to User PATH!\n\n"
+                        f"  {folder}\n  {scripts}\n\n"
+                        f"Restart your terminal for the change to take effect."
+                    )
+                else:
+                    QMessageBox.critical(self, "Error", f"Failed to update PATH:\n{result.stderr}")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to run PowerShell:\n{e}")
+
+        else:
+            # Linux / macOS — write export line to shell config files
+            export_line = f'export PATH="{folder}:$PATH"'
+
+            # Detect shell config files
+            home = Path.home()
+            candidates = [home / ".bashrc", home / ".bash_profile", home / ".zshrc", home / ".profile"]
+            existing = [str(p) for p in candidates if p.exists()]
+
+            if not existing:
+                existing = [str(home / ".bashrc")]  # fallback: create .bashrc
+
+            # Let user pick which file
+            file_choice, ok = QInputDialog.getItem(
+                self, "Select Shell Config",
+                f"Add  {export_line}  to which file?",
+                existing, 0, False,
+            )
+            if not ok or not file_choice:
+                return
+
+            reply = QMessageBox.question(
+                self, "Confirm",
+                f"Append to {file_choice}:\n\n  {export_line}\n\n"
+                f"Run  source {file_choice}  or restart terminal after.",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+
+            try:
+                config_file = Path(file_choice)
+                existing_text = config_file.read_text(encoding="utf-8") if config_file.exists() else ""
+
+                # Check if already present
+                if folder in existing_text:
+                    QMessageBox.information(
+                        self, "Already in PATH",
+                        f"{folder} is already in {file_choice}.\nNo changes made."
+                    )
+                    return
+
+                with open(config_file, "a", encoding="utf-8") as f:
+                    f.write(f"\n# Added by VenvStudio\n{export_line}\n")
+
                 QMessageBox.information(
-                    self, "Success",
-                    f"Python {selected['version']} added to User PATH!\n\n"
-                    f"  {folder}\n  {scripts}\n\n"
-                    f"Restart your terminal or apps for the change to take effect."
+                    self, "✅ Success",
+                    f"Added to {file_choice}:\n\n  {export_line}\n\n"
+                    f"Run the following to apply now:\n"
+                    f"  source {file_choice}"
                 )
-            else:
-                QMessageBox.critical(
-                    self, "Error",
-                    f"Failed to update PATH:\n{result.stderr}"
-                )
-        except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to run PowerShell:\n{e}")
+            except PermissionError:
+                # Try pkexec as fallback
+                import tempfile
+                script = f'#!/bin/bash\necho "\n# Added by VenvStudio\n{export_line}" >> "{file_choice}"\n'
+                with tempfile.NamedTemporaryFile("w", suffix=".sh", delete=False) as tmp:
+                    tmp.write(script)
+                    tmp_path = tmp.name
+                os.chmod(tmp_path, 0o755)
+                try:
+                    result = subprocess.run(["pkexec", "bash", tmp_path], timeout=30)
+                    if result.returncode == 0:
+                        QMessageBox.information(self, "✅ Success", f"Added to {file_choice} (admin).\n\nRun: source {file_choice}")
+                    else:
+                        QMessageBox.critical(self, "Error", f"pkexec failed. Try manually:\n  {export_line} >> {file_choice}")
+                finally:
+                    try:
+                        os.unlink(tmp_path)
+                    except Exception:
+                        pass
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to write to {file_choice}:\n{e}")
 
     def _toggle_vs_cli(self):
         """Copy vs.bat/vs.py to venv base dir and add that dir to User PATH."""

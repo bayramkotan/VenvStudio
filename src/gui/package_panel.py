@@ -85,9 +85,19 @@ class CommandHintDialog(QDialog):
         tip.setStyleSheet("font-size: 11px; color: #6c7086;")
         layout.addWidget(tip)
 
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok)
-        buttons.accepted.connect(self.accept)
-        layout.addWidget(buttons)
+        btn_layout = QHBoxLayout()
+        copy_btn = QPushButton("📋 Copy Command")
+        copy_btn.setObjectName("secondary")
+        copy_btn.clicked.connect(lambda: (
+            QApplication.clipboard().setText(command),
+            copy_btn.setText("✅ Copied!"),
+        ))
+        btn_layout.addWidget(copy_btn)
+        btn_layout.addStretch()
+        ok_btn = QDialogButtonBox(QDialogButtonBox.Ok)
+        ok_btn.accepted.connect(self.accept)
+        btn_layout.addWidget(ok_btn)
+        layout.addLayout(btn_layout)
 
 
 class PackagePanel(QWidget):

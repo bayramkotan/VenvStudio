@@ -1189,7 +1189,7 @@ class SettingsPage(QWidget):
         QMessageBox.information(self, "Success", f"Added Python {version}\n{filepath}")
 
     def _remove_custom_python(self):
-        """Remove a custom Python path."""
+        """Remove a custom or downloaded Python path."""
         rows = self.python_table.selectionModel().selectedRows()
         if not rows:
             QMessageBox.information(self, "Info", "Select a Python version to remove.")
@@ -1197,11 +1197,39 @@ class SettingsPage(QWidget):
 
         row = rows[0].row()
         source = self.python_table.item(row, 2).text()
-        if source != "Custom":
-            QMessageBox.information(self, "Info", "Only custom Python paths can be removed.\nSystem-detected paths are managed automatically.")
+        version = self.python_table.item(row, 0).text()
+        path = self.python_table.item(row, 1).text()
+
+        if source == "System":
+            QMessageBox.information(
+                self, "Info",
+                "System-detected Python installations cannot be removed here.\n"
+                "Use your system package manager to uninstall them."
+            )
             return
 
-        path = self.python_table.item(row, 1).text()
+        if source == "Downloaded":
+            reply = QMessageBox.question(
+                self, "Remove Downloaded Python",
+                f"Permanently delete Python {version}?\n\n"
+                f"  {path}\n\n"
+                f"This will remove the downloaded files from disk.",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+            try:
+                from src.core.python_downloader import get_installed_pythons, remove_python
+                for py in get_installed_pythons():
+                    if py["version"] == version or os.path.normpath(str(py.get("python_exe", ""))) == os.path.normpath(path):
+                        remove_python(py["path"])
+                        break
+                self._scan_pythons()
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to remove Python {version}:\n{e}")
+            return
+
+        # source == "Custom"
         custom_pythons = self.config.get("custom_pythons", [])
         custom_pythons = [e for e in custom_pythons if e.get("path") != path]
         self.config.set("custom_pythons", custom_pythons)

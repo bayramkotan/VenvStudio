@@ -193,28 +193,59 @@ def open_terminal_at(path: Path, terminal_type: str = "") -> None:
 
         else:  # linux
             activate = path / "bin" / "activate"
-            bash_cmd = f"cd '{path}' && source '{activate}' && exec bash"
+            # Use double quotes inside bash_cmd to avoid single-quote path issues
+            bash_cmd = f'cd "{path}" && source "{activate}" && exec bash'
 
-            if terminal_type == "gnome-terminal" and shutil.which("gnome-terminal"):
-                subprocess.Popen(["gnome-terminal", "--", "bash", "-c", bash_cmd])
-            elif terminal_type == "konsole" and shutil.which("konsole"):
-                subprocess.Popen(["konsole", "-e", "bash", "-c", bash_cmd])
-            elif terminal_type == "xterm" and shutil.which("xterm"):
-                subprocess.Popen(["xterm", "-e", f"bash -c \"{bash_cmd}\""])
+            # Ensure DISPLAY and DBUS are passed to subprocess (needed when launched via python main.py)
+            import os as _os
+            env = _os.environ.copy()
+            if "DISPLAY" not in env:
+                env["DISPLAY"] = ":0"
+
+            def _popen(cmd):
+                subprocess.Popen(cmd, env=env, start_new_session=True)
+
+            # Terminal preference list with correct argument styles
+            terminal_args = {
+                "gnome-terminal":  lambda: ["gnome-terminal", "--", "bash", "-c", bash_cmd],
+                "konsole":         lambda: ["konsole", "-e", "bash", "-c", bash_cmd],
+                "xfce4-terminal":  lambda: ["xfce4-terminal", "-e", f"bash -c {bash_cmd!r}"],
+                "tilix":           lambda: ["tilix", "-e", "bash", "-c", bash_cmd],
+                "mate-terminal":   lambda: ["mate-terminal", "-e", f"bash -c {bash_cmd!r}"],
+                "alacritty":       lambda: ["alacritty", "-e", "bash", "-c", bash_cmd],
+                "kitty":           lambda: ["kitty", "bash", "-c", bash_cmd],
+                "wezterm":         lambda: ["wezterm", "start", "bash", "-c", bash_cmd],
+                "lxterminal":      lambda: ["lxterminal", "-e", f"bash -c {bash_cmd!r}"],
+                "xterm":           lambda: ["xterm", "-e", f"bash -c {bash_cmd!r}"],
+            }
+
+            # If specific terminal requested
+            if terminal_type and terminal_type in terminal_args and shutil.which(terminal_type):
+                _popen(terminal_args[terminal_type]())
             else:
-                # Auto-detect
-                terminals = ["gnome-terminal", "konsole", "xfce4-terminal", "xterm"]
-                for term in terminals:
+                # Auto-detect: try each in order
+                launched = False
+                for term, args_fn in terminal_args.items():
                     if shutil.which(term):
-                        if term == "gnome-terminal":
-                            subprocess.Popen([term, "--", "bash", "-c", bash_cmd])
-                        elif term == "konsole":
-                            subprocess.Popen([term, "-e", "bash", "-c", bash_cmd])
-                        else:
-                            subprocess.Popen([term, "-e", f"bash -c \"{bash_cmd}\""])
-                        break
+                        try:
+                            _popen(args_fn())
+                            launched = True
+                            break
+                        except Exception:
+                            continue
+                if not launched:
+                    # Last resort: xdg-terminal or x-terminal-emulator
+                    for fallback in ["x-terminal-emulator", "xdg-terminal"]:
+                        if shutil.which(fallback):
+                            try:
+                                _popen([fallback, "-e", f"bash -c {bash_cmd!r}"])
+                                break
+                            except Exception:
+                                pass
     except Exception as e:
+        import traceback
         print(f"Could not open terminal: {e}")
+        traceback.print_exc()
 
 
 def get_venv_size(venv_path: Path) -> str:

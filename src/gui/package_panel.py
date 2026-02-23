@@ -1260,7 +1260,6 @@ $s.Save()
         layout.addWidget(self.manual_input)
 
         btn_layout = QHBoxLayout()
-        btn_layout.addStretch()
 
         copy_cmd_btn = QPushButton("📋 Copy Command")
         copy_cmd_btn.setObjectName("secondary")
@@ -1273,7 +1272,9 @@ $s.Save()
         clear_btn.clicked.connect(self.manual_input.clear)
         btn_layout.addWidget(clear_btn)
 
-        install_btn = QPushButton("Install Packages")
+        btn_layout.addStretch()
+
+        install_btn = QPushButton("⚡ Install Packages")
         install_btn.setObjectName("success")
         install_btn.clicked.connect(self._install_manual)
         btn_layout.addWidget(install_btn)
@@ -1288,12 +1289,12 @@ $s.Save()
 
         # Copy log button
         copy_log_row = QHBoxLayout()
-        copy_log_row.addStretch()
         self._copy_log_btn = QPushButton("📋 Copy Log")
         self._copy_log_btn.setObjectName("secondary")
         self._copy_log_btn.setFixedHeight(26)
         self._copy_log_btn.clicked.connect(self._copy_output_log)
         copy_log_row.addWidget(self._copy_log_btn)
+        copy_log_row.addStretch()
         layout.addLayout(copy_log_row)
 
         return widget

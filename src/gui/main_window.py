@@ -143,6 +143,7 @@ class MainWindow(QMainWindow):
         self._setup_ui()
         self._apply_theme()
         self._apply_linux_emoji_fix()
+        self._check_linux_venv_module()
         self._refresh_env_list()
 
         # Auto-check for updates on startup (if enabled)
@@ -870,6 +871,67 @@ class MainWindow(QMainWindow):
             return
         font = QFont(family, max(8, size))
         QApplication.instance().setFont(font)
+
+    def _check_linux_venv_module(self):
+        """On Linux, check if python3-venv is installed. If not, offer to install it."""
+        import platform as _platform
+        if _platform.system().lower() != "linux":
+            return
+
+        import subprocess
+        # Check if venv module works
+        try:
+            result = subprocess.run(
+                ["python3", "-m", "venv", "--help"],
+                capture_output=True, text=True, timeout=5
+            )
+            if result.returncode == 0:
+                return  # Already installed
+        except Exception:
+            pass
+
+        # venv not available — ask user to install
+        from PySide6.QtWidgets import QMessageBox
+        reply = QMessageBox.question(
+            self, "python3-venv Missing",
+            "The 'python3-venv' package is required to create virtual environments\n"
+            "but it is not installed on your system.\n\n"
+            "Install it now? (requires admin password)",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        # Try pkexec first, then sudo
+        import shutil
+        for sudo_cmd in [["pkexec"], ["sudo"]]:
+            exe = sudo_cmd[0]
+            if not shutil.which(exe):
+                continue
+            try:
+                r = subprocess.run(
+                    sudo_cmd + ["apt-get", "install", "-y", "python3-venv"],
+                    timeout=120
+                )
+                if r.returncode == 0:
+                    QMessageBox.information(
+                        self, "Success",
+                        "python3-venv installed successfully!\n"
+                        "You can now create virtual environments."
+                    )
+                    return
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                continue
+
+        QMessageBox.warning(
+            self, "Installation Failed",
+            "Could not install python3-venv automatically.\n\n"
+            "Please run manually:\n"
+            "  sudo apt-get install python3-venv\n\n"
+            "Or for other distributions:\n"
+            "  sudo dnf install python3-venv   (Fedora)\n"
+            "  sudo pacman -S python-virtualenv  (Arch)"
+        )
 
     def _apply_linux_emoji_fix(self):
         """On Linux, check and offer to install Noto Color Emoji font."""

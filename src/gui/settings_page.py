@@ -139,25 +139,6 @@ class SettingsPage(QWidget):
         size_row.addWidget(self.font_size_spin, 1)
         appearance_layout.addRow(f"{tr('font_size')}", size_row)
 
-        # Emoji icon size (Linux only) — protected by checkbox
-        from src.utils.platform_utils import get_platform as _gp
-        if _gp() == "linux":
-            emoji_row = QHBoxLayout()
-            self.emoji_size_cb = QCheckBox()
-            self.emoji_size_cb.setChecked(False)
-            self.emoji_size_cb.toggled.connect(lambda on: self.emoji_size_spin.setEnabled(on))
-            emoji_row.addWidget(self.emoji_size_cb)
-            self.emoji_size_spin = QSpinBox()
-            self.emoji_size_spin.setRange(12, 48)
-            self.emoji_size_spin.setValue(28)
-            self.emoji_size_spin.setSuffix(" px")
-            self.emoji_size_spin.setEnabled(False)
-            emoji_row.addWidget(self.emoji_size_spin, 1)
-            appearance_layout.addRow("🎨 Emoji Icon Size", emoji_row)
-        else:
-            self.emoji_size_cb = None
-            self.emoji_size_spin = None
-
         # UI Scale info
         scale_label = QLabel("UI scaling follows your system display settings.")
         scale_label.setStyleSheet("color: #6c7086; font-size: 11px;")
@@ -831,21 +812,6 @@ class SettingsPage(QWidget):
             except Exception as e:
                 QMessageBox.critical(self, "Error", str(e))
 
-    def _apply_emoji_size(self, size: int):
-        """Apply emoji icon size to all sidebar buttons immediately (Linux only)."""
-        from PySide6.QtWidgets import QApplication
-        from PySide6.QtGui import QFont
-        main_win = QApplication.instance().activeWindow()
-        if main_win is None:
-            return
-        # Find all SidebarButtons in the main window and update their font
-        for btn in main_win.findChildren(QPushButton):
-            if btn.parent() and getattr(btn.parent(), "objectName", lambda: "")() == "sidebar":
-                font = btn.font()
-                font.setFamily("Noto Color Emoji")
-                font.setPixelSize(size)
-                btn.setFont(font)
-
     def _detect_terminals(self):
         """Scan for installed terminals on Linux, offer to install missing ones via pkexec."""
         import shutil
@@ -983,19 +949,6 @@ class SettingsPage(QWidget):
             self.font_size_cb.setChecked(True)
             self.font_size_spin.setEnabled(True)
             self.font_size_spin.setValue(font_size)
-
-        # Emoji icon size (Linux only)
-        from src.utils.platform_utils import get_platform as _gp2
-        if _gp2() == "linux" and self.emoji_size_spin is not None:
-            emoji_size = self.config.get("emoji_icon_size", 28)
-            if emoji_size and emoji_size != 28:
-                self.emoji_size_cb.setChecked(True)
-                self.emoji_size_spin.setEnabled(True)
-                self.emoji_size_spin.setValue(emoji_size)
-            else:
-                self.emoji_size_cb.setChecked(False)
-                self.emoji_size_spin.setEnabled(False)
-                self.emoji_size_spin.setValue(28)
 
         # Language
         lang = self.config.get("language", "en")
@@ -2336,18 +2289,6 @@ try {{
         else:
             self.config.set("default_terminal", "")
 
-        # Emoji icon size (Linux only)
-        from src.utils.platform_utils import get_platform as _gp3
-        if _gp3() == "linux" and self.emoji_size_spin is not None:
-            if self.emoji_size_cb.isChecked():
-                emoji_size = self.emoji_size_spin.value()
-                self.config.set("emoji_icon_size", emoji_size)
-                # Apply immediately to main window sidebar buttons
-                self.settings_saved.emit()
-                self._apply_emoji_size(emoji_size)
-            else:
-                self.config.set("emoji_icon_size", 28)
-                self._apply_emoji_size(28)
 
         # Save custom categories
         self._save_custom_categories()

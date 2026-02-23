@@ -213,7 +213,7 @@ jobs:
       - name: Build package
         run: |
           mv build.py _pyinstaller_build.py.bak
-          pyproject-build
+          python -m build
           mv _pyinstaller_build.py.bak build.py
 
       - name: Publish to PyPI

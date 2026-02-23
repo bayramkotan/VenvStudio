@@ -102,6 +102,78 @@ class PackagePanel(QWidget):
         self._catalog_initial_state = {}  # Track original checkbox states
         self._setup_ui()
 
+    # ── Theme color palettes ──
+    DARK = {
+        "bar_bg":      "#181825",
+        "bar_border":  "#313244",
+        "combo_bg":    "#1e1e2e",
+        "combo_fg":    "#cdd6f4",
+        "combo_border":"#89b4fa",
+        "py_ver":      "#a6e3a1",
+        "muted":       "#a6adc8",
+        "info":        "#6c7086",
+        "sep":         "#45475a",
+        "installed_bg":"#313244",
+        "installed_fg":"#a6e3a1",
+    }
+    LIGHT = {
+        "bar_bg":      "#e6e9ef",
+        "bar_border":  "#ccd0da",
+        "combo_bg":    "#ffffff",
+        "combo_fg":    "#4c4f69",
+        "combo_border":"#1e66f5",
+        "py_ver":      "#40a02b",
+        "muted":       "#6c6f85",
+        "info":        "#9ca0b0",
+        "sep":         "#ccd0da",
+        "installed_bg":"#dce0e8",
+        "installed_fg":"#40a02b",
+    }
+
+    def apply_theme(self, theme: str = "dark"):
+        """Update hardcoded colors when theme changes."""
+        c = self.LIGHT if theme == "light" else self.DARK
+
+        if hasattr(self, "env_bar"):
+            self.env_bar.setStyleSheet(
+                f"QFrame {{ background-color: {c['bar_bg']}; "
+                f"border-bottom: 2px solid {c['bar_border']}; }}"
+            )
+        if hasattr(self, "env_selector"):
+            self.env_selector.setStyleSheet(
+                f"QComboBox {{ font-size: 14px; font-weight: bold; padding: 4px 12px;"
+                f"  background-color: {c['combo_bg']}; color: {c['combo_fg']};"
+                f"  border: 2px solid {c['combo_border']}; border-radius: 6px; }}"
+                f"QComboBox:hover {{ border-color: {c['combo_border']}; }}"
+                f"QComboBox::drop-down {{ border: none; width: 30px; }}"
+                f"QComboBox QAbstractItemView {{"
+                f"  background-color: {c['combo_bg']}; color: {c['combo_fg']};"
+                f"  selection-background-color: {c['combo_border']}; selection-color: {c['combo_bg']};"
+                f"  font-size: 14px; font-weight: bold; border: 1px solid {c['combo_border']}; }}"
+            )
+        if hasattr(self, "python_version_label"):
+            self.python_version_label.setStyleSheet(
+                f"font-size: 15px; font-weight: bold; color: {c['py_ver']}; padding-left: 8px;"
+            )
+        if hasattr(self, "env_pkg_count"):
+            self.env_pkg_count.setStyleSheet(
+                f"color: {c['muted']}; font-size: 12px; font-weight: bold;"
+            )
+        info_style = f"color: {c['info']}; font-size: 11px;"
+        sep_style  = f"color: {c['sep']}; font-size: 11px;"
+        for attr in ("env_path_label", "env_disk_label", "env_backend_label", "env_last_used_label"):
+            if hasattr(self, attr):
+                getattr(self, attr).setStyleSheet(info_style)
+        for attr in ("_info_sep1", "_info_sep2", "_info_sep3"):
+            if hasattr(self, attr):
+                getattr(self, attr).setStyleSheet(sep_style)
+        if hasattr(self, "status_label"):
+            self.status_label.setStyleSheet(f"color: {c['muted']}; font-size: 12px;")
+        if hasattr(self, "pkg_count_label"):
+            self.pkg_count_label.setStyleSheet(f"color: {c['muted']};")
+        if hasattr(self, "_legend_label"):
+            self._legend_label.setStyleSheet(f"color: {c['muted']}; font-size: 11px;")
+
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -992,6 +1064,7 @@ $s.Save()
 
         legend = QLabel("☑ installed  |  Check→install  Uncheck→remove")
         legend.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        self._legend_label = legend
         layout.addWidget(legend)
 
         self.catalog_table = QTableWidget()

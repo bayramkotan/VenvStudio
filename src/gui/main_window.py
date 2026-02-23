@@ -856,6 +856,8 @@ class MainWindow(QMainWindow):
     def _apply_theme(self):
         theme = self.config.get("theme", "dark")
         self.setStyleSheet(get_theme(theme))
+        if hasattr(self, "package_panel"):
+            self.package_panel.apply_theme(theme)
 
     def _on_theme_changed(self, theme_name):
         """Handle theme change from settings page."""

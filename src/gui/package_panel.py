@@ -1286,7 +1286,26 @@ $s.Save()
         self.output_log.setPlaceholderText("Installation output will appear here...")
         layout.addWidget(self.output_log)
 
+        # Copy log button
+        copy_log_row = QHBoxLayout()
+        copy_log_row.addStretch()
+        self._copy_log_btn = QPushButton("📋 Copy Log")
+        self._copy_log_btn.setObjectName("secondary")
+        self._copy_log_btn.setFixedHeight(26)
+        self._copy_log_btn.clicked.connect(self._copy_output_log)
+        copy_log_row.addWidget(self._copy_log_btn)
+        layout.addLayout(copy_log_row)
+
         return widget
+
+    def _copy_output_log(self):
+        """Copy output log content to clipboard."""
+        text = self.output_log.toPlainText().strip()
+        if text:
+            QApplication.clipboard().setText(text)
+            self._copy_log_btn.setText("✅ Copied!")
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(2000, lambda: self._copy_log_btn.setText("📋 Copy Log"))
 
     # ── Public Methods ──
 
@@ -2258,9 +2277,10 @@ dependencies:
     # ── Helpers ──
 
     def _show_command_hint(self, title, command):
-        """Show educational command hint dialog."""
-        dlg = CommandHintDialog(title, command, self)
-        dlg.exec()
+        """Show command hint in output log instead of blocking dialog."""
+        if hasattr(self, "output_log"):
+            self.output_log.append("\n💡 Equivalent command:")
+            self.output_log.append(f"   {command}\n")
 
     def _on_progress(self, message: str):
         self.status_label.setText(message)

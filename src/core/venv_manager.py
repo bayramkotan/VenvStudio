@@ -76,6 +76,24 @@ class VenvManager:
         try:
             self.base_dir.mkdir(parents=True, exist_ok=True)
         except OSError as e:
+            # Windows: suggest alternative drive if C: fails
+            import platform as _platform
+            if _platform.system().lower() == "windows":
+                import shutil
+                suggestions = []
+                for letter in ["D", "E", "F"]:
+                    drive_path = f"{letter}:/"
+                    try:
+                        usage = shutil.disk_usage(drive_path)
+                        if usage.free > 500 * 1024 * 1024:
+                            suggestions.append(f"{letter}:/venv")
+                    except Exception:
+                        pass
+                hint = ""
+                if suggestions:
+                    hint = f"\n\nAlternative locations with enough space:\n" + "\n".join(f"  • {s}" for s in suggestions)
+                    hint += "\n\nYou can change the venv directory in Settings > Python Versions."
+                return False, f"Cannot create directory '{self.base_dir}': {e}{hint}"
             return False, f"Cannot create directory '{self.base_dir}': {e}"
 
         if venv_path.exists():

@@ -1008,6 +1008,12 @@ $s.Save()
         import_btn.clicked.connect(self._import_requirements)
         toolbar.addWidget(import_btn)
 
+        terminal_btn = QPushButton("🖥️ Open Terminal")
+        terminal_btn.setObjectName("secondary")
+        terminal_btn.setToolTip("Open terminal with this environment activated")
+        terminal_btn.clicked.connect(self._open_terminal_here)
+        toolbar.addWidget(terminal_btn)
+
         layout.addLayout(toolbar)
 
         self.packages_table = QTableWidget()
@@ -1310,6 +1316,21 @@ $s.Save()
 
     # ── Public Methods ──
 
+    def _open_terminal_here(self):
+        """Open terminal with current venv activated."""
+        if not hasattr(self, "_current_venv_path") or not self._current_venv_path:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "No Environment", "Please select an environment first.")
+            return
+        try:
+            from src.utils.platform_utils import open_terminal_at
+            from src.core.config_manager import ConfigManager
+            terminal_type = ConfigManager().get("terminal_type", "")
+            open_terminal_at(self._current_venv_path, terminal_type)
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Error", f"Could not open terminal:\n{e}")
+
     def set_venv(self, venv_path: Path):
         backend = "pip"
         try:
@@ -1318,6 +1339,7 @@ $s.Save()
         except Exception:
             pass
         self.pip_manager = PipManager(venv_path, backend=backend)
+        self._current_venv_path = venv_path
         # Select in dropdown
         name = venv_path.name
         idx = self.env_selector.findData(str(venv_path))

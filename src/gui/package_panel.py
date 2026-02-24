@@ -240,12 +240,6 @@ class PackagePanel(QWidget):
         )
         row1.addWidget(self.python_version_label)
 
-        row1.addStretch()
-
-        self.env_pkg_count = QLabel("")
-        self.env_pkg_count.setStyleSheet("color: #a6adc8; font-size: 12px; font-weight: bold;")
-        row1.addWidget(self.env_pkg_count)
-
         self._env_bar_terminal_btn = QPushButton("🖥️ Open Terminal")
         self._env_bar_terminal_btn.setObjectName("secondary")
         self._env_bar_terminal_btn.setFixedHeight(28)
@@ -253,6 +247,12 @@ class PackagePanel(QWidget):
         self._env_bar_terminal_btn.clicked.connect(self._open_terminal_here)
         self._env_bar_terminal_btn.setVisible(False)  # Hidden until env selected
         row1.addWidget(self._env_bar_terminal_btn)
+
+        row1.addStretch()
+
+        self.env_pkg_count = QLabel("")
+        self.env_pkg_count.setStyleSheet("color: #a6adc8; font-size: 14px; font-weight: bold;")
+        row1.addWidget(self.env_pkg_count)
 
         env_bar_outer.addLayout(row1)
 

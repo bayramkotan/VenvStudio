@@ -213,7 +213,7 @@ class PackagePanel(QWidget):
         self.env_selector.setMaximumWidth(500)
         self.env_selector.setFixedHeight(34)
         # Disable mouse wheel scrolling on env selector to prevent accidental switches
-        self.env_selector.wheelEvent = lambda e: e.ignore()
+        # wheelEvent enabled — scroll to switch environments
         self.env_selector.setStyleSheet(
             "QComboBox {"
             "  font-size: 14px; font-weight: bold; padding: 4px 12px;"
@@ -1318,6 +1318,19 @@ $s.Save()
 
     # ── Public Methods ──
 
+    def _invalidate_env_cache(self) -> None:
+        """Invalidate cache for current env so env list refreshes correctly."""
+        if not hasattr(self, "_current_venv_path") or not self._current_venv_path:
+            return
+        try:
+            from src.core.venv_manager import VenvManager
+            from src.core.config_manager import ConfigManager
+            base_dir = ConfigManager().get_venv_base_dir()
+            vm = VenvManager(base_dir)
+            vm.invalidate_cache(self._current_venv_path)
+        except Exception:
+            pass
+
     def _open_terminal_here(self):
         """Open terminal with current venv activated."""
         if not hasattr(self, "_current_venv_path") or not self._current_venv_path:
@@ -1439,23 +1452,41 @@ $s.Save()
             self._safe_clear_env_state()
 
     def _update_env_info_bar(self, venv_path, backend="pip"):
-        """Update all info labels for the selected environment."""
+        """Update all info labels for the selected environment — uses cache."""
         # Show info labels
         for lbl in self._info_labels:
             lbl.setVisible(True)
 
-        # 1) Python version
+        # Try cache first for python version and size
+        python_ver = ""
+        size_str = ""
         try:
-            python_exe = get_python_executable(venv_path)
-            result = subprocess.run(
-                [str(python_exe), "--version"],
-                capture_output=True, text=True, timeout=10,
-                **subprocess_args()
-            )
-            ver_text = result.stdout.strip() or result.stderr.strip()
-            self.python_version_label.setText(f"🐍 {ver_text}")
+            from src.core.venv_manager import VenvManager
+            from src.core.config_manager import ConfigManager
+            base_dir = ConfigManager().get_venv_base_dir()
+            vm = VenvManager(base_dir)
+            cached = vm._read_cache(venv_path)
+            if cached:
+                python_ver = cached.get("python_version", "")
+                size_str = cached.get("size", "")
         except Exception:
-            self.python_version_label.setText("")
+            pass
+
+        # 1) Python version — from cache or subprocess
+        if python_ver:
+            self.python_version_label.setText(f"🐍 Python {python_ver}")
+        else:
+            try:
+                python_exe = get_python_executable(venv_path)
+                result = subprocess.run(
+                    [str(python_exe), "--version"],
+                    capture_output=True, text=True, timeout=10,
+                    **subprocess_args()
+                )
+                ver_text = result.stdout.strip() or result.stderr.strip()
+                self.python_version_label.setText(f"🐍 {ver_text}")
+            except Exception:
+                self.python_version_label.setText("")
 
         # 2) Shortened path
         try:
@@ -1465,7 +1496,6 @@ $s.Save()
                 display_path = "~" + full_path[len(home):]
             else:
                 display_path = full_path
-            # Truncate if too long
             if len(display_path) > 60:
                 display_path = "..." + display_path[-57:]
             self.env_path_label.setText(f"📂 {display_path}")
@@ -1473,28 +1503,30 @@ $s.Save()
         except Exception:
             self.env_path_label.setText("")
 
-        # 3) Disk size (async-friendly but quick for most envs)
-        try:
-            total_size = 0
-            for dirpath, dirnames, filenames in os.walk(str(venv_path)):
-                for f in filenames:
-                    fp = os.path.join(dirpath, f)
-                    try:
-                        total_size += os.path.getsize(fp)
-                    except OSError:
-                        pass
-                # Limit depth to avoid very slow scans
-                if total_size > 10 * 1024 * 1024 * 1024:  # cap at 10GB scan
-                    break
-            if total_size < 1024 * 1024:
-                size_str = f"{total_size / 1024:.0f} KB"
-            elif total_size < 1024 * 1024 * 1024:
-                size_str = f"{total_size / (1024 * 1024):.1f} MB"
-            else:
-                size_str = f"{total_size / (1024 * 1024 * 1024):.2f} GB"
+        # 3) Disk size — from cache or calculate
+        if size_str:
             self.env_disk_label.setText(f"💾 {size_str}")
-        except Exception:
-            self.env_disk_label.setText("💾 ?")
+        else:
+            try:
+                total_size = 0
+                for dirpath, dirnames, filenames in os.walk(str(venv_path)):
+                    for f in filenames:
+                        fp = os.path.join(dirpath, f)
+                        try:
+                            total_size += os.path.getsize(fp)
+                        except OSError:
+                            pass
+                    if total_size > 10 * 1024 * 1024 * 1024:
+                        break
+                if total_size < 1024 * 1024:
+                    size_str = f"{total_size / 1024:.0f} KB"
+                elif total_size < 1024 * 1024 * 1024:
+                    size_str = f"{total_size / (1024 * 1024):.1f} MB"
+                else:
+                    size_str = f"{total_size / (1024 * 1024 * 1024):.2f} GB"
+                self.env_disk_label.setText(f"💾 {size_str}")
+            except Exception:
+                self.env_disk_label.setText("💾 ?")
 
         # 4) Backend (pip/uv)
         backend_display = backend.upper() if backend else "PIP"
@@ -2324,6 +2356,8 @@ dependencies:
 
         if success:
             self.status_label.setText("Operation completed successfully")
+            # Invalidate cache so env list shows updated package count/size
+            self._invalidate_env_cache()
             self.refresh_packages()
             self.env_refresh_requested.emit()
         else:

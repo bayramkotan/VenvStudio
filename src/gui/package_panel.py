@@ -245,14 +245,14 @@ class PackagePanel(QWidget):
         self._env_bar_terminal_btn.setFixedHeight(28)
         self._env_bar_terminal_btn.setToolTip("Open terminal with this environment activated")
         self._env_bar_terminal_btn.clicked.connect(self._open_terminal_here)
-        self._env_bar_terminal_btn.setVisible(False)  # Hidden until env selected
+        self._env_bar_terminal_btn.setEnabled(False)  # Disabled until env selected
         row1.addWidget(self._env_bar_terminal_btn)
 
-        row1.addStretch()
-
         self.env_pkg_count = QLabel("")
-        self.env_pkg_count.setStyleSheet("color: #a6adc8; font-size: 14px; font-weight: bold;")
+        self.env_pkg_count.setStyleSheet("color: #a6adc8; font-size: 15px; font-weight: bold; padding-left: 12px;")
         row1.addWidget(self.env_pkg_count)
+
+        row1.addStretch()
 
         env_bar_outer.addLayout(row1)
 
@@ -1343,7 +1343,7 @@ $s.Save()
         self.pip_manager = PipManager(venv_path, backend=backend)
         self._current_venv_path = venv_path
         if hasattr(self, "_env_bar_terminal_btn"):
-            self._env_bar_terminal_btn.setVisible(True)
+            self._env_bar_terminal_btn.setEnabled(True)
         # Select in dropdown
         name = venv_path.name
         idx = self.env_selector.findData(str(venv_path))
@@ -1412,6 +1412,8 @@ $s.Save()
         self.packages_table.setRowCount(0)
         self.env_pkg_count.setText("")
         self.python_version_label.setText("")
+        if hasattr(self, "_env_bar_terminal_btn"):
+            self._env_bar_terminal_btn.setEnabled(False)
         self.pkg_count_label.setText("0 packages")
         self.status_label.setText("Select an environment to manage packages")
         self._hide_env_info_bar()
@@ -1427,6 +1429,9 @@ $s.Save()
             except Exception:
                 pass
             self.pip_manager = PipManager(Path(path_str), backend=backend)
+            self._current_venv_path = Path(path_str)
+            if hasattr(self, "_env_bar_terminal_btn"):
+                self._env_bar_terminal_btn.setEnabled(True)
             self.status_label.setText(f"Loading packages...")
             self._update_env_info_bar(Path(path_str), backend)
             self._async_refresh_packages()

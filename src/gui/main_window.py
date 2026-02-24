@@ -208,7 +208,7 @@ class MainWindow(QMainWindow):
         file_menu.addAction(quit_action)
 
         view_menu = menubar.addMenu(tr("view"))
-        refresh_action = QAction(f"&{tr('refresh')}", self)
+        refresh_action = QAction(f"🔄 {tr('refresh')}", self)
         refresh_action.setShortcut("F5")
         refresh_action.triggered.connect(self._refresh_env_list)
         view_menu.addAction(refresh_action)

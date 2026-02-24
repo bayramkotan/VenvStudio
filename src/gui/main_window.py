@@ -229,6 +229,24 @@ class MainWindow(QMainWindow):
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
 
+        update_action = QAction("🔄 Check for Updates", self)
+        update_action.triggered.connect(self._check_for_updates)
+        help_menu.addAction(update_action)
+
+        help_menu.addSeparator()
+
+        github_action = QAction("⭐ GitHub Repository", self)
+        github_action.triggered.connect(lambda: __import__("webbrowser").open("https://github.com/bayramkotan/VenvStudio"))
+        help_menu.addAction(github_action)
+
+        pypi_action = QAction("📦 PyPI Page", self)
+        pypi_action.triggered.connect(lambda: __import__("webbrowser").open("https://pypi.org/project/venvstudio/"))
+        help_menu.addAction(pypi_action)
+
+        issues_action = QAction("🐛 Report a Bug", self)
+        issues_action.triggered.connect(lambda: __import__("webbrowser").open("https://github.com/bayramkotan/VenvStudio/issues"))
+        help_menu.addAction(issues_action)
+
     def _setup_ui(self):
         central = QWidget()
         self.setCentralWidget(central)
@@ -983,15 +1001,70 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("Settings saved")
 
     def _show_about(self):
+        import sys as _sys
+        from PySide6.QtCore import __version__ as qt_ver
         QMessageBox.about(
             self, f"About {APP_NAME}",
             f"<h2>{APP_NAME} v{APP_VERSION}</h2>"
-            f"<p>Lightweight Python Virtual Environment Manager</p>"
-            f"<p>Create, manage, and organize your Python environments with ease.</p>"
+            f"<p><b>Lightweight Python Virtual Environment Manager</b></p>"
+            f"<p>Create, manage, and organize your Python virtual environments with ease.</p>"
+            f"<hr>"
+            f"<p><b>Author:</b> Bayram Kotan</p>"
             f"<p><b>License:</b> LGPL-3.0</p>"
             f"<p><b>Platform:</b> {get_platform().title()}</p>"
-            f"<p>Built with PySide6 (Qt for Python)</p>"
+            f"<p><b>Python:</b> {_sys.version.split()[0]}</p>"
+            f"<p><b>Qt:</b> {qt_ver}</p>"
+            f"<hr>"
+            f"<p>"
+            f"<a href='https://github.com/bayramkotan/VenvStudio'>GitHub</a> &nbsp;|&nbsp; "
+            f"<a href='https://pypi.org/project/venvstudio/'>PyPI</a> &nbsp;|&nbsp; "
+            f"<a href='https://github.com/bayramkotan'>github.com/bayramkotan</a> &nbsp;|&nbsp; "
+            f"<a href='https://www.linkedin.com/in/bayramkotan'>LinkedIn</a>"
+            f"</p>"
         )
+
+    def _check_for_updates(self):
+        """Manually check for updates from Help menu."""
+        from PySide6.QtWidgets import QProgressDialog
+        from PySide6.QtCore import Qt
+        progress = QProgressDialog("Checking for updates...", None, 0, 0, self)
+        progress.setWindowTitle("Check for Updates")
+        progress.setWindowModality(Qt.WindowModal)
+        progress.setMinimumWidth(300)
+        progress.show()
+        QApplication.processEvents()
+
+        try:
+            from src.core.updater import check_for_update
+            result = check_for_update()
+            progress.close()
+
+            if result.get("update_available"):
+                reply = QMessageBox.information(
+                    self, "🆕 Update Available",
+                    f"<b>VenvStudio v{result['latest_version']}</b> is available!<br>"
+                    f"You have <b>v{result['current_version']}</b>.<br><br>"
+                    f"Update command:<br>"
+                    f"<code>pip install --upgrade venvstudio</code><br><br>"
+                    f"Open download page?",
+                    QMessageBox.Yes | QMessageBox.No
+                )
+                if reply == QMessageBox.Yes:
+                    import webbrowser
+                    webbrowser.open(result.get("release_url", "https://github.com/bayramkotan/VenvStudio/releases"))
+            else:
+                QMessageBox.information(
+                    self, "✅ Up to Date",
+                    f"You are running the latest version: <b>v{APP_VERSION}</b>"
+                )
+        except Exception as e:
+            progress.close()
+            QMessageBox.warning(
+                self, "Update Check Failed",
+                f"Could not check for updates.<br><br>"
+                f"Check manually: <a href='https://pypi.org/project/venvstudio/'>pypi.org/project/venvstudio</a><br><br>"
+                f"Error: {e}"
+            )
 
     def closeEvent(self, event):
         self.config.set("window_width", self.width())

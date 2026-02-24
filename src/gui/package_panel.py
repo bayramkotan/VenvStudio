@@ -246,6 +246,14 @@ class PackagePanel(QWidget):
         self.env_pkg_count.setStyleSheet("color: #a6adc8; font-size: 12px; font-weight: bold;")
         row1.addWidget(self.env_pkg_count)
 
+        self._env_bar_terminal_btn = QPushButton("🖥️ Open Terminal")
+        self._env_bar_terminal_btn.setObjectName("secondary")
+        self._env_bar_terminal_btn.setFixedHeight(28)
+        self._env_bar_terminal_btn.setToolTip("Open terminal with this environment activated")
+        self._env_bar_terminal_btn.clicked.connect(self._open_terminal_here)
+        self._env_bar_terminal_btn.setVisible(False)  # Hidden until env selected
+        row1.addWidget(self._env_bar_terminal_btn)
+
         env_bar_outer.addLayout(row1)
 
         # ── Row 2: Info bar — path | disk size | backend | last used ──
@@ -1008,12 +1016,6 @@ $s.Save()
         import_btn.clicked.connect(self._import_requirements)
         toolbar.addWidget(import_btn)
 
-        terminal_btn = QPushButton("🖥️ Open Terminal")
-        terminal_btn.setObjectName("secondary")
-        terminal_btn.setToolTip("Open terminal with this environment activated")
-        terminal_btn.clicked.connect(self._open_terminal_here)
-        toolbar.addWidget(terminal_btn)
-
         layout.addLayout(toolbar)
 
         self.packages_table = QTableWidget()
@@ -1340,6 +1342,8 @@ $s.Save()
             pass
         self.pip_manager = PipManager(venv_path, backend=backend)
         self._current_venv_path = venv_path
+        if hasattr(self, "_env_bar_terminal_btn"):
+            self._env_bar_terminal_btn.setVisible(True)
         # Select in dropdown
         name = venv_path.name
         idx = self.env_selector.findData(str(venv_path))

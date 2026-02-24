@@ -197,12 +197,12 @@ class MainWindow(QMainWindow):
         menubar = self.menuBar()
 
         file_menu = menubar.addMenu(tr("file"))
-        new_env_action = QAction(f"&{tr('new_environment')}", self)
+        new_env_action = QAction(f"➕ &{tr('new_environment')}", self)
         new_env_action.setShortcut("Ctrl+N")
         new_env_action.triggered.connect(self._create_env)
         file_menu.addAction(new_env_action)
         file_menu.addSeparator()
-        quit_action = QAction(tr("quit"), self)
+        quit_action = QAction(f"❌ {tr('quit')}", self)
         quit_action.setShortcut("Ctrl+Q")
         quit_action.triggered.connect(self.close)
         file_menu.addAction(quit_action)
@@ -225,7 +225,7 @@ class MainWindow(QMainWindow):
         view_menu.addAction(settings_view_action)
 
         help_menu = menubar.addMenu(tr("help"))
-        about_action = QAction(tr("about"), self)
+        about_action = QAction(f"ℹ️ {tr('about')}", self)
         about_action.triggered.connect(self._show_about)
         help_menu.addAction(about_action)
 

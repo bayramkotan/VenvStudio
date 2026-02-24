@@ -77,7 +77,7 @@ class CloneWorker(QThread):
 
 
 class EnvDetailWorker(QThread):
-    """Background worker to load env details (Python version, package count, size)."""
+    """Background worker to load env details only for envs missing cache."""
     env_detail_ready = Signal(int, str, int, str)  # row, python_ver, pkg_count, size
     all_done = Signal()
 
@@ -88,7 +88,13 @@ class EnvDetailWorker(QThread):
 
     def run(self):
         for i, name in enumerate(self.env_names):
-            info = self.venv_manager.get_venv_info(name)
+            venv_path = self.venv_manager.base_dir / name
+            # Skip if cache already exists — list_venvs_fast already loaded it
+            cached = self.venv_manager._read_cache(venv_path)
+            if cached:
+                continue
+            # No cache — fetch and write cache
+            info = self.venv_manager.get_venv_info(name, use_cache=False)
             if info:
                 self.env_detail_ready.emit(
                     i, info.python_version, info.package_count, info.size
@@ -432,13 +438,19 @@ class MainWindow(QMainWindow):
             btn.setChecked(i == index)
 
     def _refresh_env_list(self):
-        """Phase 1: Instantly show env names, then load details in background."""
+        """Phase 1: Load from cache instantly. Phase 2: only fetch missing caches."""
         self.env_table.setRowCount(0)
-        self.statusBar().showMessage("Loading environments...")
-        self.loading_label.setVisible(True)
 
-        # Fast load - no subprocess, instant
+        # Fast load - reads cache, no subprocess
         envs = self.venv_manager.list_venvs_fast()
+
+        # Only show loading if some envs are missing cache
+        has_missing_cache = any(
+            e.python_version == "..." for e in envs
+        )
+        self.loading_label.setVisible(has_missing_cache)
+        if has_missing_cache:
+            self.statusBar().showMessage("Loading environments...")
         self.env_table.setRowCount(len(envs))
 
         for i, env in enumerate(envs):
@@ -451,8 +463,9 @@ class MainWindow(QMainWindow):
             name_item.setFont(name_font)
             self.env_table.setItem(i, 0, name_item)
             self.env_table.setItem(i, 1, QTableWidgetItem(f"  {env.python_version}"))
-            self.env_table.setItem(i, 2, QTableWidgetItem(f"  ..."))
-            self.env_table.setItem(i, 3, QTableWidgetItem(f"  ..."))
+            pkg = str(env.package_count) if env.package_count else "..."
+            self.env_table.setItem(i, 2, QTableWidgetItem(f"  {pkg}"))
+            self.env_table.setItem(i, 3, QTableWidgetItem(f"  {env.size}"))
 
             created_str = ""
             if env.created:
@@ -475,11 +488,8 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("No environments found")
             return
 
-        # Phase 2: Load details in background thread
-        self._detail_worker = EnvDetailWorker(self.venv_manager, [e.name for e in envs])
-        self._detail_worker.env_detail_ready.connect(self._on_env_detail_ready)
-        self._detail_worker.all_done.connect(self._on_all_details_done)
-        self._detail_worker.start()
+        # All data already loaded from cache in list_venvs_fast
+        self._on_all_details_done()
 
     def _on_env_detail_ready(self, row, python_version, package_count, size):
         """Update a single row with detailed info from background thread."""
@@ -1069,4 +1079,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         self.config.set("window_width", self.width())
         self.config.set("window_height", self.height())
+        # Wait for background worker to finish writing cache
+        if hasattr(self, "_detail_worker") and self._detail_worker.isRunning():
+            self._detail_worker.wait(5000)
         super().closeEvent(event)

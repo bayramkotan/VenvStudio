@@ -13,8 +13,6 @@ from typing import Optional, List, Dict, Any
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from src.utils.platform_utils import subprocess_args
-
 from src.utils.platform_utils import (
     get_python_executable,
     get_pip_executable,
@@ -72,30 +70,6 @@ class VenvManager:
         """
         venv_path = self.base_dir / name
 
-        # Ensure base directory exists
-        try:
-            self.base_dir.mkdir(parents=True, exist_ok=True)
-        except OSError as e:
-            # Windows: suggest alternative drive if C: fails
-            import platform as _platform
-            if _platform.system().lower() == "windows":
-                import shutil
-                suggestions = []
-                for letter in ["D", "E", "F"]:
-                    drive_path = f"{letter}:/"
-                    try:
-                        usage = shutil.disk_usage(drive_path)
-                        if usage.free > 500 * 1024 * 1024:
-                            suggestions.append(f"{letter}:/venv")
-                    except Exception:
-                        pass
-                hint = ""
-                if suggestions:
-                    hint = f"\n\nAlternative locations with enough space:\n" + "\n".join(f"  • {s}" for s in suggestions)
-                    hint += "\n\nYou can change the venv directory in Settings > Python Versions."
-                return False, f"Cannot create directory '{self.base_dir}': {e}{hint}"
-            return False, f"Cannot create directory '{self.base_dir}': {e}"
-
         if venv_path.exists():
             return False, f"Environment '{name}' already exists at {venv_path}"
 
@@ -115,8 +89,10 @@ class VenvManager:
 
             result = subprocess.run(
                 cmd,
-                **subprocess_args(capture_output=True, text=True, timeout=120)
-                )
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
 
             if result.returncode != 0:
                 # Clean up on failure
@@ -130,17 +106,12 @@ class VenvManager:
             if with_pip and pip_exe.exists():
                 if callback:
                     callback("Upgrading pip...")
-                # SSL olmayabilir — trusted-host ekle
-                pip_upgrade_cmd = [
-                    str(python_in_venv), "-m", "pip", "install", "--upgrade", "pip",
-                    "--trusted-host", "pypi.org",
-                    "--trusted-host", "pypi.python.org",
-                    "--trusted-host", "files.pythonhosted.org",
-                ]
                 subprocess.run(
-                    pip_upgrade_cmd,
-                    **subprocess_args(capture_output=True, text=True, timeout=60)
-                    )
+                    [str(python_in_venv), "-m", "pip", "install", "--upgrade", "pip"],
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                )
 
             # Save creation metadata
             meta = {
@@ -163,7 +134,7 @@ class VenvManager:
                 shutil.rmtree(venv_path, ignore_errors=True)
             return False, f"Error creating environment: {str(e)}"
 
-    def delete_venv(self, name: str, callback=None) -> tuple[bool, str]:
+    def delete_venv(self, name: str) -> tuple[bool, str]:
         """Delete a virtual environment."""
         venv_path = self.base_dir / name
 
@@ -171,70 +142,175 @@ class VenvManager:
             return False, f"Environment '{name}' not found"
 
         try:
-            if callback:
-                callback(f"Deleting '{name}'...")
             shutil.rmtree(venv_path)
             return True, f"Environment '{name}' deleted successfully"
         except Exception as e:
             return False, f"Error deleting environment: {str(e)}"
 
+    def invalidate_cache_by_name(self, name: str) -> None:
+        """Invalidate cache for a named env."""
+        self.invalidate_cache(self.base_dir / name)
+
     def list_venvs_fast(self) -> List[VenvInfo]:
-        """Fast list - only check directory names and validity, no subprocess calls."""
+        """Load env list. Uses cache if available, otherwise calculates and saves cache."""
         venvs = []
         if not self.base_dir.exists():
             return venvs
-
         for item in sorted(self.base_dir.iterdir()):
-            if item.is_dir():
-                python_exe = get_python_executable(item)
-                is_valid = python_exe.exists()
+            if not item.is_dir():
+                continue
+            python_exe = get_python_executable(item)
+            is_valid = python_exe.exists()
+            info = VenvInfo(name=item.name, path=item, is_valid=is_valid)
 
-                info = VenvInfo(
-                    name=item.name,
-                    path=item,
-                    is_valid=is_valid,
-                    python_version="..." if is_valid else "N/A",
-                    size="...",
-                    package_count=0,
-                )
+            # Creation date (no subprocess)
+            meta_file = item / ".venvstudio_meta.json"
+            if meta_file.exists():
+                try:
+                    with open(meta_file) as f:
+                        meta = json.load(f)
+                    info.created = meta.get("created", "")
+                except (json.JSONDecodeError, IOError):
+                    pass
+            if not info.created:
+                try:
+                    info.created = datetime.fromtimestamp(item.stat().st_ctime).isoformat()
+                except OSError:
+                    pass
 
-                # Creation date (no subprocess needed)
-                meta_file = item / ".venvstudio_meta.json"
-                if meta_file.exists():
+            if is_valid:
+                # Try cache first
+                cached = self._read_cache(item)
+                if cached:
+                    # Cache hit - load instantly
+                    info.python_version = cached.get("python_version", "?")
+                    info.package_count = cached.get("package_count", 0)
+                    info.size = cached.get("size", "?")
+                else:
+                    # Cache miss - calculate now and save
                     try:
-                        with open(meta_file) as f:
-                            meta = json.load(f)
-                        info.created = meta.get("created", "")
-                    except (json.JSONDecodeError, IOError):
-                        pass
-                if not info.created:
-                    try:
-                        stat = item.stat()
-                        info.created = datetime.fromtimestamp(stat.st_ctime).isoformat()
-                    except OSError:
-                        pass
+                        result = subprocess.run(
+                            [str(python_exe), "--version"],
+                            capture_output=True, text=True, timeout=5,
+                        )
+                        ver = result.stdout.strip() or result.stderr.strip()
+                        info.python_version = ver.replace("Python ", "")
+                    except Exception:
+                        info.python_version = "?"
 
-                venvs.append(info)
+                    info.size = get_venv_size(item)
 
+                    pip_exe = get_pip_executable(item)
+                    if pip_exe.exists():
+                        try:
+                            result = subprocess.run(
+                                [str(pip_exe), "list", "--format=json"],
+                                capture_output=True, text=True, timeout=15,
+                            )
+                            if result.returncode == 0:
+                                info.package_count = len(json.loads(result.stdout))
+                        except Exception:
+                            pass
+
+                    # Save to cache
+                    self.write_cache(item, info.python_version, info.package_count, info.size)
+
+            venvs.append(info)
         return venvs
 
-    def list_venvs(self) -> List[VenvInfo]:
-        """Full list with all details (slow - calls subprocess for each env)."""
+    def list_venvs(self, use_cache: bool = True) -> List[VenvInfo]:
+        """List all virtual environments. Uses cache for speed."""
         venvs = []
-
         if not self.base_dir.exists():
             return venvs
-
         for item in sorted(self.base_dir.iterdir()):
             if item.is_dir():
-                info = self.get_venv_info(item.name)
+                info = self.get_venv_info(item.name, use_cache=use_cache)
                 if info:
                     venvs.append(info)
-
         return venvs
 
-    def get_venv_info(self, name: str) -> Optional[VenvInfo]:
-        """Get detailed information about a virtual environment."""
+    # ── Cache helpers ──────────────────────────────────────────────────────
+    # Single cache file in AppData/VenvStudio/env_cache.json
+    # Structure: { "C:/venv/ml": {"python_version": "3.14", "package_count": 112, "size": "747MB", "needs_refresh": 0}, ... }
+
+    def _get_cache_file(self) -> Path:
+        """Returns path to the single cache file in AppData."""
+        import platform as _platform
+        system = _platform.system().lower()
+        if system == "windows":
+            base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+        elif system == "darwin":
+            base = Path.home() / "Library" / "Application Support"
+        else:
+            base = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+        cache_dir = base / "VenvStudio"
+        cache_dir.mkdir(parents=True, exist_ok=True)
+        return cache_dir / "env_cache.json"
+
+    def _load_all_cache(self) -> Dict[str, Any]:
+        """Load entire cache file."""
+        f = self._get_cache_file()
+        if not f.exists():
+            return {}
+        try:
+            return json.load(open(f, encoding="utf-8"))
+        except (json.JSONDecodeError, IOError):
+            return {}
+
+    def _save_all_cache(self, data: Dict[str, Any]) -> None:
+        """Save entire cache file."""
+        try:
+            cache_file = self._get_cache_file()
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            with open(cache_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            print(f"[VenvStudio] Cache write error: {e}")
+
+    def _cache_key(self, venv_path: Path) -> str:
+        """Normalize path to consistent cache key."""
+        return str(venv_path.resolve()).replace("\\", "/").replace("\\\\", "/")
+
+    def _read_cache(self, venv_path: Path) -> Optional[Dict[str, Any]]:
+        """Read cache for a specific env. Returns None if needs_refresh=1."""
+        all_cache = self._load_all_cache()
+        entry = all_cache.get(self._cache_key(venv_path))
+        if not entry:
+            return None
+        if entry.get("needs_refresh", 1) == 1:
+            return None
+        return entry
+
+    def write_cache(self, venv_path: Path, python_version: str, package_count: int, size: str) -> None:
+        """Write cache for env with needs_refresh=0."""
+        all_cache = self._load_all_cache()
+        all_cache[self._cache_key(venv_path)] = {
+            "python_version": python_version,
+            "package_count": package_count,
+            "size": size,
+            "needs_refresh": 0,
+        }
+        self._save_all_cache(all_cache)
+        print(f"[Cache] Written: {self._cache_key(venv_path)} -> {python_version}, {package_count} pkgs, {size}")
+        print(f"[Cache] File: {self._get_cache_file()}")
+
+    def invalidate_cache(self, venv_path: Path) -> None:
+        """Set needs_refresh=1 for this env."""
+        all_cache = self._load_all_cache()
+        key = self._cache_key(venv_path)
+        if key in all_cache:
+            all_cache[key]["needs_refresh"] = 1
+        else:
+            all_cache[key] = {"needs_refresh": 1}
+        self._save_all_cache(all_cache)
+
+    # ── Venv info ──────────────────────────────────────────────────────────
+
+    def get_venv_info(self, name: str, use_cache: bool = True) -> Optional[VenvInfo]:
+        """Get detailed information about a virtual environment.
+        If use_cache=True and cache exists, returns cached data instantly.
+        """
         venv_path = self.base_dir / name
         if not venv_path.exists():
             return None
@@ -248,22 +324,7 @@ class VenvManager:
             is_valid=is_valid,
         )
 
-        # Get Python version
-        if is_valid:
-            try:
-                result = subprocess.run(
-                    [str(python_exe), "--version"],
-                    **subprocess_args(capture_output=True, text=True, timeout=5)
-                )
-                ver = result.stdout.strip() or result.stderr.strip()
-                info.python_version = ver.replace("Python ", "")
-            except (subprocess.TimeoutExpired, Exception):
-                info.python_version = "Unknown"
-
-        # Get size
-        info.size = get_venv_size(venv_path)
-
-        # Get creation date
+        # Get creation date from meta (fast, no subprocess)
         meta_file = venv_path / ".venvstudio_meta.json"
         if meta_file.exists():
             try:
@@ -272,28 +333,52 @@ class VenvManager:
                 info.created = meta.get("created", "")
             except (json.JSONDecodeError, IOError):
                 pass
-
         if not info.created:
             try:
-                stat = venv_path.stat()
-                info.created = datetime.fromtimestamp(stat.st_ctime).isoformat()
+                info.created = datetime.fromtimestamp(venv_path.stat().st_ctime).isoformat()
             except OSError:
                 pass
 
-        # Get package count
+        # Try cache first (AppData/VenvStudio/env_cache.json)
+        if use_cache and is_valid:
+            cached = self._read_cache(venv_path)
+            if cached:
+                info.python_version = cached.get("python_version", "Unknown")
+                info.package_count = cached.get("package_count", 0)
+                info.size = cached.get("size", "N/A")
+                return info
+
+        # Cache miss — fetch from disk/subprocess
         if is_valid:
+            # Python version
+            try:
+                result = subprocess.run(
+                    [str(python_exe), "--version"],
+                    capture_output=True, text=True, timeout=5,
+                )
+                ver = result.stdout.strip() or result.stderr.strip()
+                info.python_version = ver.replace("Python ", "")
+            except (subprocess.TimeoutExpired, Exception):
+                info.python_version = "Unknown"
+
+            # Size
+            info.size = get_venv_size(venv_path)
+
+            # Package count
             pip_exe = get_pip_executable(venv_path)
             if pip_exe.exists():
                 try:
                     result = subprocess.run(
                         [str(pip_exe), "list", "--format=json"],
-                        **subprocess_args(capture_output=True, text=True, timeout=10)
+                        capture_output=True, text=True, timeout=10,
                     )
                     if result.returncode == 0:
-                        packages = json.loads(result.stdout)
-                        info.package_count = len(packages)
+                        info.package_count = len(json.loads(result.stdout))
                 except (subprocess.TimeoutExpired, json.JSONDecodeError, Exception):
                     pass
+
+            # Write to cache for next time
+            self.write_cache(venv_path, info.python_version, info.package_count, info.size)
 
         return info
 
@@ -314,7 +399,7 @@ class VenvManager:
             # Get requirements from source
             result = subprocess.run(
                 [str(source_pip), "freeze"],
-                **subprocess_args(capture_output=True, text=True, timeout=15)
+                capture_output=True, text=True, timeout=15,
             )
             requirements = result.stdout
 
@@ -334,8 +419,8 @@ class VenvManager:
                     callback(f"Installing packages into '{target_name}'...")
 
                 result = subprocess.run(
-                    [str(target_pip), "install", "--no-cache-dir", "-r", str(req_file)],
-                    **subprocess_args(capture_output=True, text=True, timeout=300)
+                    [str(target_pip), "install", "-r", str(req_file)],
+                    capture_output=True, text=True, timeout=300,
                 )
                 req_file.unlink(missing_ok=True)
 
@@ -347,8 +432,8 @@ class VenvManager:
         except Exception as e:
             return False, f"Error cloning environment: {str(e)}"
 
-    def rename_venv(self, old_name: str, new_name: str, callback=None) -> tuple[bool, str]:
-        """Rename environment via clone + delete for reliable pip support."""
+    def rename_venv(self, old_name: str, new_name: str) -> tuple[bool, str]:
+        """Rename an environment by renaming its directory."""
         old_path = self.base_dir / old_name
         new_path = self.base_dir / new_name
 
@@ -358,69 +443,7 @@ class VenvManager:
             return False, f"Environment '{new_name}' already exists"
 
         try:
-            if callback:
-                callback(f"Getting packages from '{old_name}'...")
-
-            # 1. Freeze packages from old env
-            pip_exe = get_pip_executable(old_path)
-            requirements = ""
-            if pip_exe.exists():
-                result = subprocess.run(
-                    [str(pip_exe), "freeze"],
-                    **subprocess_args(capture_output=True, text=True, timeout=15)
-                )
-                requirements = result.stdout
-
-            # 2. Create new env
-            if callback:
-                callback(f"Creating '{new_name}'...")
-            success, msg = self.create_venv(new_name, callback=callback)
-            if not success:
-                return False, msg
-
-            # 3. Install packages into new env
-            if requirements.strip():
-                req_file = new_path / "_rename_requirements.txt"
-                with open(req_file, "w") as f:
-                    f.write(requirements)
-
-                target_pip = get_pip_executable(new_path)
-                if callback:
-                    callback(f"Installing packages into '{new_name}'...")
-
-                result = subprocess.run(
-                    [str(target_pip), "install", "-r", str(req_file)],
-                    **subprocess_args(capture_output=True, text=True, timeout=300)
-                )
-                req_file.unlink(missing_ok=True)
-
-                if result.returncode != 0:
-                    # New env created but packages failed — keep both, warn user
-                    return False, (
-                        f"Created '{new_name}' but failed to install some packages.\n"
-                        f"Original '{old_name}' preserved.\n{result.stderr[:300]}"
-                    )
-
-            # 4. Copy metadata
-            old_meta = old_path / ".venvstudio_meta.json"
-            new_meta = new_path / ".venvstudio_meta.json"
-            if old_meta.exists():
-                try:
-                    with open(old_meta) as f:
-                        meta = json.load(f)
-                    meta["name"] = new_name
-                    meta["renamed_from"] = old_name
-                    with open(new_meta, "w") as f:
-                        json.dump(meta, f, indent=2)
-                except Exception:
-                    pass
-
-            # 5. Delete old env
-            if callback:
-                callback(f"Removing old '{old_name}'...")
-            shutil.rmtree(old_path, ignore_errors=True)
-
+            old_path.rename(new_path)
             return True, f"Environment '{old_name}' renamed to '{new_name}'"
-
         except Exception as e:
             return False, f"Error renaming environment: {str(e)}"

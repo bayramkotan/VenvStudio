@@ -134,15 +134,19 @@ class VenvManager:
                 shutil.rmtree(venv_path, ignore_errors=True)
             return False, f"Error creating environment: {str(e)}"
 
-    def delete_venv(self, name: str) -> tuple[bool, str]:
-        """Delete a virtual environment."""
+    def delete_venv(self, name: str, callback=None) -> tuple[bool, str]:
+        """Delete a virtual environment and remove from cache."""
         venv_path = self.base_dir / name
 
         if not venv_path.exists():
             return False, f"Environment '{name}' not found"
 
         try:
+            if callback:
+                callback(f"Removing '{name}'...")
             shutil.rmtree(venv_path)
+            # Remove from cache
+            self._remove_from_cache(venv_path)
             return True, f"Environment '{name}' deleted successfully"
         except Exception as e:
             return False, f"Error deleting environment: {str(e)}"
@@ -150,6 +154,44 @@ class VenvManager:
     def invalidate_cache_by_name(self, name: str) -> None:
         """Invalidate cache for a named env."""
         self.invalidate_cache(self.base_dir / name)
+
+    def _remove_from_cache(self, venv_path: Path) -> None:
+        """Remove env entry from cache completely."""
+        all_cache = self._load_all_cache()
+        key = self._cache_key(venv_path)
+        if key in all_cache:
+            del all_cache[key]
+            self._save_all_cache(all_cache)
+
+    def _rename_cache_key(self, old_path: Path, new_path: Path) -> None:
+        """Move cache entry from old key to new key."""
+        all_cache = self._load_all_cache()
+        old_key = self._cache_key(old_path)
+        new_key = self._cache_key(new_path)
+        if old_key in all_cache:
+            all_cache[new_key] = all_cache.pop(old_key)
+            self._save_all_cache(all_cache)
+
+    def sync_cache_with_disk(self) -> None:
+        """Startup check: remove stale cache entries, mark new envs as needs_refresh=1."""
+        if not self.base_dir.exists():
+            return
+        all_cache = self._load_all_cache()
+        # Get actual env dirs on disk
+        disk_keys = set()
+        for item in self.base_dir.iterdir():
+            if item.is_dir():
+                disk_keys.add(self._cache_key(item))
+        # Remove cache entries for deleted envs
+        stale = [k for k in list(all_cache.keys()) if k not in disk_keys]
+        for k in stale:
+            del all_cache[k]
+        # Add needs_refresh=1 for new envs not in cache
+        for key in disk_keys:
+            if key not in all_cache:
+                all_cache[key] = {"needs_refresh": 1}
+        if stale or (disk_keys - set(all_cache.keys())):
+            self._save_all_cache(all_cache)
 
     def list_venvs_fast(self) -> List[VenvInfo]:
         """Load env list. Uses cache if available, otherwise calculates and saves cache."""
@@ -432,8 +474,8 @@ class VenvManager:
         except Exception as e:
             return False, f"Error cloning environment: {str(e)}"
 
-    def rename_venv(self, old_name: str, new_name: str) -> tuple[bool, str]:
-        """Rename an environment by renaming its directory."""
+    def rename_venv(self, old_name: str, new_name: str, callback=None) -> tuple[bool, str]:
+        """Rename an environment and update cache key."""
         old_path = self.base_dir / old_name
         new_path = self.base_dir / new_name
 
@@ -443,6 +485,10 @@ class VenvManager:
             return False, f"Environment '{new_name}' already exists"
 
         try:
+            if callback:
+                callback(f"Renaming '{old_name}' to '{new_name}'...")
+            # Move cache entry to new key before renaming
+            self._rename_cache_key(old_path, new_path)
             old_path.rename(new_path)
             return True, f"Environment '{old_name}' renamed to '{new_name}'"
         except Exception as e:

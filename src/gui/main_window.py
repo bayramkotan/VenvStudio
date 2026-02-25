@@ -150,6 +150,7 @@ class MainWindow(QMainWindow):
         self._apply_theme()
         self._apply_linux_emoji_fix()
         self._check_linux_venv_module()
+        self.venv_manager.sync_cache_with_disk()
         self._refresh_env_list()
 
         # Auto-check for updates on startup (if enabled)
@@ -617,6 +618,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(message)
         else:
             QMessageBox.critical(self, "Error", message)
+            self._refresh_env_list()
 
     def _clone_env(self):
         source = self._get_selected_env_name()

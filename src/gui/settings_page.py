@@ -357,7 +357,6 @@ class SettingsPage(QWidget):
             self.terminal_combo.addItem("PowerShell", "powershell")
             self.terminal_combo.addItem("CMD", "cmd")
             self.terminal_combo.addItem("Windows Terminal", "wt")
-            self.terminal_combo.addItem("Git Bash", "git-bash")
         elif platform == "macos":
             self.terminal_combo.addItem("Terminal", "terminal")
             self.terminal_combo.addItem("iTerm2", "iterm2")
@@ -387,6 +386,47 @@ class SettingsPage(QWidget):
 
         general_group.setLayout(general_layout)
         layout.addWidget(general_group)
+
+        # ── CUSTOM TERMINALS ──
+        custom_term_group = QGroupBox("🖥️ Custom Terminals")
+        custom_term_layout = QVBoxLayout()
+        custom_term_layout.setSpacing(8)
+
+        info_lbl = QLabel("Add custom terminal commands. Use {path} for env path and {activate} for activate script.")
+        info_lbl.setWordWrap(True)
+        info_lbl.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        custom_term_layout.addWidget(info_lbl)
+
+        # Table
+        self.custom_term_table = QTableWidget(0, 3)
+        self.custom_term_table.setHorizontalHeaderLabels(["Name", "Command", "Enabled"])
+        self.custom_term_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.custom_term_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.custom_term_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.custom_term_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.custom_term_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.custom_term_table.setMaximumHeight(180)
+        custom_term_layout.addWidget(self.custom_term_table)
+
+        # Buttons
+        btn_row = QHBoxLayout()
+        add_term_btn = QPushButton("➕ Add")
+        add_term_btn.setObjectName("secondary")
+        add_term_btn.clicked.connect(self._add_custom_terminal)
+        edit_term_btn = QPushButton("✏️ Edit")
+        edit_term_btn.setObjectName("secondary")
+        edit_term_btn.clicked.connect(self._edit_custom_terminal)
+        del_term_btn = QPushButton("🗑️ Remove")
+        del_term_btn.setObjectName("danger")
+        del_term_btn.clicked.connect(self._remove_custom_terminal)
+        btn_row.addWidget(add_term_btn)
+        btn_row.addWidget(edit_term_btn)
+        btn_row.addWidget(del_term_btn)
+        btn_row.addStretch()
+        custom_term_layout.addLayout(btn_row)
+
+        custom_term_group.setLayout(custom_term_layout)
+        layout.addWidget(custom_term_group)
 
         # ── 6. VS CODE INTEGRATION ──
         vscode_group = QGroupBox("💻 VS Code Integration")
@@ -812,6 +852,130 @@ class SettingsPage(QWidget):
             except Exception as e:
                 QMessageBox.critical(self, "Error", str(e))
 
+    def _load_custom_terminals(self):
+        """Load custom terminals from config into table."""
+        terminals = self.config.get("custom_terminals", [])
+        self.custom_term_table.setRowCount(0)
+        for t in terminals:
+            row = self.custom_term_table.rowCount()
+            self.custom_term_table.insertRow(row)
+            self.custom_term_table.setItem(row, 0, QTableWidgetItem(t.get("name", "")))
+            self.custom_term_table.setItem(row, 1, QTableWidgetItem(t.get("command", "")))
+            chk = QTableWidgetItem()
+            chk.setCheckState(Qt.Checked if t.get("enabled", True) else Qt.Unchecked)
+            self.custom_term_table.setItem(row, 2, chk)
+            # Also add to terminal_combo if enabled
+            if t.get("enabled", True):
+                name = t.get("name", "")
+                if self.terminal_combo.findData(f"custom:{name}") < 0:
+                    self.terminal_combo.addItem(f"⚡ {name}", f"custom:{name}")
+
+    def _save_custom_terminals(self):
+        """Save custom terminals from table to config."""
+        terminals = []
+        for row in range(self.custom_term_table.rowCount()):
+            name = self.custom_term_table.item(row, 0).text() if self.custom_term_table.item(row, 0) else ""
+            cmd = self.custom_term_table.item(row, 1).text() if self.custom_term_table.item(row, 1) else ""
+            chk = self.custom_term_table.item(row, 2)
+            enabled = chk.checkState() == Qt.Checked if chk else True
+            if name and cmd:
+                terminals.append({"name": name, "command": cmd, "enabled": enabled})
+        self.config.set("custom_terminals", terminals)
+
+    def _add_custom_terminal(self):
+        """Add a new custom terminal."""
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLineEdit
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Add Custom Terminal")
+        dialog.setMinimumWidth(480)
+        layout = QFormLayout(dialog)
+
+        name_edit = QLineEdit()
+        name_edit.setPlaceholderText("e.g. My Terminal")
+        cmd_edit = QLineEdit()
+        cmd_edit.setPlaceholderText('e.g. wt -d "{path}" cmd /k "{activate}"')
+
+        hint = QLabel("Variables: {path} = env path, {activate} = activate script")
+        hint.setStyleSheet("color: #a6adc8; font-size: 11px;")
+
+        layout.addRow("Name:", name_edit)
+        layout.addRow("Command:", cmd_edit)
+        layout.addRow(hint)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(dialog.accept)
+        btns.rejected.connect(dialog.reject)
+        layout.addRow(btns)
+
+        if dialog.exec() == QDialog.Accepted:
+            name = name_edit.text().strip()
+            cmd = cmd_edit.text().strip()
+            if name and cmd:
+                row = self.custom_term_table.rowCount()
+                self.custom_term_table.insertRow(row)
+                self.custom_term_table.setItem(row, 0, QTableWidgetItem(name))
+                self.custom_term_table.setItem(row, 1, QTableWidgetItem(cmd))
+                chk = QTableWidgetItem()
+                chk.setCheckState(Qt.Checked)
+                self.custom_term_table.setItem(row, 2, chk)
+                # Add to combo
+                self.terminal_combo.addItem(f"⚡ {name}", f"custom:{name}")
+
+    def _edit_custom_terminal(self):
+        """Edit selected custom terminal."""
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLineEdit
+        row = self.custom_term_table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Edit", "Please select a terminal to edit.")
+            return
+        old_name = self.custom_term_table.item(row, 0).text()
+        old_cmd = self.custom_term_table.item(row, 1).text()
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Edit Custom Terminal")
+        dialog.setMinimumWidth(480)
+        layout = QFormLayout(dialog)
+
+        name_edit = QLineEdit(old_name)
+        cmd_edit = QLineEdit(old_cmd)
+        hint = QLabel("Variables: {path} = env path, {activate} = activate script")
+        hint.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        layout.addRow("Name:", name_edit)
+        layout.addRow("Command:", cmd_edit)
+        layout.addRow(hint)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(dialog.accept)
+        btns.rejected.connect(dialog.reject)
+        layout.addRow(btns)
+
+        if dialog.exec() == QDialog.Accepted:
+            new_name = name_edit.text().strip()
+            new_cmd = cmd_edit.text().strip()
+            if new_name and new_cmd:
+                self.custom_term_table.setItem(row, 0, QTableWidgetItem(new_name))
+                self.custom_term_table.setItem(row, 1, QTableWidgetItem(new_cmd))
+                # Update combo
+                idx = self.terminal_combo.findData(f"custom:{old_name}")
+                if idx >= 0:
+                    self.terminal_combo.setItemText(idx, f"⚡ {new_name}")
+                    self.terminal_combo.setItemData(idx, f"custom:{new_name}")
+
+    def _remove_custom_terminal(self):
+        """Remove selected custom terminal."""
+        row = self.custom_term_table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Remove", "Please select a terminal to remove.")
+            return
+        name = self.custom_term_table.item(row, 0).text()
+        reply = QMessageBox.question(self, "Remove Terminal",
+            f"Remove '{name}'?", QMessageBox.Yes | QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            self.custom_term_table.removeRow(row)
+            idx = self.terminal_combo.findData(f"custom:{name}")
+            if idx >= 0:
+                self.terminal_combo.removeItem(idx)
+
     def _detect_terminals(self):
         """Scan for installed terminals on Linux, offer to install missing ones via pkexec."""
         import shutil
@@ -997,6 +1161,9 @@ class SettingsPage(QWidget):
             self.terminal_cb.setChecked(False)
             self.terminal_combo.setEnabled(False)
             self.terminal_combo.setCurrentIndex(0)
+
+        # Load custom terminals into table and combo
+        self._load_custom_terminals()
 
         # Scan pythons
         self._scan_pythons()
@@ -2317,6 +2484,8 @@ try {{
         else:
             self.config.set("default_terminal", "")
 
+        # Save custom terminals
+        self._save_custom_terminals()
 
         # Save custom categories
         self._save_custom_categories()

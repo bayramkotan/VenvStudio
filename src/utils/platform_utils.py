@@ -34,24 +34,10 @@ def get_platform() -> str:
 
 
 def get_default_venv_base_dir() -> Path:
-    """Return the default base directory for virtual environments.
-    On Windows, falls back to D:/venv, E:/venv if C: is unavailable or has < 500 MB free.
-    """
+    """Return the default base directory for virtual environments."""
     system = get_platform()
     if system == "windows":
-        import shutil
-        for letter in ["C", "D", "E", "F"]:
-            drive = Path(f"{letter}:/")
-            if not drive.exists():
-                continue
-            try:
-                usage = shutil.disk_usage(str(drive))
-                if usage.free < 500 * 1024 * 1024:  # 500 MB minimum
-                    continue
-            except Exception:
-                pass  # If we can't check space, assume it's OK
-            return Path(f"{letter}:/venv")
-        return Path.home() / "venv"  # Last resort
+        return Path("C:/venv")
     elif system == "macos":
         return Path.home() / "venv"
     else:  # linux
@@ -149,33 +135,87 @@ def open_terminal_at(path: Path, terminal_type: str = "") -> None:
     system = get_platform()
 
     try:
+        # Custom terminal — format command with path and activate
+        if terminal_type and terminal_type.startswith("custom:"):
+            custom_name = terminal_type[7:]
+            try:
+                import json as _json
+                from src.utils.platform_utils import get_config_dir
+                cfg_file = get_config_dir() / "config.json"
+                if cfg_file.exists():
+                    cfg = _json.load(open(cfg_file, encoding="utf-8"))
+                    custom_terminals = cfg.get("custom_terminals", [])
+                    for t in custom_terminals:
+                        if t.get("name") == custom_name and t.get("enabled", True):
+                            activate = path / ("Scripts/activate.bat" if system == "windows" else "bin/activate")
+                            cmd = t["command"].replace("{path}", str(path)).replace("{activate}", str(activate))
+                            subprocess.Popen(cmd, shell=True)
+                            return
+            except Exception as e:
+                print(f"Custom terminal error: {e}")
+            return
+
         if system == "windows":
             activate_bat = path / "Scripts" / "activate.bat"
             activate_ps1 = path / "Scripts" / "Activate.ps1"
 
             if terminal_type == "cmd":
-                cmd = f'start cmd /k "cd /d {path} && {activate_bat}"'
+                subprocess.Popen(
+                    ["cmd", "/k", f"cd /d {path} && {activate_bat}"],
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
+                )
+                return
+
             elif terminal_type == "wt":
-                cmd = f'start wt -d "{path}" cmd /k "{activate_bat}"'
+                subprocess.Popen(
+                    ["wt", "-d", str(path), "cmd", "/k", str(activate_bat)],
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
+                )
+                return
+
             elif terminal_type == "git-bash":
-                git_bash = shutil.which("bash")
+                # Find Git Bash executable - NEVER use WSL bash (System32)
+                git_bash = None
+                for candidate in [
+                    r"C:\Program Files\Gitinash.exe",
+                    r"C:\Program Files (x86)\Gitinash.exe",
+                    os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Git", "bin", "bash.exe"),
+                    os.path.join(os.environ.get("USERPROFILE", ""), "AppData", "Local", "Programs", "Git", "bin", "bash.exe"),
+                    os.path.join(os.environ.get("ProgramFiles", ""), "Git", "bin", "bash.exe"),
+                ]:
+                    if candidate and os.path.exists(candidate):
+                        git_bash = candidate
+                        break
+
                 if git_bash:
                     activate_sh = path / "Scripts" / "activate"
-                    cmd = f'start "" "{git_bash}" --login -c "cd \'{path}\' && source \'{activate_sh}\' && exec bash"'
-                else:
-                    cmd = f'start cmd /k "cd /d {path} && {activate_bat}"'
-            else:
-                # Default: PowerShell
-                if activate_ps1.exists():
-                    cmd = (
-                        f'start powershell -NoExit -Command "'
-                        f'Set-Location \'{path}\'; '
-                        f'& \'{activate_ps1}\'"'
+                    # Convert Windows path to Unix path for bash
+                    def to_unix(p):
+                        s = str(p).replace("\\", "/")
+                        if len(s) > 1 and s[1] == ":":
+                            s = "/" + s[0].lower() + s[2:]
+                        return s
+                    bash_init = f"cd '{to_unix(path)}' && source '{to_unix(activate_sh)}' && exec bash -i"
+                    subprocess.Popen(
+                        [git_bash, "--login", "-i", "-c", bash_init],
+                        creationflags=subprocess.CREATE_NEW_CONSOLE,
+                        env={**os.environ, "MSYSTEM": "MINGW64"},
                     )
-                else:
-                    cmd = f'start cmd /k "cd /d {path} && {activate_bat}"'
+                    return
+                # Git Bash not found, fall through to PowerShell
 
-            subprocess.Popen(cmd, shell=True)
+            # Default: PowerShell
+            if activate_ps1.exists():
+                subprocess.Popen(
+                    ["powershell", "-NoExit", "-Command",
+                     f"Set-Location '{path}'; & '{activate_ps1}'"],
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
+                )
+            else:
+                subprocess.Popen(
+                    ["cmd", "/k", f"cd /d {path} && {activate_bat}"],
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
+                )
 
         elif system == "macos":
             activate = path / "bin" / "activate"
@@ -193,59 +233,48 @@ def open_terminal_at(path: Path, terminal_type: str = "") -> None:
 
         else:  # linux
             activate = path / "bin" / "activate"
-            # Use double quotes inside bash_cmd to avoid single-quote path issues
-            bash_cmd = f'cd "{path}" && source "{activate}" && exec bash'
+            bash_cmd = f"cd '{path}' && source '{activate}' && exec bash"
 
-            # Ensure DISPLAY and DBUS are passed to subprocess (needed when launched via python main.py)
-            import os as _os
-            env = _os.environ.copy()
-            if "DISPLAY" not in env:
-                env["DISPLAY"] = ":0"
+            def _launch_linux_terminal(term: str) -> bool:
+                """Try to launch a specific terminal. Returns True on success."""
+                if not shutil.which(term):
+                    return False
+                try:
+                    if term == "gnome-terminal":
+                        subprocess.Popen([term, "--", "bash", "-c", bash_cmd])
+                    elif term in ("konsole", "yakuake"):
+                        subprocess.Popen([term, "--noclose", "-e", "bash", "-c", bash_cmd])
+                    elif term in ("xfce4-terminal", "mate-terminal", "lxterminal", "tilix"):
+                        subprocess.Popen([term, "-e", f"bash -c '{bash_cmd}'"])
+                    elif term == "kitty":
+                        subprocess.Popen([term, "bash", "-c", bash_cmd])
+                    elif term == "alacritty":
+                        subprocess.Popen([term, "-e", "bash", "-c", bash_cmd])
+                    elif term == "wezterm":
+                        subprocess.Popen([term, "start", "--", "bash", "-c", bash_cmd])
+                    else:
+                        # xterm, x-terminal-emulator and others
+                        subprocess.Popen([term, "-e", f"bash -c '{bash_cmd}'"])
+                    return True
+                except Exception:
+                    return False
 
-            def _popen(cmd):
-                subprocess.Popen(cmd, env=env, start_new_session=True)
+            # Explicit terminal selected (not "default" or empty)
+            if terminal_type and terminal_type not in ("", "default"):
+                if _launch_linux_terminal(terminal_type):
+                    return  # success, done
 
-            # Terminal preference list with correct argument styles
-            terminal_args = {
-                "gnome-terminal":  lambda: ["gnome-terminal", "--", "bash", "-c", bash_cmd],
-                "konsole":         lambda: ["konsole", "-e", "bash", "-c", bash_cmd],
-                "xfce4-terminal":  lambda: ["xfce4-terminal", "-e", f"bash -c {bash_cmd!r}"],
-                "tilix":           lambda: ["tilix", "-e", "bash", "-c", bash_cmd],
-                "mate-terminal":   lambda: ["mate-terminal", "-e", f"bash -c {bash_cmd!r}"],
-                "alacritty":       lambda: ["alacritty", "-e", "bash", "-c", bash_cmd],
-                "kitty":           lambda: ["kitty", "bash", "-c", bash_cmd],
-                "wezterm":         lambda: ["wezterm", "start", "bash", "-c", bash_cmd],
-                "lxterminal":      lambda: ["lxterminal", "-e", f"bash -c {bash_cmd!r}"],
-                "xterm":           lambda: ["xterm", "-e", f"bash -c {bash_cmd!r}"],
-            }
-
-            # If specific terminal requested
-            if terminal_type and terminal_type in terminal_args and shutil.which(terminal_type):
-                _popen(terminal_args[terminal_type]())
-            else:
-                # Auto-detect: try each in order
-                launched = False
-                for term, args_fn in terminal_args.items():
-                    if shutil.which(term):
-                        try:
-                            _popen(args_fn())
-                            launched = True
-                            break
-                        except Exception:
-                            continue
-                if not launched:
-                    # Last resort: xdg-terminal or x-terminal-emulator
-                    for fallback in ["x-terminal-emulator", "xdg-terminal"]:
-                        if shutil.which(fallback):
-                            try:
-                                _popen([fallback, "-e", f"bash -c {bash_cmd!r}"])
-                                break
-                            except Exception:
-                                pass
+            # Auto-detect: try common terminals in order of preference
+            auto_order = [
+                "gnome-terminal", "konsole", "xfce4-terminal",
+                "tilix", "mate-terminal", "alacritty", "kitty",
+                "wezterm", "lxterminal", "xterm", "x-terminal-emulator",
+            ]
+            for term in auto_order:
+                if _launch_linux_terminal(term):
+                    break
     except Exception as e:
-        import traceback
         print(f"Could not open terminal: {e}")
-        traceback.print_exc()
 
 
 def get_venv_size(venv_path: Path) -> str:

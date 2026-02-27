@@ -1709,7 +1709,13 @@ $s.Save()
             self._ql_update_callback()
 
     def refresh_packages(self):
-        """Refresh installed packages list - shows ALL packages."""
+        """Refresh installed packages list - invalidates cache and async reloads."""
+        self._invalidate_pkg_cache()
+        self._async_refresh_packages(force=True)
+        return
+
+    def _refresh_packages_sync_legacy(self):
+        """Legacy sync refresh - kept for internal use only."""
         if not self.pip_manager:
             return
 

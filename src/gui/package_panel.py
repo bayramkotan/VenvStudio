@@ -983,7 +983,7 @@ $s.Save()
 
         refresh_btn = QPushButton(f"🔄 {tr('refresh')}")
         refresh_btn.setObjectName("secondary")
-        refresh_btn.clicked.connect(self.refresh_packages)
+        refresh_btn.clicked.connect(lambda: self._async_refresh_packages(force=True))
         toolbar.addWidget(refresh_btn)
 
         self.update_btn = QPushButton(f"⬆️ {tr('check_outdated')}")
@@ -1318,6 +1318,53 @@ $s.Save()
 
     # ── Public Methods ──
 
+    def _get_pkg_cache_key(self) -> str:
+        """Cache key for current env's package list."""
+        if not self.pip_manager:
+            return ""
+        return "pkg_list:" + str(self.pip_manager.venv_path).replace("\\", "/")
+
+    def _load_pkg_cache(self):
+        """Load cached package list. Returns list of dicts or None if needs_refresh."""
+        try:
+            from src.core.venv_manager import VenvManager
+            from src.core.config_manager import ConfigManager
+            vm = VenvManager(ConfigManager().get_venv_base_dir())
+            entry = vm._load_all_cache().get(self._get_pkg_cache_key())
+            if not entry or entry.get("needs_refresh", 1) == 1:
+                return None
+            return entry.get("packages")
+        except Exception:
+            return None
+
+    def _save_pkg_cache(self, packages):
+        """Save package list to cache."""
+        try:
+            from src.core.venv_manager import VenvManager
+            from src.core.config_manager import ConfigManager
+            vm = VenvManager(ConfigManager().get_venv_base_dir())
+            all_cache = vm._load_all_cache()
+            all_cache[self._get_pkg_cache_key()] = {
+                "packages": [{"name": p.name, "version": p.version} for p in packages],
+                "needs_refresh": 0,
+            }
+            vm._save_all_cache(all_cache)
+        except Exception:
+            pass
+
+    def _invalidate_pkg_cache(self):
+        """Mark package list cache as needs_refresh=1."""
+        try:
+            from src.core.venv_manager import VenvManager
+            from src.core.config_manager import ConfigManager
+            vm = VenvManager(ConfigManager().get_venv_base_dir())
+            all_cache = vm._load_all_cache()
+            key = self._get_pkg_cache_key()
+            all_cache[key] = {"needs_refresh": 1, **{k: v for k, v in all_cache.get(key, {}).items() if k != "needs_refresh"}}
+            vm._save_all_cache(all_cache)
+        except Exception:
+            pass
+
     def _invalidate_env_cache(self) -> None:
         """Invalidate cache for current env so env list refreshes correctly."""
         if not hasattr(self, "_current_venv_path") or not self._current_venv_path:
@@ -1561,10 +1608,24 @@ $s.Save()
         for lbl in self._info_labels:
             lbl.setVisible(False)
 
-    def _async_refresh_packages(self):
-        """Load packages in background — UI stays responsive."""
+    def _async_refresh_packages(self, force: bool = False):
+        """Load packages — from cache if available, otherwise background subprocess."""
         if not self.pip_manager:
             return
+
+        # Try cache first (unless force=True e.g. after install/uninstall)
+        if not force:
+            cached = self._load_pkg_cache()
+            if cached is not None:
+                from src.core.pip_manager import PipManager
+                # Reconstruct minimal package objects
+                class _Pkg:
+                    def __init__(self, name, version):
+                        self.name = name
+                        self.version = version
+                pkgs = [_Pkg(p["name"], p["version"]) for p in cached]
+                self._on_packages_loaded(pkgs)
+                return
 
         # Cancel / wait for any previous loader to avoid QThread crash
         if hasattr(self, '_pkg_loader') and self._pkg_loader is not None:
@@ -1612,6 +1673,10 @@ $s.Save()
         """Called when async package loading finishes."""
         if not self.pip_manager:
             return
+
+        # Save to cache for next time (no-op if packages came from cache)
+        if hasattr(packages[0] if packages else None, 'name'):
+            self._save_pkg_cache(packages)
 
         self.installed_package_names = {pkg.name.lower() for pkg in packages}
 
@@ -2356,9 +2421,9 @@ dependencies:
 
         if success:
             self.status_label.setText("Operation completed successfully")
-            # Invalidate cache so env list shows updated package count/size
             self._invalidate_env_cache()
-            self.refresh_packages()
+            self._invalidate_pkg_cache()
+            self._async_refresh_packages(force=True)
             self.env_refresh_requested.emit()
         else:
             if "cancelled" not in message.lower():

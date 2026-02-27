@@ -579,6 +579,49 @@ class PackagePanel(QWidget):
                 card._uninstall_btn.setVisible(False)
                 card._shortcut_btn.setVisible(False)
 
+        # Update quick sidebar
+        self._update_quick_sidebar()
+
+    def _update_quick_sidebar(self):
+        """Update sidebar buttons — show only installed apps."""
+        if not hasattr(self, "_sidebar_buttons"):
+            return
+        # Remove old buttons
+        for btn in self._sidebar_buttons.values():
+            self._sidebar_layout.removeWidget(btn)
+            btn.deleteLater()
+        self._sidebar_buttons = {}
+
+        for name, card in self.launcher_cards.items():
+            app_def = card._app_def
+            pkg = app_def["package"].lower()
+            if pkg not in self.installed_package_names:
+                continue
+            btn = QPushButton(app_def["icon"])
+            btn.setFixedSize(48, 48)
+            btn.setToolTip(f"Launch {name}")
+            btn.setStyleSheet("""
+                QPushButton {
+                    font-size: 22px;
+                    background-color: #1e1e2e;
+                    border: 1px solid #313244;
+                    border-radius: 8px;
+                }
+                QPushButton:hover {
+                    background-color: #313244;
+                    border-color: #89b4fa;
+                }
+                QPushButton:pressed {
+                    background-color: #45475a;
+                }
+            """)
+            btn.clicked.connect(lambda checked, a=app_def: self._launch_app(a))
+            self._sidebar_layout.addWidget(btn)
+            self._sidebar_buttons[name] = btn
+
+        # Show/hide sidebar based on installed count
+        self.quick_sidebar.setVisible(len(self._sidebar_buttons) > 0)
+
     def _get_orange3_packages(self, python_exe) -> list:
         """Return the right Orange3 + PyQt packages based on Python version."""
         try:
@@ -1661,6 +1704,9 @@ $s.Save()
         self._populate_catalog()
         self._update_launcher_status()
         self._update_preset_badges()
+        # Notify main window to update quick launch buttons
+        if hasattr(self, "_ql_update_callback") and callable(self._ql_update_callback):
+            self._ql_update_callback()
 
     def refresh_packages(self):
         """Refresh installed packages list - shows ALL packages."""

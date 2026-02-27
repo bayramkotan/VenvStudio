@@ -135,87 +135,33 @@ def open_terminal_at(path: Path, terminal_type: str = "") -> None:
     system = get_platform()
 
     try:
-        # Custom terminal — format command with path and activate
-        if terminal_type and terminal_type.startswith("custom:"):
-            custom_name = terminal_type[7:]
-            try:
-                import json as _json
-                from src.utils.platform_utils import get_config_dir
-                cfg_file = get_config_dir() / "config.json"
-                if cfg_file.exists():
-                    cfg = _json.load(open(cfg_file, encoding="utf-8"))
-                    custom_terminals = cfg.get("custom_terminals", [])
-                    for t in custom_terminals:
-                        if t.get("name") == custom_name and t.get("enabled", True):
-                            activate = path / ("Scripts/activate.bat" if system == "windows" else "bin/activate")
-                            cmd = t["command"].replace("{path}", str(path)).replace("{activate}", str(activate))
-                            subprocess.Popen(cmd, shell=True)
-                            return
-            except Exception as e:
-                print(f"Custom terminal error: {e}")
-            return
-
         if system == "windows":
             activate_bat = path / "Scripts" / "activate.bat"
             activate_ps1 = path / "Scripts" / "Activate.ps1"
 
             if terminal_type == "cmd":
-                subprocess.Popen(
-                    ["cmd", "/k", f"cd /d {path} && {activate_bat}"],
-                    creationflags=subprocess.CREATE_NEW_CONSOLE,
-                )
-                return
-
+                cmd = f'start cmd /k "cd /d {path} && {activate_bat}"'
             elif terminal_type == "wt":
-                subprocess.Popen(
-                    ["wt", "-d", str(path), "cmd", "/k", str(activate_bat)],
-                    creationflags=subprocess.CREATE_NEW_CONSOLE,
-                )
-                return
-
+                cmd = f'start wt -d "{path}" cmd /k "{activate_bat}"'
             elif terminal_type == "git-bash":
-                # Find Git Bash executable - NEVER use WSL bash (System32)
-                git_bash = None
-                for candidate in [
-                    r"C:\Program Files\Gitinash.exe",
-                    r"C:\Program Files (x86)\Gitinash.exe",
-                    os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Git", "bin", "bash.exe"),
-                    os.path.join(os.environ.get("USERPROFILE", ""), "AppData", "Local", "Programs", "Git", "bin", "bash.exe"),
-                    os.path.join(os.environ.get("ProgramFiles", ""), "Git", "bin", "bash.exe"),
-                ]:
-                    if candidate and os.path.exists(candidate):
-                        git_bash = candidate
-                        break
-
+                git_bash = shutil.which("bash")
                 if git_bash:
                     activate_sh = path / "Scripts" / "activate"
-                    # Convert Windows path to Unix path for bash
-                    def to_unix(p):
-                        s = str(p).replace("\\", "/")
-                        if len(s) > 1 and s[1] == ":":
-                            s = "/" + s[0].lower() + s[2:]
-                        return s
-                    bash_init = f"cd '{to_unix(path)}' && source '{to_unix(activate_sh)}' && exec bash -i"
-                    subprocess.Popen(
-                        [git_bash, "--login", "-i", "-c", bash_init],
-                        creationflags=subprocess.CREATE_NEW_CONSOLE,
-                        env={**os.environ, "MSYSTEM": "MINGW64"},
-                    )
-                    return
-                # Git Bash not found, fall through to PowerShell
-
-            # Default: PowerShell
-            if activate_ps1.exists():
-                subprocess.Popen(
-                    ["powershell", "-NoExit", "-Command",
-                     f"Set-Location '{path}'; & '{activate_ps1}'"],
-                    creationflags=subprocess.CREATE_NEW_CONSOLE,
-                )
+                    cmd = f'start "" "{git_bash}" --login -c "cd \'{path}\' && source \'{activate_sh}\' && exec bash"'
+                else:
+                    cmd = f'start cmd /k "cd /d {path} && {activate_bat}"'
             else:
-                subprocess.Popen(
-                    ["cmd", "/k", f"cd /d {path} && {activate_bat}"],
-                    creationflags=subprocess.CREATE_NEW_CONSOLE,
-                )
+                # Default: PowerShell
+                if activate_ps1.exists():
+                    cmd = (
+                        f'start powershell -NoExit -Command "'
+                        f'Set-Location \'{path}\'; '
+                        f'& \'{activate_ps1}\'"'
+                    )
+                else:
+                    cmd = f'start cmd /k "cd /d {path} && {activate_bat}"'
+
+            subprocess.Popen(cmd, shell=True)
 
         elif system == "macos":
             activate = path / "bin" / "activate"
@@ -235,26 +181,44 @@ def open_terminal_at(path: Path, terminal_type: str = "") -> None:
             activate = path / "bin" / "activate"
             bash_cmd = f"cd '{path}' && source '{activate}' && exec bash"
 
+            # AppImage: restore host system PATH so terminals can be found
+            host_env = os.environ.copy()
+            if "APPDIR" in os.environ or "APPIMAGE" in os.environ:
+                # Remove AppImage-injected paths, restore original PATH
+                original_path = os.environ.get("PATH_ORIG", os.environ.get("PATH", ""))
+                # Also add common terminal locations
+                extra = "/usr/bin:/usr/local/bin:/bin:/snap/bin:/usr/games"
+                host_env["PATH"] = original_path + ":" + extra
+                # Unset Qt/library overrides that would confuse the terminal
+                for var in ("QT_PLUGIN_PATH", "QT_QPA_PLATFORM_PLUGIN_PATH",
+                            "LD_LIBRARY_PATH", "LD_PRELOAD"):
+                    host_env.pop(var, None)
+
+            def _find_term(term: str) -> str:
+                """Find terminal executable, checking host PATH for AppImage."""
+                found = shutil.which(term, path=host_env.get("PATH"))
+                return found or ""
+
             def _launch_linux_terminal(term: str) -> bool:
                 """Try to launch a specific terminal. Returns True on success."""
-                if not shutil.which(term):
+                exe = _find_term(term)
+                if not exe:
                     return False
                 try:
                     if term == "gnome-terminal":
-                        subprocess.Popen([term, "--", "bash", "-c", bash_cmd])
+                        subprocess.Popen([exe, "--", "bash", "-c", bash_cmd], env=host_env)
                     elif term in ("konsole", "yakuake"):
-                        subprocess.Popen([term, "--noclose", "-e", "bash", "-c", bash_cmd])
+                        subprocess.Popen([exe, "--noclose", "-e", "bash", "-c", bash_cmd], env=host_env)
                     elif term in ("xfce4-terminal", "mate-terminal", "lxterminal", "tilix"):
-                        subprocess.Popen([term, "-e", f"bash -c '{bash_cmd}'"])
+                        subprocess.Popen([exe, "-e", f"bash -c '{bash_cmd}'"], env=host_env)
                     elif term == "kitty":
-                        subprocess.Popen([term, "bash", "-c", bash_cmd])
+                        subprocess.Popen([exe, "bash", "-c", bash_cmd], env=host_env)
                     elif term == "alacritty":
-                        subprocess.Popen([term, "-e", "bash", "-c", bash_cmd])
+                        subprocess.Popen([exe, "-e", "bash", "-c", bash_cmd], env=host_env)
                     elif term == "wezterm":
-                        subprocess.Popen([term, "start", "--", "bash", "-c", bash_cmd])
+                        subprocess.Popen([exe, "start", "--", "bash", "-c", bash_cmd], env=host_env)
                     else:
-                        # xterm, x-terminal-emulator and others
-                        subprocess.Popen([term, "-e", f"bash -c '{bash_cmd}'"])
+                        subprocess.Popen([exe, "-e", f"bash -c '{bash_cmd}'"], env=host_env)
                     return True
                 except Exception:
                     return False
@@ -262,7 +226,7 @@ def open_terminal_at(path: Path, terminal_type: str = "") -> None:
             # Explicit terminal selected (not "default" or empty)
             if terminal_type and terminal_type not in ("", "default"):
                 if _launch_linux_terminal(terminal_type):
-                    return  # success, done
+                    return
 
             # Auto-detect: try common terminals in order of preference
             auto_order = [

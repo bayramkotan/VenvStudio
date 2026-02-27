@@ -140,28 +140,62 @@ def open_terminal_at(path: Path, terminal_type: str = "") -> None:
             activate_ps1 = path / "Scripts" / "Activate.ps1"
 
             if terminal_type == "cmd":
-                cmd = f'start cmd /k "cd /d {path} && {activate_bat}"'
+                subprocess.Popen(
+                    ["cmd", "/k", f"cd /d {path} && {activate_bat}"],
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
+                )
+                return
+
             elif terminal_type == "wt":
-                cmd = f'start wt -d "{path}" cmd /k "{activate_bat}"'
+                subprocess.Popen(
+                    ["wt", "-d", str(path), "cmd", "/k", str(activate_bat)],
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
+                )
+                return
+
             elif terminal_type == "git-bash":
-                git_bash = shutil.which("bash")
+                # Find Git Bash executable - NEVER use WSL bash (System32)
+                git_bash = None
+                for candidate in [
+                    r"C:\Program Files\Gitinash.exe",
+                    r"C:\Program Files (x86)\Gitinash.exe",
+                    os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Git", "bin", "bash.exe"),
+                    os.path.join(os.environ.get("USERPROFILE", ""), "AppData", "Local", "Programs", "Git", "bin", "bash.exe"),
+                    os.path.join(os.environ.get("ProgramFiles", ""), "Git", "bin", "bash.exe"),
+                ]:
+                    if candidate and os.path.exists(candidate):
+                        git_bash = candidate
+                        break
+
                 if git_bash:
                     activate_sh = path / "Scripts" / "activate"
-                    cmd = f'start "" "{git_bash}" --login -c "cd \'{path}\' && source \'{activate_sh}\' && exec bash"'
-                else:
-                    cmd = f'start cmd /k "cd /d {path} && {activate_bat}"'
-            else:
-                # Default: PowerShell
-                if activate_ps1.exists():
-                    cmd = (
-                        f'start powershell -NoExit -Command "'
-                        f'Set-Location \'{path}\'; '
-                        f'& \'{activate_ps1}\'"'
+                    # Convert Windows path to Unix path for bash
+                    def to_unix(p):
+                        s = str(p).replace("\\", "/")
+                        if len(s) > 1 and s[1] == ":":
+                            s = "/" + s[0].lower() + s[2:]
+                        return s
+                    bash_init = f"cd '{to_unix(path)}' && source '{to_unix(activate_sh)}' && exec bash -i"
+                    subprocess.Popen(
+                        [git_bash, "--login", "-i", "-c", bash_init],
+                        creationflags=subprocess.CREATE_NEW_CONSOLE,
+                        env={**os.environ, "MSYSTEM": "MINGW64"},
                     )
-                else:
-                    cmd = f'start cmd /k "cd /d {path} && {activate_bat}"'
+                    return
+                # Git Bash not found, fall through to PowerShell
 
-            subprocess.Popen(cmd, shell=True)
+            # Default: PowerShell
+            if activate_ps1.exists():
+                subprocess.Popen(
+                    ["powershell", "-NoExit", "-Command",
+                     f"Set-Location '{path}'; & '{activate_ps1}'"],
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
+                )
+            else:
+                subprocess.Popen(
+                    ["cmd", "/k", f"cd /d {path} && {activate_bat}"],
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
+                )
 
         elif system == "macos":
             activate = path / "bin" / "activate"

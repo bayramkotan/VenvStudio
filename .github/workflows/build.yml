@@ -133,6 +133,8 @@ jobs:
           #!/bin/bash
           SELF=$(readlink -f "$0")
           HERE=${SELF%/*}
+          # Save original host PATH before modifying (for terminal launch)
+          export PATH_ORIG="${PATH}"
           export PATH="${HERE}/usr/bin:${PATH}"
           export LD_LIBRARY_PATH="${HERE}/usr/bin:${HERE}/usr/lib:${LD_LIBRARY_PATH}"
           export QT_PLUGIN_PATH="${HERE}/usr/bin/PySide6/Qt/plugins"

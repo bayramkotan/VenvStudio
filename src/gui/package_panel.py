@@ -1380,6 +1380,52 @@ $s.Save()
 
     # ── Public Methods ──
 
+    def _get_pkg_cache_key(self) -> str:
+        if not self.pip_manager:
+            return ""
+        return "pkg_list:" + str(self.pip_manager.venv_path).replace("\\", "/")
+
+    def _load_pkg_cache(self):
+        try:
+            from src.core.venv_manager import VenvManager
+            from src.core.config_manager import ConfigManager
+            vm = VenvManager(ConfigManager().get_venv_base_dir())
+            entry = vm._load_all_cache().get(self._get_pkg_cache_key())
+            if not entry or entry.get("needs_refresh", 1) == 1:
+                return None
+            return entry.get("packages")
+        except Exception:
+            return None
+
+    def _save_pkg_cache(self, packages):
+        try:
+            from src.core.venv_manager import VenvManager
+            from src.core.config_manager import ConfigManager
+            vm = VenvManager(ConfigManager().get_venv_base_dir())
+            all_cache = vm._load_all_cache()
+            all_cache[self._get_pkg_cache_key()] = {
+                "packages": [{"name": p.name, "version": p.version} for p in packages],
+                "needs_refresh": 0,
+            }
+            vm._save_all_cache(all_cache)
+        except Exception:
+            pass
+
+    def _invalidate_pkg_cache(self):
+        try:
+            from src.core.venv_manager import VenvManager
+            from src.core.config_manager import ConfigManager
+            vm = VenvManager(ConfigManager().get_venv_base_dir())
+            all_cache = vm._load_all_cache()
+            key = self._get_pkg_cache_key()
+            if key in all_cache:
+                all_cache[key]["needs_refresh"] = 1
+            else:
+                all_cache[key] = {"needs_refresh": 1}
+            vm._save_all_cache(all_cache)
+        except Exception:
+            pass
+
     def _invalidate_env_cache(self) -> None:
         """Invalidate cache for current env so env list refreshes correctly."""
         if not hasattr(self, "_current_venv_path") or not self._current_venv_path:
@@ -1623,10 +1669,22 @@ $s.Save()
         for lbl in self._info_labels:
             lbl.setVisible(False)
 
-    def _async_refresh_packages(self):
-        """Load packages in background — UI stays responsive."""
+    def _async_refresh_packages(self, force: bool = False):
+        """Load packages — from cache if available, otherwise background subprocess."""
         if not self.pip_manager:
             return
+
+        # Try cache first (unless force=True)
+        if not force:
+            cached = self._load_pkg_cache()
+            if cached is not None:
+                class _Pkg:
+                    def __init__(self, name, version):
+                        self.name = name
+                        self.version = version
+                pkgs = [_Pkg(p["name"], p["version"]) for p in cached]
+                self._on_packages_loaded(pkgs)
+                return
 
         # Cancel / wait for any previous loader to avoid QThread crash
         if hasattr(self, '_pkg_loader') and self._pkg_loader is not None:
@@ -1674,6 +1732,9 @@ $s.Save()
         """Called when async package loading finishes."""
         if not self.pip_manager:
             return
+
+        # Save to cache
+        self._save_pkg_cache(packages)
 
         self.installed_package_names = {pkg.name.lower() for pkg in packages}
 

@@ -1117,6 +1117,20 @@ $s.Save()
         self._populate_catalog()
         return widget
 
+    def reload_presets_tab(self):
+        """Reload presets tab — called after settings saved to show new custom presets."""
+        # Find preset tab index (index 3)
+        preset_idx = 3
+        old_widget = self.tabs.widget(preset_idx)
+        new_widget = self._create_presets_tab()
+        self.tabs.removeTab(preset_idx)
+        self.tabs.insertTab(preset_idx, new_widget, f"⚡ {tr('presets')}")
+        self.tabs.setCurrentIndex(self.tabs.currentIndex())  # keep current tab
+        if old_widget:
+            old_widget.deleteLater()
+        # Update badge states
+        self._update_preset_badges()
+
     def _create_presets_tab(self) -> QWidget:
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)

@@ -1010,6 +1010,9 @@ class MainWindow(QMainWindow):
         new_dir = self.config.get_venv_base_dir()
         self.venv_manager.set_base_dir(new_dir)
         self._refresh_env_list()
+        # Reload presets tab so custom presets appear immediately
+        if hasattr(self, "package_panel"):
+            self.package_panel.reload_presets_tab()
         self.statusBar().showMessage("Settings saved")
 
     def _show_about(self):

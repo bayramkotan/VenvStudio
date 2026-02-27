@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QPushButton, QFrame, QTableWidget, QTableWidgetItem,
     QHeaderView, QMessageBox, QFileDialog,
     QStackedWidget, QInputDialog, QApplication, QProgressDialog,
-    QMenu,
+    QMenu, QComboBox,
 )
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QFont, QAction
@@ -152,6 +152,10 @@ class MainWindow(QMainWindow):
         self._check_linux_venv_module()
         self.venv_manager.sync_cache_with_disk()
         self._refresh_env_list()
+
+        # Open default env on startup
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(300, self._open_default_env)
 
         # Auto-check for updates on startup (if enabled)
         if self.config.get("check_updates", False):
@@ -297,6 +301,43 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(self.btn_settings)
         self.nav_buttons.append(self.btn_settings)
 
+        # ── Quick Launch section (visible only on Packages page) ──
+        self.quick_launch_frame = QFrame()
+        self.quick_launch_frame.setVisible(True)
+        ql_layout = QVBoxLayout(self.quick_launch_frame)
+        ql_layout.setContentsMargins(4, 8, 4, 4)
+        ql_layout.setSpacing(4)
+
+        ql_sep = QFrame()
+        ql_sep.setFrameShape(QFrame.HLine)
+        ql_sep.setStyleSheet("background-color: #313244; max-height: 1px;")
+        ql_layout.addWidget(ql_sep)
+
+        ql_title = QLabel("  ⚡ Quick Launch")
+        ql_title.setStyleSheet("color: #6c7086; font-size: 10px; padding: 2px 0;")
+        ql_layout.addWidget(ql_title)
+
+        # Env selector for quick launch
+        self.ql_env_selector = QComboBox()
+        self.ql_env_selector.setFixedHeight(28)
+        self.ql_env_selector.setStyleSheet(
+            "QComboBox { font-size: 12px; padding: 2px 8px; "
+            "background-color: #1e1e2e; color: #cdd6f4; "
+            "border: 1px solid #45475a; border-radius: 4px; }"
+            "QComboBox QAbstractItemView { background-color: #1e1e2e; color: #cdd6f4; "
+            "selection-background-color: #89b4fa; selection-color: #1e1e2e; }"
+        )
+        self.ql_env_selector.currentIndexChanged.connect(self._on_ql_env_changed)
+        ql_layout.addWidget(self.ql_env_selector)
+
+        # App buttons container
+        self.ql_buttons_widget = QWidget()
+        self.ql_buttons_layout = QVBoxLayout(self.ql_buttons_widget)
+        self.ql_buttons_layout.setContentsMargins(0, 0, 0, 0)
+        self.ql_buttons_layout.setSpacing(2)
+        ql_layout.addWidget(self.ql_buttons_widget)
+
+        sidebar_layout.addWidget(self.quick_launch_frame)
         sidebar_layout.addStretch()
 
         footer_label = QLabel("  LGPL-3.0 License")
@@ -309,6 +350,7 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self._create_env_page())       # Page 0
         self.package_panel = PackagePanel()
         self.package_panel.env_refresh_requested.connect(self._refresh_env_list)
+        self.package_panel._ql_update_callback = self._update_ql_buttons
         self.stack.addWidget(self.package_panel)             # Page 1
 
         # Settings page
@@ -352,11 +394,13 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.info_label)
 
         self.env_table = QTableWidget()
-        self.env_table.setColumnCount(5)
-        self.env_table.setHorizontalHeaderLabels(["Name", "Python", "Packages", "Size", "Created"])
+        self.env_table.setColumnCount(6)
+        self.env_table.setHorizontalHeaderLabels(["Name", "Python", "Packages", "Size", "Created", "Default"])
         self.env_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         for col in range(1, 5):
             self.env_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeToContents)
+        self.env_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Fixed)
+        self.env_table.setColumnWidth(5, 70)
         self.env_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.env_table.setSelectionMode(QTableWidget.SingleSelection)
         self.env_table.setAlternatingRowColors(True)
@@ -422,6 +466,12 @@ class MainWindow(QMainWindow):
         self.btn_export.setMenu(export_menu)
         action_layout.addWidget(self.btn_export)
 
+        self.btn_make_default = QPushButton("⭐ Make Default")
+        self.btn_make_default.setObjectName("secondary")
+        self.btn_make_default.clicked.connect(self._make_default_env)
+        self.btn_make_default.setEnabled(False)
+        action_layout.addWidget(self.btn_make_default)
+
         action_layout.addStretch()
 
         self.btn_delete = QPushButton(f"\U0001f5d1\ufe0f {tr('delete')}")
@@ -437,6 +487,71 @@ class MainWindow(QMainWindow):
         self.stack.setCurrentIndex(index)
         for i, btn in enumerate(self.nav_buttons):
             btn.setChecked(i == index)
+        # Quick launch always visible (not on Settings page)
+        if hasattr(self, "quick_launch_frame"):
+            self.quick_launch_frame.setVisible(index != 2)
+
+    def _on_ql_env_changed(self, idx):
+        """Quick launch env selector changed — sync package_panel, buttons update via callback."""
+        if not hasattr(self, "ql_env_selector"):
+            return
+        venv_name = self.ql_env_selector.itemData(idx)
+        if not venv_name:
+            self._update_ql_buttons()
+            return
+        # Sync package_panel env selector — this triggers async package load
+        # _update_ql_buttons will be called via _ql_update_callback when loading finishes
+        pp_idx = self.package_panel.env_selector.findData(venv_name)
+        if pp_idx >= 0:
+            self.package_panel.env_selector.setCurrentIndex(pp_idx)
+        else:
+            # fallback: set directly
+            venv_path = self.venv_manager.base_dir / venv_name
+            if venv_path.exists():
+                self.package_panel.set_venv(venv_path)
+
+    def _update_ql_buttons(self):
+        """Rebuild quick launch buttons — called after packages finish loading."""
+        if not hasattr(self, "ql_buttons_layout"):
+            return
+        # Clear old buttons
+        while self.ql_buttons_layout.count():
+            item = self.ql_buttons_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+        # Get installed packages from package_panel
+        installed = getattr(self.package_panel, "installed_package_names", set())
+        app_defs = getattr(self.package_panel, "app_definitions", [])
+        has_any = False
+        for app in app_defs:
+            if app["package"].lower() not in installed:
+                continue
+            has_any = True
+            btn = QPushButton(f"{app['icon']} {app['name']}")
+            btn.setFixedHeight(30)
+            btn.setStyleSheet(
+                "QPushButton { font-size: 12px; text-align: left; padding: 2px 8px; "
+                "background-color: #1e1e2e; color: #cdd6f4; "
+                "border: 1px solid #313244; border-radius: 4px; }"
+                "QPushButton:hover { background-color: #313244; border-color: #89b4fa; }"
+            )
+            btn.clicked.connect(lambda checked, a=app: self.package_panel._launch_app(a))
+            self.ql_buttons_layout.addWidget(btn)
+        # Show placeholder if nothing installed
+        if not has_any:
+            lbl = QLabel("  No apps installed")
+            lbl.setStyleSheet("color: #45475a; font-size: 11px; padding: 4px;")
+            self.ql_buttons_layout.addWidget(lbl)
+        # Sync ql_env_selector with package_panel's current env
+        current_env = ""
+        if self.package_panel.pip_manager:
+            current_env = self.package_panel.pip_manager.venv_path.name
+        if hasattr(self, "ql_env_selector") and current_env:
+            idx = self.ql_env_selector.findData(current_env)
+            if idx >= 0:
+                self.ql_env_selector.blockSignals(True)
+                self.ql_env_selector.setCurrentIndex(idx)
+                self.ql_env_selector.blockSignals(False)
 
     def _refresh_env_list(self):
         """Phase 1: Load from cache instantly. Phase 2: only fetch missing caches."""
@@ -453,6 +568,20 @@ class MainWindow(QMainWindow):
         if has_missing_cache:
             self.statusBar().showMessage("Loading environments...")
         self.env_table.setRowCount(len(envs))
+
+        # Sync quick launch env selector
+        if hasattr(self, "ql_env_selector"):
+            current_ql = self.ql_env_selector.currentData()
+            self.ql_env_selector.blockSignals(True)
+            self.ql_env_selector.clear()
+            self.ql_env_selector.addItem(tr("select_environment"), "")
+            for env in envs:
+                if env.is_valid:
+                    self.ql_env_selector.addItem(f"  {env.name}", env.name)
+            idx = self.ql_env_selector.findData(current_ql)
+            if idx >= 0:
+                self.ql_env_selector.setCurrentIndex(idx)
+            self.ql_env_selector.blockSignals(False)
 
         for i, env in enumerate(envs):
             name_item = QTableWidgetItem(f"  {env.name}")
@@ -476,6 +605,13 @@ class MainWindow(QMainWindow):
                 except ValueError:
                     created_str = env.created[:16]
             self.env_table.setItem(i, 4, QTableWidgetItem(f"  {created_str}"))
+
+            # Default column
+            default_env = self.config.get("default_env", "")
+            default_item = QTableWidgetItem("⭐" if env.name == default_env else "")
+            default_item.setTextAlignment(Qt.AlignCenter)
+            default_item.setFlags(default_item.flags() & ~Qt.ItemIsEditable)
+            self.env_table.setItem(i, 5, default_item)
 
         self._update_info_label_fast(len(envs))
 
@@ -522,12 +658,62 @@ class MainWindow(QMainWindow):
         self.btn_rename.setEnabled(has_selection)
         self.btn_delete.setEnabled(has_selection)
         self.btn_export.setEnabled(has_selection)
+        if hasattr(self, "btn_make_default"):
+            self.btn_make_default.setEnabled(has_selection)
 
         if has_selection:
             row = rows[0].row()
             name = self.env_table.item(row, 0).text().strip()
             self.selected_env = name
             self.statusBar().showMessage(f"Selected: {name}")
+            # Sync quick launch dropdown
+            if hasattr(self, "ql_env_selector"):
+                idx = self.ql_env_selector.findData(name)
+                if idx >= 0:
+                    self.ql_env_selector.blockSignals(True)
+                    self.ql_env_selector.setCurrentIndex(idx)
+                    self.ql_env_selector.blockSignals(False)
+            # Update QL buttons for this env using package_panel
+            venv_path = self.venv_manager.base_dir / name
+            if venv_path.exists():
+                # Set env in package panel silently to get installed_package_names
+                self.package_panel.set_venv(venv_path)
+                # _update_ql_buttons will be called via callback when packages load
+
+    def _open_default_env(self):
+        """On startup, open default env in Packages if set."""
+        default_env = self.config.get("default_env", "")
+        if not default_env:
+            return
+        venv_path = self.venv_manager.base_dir / default_env
+        if not venv_path.exists():
+            return
+        self.package_panel.set_venv(venv_path)
+        self._switch_page(1)
+        # Sync env table selection
+        for row in range(self.env_table.rowCount()):
+            item = self.env_table.item(row, 0)
+            if item and item.text().strip() == default_env:
+                self.env_table.selectRow(row)
+                break
+
+    def _make_default_env(self):
+        name = self._get_selected_env_name()
+        if not name:
+            return
+        current_default = self.config.get("default_env", "")
+        if name == current_default:
+            QMessageBox.information(self, "Default Env", f"'{name}' is already the default environment.")
+            return
+        reply = QMessageBox.question(
+            self, "Make Default Environment",
+            f"Set '{name}' as the default environment?\n\nVenvStudio will open this environment on startup.",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if reply == QMessageBox.Yes:
+            self.config.set("default_env", name)
+            self._refresh_env_list()
+            self.statusBar().showMessage(f"✅ '{name}' set as default environment")
 
     def _on_env_double_click(self):
         self._open_package_manager()

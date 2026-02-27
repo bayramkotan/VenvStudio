@@ -541,6 +541,83 @@ class SettingsPage(QWidget):
         cat_mgr_group.setLayout(cat_mgr_layout)
         layout.addWidget(cat_mgr_group)
 
+        # ── PRESET MANAGER ──
+        preset_group = QGroupBox("⚡ Preset Manager")
+        preset_layout = QVBoxLayout()
+        preset_layout.setSpacing(8)
+
+        preset_info = QLabel("Add, edit or remove package presets. Built-in presets are shown read-only. Custom presets appear in the Packages → Presets tab.")
+        preset_info.setWordWrap(True)
+        preset_info.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        preset_layout.addWidget(preset_info)
+
+        # Built-in presets (read-only)
+        self.show_builtin_presets_cb = QCheckBox("Show built-in presets (read-only)")
+        self.show_builtin_presets_cb.setChecked(False)
+        self.show_builtin_presets_cb.toggled.connect(self._toggle_builtin_presets)
+        preset_layout.addWidget(self.show_builtin_presets_cb)
+
+        self.builtin_presets_table = QTableWidget(0, 2)
+        self.builtin_presets_table.setHorizontalHeaderLabels(["Preset Name", "Packages"])
+        self.builtin_presets_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.builtin_presets_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.builtin_presets_table.setMaximumHeight(150)
+        self.builtin_presets_table.verticalHeader().setVisible(False)
+        self.builtin_presets_table.verticalHeader().setDefaultSectionSize(26)
+        self.builtin_presets_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.builtin_presets_table.setVisible(False)
+        self.builtin_presets_table.setStyleSheet("""
+            QTableWidget { background-color: #1e1e2e; color: #cdd6f4; gridline-color: #313244; font-size: 12px; }
+            QTableWidget::item { color: #cdd6f4; padding: 4px; }
+        """)
+        from src.utils.constants import PRESETS
+        self.builtin_presets_table.setRowCount(len(PRESETS))
+        for i, (name, pkgs) in enumerate(PRESETS.items()):
+            self.builtin_presets_table.setItem(i, 0, QTableWidgetItem(name))
+            self.builtin_presets_table.setItem(i, 1, QTableWidgetItem(", ".join(pkgs)))
+        preset_layout.addWidget(self.builtin_presets_table)
+
+        # Custom presets table
+        custom_preset_lbl = QLabel("Custom Presets:")
+        custom_preset_lbl.setStyleSheet("color: #cdd6f4; font-size: 12px; font-weight: bold;")
+        preset_layout.addWidget(custom_preset_lbl)
+
+        self.custom_presets_table = QTableWidget(0, 2)
+        self.custom_presets_table.setHorizontalHeaderLabels(["Preset Name", "Packages (comma separated)"])
+        self.custom_presets_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.custom_presets_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.custom_presets_table.setMaximumHeight(160)
+        self.custom_presets_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.custom_presets_table.setSelectionMode(QTableWidget.SingleSelection)
+        self.custom_presets_table.verticalHeader().setVisible(False)
+        self.custom_presets_table.verticalHeader().setDefaultSectionSize(28)
+        self.custom_presets_table.setStyleSheet("""
+            QTableWidget { background-color: #1e1e2e; color: #cdd6f4; gridline-color: #313244; font-size: 13px; }
+            QTableWidget::item { color: #cdd6f4; padding: 4px; }
+            QTableWidget::item:selected { background-color: #45475a; color: #cdd6f4; }
+            QTableWidget QLineEdit { background-color: #313244; color: #f5e0dc; border: 2px solid #89b4fa; padding: 2px 4px; font-size: 13px; }
+        """)
+        preset_layout.addWidget(self.custom_presets_table)
+
+        preset_btn_row = QHBoxLayout()
+        add_preset_btn = QPushButton("➕ Add Preset")
+        add_preset_btn.setObjectName("secondary")
+        add_preset_btn.clicked.connect(self._add_custom_preset)
+        edit_preset_btn = QPushButton("✏️ Edit")
+        edit_preset_btn.setObjectName("secondary")
+        edit_preset_btn.clicked.connect(self._edit_custom_preset)
+        del_preset_btn = QPushButton("🗑️ Remove")
+        del_preset_btn.setObjectName("danger")
+        del_preset_btn.clicked.connect(self._remove_custom_preset)
+        preset_btn_row.addWidget(add_preset_btn)
+        preset_btn_row.addWidget(edit_preset_btn)
+        preset_btn_row.addWidget(del_preset_btn)
+        preset_btn_row.addStretch()
+        preset_layout.addLayout(preset_btn_row)
+
+        preset_group.setLayout(preset_layout)
+        layout.addWidget(preset_group)
+
         # ── 8. CUSTOM CATALOG PACKAGES ──
         catalog_group = QGroupBox("📚 Custom Catalog Packages")
         catalog_layout = QVBoxLayout()
@@ -1165,6 +1242,9 @@ class SettingsPage(QWidget):
         # Load custom terminals into table and combo
         self._load_custom_terminals()
 
+        # Load custom presets
+        self._load_custom_presets()
+
         # Scan pythons
         self._scan_pythons()
 
@@ -1730,6 +1810,113 @@ try {{
         if "⭐ Custom" not in cats:
             cats.append("⭐ Custom")
         return cats
+
+    def _toggle_builtin_presets(self, visible: bool):
+        self.builtin_presets_table.setVisible(visible)
+
+    def _load_custom_presets(self):
+        """Load custom presets from config into table."""
+        presets = self.config.get("custom_presets", {})
+        self.custom_presets_table.setRowCount(0)
+        for name, pkgs in presets.items():
+            row = self.custom_presets_table.rowCount()
+            self.custom_presets_table.insertRow(row)
+            self.custom_presets_table.setItem(row, 0, QTableWidgetItem(name))
+            self.custom_presets_table.setItem(row, 1, QTableWidgetItem(", ".join(pkgs)))
+
+    def _save_custom_presets(self):
+        """Save custom presets from table to config."""
+        presets = {}
+        for row in range(self.custom_presets_table.rowCount()):
+            name_item = self.custom_presets_table.item(row, 0)
+            pkgs_item = self.custom_presets_table.item(row, 1)
+            if name_item and pkgs_item:
+                name = name_item.text().strip()
+                pkgs = [p.strip() for p in pkgs_item.text().split(",") if p.strip()]
+                if name and pkgs:
+                    presets[name] = pkgs
+        self.config.set("custom_presets", presets)
+
+    def _add_custom_preset(self):
+        """Add a new custom preset."""
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLineEdit, QTextEdit
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Add Custom Preset")
+        dialog.setMinimumWidth(480)
+        layout = QFormLayout(dialog)
+
+        name_edit = QLineEdit()
+        name_edit.setPlaceholderText("e.g. 🚀 My Stack")
+        pkgs_edit = QLineEdit()
+        pkgs_edit.setPlaceholderText("e.g. numpy, pandas, matplotlib, scikit-learn")
+
+        hint = QLabel("Separate package names with commas.")
+        hint.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        layout.addRow("Preset Name:", name_edit)
+        layout.addRow("Packages:", pkgs_edit)
+        layout.addRow(hint)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(dialog.accept)
+        btns.rejected.connect(dialog.reject)
+        layout.addRow(btns)
+
+        if dialog.exec() == QDialog.Accepted:
+            name = name_edit.text().strip()
+            pkgs_raw = pkgs_edit.text().strip()
+            if name and pkgs_raw:
+                pkgs = [p.strip() for p in pkgs_raw.split(",") if p.strip()]
+                row = self.custom_presets_table.rowCount()
+                self.custom_presets_table.insertRow(row)
+                self.custom_presets_table.setItem(row, 0, QTableWidgetItem(name))
+                self.custom_presets_table.setItem(row, 1, QTableWidgetItem(", ".join(pkgs)))
+
+    def _edit_custom_preset(self):
+        """Edit selected custom preset."""
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLineEdit
+        row = self.custom_presets_table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Edit", "Please select a preset to edit.")
+            return
+        old_name = self.custom_presets_table.item(row, 0).text()
+        old_pkgs = self.custom_presets_table.item(row, 1).text()
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Edit Custom Preset")
+        dialog.setMinimumWidth(480)
+        layout = QFormLayout(dialog)
+
+        name_edit = QLineEdit(old_name)
+        pkgs_edit = QLineEdit(old_pkgs)
+        hint = QLabel("Separate package names with commas.")
+        hint.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        layout.addRow("Preset Name:", name_edit)
+        layout.addRow("Packages:", pkgs_edit)
+        layout.addRow(hint)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(dialog.accept)
+        btns.rejected.connect(dialog.reject)
+        layout.addRow(btns)
+
+        if dialog.exec() == QDialog.Accepted:
+            name = name_edit.text().strip()
+            pkgs_raw = pkgs_edit.text().strip()
+            if name and pkgs_raw:
+                self.custom_presets_table.setItem(row, 0, QTableWidgetItem(name))
+                self.custom_presets_table.setItem(row, 1, QTableWidgetItem(pkgs_raw))
+
+    def _remove_custom_preset(self):
+        """Remove selected custom preset."""
+        row = self.custom_presets_table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Remove", "Please select a preset to remove.")
+            return
+        name = self.custom_presets_table.item(row, 0).text()
+        reply = QMessageBox.question(self, "Remove Preset",
+            f"Remove preset '{name}'?", QMessageBox.Yes | QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            self.custom_presets_table.removeRow(row)
 
     def _load_custom_categories(self):
         """Load custom categories from config."""
@@ -2486,6 +2673,9 @@ try {{
 
         # Save custom terminals
         self._save_custom_terminals()
+
+        # Save custom presets
+        self._save_custom_presets()
 
         # Save custom categories
         self._save_custom_categories()

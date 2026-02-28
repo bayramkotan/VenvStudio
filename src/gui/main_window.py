@@ -569,23 +569,20 @@ class MainWindow(QMainWindow):
         if not env_name and self.package_panel.pip_manager:
             env_name = self.package_panel.pip_manager.venv_path.name
 
-        # Always prefer package_panel's freshly loaded data (most accurate)
+        # package_panel has fresh data for whatever env it just loaded
         pp_installed = getattr(self.package_panel, "installed_package_names", set())
-        pp_env = ""
-        if self.package_panel.pip_manager:
-            pp_env = self.package_panel.pip_manager.venv_path.name
+        pp_env = self.package_panel.pip_manager.venv_path.name if self.package_panel.pip_manager else ""
 
-        if pp_installed and (not env_name or env_name == pp_env):
-            # package_panel has data for this env — use it
+        if env_name and env_name == pp_env and pp_installed:
+            # Callback fired after loading this exact env — use fresh data
             installed = pp_installed
-            env_name = pp_env  # make sure env_name is set for QL selector sync
-        elif env_name:
-            # Different env selected — try cache
+        elif env_name and env_name != pp_env:
+            # Different env — try cache (sidebar dropdown)
             installed = self._get_installed_from_cache(env_name)
-            if not installed:
-                installed = pp_installed  # last resort
         else:
+            # No specific env — use whatever package_panel has
             installed = pp_installed
+            env_name = pp_env
         app_defs = getattr(self.package_panel, "app_definitions", [])
         has_any = False
         for app in app_defs:

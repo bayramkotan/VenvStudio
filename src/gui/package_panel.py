@@ -1893,7 +1893,8 @@ $s.Save()
         self._update_preset_badges()
         # Notify main window to update quick launch buttons
         if hasattr(self, "_ql_update_callback") and callable(self._ql_update_callback):
-            self._ql_update_callback()
+            _current_env = self.pip_manager.venv_path.name if self.pip_manager else ""
+            self._ql_update_callback(env_name=_current_env)
 
     def refresh_packages(self):
         """Refresh installed packages list - invalidates cache and async reloads."""

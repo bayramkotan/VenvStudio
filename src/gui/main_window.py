@@ -493,58 +493,39 @@ class MainWindow(QMainWindow):
             self.quick_launch_frame.setVisible(index != 2)
 
     def _on_ql_env_changed(self, idx):
-        """Quick launch env selector changed — update buttons from cache instantly."""
+        """Sol sidebar QL dropdown değişti — sadece o env için butonları göster."""
         if not hasattr(self, "ql_env_selector"):
             return
         venv_name = self.ql_env_selector.itemData(idx)
         if not venv_name:
-            self._update_ql_buttons()
+            self._rebuild_ql_buttons(set())
             return
-        # 1. Update buttons instantly from cache
-        self._update_ql_buttons(env_name=venv_name)
-        # 2. Also sync package_panel env selector in background
-        pp_idx = self.package_panel.env_selector.findData(venv_name)
-        if pp_idx >= 0:
-            self.package_panel.env_selector.setCurrentIndex(pp_idx)
+        # Cache'den anında oku
+        installed = self._get_installed_from_cache(venv_name)
+        self._rebuild_ql_buttons(installed)
 
     def _get_installed_from_cache(self, env_name: str) -> set:
-        """Read installed package names directly from cache — no subprocess."""
+        """Cache'den paket isimlerini oku — subprocess yok."""
         try:
             from src.core.venv_manager import VenvManager
             vm = VenvManager(self.config.get_venv_base_dir())
             all_cache = vm._load_all_cache()
             venv_path = self.venv_manager.base_dir / env_name
-
-            # Try multiple key formats to handle path separator differences
-            keys_to_try = [
-                "pkg_list:" + str(venv_path).replace("\\", "/"),
-                "pkg_list:" + str(venv_path),
-                "pkg_list:" + venv_path.as_posix(),
-            ]
-            for key in keys_to_try:
-                entry = all_cache.get(key)
-                if entry and entry.get("needs_refresh", 1) == 0:
-                    pkgs = entry.get("packages", [])
-                    if pkgs:
-                        return {p["name"].lower() for p in pkgs}
-
-            # Case-insensitive fallback — scan all pkg_list keys
+            our_path = str(venv_path).lower().replace("\\", "/")
             for key, entry in all_cache.items():
                 if not key.startswith("pkg_list:"):
                     continue
-                key_path = key[len("pkg_list:"):].lower().replace("\\", "/").replace("\\", "/")
-                our_path = str(venv_path).lower().replace("\\", "/")
-                if key_path == our_path:
-                    if entry.get("needs_refresh", 1) == 0:
-                        pkgs = entry.get("packages", [])
-                        if pkgs:
-                            return {p["name"].lower() for p in pkgs}
+                key_path = key[len("pkg_list:"):].lower().replace("\\", "/")
+                if key_path == our_path and entry.get("needs_refresh", 1) == 0:
+                    pkgs = entry.get("packages", [])
+                    if pkgs:
+                        return {p["name"].lower() for p in pkgs}
         except Exception:
             pass
         return set()
 
     def _sync_ql_selector(self, env_name: str):
-        """Sync QL dropdown to env_name when top dropdown changes."""
+        """Üst dropdown değişince QL selector'ı sync et."""
         if not hasattr(self, "ql_env_selector"):
             return
         idx = self.ql_env_selector.findData(env_name)
@@ -554,35 +535,23 @@ class MainWindow(QMainWindow):
             self.ql_env_selector.blockSignals(False)
 
     def _update_ql_buttons(self, env_name: str = ""):
-        """Rebuild quick launch buttons — reads from cache instantly."""
+        """package_panel'deki yükleme bittikten sonra çağrılır — fresh data kullan."""
+        # installed_package_names her zaman şu anki package_panel env'ine aittir
+        installed = getattr(self.package_panel, "installed_package_names", set())
+        self._rebuild_ql_buttons(installed)
+        # QL selector'ı package_panel'in env'iyle sync et
+        if hasattr(self, "ql_env_selector") and self.package_panel.pip_manager:
+            current_env = self.package_panel.pip_manager.venv_path.name
+            self._sync_ql_selector(current_env)
+
+    def _rebuild_ql_buttons(self, installed: set):
+        """Verilen installed set'e göre QL butonlarını yeniden oluştur."""
         if not hasattr(self, "ql_buttons_layout"):
             return
-        # Clear old buttons
         while self.ql_buttons_layout.count():
             item = self.ql_buttons_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-
-        # Try cache first (instant), fallback to package_panel
-        if not env_name:
-            env_name = self.ql_env_selector.currentData() if hasattr(self, "ql_env_selector") else ""
-        if not env_name and self.package_panel.pip_manager:
-            env_name = self.package_panel.pip_manager.venv_path.name
-
-        # package_panel has fresh data for whatever env it just loaded
-        pp_installed = getattr(self.package_panel, "installed_package_names", set())
-        pp_env = self.package_panel.pip_manager.venv_path.name if self.package_panel.pip_manager else ""
-
-        if env_name and env_name == pp_env and pp_installed:
-            # Callback fired after loading this exact env — use fresh data
-            installed = pp_installed
-        elif env_name and env_name != pp_env:
-            # Different env — try cache (sidebar dropdown)
-            installed = self._get_installed_from_cache(env_name)
-        else:
-            # No specific env — use whatever package_panel has
-            installed = pp_installed
-            env_name = pp_env
         app_defs = getattr(self.package_panel, "app_definitions", [])
         has_any = False
         for app in app_defs:
@@ -599,21 +568,10 @@ class MainWindow(QMainWindow):
             )
             btn.clicked.connect(lambda checked, a=app: self.package_panel._launch_app(a))
             self.ql_buttons_layout.addWidget(btn)
-        # Show placeholder if nothing installed
         if not has_any:
             lbl = QLabel("  No apps installed")
             lbl.setStyleSheet("color: #45475a; font-size: 11px; padding: 4px;")
             self.ql_buttons_layout.addWidget(lbl)
-        # Sync ql_env_selector with package_panel's current env
-        current_env = ""
-        if self.package_panel.pip_manager:
-            current_env = self.package_panel.pip_manager.venv_path.name
-        if hasattr(self, "ql_env_selector") and current_env:
-            idx = self.ql_env_selector.findData(current_env)
-            if idx >= 0:
-                self.ql_env_selector.blockSignals(True)
-                self.ql_env_selector.setCurrentIndex(idx)
-                self.ql_env_selector.blockSignals(False)
 
     def _refresh_env_list(self):
         """Phase 1: Load from cache instantly. Phase 2: only fetch missing caches."""

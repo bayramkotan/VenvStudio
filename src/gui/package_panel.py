@@ -1430,6 +1430,11 @@ $s.Save()
         self.output_log.setReadOnly(True)
         self.output_log.setMaximumHeight(200)
         self.output_log.setPlaceholderText("Installation output will appear here...")
+        self.output_log.setStyleSheet(
+            "QTextEdit { background-color: #11111b; color: #cdd6f4; "
+            "font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; "
+            "border: 1px solid #313244; border-radius: 4px; padding: 4px; }"
+        )
         layout.addWidget(self.output_log)
 
         # Copy log button
@@ -1443,6 +1448,34 @@ $s.Save()
         layout.addLayout(copy_log_row)
 
         return widget
+
+    def _append_log(self, text: str):
+        """Append colored HTML lines to output log."""
+        import html as _html
+        for line in text.split("\n"):
+            t = line.rstrip()
+            if not t:
+                self.output_log.append("")
+                continue
+            escaped = _html.escape(t)
+            tl = t.lower()
+            if t.startswith(("✅", "Successfully")) or "successfully installed" in tl:
+                color = "#a6e3a1"
+            elif t.startswith(("❌", "ERROR")) or "failed" in tl or "error" in tl:
+                color = "#f38ba8"
+            elif t.startswith(("⚠️", "WARNING")) or "warning" in tl:
+                color = "#f9e2af"
+            elif t.startswith("⛔") or "cancel" in tl:
+                color = "#fab387"
+            elif t.startswith(("💡", "   ", "Collecting")):
+                color = "#89dceb"
+            elif t.startswith(("📦", "🔄", "⬇", "Downloading", "Installing")):
+                color = "#89b4fa"
+            elif t.startswith("Requirement already"):
+                color = "#6c7086"
+            else:
+                color = "#cdd6f4"
+            self.output_log.append(f'<span style="color:{color};">{escaped}</span>')
 
     def _copy_output_log(self):
         """Copy output log content to clipboard."""
@@ -2092,8 +2125,8 @@ $s.Save()
 
     def _chain_install(self, uninstall_ok, uninstall_msg, to_install):
         if not uninstall_ok:
-            self.output_log.append(f"❌ Uninstall failed: {uninstall_msg[:300]}")
-        self.output_log.append("✅ Uninstall done. Starting install...")
+            self._append_log(f"❌ Uninstall failed: {uninstall_msg[:300]}")
+        self._append_log("✅ Uninstall done. Starting install...")
         self._do_install(to_install)
 
     # ── Install / Uninstall ──
@@ -2657,16 +2690,16 @@ dependencies:
     def _show_command_hint(self, title, command):
         """Show command hint in output log instead of blocking dialog."""
         if hasattr(self, "output_log"):
-            self.output_log.append("\n💡 Equivalent command:")
-            self.output_log.append(f"   {command}\n")
+            self._append_log("\n💡 Equivalent command:")
+            self._append_log(f"   {command}\n")
 
     def _on_progress(self, message: str):
         self.status_label.setText(message)
-        self.output_log.append(message)
+        self._append_log(message)
 
     def _on_install_finished(self, success: bool, message: str):
         self._set_busy(False)
-        self.output_log.append(f"\n{'✅ Success' if success else '❌ Failed'}: {message[:500]}")
+        self._append_log(f"\n{'✅ Success' if success else '❌ Failed'}: {message[:500]}")
 
         if success:
             self.status_label.setText("Operation completed successfully")
@@ -2679,14 +2712,14 @@ dependencies:
                 # Friendly log message instead of popup
                 if "no matching distribution" in message.lower() or "could not find" in message.lower():
                     self.status_label.setText("⚠️ Some packages could not be found on PyPI")
-                    self.output_log.append(
+                    self._append_log(
                         "\n⚠️ Some packages could not be found on PyPI.\n"
                         "Please check the package names and try again.\n"
                         "You can search at: https://pypi.org"
                     )
                 else:
                     self.status_label.setText("❌ Operation failed")
-                    self.output_log.append(f"\n❌ {message[:500]}")
+                    self._append_log(f"\n❌ {message[:500]}")
             else:
                 self.status_label.setText("⛔ Operation cancelled")
 
@@ -2704,7 +2737,7 @@ dependencies:
                     self.current_worker.terminate()
                 self._set_busy(False)
                 self.status_label.setText("⛔ Operation cancelled")
-                self.output_log.append("\n⛔ Operation cancelled by user")
+                self._append_log("\n⛔ Operation cancelled by user")
 
     def _check_outdated(self):
         """Check for outdated packages and show update option."""

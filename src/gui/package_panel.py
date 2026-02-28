@@ -2438,6 +2438,8 @@ dependencies:
 
         if len(selected_pkgs) == 1:
             pkg, ver = selected_pkgs[0]
+            menu.addAction(f"ℹ️ Package Info (pip show)", lambda: self._show_pip_info(pkg))
+            menu.addSeparator()
             menu.addAction(f"📋 Copy: pip install {pkg}", lambda: self._copy_to_clipboard(f"pip install {pkg}"))
             menu.addAction(f"📋 Copy: pip install {pkg}=={ver}", lambda: self._copy_to_clipboard(f"pip install {pkg}=={ver}"))
             menu.addSeparator()
@@ -2451,6 +2453,78 @@ dependencies:
                 menu.addAction(f"📋 Copy with versions", lambda: self._copy_to_clipboard(f"pip install {pinned}"))
 
         menu.exec(self.packages_table.viewport().mapToGlobal(position))
+
+    def _show_pip_info(self, pkg_name: str):
+        """Show pip show output in a dialog."""
+        if not self.pip_manager:
+            return
+        try:
+            python_exe = get_python_executable(self.pip_manager.venv_path)
+            result = subprocess.run(
+                [str(python_exe), "-m", "pip", "show", pkg_name],
+                **subprocess_args(capture_output=True, text=True, timeout=10)
+            )
+            info_text = result.stdout.strip() or result.stderr.strip() or "No info available."
+        except Exception as e:
+            info_text = f"Error: {e}"
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"📦 {pkg_name} — Package Info")
+        dialog.setMinimumSize(480, 320)
+        layout = QVBoxLayout(dialog)
+        layout.setSpacing(8)
+
+        # Parse into key-value pairs for nicer display
+        info_frame = QFrame()
+        info_frame.setStyleSheet(
+            "QFrame { background-color: #1e1e2e; border: 1px solid #313244; border-radius: 6px; padding: 4px; }"
+        )
+        info_layout = QVBoxLayout(info_frame)
+        info_layout.setSpacing(4)
+
+        pypi_url = None
+        for line in info_text.splitlines():
+            if ":" in line:
+                key, _, val = line.partition(":")
+                key = key.strip()
+                val = val.strip()
+                row = QHBoxLayout()
+                key_lbl = QLabel(f"{key}:")
+                key_lbl.setFixedWidth(120)
+                key_lbl.setStyleSheet("color: #89b4fa; font-weight: bold; font-size: 12px;")
+                val_lbl = QLabel(val)
+                val_lbl.setWordWrap(True)
+                val_lbl.setStyleSheet("color: #cdd6f4; font-size: 12px;")
+                val_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
+                row.addWidget(key_lbl)
+                row.addWidget(val_lbl, 1)
+                info_layout.addLayout(row)
+                if key.lower() == "home-page" and val.startswith("http"):
+                    pypi_url = val
+
+        layout.addWidget(info_frame)
+
+        btn_row = QHBoxLayout()
+        if pypi_url:
+            home_btn = QPushButton("🌐 Homepage")
+            home_btn.setObjectName("secondary")
+            home_btn.clicked.connect(lambda: __import__("webbrowser").open(pypi_url))
+            btn_row.addWidget(home_btn)
+        pypi_btn = QPushButton("📦 PyPI")
+        pypi_btn.setObjectName("secondary")
+        pypi_btn.clicked.connect(lambda: __import__("webbrowser").open(f"https://pypi.org/project/{pkg_name}/"))
+        btn_row.addWidget(pypi_btn)
+        copy_btn = QPushButton("📋 Copy All")
+        copy_btn.setObjectName("secondary")
+        copy_btn.clicked.connect(lambda: self._copy_to_clipboard(info_text))
+        btn_row.addWidget(copy_btn)
+        btn_row.addStretch()
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(dialog.accept)
+        btn_row.addWidget(close_btn)
+        layout.addLayout(btn_row)
+
+        dialog.exec()
 
     def _copy_to_clipboard(self, text):
         """Copy text to clipboard."""

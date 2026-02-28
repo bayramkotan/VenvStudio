@@ -1263,9 +1263,36 @@ class SettingsPage(QWidget):
 
         # System pythons
         system_pythons = find_system_pythons()
+        excluded_pythons = {
+            os.path.normcase(os.path.normpath(p))
+            for p in self.config.get("excluded_pythons", [])
+        }
         system_paths = set()
+        home_lower = os.path.expanduser("~").lower()
         for version, path in system_pythons:
             norm_path = os.path.normpath(path)
+            norm_lower = norm_path.lower()
+            # Determine if this is a user-level install
+            is_user_install = (
+                home_lower in norm_lower or
+                "appdata" in norm_lower or
+                ".local" in norm_lower
+            )
+            # Skip excluded paths
+            if os.path.normcase(norm_path) in excluded_pythons:
+                continue
+
+            if is_user_install:
+                # Treat as custom so it can be removed
+                row = self.python_table.rowCount()
+                self.python_table.insertRow(row)
+                self.python_table.setItem(row, 0, QTableWidgetItem(version))
+                self.python_table.setItem(row, 1, QTableWidgetItem(norm_path))
+                source_item = QTableWidgetItem("User Install")
+                source_item.setForeground(__import__('PySide6.QtGui', fromlist=['QColor']).QColor("#f9e2af"))
+                self.python_table.setItem(row, 2, source_item)
+                self.default_python_combo.addItem(f"Python {version}", norm_path)
+                continue
             system_paths.add(os.path.normcase(norm_path))
             row = self.python_table.rowCount()
             self.python_table.insertRow(row)
@@ -1453,6 +1480,24 @@ class SettingsPage(QWidget):
                 "System-detected Python installations cannot be removed here.\n"
                 "Use your system package manager to uninstall them."
             )
+            return
+
+        if source == "User Install":
+            reply = QMessageBox.question(
+                self, "Remove User Install",
+                f"Remove Python {version} from the list?\n\n"
+                f"  {path}\n\n"
+                f"Note: This only removes it from VenvStudio's list.\n"
+                f"To fully uninstall, use: pip uninstall python (or your package manager).",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply == QMessageBox.Yes:
+                # Save to config as excluded path so it won't reappear on next scan
+                excluded = self.config.get("excluded_pythons", [])
+                if path not in excluded:
+                    excluded.append(path)
+                    self.config.set("excluded_pythons", excluded)
+                self._scan_pythons()
             return
 
         if source == "Downloaded":

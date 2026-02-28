@@ -492,26 +492,37 @@ class MainWindow(QMainWindow):
             self.quick_launch_frame.setVisible(index != 2)
 
     def _on_ql_env_changed(self, idx):
-        """Quick launch env selector changed — sync package_panel, buttons update via callback."""
+        """Quick launch env selector changed — update buttons from cache instantly."""
         if not hasattr(self, "ql_env_selector"):
             return
         venv_name = self.ql_env_selector.itemData(idx)
         if not venv_name:
             self._update_ql_buttons()
             return
-        # Sync package_panel env selector — this triggers async package load
-        # _update_ql_buttons will be called via _ql_update_callback when loading finishes
+        # 1. Update buttons instantly from cache
+        self._update_ql_buttons(env_name=venv_name)
+        # 2. Also sync package_panel env selector in background
         pp_idx = self.package_panel.env_selector.findData(venv_name)
         if pp_idx >= 0:
             self.package_panel.env_selector.setCurrentIndex(pp_idx)
-        else:
-            # fallback: set directly
-            venv_path = self.venv_manager.base_dir / venv_name
-            if venv_path.exists():
-                self.package_panel.set_venv(venv_path)
 
-    def _update_ql_buttons(self):
-        """Rebuild quick launch buttons — called after packages finish loading."""
+    def _get_installed_from_cache(self, env_name: str) -> set:
+        """Read installed package names directly from cache — no subprocess."""
+        try:
+            from src.core.venv_manager import VenvManager
+            vm = VenvManager(self.config.get_venv_base_dir())
+            all_cache = vm._load_all_cache()
+            venv_path = self.venv_manager.base_dir / env_name
+            key = "pkg_list:" + str(venv_path).replace("\\", "/")
+            entry = all_cache.get(key)
+            if entry and entry.get("needs_refresh", 1) == 0:
+                return {p["name"].lower() for p in entry.get("packages", [])}
+        except Exception:
+            pass
+        return set()
+
+    def _update_ql_buttons(self, env_name: str = ""):
+        """Rebuild quick launch buttons — reads from cache instantly."""
         if not hasattr(self, "ql_buttons_layout"):
             return
         # Clear old buttons
@@ -519,8 +530,17 @@ class MainWindow(QMainWindow):
             item = self.ql_buttons_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
-        # Get installed packages from package_panel
-        installed = getattr(self.package_panel, "installed_package_names", set())
+
+        # Try cache first (instant), fallback to package_panel
+        if not env_name:
+            env_name = self.ql_env_selector.currentData() if hasattr(self, "ql_env_selector") else ""
+        if not env_name and self.package_panel.pip_manager:
+            env_name = self.package_panel.pip_manager.venv_path.name
+
+        installed = self._get_installed_from_cache(env_name)
+        if not installed:
+            # fallback to already-loaded data in package_panel
+            installed = getattr(self.package_panel, "installed_package_names", set())
         app_defs = getattr(self.package_panel, "app_definitions", [])
         has_any = False
         for app in app_defs:
@@ -673,12 +693,8 @@ class MainWindow(QMainWindow):
                     self.ql_env_selector.blockSignals(True)
                     self.ql_env_selector.setCurrentIndex(idx)
                     self.ql_env_selector.blockSignals(False)
-            # Update QL buttons for this env using package_panel
-            venv_path = self.venv_manager.base_dir / name
-            if venv_path.exists():
-                # Set env in package panel silently to get installed_package_names
-                self.package_panel.set_venv(venv_path)
-                # _update_ql_buttons will be called via callback when packages load
+            # Update QL buttons instantly from cache — no subprocess
+            self._update_ql_buttons(env_name=name)
 
     def _open_default_env(self):
         """On startup, open default env in Packages if set."""

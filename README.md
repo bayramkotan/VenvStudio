@@ -42,12 +42,16 @@ Or download the standalone binary from [GitHub Releases](https://github.com/bayr
 
 - **Create & manage** Python virtual environments with a modern GUI
 - **Package management** — install, uninstall, update packages via pip or uv
-- **200+ package catalog** with categories (Data Science, Web, ML, NLP, DevOps...)
-- **Quick presets** — Data Science Starter, Web API, Django, Flask, ML, NLP, Testing...
+- **200+ package catalog** with categories (Data Science, Web, ML, NLP, DevOps...) and PyPI/Docs links
+- **Quick presets** — Data Science Starter, Web API, Django, Flask, ML, NLP, Testing... + custom presets
 - **Launch apps** — JupyterLab, Orange Data Mining, Spyder, IPython, Streamlit with one click
+- **Quick Launch sidebar** — instantly launch installed apps from any page, per-environment
+- **Default environment** — set a default env that opens automatically on startup
 - **Desktop shortcuts** — create `.lnk` shortcuts with app-specific icons
 - **Export** — requirements.txt, Dockerfile, docker-compose.yml, pyproject.toml, Conda environment.yml
 - **Python downloader** — download standalone Python builds (astral-sh/python-build-standalone)
+- **Custom terminals** — add and manage your own terminal emulators (Git Bash, Kitty, Alacritty...)
+- **Smart cache** — instant environment and package list loading with background refresh
 - **PATH management** — set User/System default Python with admin elevation
 - **Auto-update** — check PyPI for new versions on startup
 - **Cross-platform** — Windows, macOS, Linux
@@ -80,7 +84,7 @@ Select Python version, location, and options. Shows equivalent terminal commands
 
 ### Installed Packages
 
-View, filter, update, uninstall packages. Export in 6 formats. Right-click to copy pip commands.
+View, filter, update, uninstall packages. Export in 6 formats. Right-click for pip show, copy pip commands, and PyPI link.
 
 <p align="center">
   <img src="assets/screenshots/Installed.png" alt="Installed Packages" width="800">
@@ -88,7 +92,7 @@ View, filter, update, uninstall packages. Export in 6 formats. Right-click to co
 
 ### Package Catalog
 
-Browse 200+ packages organized by category. Check to install, uncheck to remove.
+Browse 200+ packages organized by category. Check to install, uncheck to remove. Direct PyPI and Docs links for every package.
 
 <p align="center">
   <img src="assets/screenshots/catalog1.png" alt="Package Catalog" width="800">
@@ -100,7 +104,7 @@ Browse 200+ packages organized by category. Check to install, uncheck to remove.
 
 ### Quick Presets
 
-One-click install for common project setups: Data Science, Web API, Django, Flask, ML, NLP, Testing, and more.
+One-click install for common project setups: Data Science, Web API, Django, Flask, ML, NLP, Testing, and more. Create and manage your own custom presets in Settings.
 
 <p align="center">
   <img src="assets/screenshots/presets_1.png" alt="Presets" width="800">
@@ -112,7 +116,7 @@ One-click install for common project setups: Data Science, Web API, Django, Flas
 
 ### Launch Applications
 
-Launch JupyterLab, Jupyter Notebook, Orange Data Mining, Spyder, IPython, Streamlit directly. Create desktop shortcuts.
+Launch JupyterLab, Jupyter Notebook, Orange Data Mining, Spyder, IPython, Streamlit directly. Create desktop shortcuts. The **Quick Launch sidebar** shows installed apps for the selected environment at a glance.
 
 <p align="center">
   <img src="assets/screenshots/Launch.png" alt="Launch Applications" width="800">
@@ -196,7 +200,10 @@ Manage which Python is the default on your system:
 - Language: English, Turkish
 - Default package manager: pip or uv
 - Custom venv base directory (default: `C:\venv` on Windows, `~/venv` on Linux/macOS)
-- Python version management
+- Python version management (System, User Install, Custom, Downloaded)
+- **Custom terminals** — add your own terminal emulators (Git Bash, Kitty, Alacritty, etc.)
+- **Custom presets** — create and manage your own package preset bundles
+- **Default environment** — automatically open a specific environment on startup
 - Check for updates on startup
 - Export/Import settings
 

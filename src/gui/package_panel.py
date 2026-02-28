@@ -1678,6 +1678,9 @@ $s.Save()
                 self._env_bar_terminal_btn.setEnabled(True)
             self.status_label.setText(f"Loading packages...")
             self._update_env_info_bar(Path(path_str), backend)
+            # Notify main window to sync QL selector immediately
+            if hasattr(self, "_ql_env_changed_callback") and callable(self._ql_env_changed_callback):
+                self._ql_env_changed_callback(Path(path_str).name)
             self._async_refresh_packages()
         else:
             self._safe_clear_env_state()

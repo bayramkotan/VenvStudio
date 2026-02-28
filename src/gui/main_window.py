@@ -350,6 +350,7 @@ class MainWindow(QMainWindow):
         self.package_panel = PackagePanel()
         self.package_panel.env_refresh_requested.connect(self._refresh_env_list)
         self.package_panel._ql_update_callback = self._update_ql_buttons
+        self.package_panel._ql_env_changed_callback = self._sync_ql_selector
         self.stack.addWidget(self.package_panel)             # Page 0
         self.stack.addWidget(self._create_env_page())       # Page 1
 
@@ -542,6 +543,16 @@ class MainWindow(QMainWindow):
             pass
         return set()
 
+    def _sync_ql_selector(self, env_name: str):
+        """Sync QL dropdown to env_name when top dropdown changes."""
+        if not hasattr(self, "ql_env_selector"):
+            return
+        idx = self.ql_env_selector.findData(env_name)
+        if idx >= 0:
+            self.ql_env_selector.blockSignals(True)
+            self.ql_env_selector.setCurrentIndex(idx)
+            self.ql_env_selector.blockSignals(False)
+
     def _update_ql_buttons(self, env_name: str = ""):
         """Rebuild quick launch buttons — reads from cache instantly."""
         if not hasattr(self, "ql_buttons_layout"):
@@ -558,15 +569,23 @@ class MainWindow(QMainWindow):
         if not env_name and self.package_panel.pip_manager:
             env_name = self.package_panel.pip_manager.venv_path.name
 
-        # Use package_panel's loaded data if the env matches (most accurate)
+        # Always prefer package_panel's freshly loaded data (most accurate)
+        pp_installed = getattr(self.package_panel, "installed_package_names", set())
         pp_env = ""
         if self.package_panel.pip_manager:
             pp_env = self.package_panel.pip_manager.venv_path.name
-        if env_name and env_name == pp_env:
-            installed = getattr(self.package_panel, "installed_package_names", set())
-        else:
-            # Different env — read from cache
+
+        if pp_installed and (not env_name or env_name == pp_env):
+            # package_panel has data for this env — use it
+            installed = pp_installed
+            env_name = pp_env  # make sure env_name is set for QL selector sync
+        elif env_name:
+            # Different env selected — try cache
             installed = self._get_installed_from_cache(env_name)
+            if not installed:
+                installed = pp_installed  # last resort
+        else:
+            installed = pp_installed
         app_defs = getattr(self.package_panel, "app_definitions", [])
         has_any = False
         for app in app_defs:

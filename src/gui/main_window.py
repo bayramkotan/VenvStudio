@@ -513,10 +513,31 @@ class MainWindow(QMainWindow):
             vm = VenvManager(self.config.get_venv_base_dir())
             all_cache = vm._load_all_cache()
             venv_path = self.venv_manager.base_dir / env_name
-            key = "pkg_list:" + str(venv_path).replace("\\", "/")
-            entry = all_cache.get(key)
-            if entry and entry.get("needs_refresh", 1) == 0:
-                return {p["name"].lower() for p in entry.get("packages", [])}
+
+            # Try multiple key formats to handle path separator differences
+            keys_to_try = [
+                "pkg_list:" + str(venv_path).replace("\\", "/"),
+                "pkg_list:" + str(venv_path),
+                "pkg_list:" + venv_path.as_posix(),
+            ]
+            for key in keys_to_try:
+                entry = all_cache.get(key)
+                if entry and entry.get("needs_refresh", 1) == 0:
+                    pkgs = entry.get("packages", [])
+                    if pkgs:
+                        return {p["name"].lower() for p in pkgs}
+
+            # Case-insensitive fallback — scan all pkg_list keys
+            for key, entry in all_cache.items():
+                if not key.startswith("pkg_list:"):
+                    continue
+                key_path = key[len("pkg_list:"):].lower().replace("\\", "/").replace("\\", "/")
+                our_path = str(venv_path).lower().replace("\\", "/")
+                if key_path == our_path:
+                    if entry.get("needs_refresh", 1) == 0:
+                        pkgs = entry.get("packages", [])
+                        if pkgs:
+                            return {p["name"].lower() for p in pkgs}
         except Exception:
             pass
         return set()

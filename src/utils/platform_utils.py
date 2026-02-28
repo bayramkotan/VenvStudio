@@ -80,10 +80,40 @@ def get_activate_command(venv_path: Path) -> str:
     return f"source {venv_path / 'bin' / 'activate'}"
 
 
+def _is_user_python(path: str) -> bool:
+    """Return True if this Python is a user-level install.
+    Covers: AppData, .local/bin, pyenv, conda user env, pipx — all under home dir.
+    Does NOT flag /usr/local (Homebrew system-wide).
+    """
+    norm = os.path.normpath(path).lower()
+    home = os.path.expanduser("~").lower()
+
+    # Must be under home directory to be user-level
+    if home not in norm:
+        return False
+
+    # Known user-level subdirs under home
+    user_subdirs = [
+        ".local",          # Linux pip user install
+        "appdata",         # Windows pip user install
+        ".pyenv",          # pyenv
+        ".conda",          # conda user env
+        "miniconda",       # miniconda in home
+        "anaconda",        # anaconda in home
+        "miniforge",       # miniforge in home
+        ".rye",            # rye
+        ".uv",             # uv
+        "pipx",            # pipx
+    ]
+    return any(sub in norm for sub in user_subdirs)
+
+
+
 def find_system_pythons() -> List[Tuple[str, str]]:
     """
     Find available Python installations on the system.
     Returns list of (version_string, executable_path) tuples.
+    Skips user-level installs (AppData, .local/bin) to avoid duplicates.
     """
     pythons = []
     seen_versions = set()
@@ -104,6 +134,10 @@ def find_system_pythons() -> List[Tuple[str, str]]:
         if "windowsapps" in normalized:
             continue
 
+        # User-level installs filtrele (AppData, .local/bin)
+        if _is_user_python(exe_path):
+            continue
+
         if normalized in seen_paths:
             continue
         seen_paths.add(normalized)
@@ -116,7 +150,6 @@ def find_system_pythons() -> List[Tuple[str, str]]:
             version = result.stdout.strip() or result.stderr.strip()
             version = version.replace("Python ", "")
 
-            # Versiyon numarası formatını kontrol et (x.y.z)
             if not version or not version[0].isdigit():
                 continue
 

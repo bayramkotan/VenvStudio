@@ -88,6 +88,21 @@ _PACKAGE_DOCS = {
     "docker": "https://docker-py.readthedocs.io/",
     "fabric": "https://docs.fabfile.org/",
     "ansible": "https://docs.ansible.com/",
+    # CLI/TUI
+    "rich": "https://rich.readthedocs.io/",
+    "textual": "https://textual.textualize.io/",
+    "prompt_toolkit": "https://python-prompt-toolkit.readthedocs.io/",
+    "questionary": "https://questionary.readthedocs.io/",
+    "blessed": "https://blessed.readthedocs.io/",
+    "urwid": "http://urwid.org/",
+    "asciimatics": "https://asciimatics.readthedocs.io/",
+    "tqdm": "https://tqdm.github.io/",
+    "alive-progress": "https://github.com/rsalmei/alive-progress",
+    "colorama": "https://github.com/tartley/colorama",
+    "click": "https://click.palletsprojects.com/",
+    "typer": "https://typer.tiangolo.com/",
+    "tabulate": "https://github.com/astanin/python-tabulate",
+    "prettytable": "https://prettytable.readthedocs.io/",
 }
 from src.utils.i18n import tr
 from src.utils.platform_utils import get_platform, get_python_executable, subprocess_args

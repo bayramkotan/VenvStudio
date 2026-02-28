@@ -9,7 +9,7 @@ from PySide6.QtWidgets import (
     QFormLayout, QFileDialog, QMessageBox, QScrollArea,
     QFrame, QFontComboBox, QTableWidget, QTableWidgetItem,
     QHeaderView, QInputDialog, QDialog, QDialogButtonBox,
-    QProgressBar, QListWidget, QListWidgetItem,
+    QProgressBar, QListWidget, QListWidgetItem, QTextEdit,
 )
 from PySide6.QtCore import Qt, Signal, QThread
 from PySide6.QtGui import QFont, QColor
@@ -766,6 +766,89 @@ class SettingsPage(QWidget):
         about_group.setLayout(about_layout)
         layout.addWidget(about_group)
 
+        # ── CLI/TUI TOOLS ──
+        cli_group = QGroupBox("🖥️ CLI/TUI Tools")
+        cli_layout = QVBoxLayout()
+        cli_layout.setSpacing(12)
+
+        cli_desc = QLabel(
+            "Enhance your terminal experience with modern CLI/TUI tools. "
+            "Starship & Oh My Posh require a Nerd Font for proper rendering."
+        )
+        cli_desc.setWordWrap(True)
+        cli_desc.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        cli_layout.addWidget(cli_desc)
+
+        # Output log for CLI tools
+        self.cli_log = QTextEdit()
+        self.cli_log.setReadOnly(True)
+        self.cli_log.setMaximumHeight(100)
+        self.cli_log.setStyleSheet(
+            "QTextEdit { background: #11111b; color: #cdd6f4; "
+            "font-family: Consolas, monospace; font-size: 11px; "
+            "border: 1px solid #313244; border-radius: 4px; padding: 4px; }"
+        )
+        self.cli_log.setPlaceholderText("Installation output will appear here...")
+        cli_layout.addWidget(self.cli_log)
+
+        # ── Nerd Fonts ──
+        font_group = QGroupBox("🖋️ Nerd Fonts")
+        font_inner = QHBoxLayout()
+        font_inner.setSpacing(8)
+
+        from src.core.cli_tools_manager import NERD_FONTS
+        self.nerd_font_combo = QComboBox()
+        for font_id, font_name in NERD_FONTS:
+            self.nerd_font_combo.addItem(font_name, font_id)
+        font_inner.addWidget(self.nerd_font_combo, 1)
+
+        install_font_btn = QPushButton("⬇️ Download & Install Font")
+        install_font_btn.setObjectName("secondary")
+        install_font_btn.clicked.connect(self._install_nerd_font)
+        font_inner.addWidget(install_font_btn)
+        font_group.setLayout(font_inner)
+        cli_layout.addWidget(font_group)
+
+        # ── Tool cards ──
+        from src.core.cli_tools_manager import (
+            STARSHIP_PRESETS, OMP_THEMES, PIP_TOOLS, is_tool_installed
+        )
+
+        # Starship
+        cli_layout.addWidget(self._make_cli_card(
+            "starship", "🚀 Starship",
+            "The minimal, blazing-fast, and infinitely customizable prompt for any shell",
+            "Preset:", STARSHIP_PRESETS, "preset"
+        ))
+
+        # Oh My Posh
+        cli_layout.addWidget(self._make_cli_card(
+            "oh-my-posh", "🎨 Oh My Posh",
+            "A prompt theme engine for any shell",
+            "Theme:", OMP_THEMES, "theme"
+        ))
+
+        # Rich
+        cli_layout.addWidget(self._make_pip_card(
+            "rich", "✨ Rich",
+            "Rich text and beautiful formatting in the terminal",
+        ))
+
+        # Textual
+        cli_layout.addWidget(self._make_pip_card(
+            "textual", "🖼️ Textual",
+            "Rapid framework for terminal-based user interfaces (TUI)",
+        ))
+
+        # Prompt Toolkit
+        cli_layout.addWidget(self._make_pip_card(
+            "prompt_toolkit", "⌨️ Prompt Toolkit",
+            "Library for building interactive CLI applications",
+        ))
+
+        cli_group.setLayout(cli_layout)
+        layout.addWidget(cli_group)
+
         layout.addStretch()
 
         # ── SAVE / RESET BUTTONS ──
@@ -793,6 +876,200 @@ class SettingsPage(QWidget):
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addWidget(scroll)
+
+    # ── CLI/TUI Tools helpers ─────────────────────────────────────────────────
+
+    def _cli_log_append(self, text: str):
+        import html as _html
+        for line in text.split("\n"):
+            t = line.strip()
+            if not t:
+                continue
+            escaped = _html.escape(t)
+            if t.startswith("✅"):
+                color = "#a6e3a1"
+            elif t.startswith("❌"):
+                color = "#f38ba8"
+            elif t.startswith("⬇️") or t.startswith("📦"):
+                color = "#89b4fa"
+            elif t.startswith("⚠️"):
+                color = "#f9e2af"
+            else:
+                color = "#cdd6f4"
+            self.cli_log.append(f'<span style="color:{color};">{escaped}</span>')
+
+    def _make_cli_card(self, tool_id, title, desc, preset_label, presets, preset_key):
+        """Create a card widget for binary CLI tools (starship, oh-my-posh)."""
+        from src.core.cli_tools_manager import is_tool_installed, get_tool_version
+        card = QFrame()
+        card.setStyleSheet(
+            "QFrame { background: #1e1e2e; border: 1px solid #313244; border-radius: 6px; padding: 8px; }"
+        )
+        layout = QVBoxLayout(card)
+        layout.setSpacing(6)
+
+        # Title + status
+        header = QHBoxLayout()
+        title_lbl = QLabel(title)
+        title_lbl.setStyleSheet("font-weight: bold; font-size: 13px; color: #cdd6f4;")
+        header.addWidget(title_lbl)
+
+        installed = is_tool_installed(tool_id)
+        version = get_tool_version(tool_id) or ""
+        status_lbl = QLabel(f"✅ {version}" if installed else "❌ Not installed")
+        status_lbl.setStyleSheet(f"color: {'#a6e3a1' if installed else '#f38ba8'}; font-size: 11px;")
+        status_lbl.setObjectName(f"status_{tool_id.replace('-','_')}")
+        header.addWidget(status_lbl)
+        header.addStretch()
+        layout.addLayout(header)
+
+        desc_lbl = QLabel(desc)
+        desc_lbl.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        desc_lbl.setWordWrap(True)
+        layout.addWidget(desc_lbl)
+
+        # Preset selector + buttons
+        controls = QHBoxLayout()
+        controls.setSpacing(6)
+
+        preset_lbl = QLabel(preset_label)
+        preset_lbl.setStyleSheet("font-size: 11px; color: #cdd6f4;")
+        controls.addWidget(preset_lbl)
+
+        combo = QComboBox()
+        combo.setMaximumWidth(180)
+        for p in presets:
+            combo.addItem(p)
+        combo.setObjectName(f"preset_{tool_id.replace('-','_')}")
+        controls.addWidget(combo)
+
+        controls.addStretch()
+
+        install_btn = QPushButton("⬇️ Install" if not installed else "🔄 Reinstall")
+        install_btn.setObjectName("secondary")
+        install_btn.setFixedHeight(26)
+        install_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_install(t, sb, sl))
+        controls.addWidget(install_btn)
+
+        if installed:
+            cfg_btn = QPushButton("⚙️ Configure Shell")
+            cfg_btn.setObjectName("secondary")
+            cfg_btn.setFixedHeight(26)
+            cfg_btn.clicked.connect(lambda _, t=tool_id, c=combo, pk=preset_key: self._cli_configure(t, c, pk))
+            controls.addWidget(cfg_btn)
+
+            uninst_btn = QPushButton("🗑️ Uninstall")
+            uninst_btn.setObjectName("danger")
+            uninst_btn.setFixedHeight(26)
+            uninst_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_uninstall(t, sb, sl))
+            controls.addWidget(uninst_btn)
+
+        layout.addLayout(controls)
+        return card
+
+    def _make_pip_card(self, tool_id, title, desc):
+        """Create a card widget for pip-based tools (rich, textual, prompt_toolkit)."""
+        from src.core.cli_tools_manager import is_tool_installed, get_tool_version
+        card = QFrame()
+        card.setStyleSheet(
+            "QFrame { background: #1e1e2e; border: 1px solid #313244; border-radius: 6px; padding: 8px; }"
+        )
+        layout = QVBoxLayout(card)
+        layout.setSpacing(6)
+
+        header = QHBoxLayout()
+        title_lbl = QLabel(title)
+        title_lbl.setStyleSheet("font-weight: bold; font-size: 13px; color: #cdd6f4;")
+        header.addWidget(title_lbl)
+
+        installed = is_tool_installed(tool_id)
+        version = get_tool_version(tool_id) or ""
+        status_lbl = QLabel(f"✅ {version}" if installed else "❌ Not installed")
+        status_lbl.setStyleSheet(f"color: {'#a6e3a1' if installed else '#f38ba8'}; font-size: 11px;")
+        header.addWidget(status_lbl)
+        header.addStretch()
+
+        install_btn = QPushButton("⬇️ Install" if not installed else "🔄 Reinstall")
+        install_btn.setObjectName("secondary")
+        install_btn.setFixedHeight(26)
+        install_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_install(t, sb, sl))
+        header.addWidget(install_btn)
+
+        if installed:
+            uninst_btn = QPushButton("🗑️")
+            uninst_btn.setObjectName("danger")
+            uninst_btn.setFixedHeight(26)
+            uninst_btn.setFixedWidth(32)
+            uninst_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_uninstall(t, sb, sl))
+            header.addWidget(uninst_btn)
+
+        layout.addLayout(header)
+
+        desc_lbl = QLabel(desc)
+        desc_lbl.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        layout.addWidget(desc_lbl)
+        return card
+
+    def _cli_install(self, tool_id, btn, status_lbl):
+        from src.core.cli_tools_manager import CliToolWorker
+        btn.setEnabled(False)
+        btn.setText("⏳ Installing...")
+        self.cli_log.clear()
+        self._cli_worker = CliToolWorker("install", tool_id, parent=self)
+        self._cli_worker.progress.connect(self._cli_log_append)
+        self._cli_worker.finished.connect(
+            lambda ok, msg, b=btn, sl=status_lbl, t=tool_id: self._cli_done(ok, msg, b, sl, t)
+        )
+        self._cli_worker.start()
+
+    def _cli_uninstall(self, tool_id, btn, status_lbl):
+        from src.core.cli_tools_manager import CliToolWorker
+        reply = QMessageBox.question(self, "Uninstall", f"Uninstall {tool_id}?",
+                                     QMessageBox.Yes | QMessageBox.No)
+        if reply != QMessageBox.Yes:
+            return
+        self._cli_worker = CliToolWorker("uninstall", tool_id, parent=self)
+        self._cli_worker.progress.connect(self._cli_log_append)
+        self._cli_worker.finished.connect(
+            lambda ok, msg, b=btn, sl=status_lbl, t=tool_id: self._cli_done(ok, msg, b, sl, t)
+        )
+        self._cli_worker.start()
+
+    def _cli_configure(self, tool_id, combo, preset_key):
+        from src.core.cli_tools_manager import CliToolWorker
+        theme = combo.currentText()
+        self._cli_worker = CliToolWorker("configure", tool_id, {preset_key: theme}, parent=self)
+        self._cli_worker.progress.connect(self._cli_log_append)
+        self._cli_worker.finished.connect(
+            lambda ok, msg: self._cli_log_append(msg)
+        )
+        self._cli_worker.start()
+
+    def _cli_done(self, ok, msg, btn, status_lbl, tool_id):
+        from src.core.cli_tools_manager import is_tool_installed, get_tool_version
+        self._cli_log_append(msg)
+        installed = is_tool_installed(tool_id)
+        version = get_tool_version(tool_id) or ""
+        status_lbl.setText(f"✅ {version}" if installed else "❌ Not installed")
+        status_lbl.setStyleSheet(f"color: {'#a6e3a1' if installed else '#f38ba8'}; font-size: 11px;")
+        btn.setEnabled(True)
+        btn.setText("🔄 Reinstall" if installed else "⬇️ Install")
+
+    def _install_nerd_font(self):
+        from src.core.cli_tools_manager import CliToolWorker
+        font_id   = self.nerd_font_combo.currentData()
+        font_name = self.nerd_font_combo.currentText()
+        self.cli_log.clear()
+        self._cli_worker = CliToolWorker(
+            "install_font", "font",
+            {"font_id": font_id, "font_name": font_name},
+            parent=self
+        )
+        self._cli_worker.progress.connect(self._cli_log_append)
+        self._cli_worker.finished.connect(
+            lambda ok, msg: self._cli_log_append(msg)
+        )
+        self._cli_worker.start()
 
     def _set_python_default_unix(self, version, python_path, scope):
         """Set default Python on Linux/macOS using update-alternatives or symlinks."""

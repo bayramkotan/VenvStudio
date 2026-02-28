@@ -500,11 +500,20 @@ class MainWindow(QMainWindow):
         if not venv_name:
             self._rebuild_ql_buttons(set())
             return
-        # Sağ paneli de güncelle
         venv_path = self.venv_manager.base_dir / venv_name
-        if venv_path.exists():
-            self.package_panel.set_venv(venv_path)
-            self._switch_page(0)
+        if not venv_path.exists():
+            return
+        # Env tablosunda ilgili satırı seç
+        for row in range(self.env_table.rowCount()):
+            item = self.env_table.item(row, 0)
+            if item and item.text().strip() == venv_name:
+                self.env_table.blockSignals(True)
+                self.env_table.selectRow(row)
+                self.env_table.blockSignals(False)
+                break
+        # package_panel sync
+        self.package_panel.set_venv(venv_path)
+        self._switch_page(0)
 
     def _ql_load_env_packages(self, venv_name: str):
         """Sadece QL için paket listesi yükle — sağ paneli değiştirme."""
@@ -576,14 +585,22 @@ class MainWindow(QMainWindow):
         return set()
 
     def _sync_ql_selector(self, env_name: str):
-        """Üst dropdown değişince QL selector'ı sync et."""
-        if not hasattr(self, "ql_env_selector"):
-            return
-        idx = self.ql_env_selector.findData(env_name)
-        if idx >= 0:
-            self.ql_env_selector.blockSignals(True)
-            self.ql_env_selector.setCurrentIndex(idx)
-            self.ql_env_selector.blockSignals(False)
+        """Üst dropdown değişince QL + env tablosunu sync et."""
+        # QL selector
+        if hasattr(self, "ql_env_selector"):
+            idx = self.ql_env_selector.findData(env_name)
+            if idx >= 0:
+                self.ql_env_selector.blockSignals(True)
+                self.ql_env_selector.setCurrentIndex(idx)
+                self.ql_env_selector.blockSignals(False)
+        # Env tablosu satırı
+        for row in range(self.env_table.rowCount()):
+            item = self.env_table.item(row, 0)
+            if item and item.text().strip() == env_name:
+                self.env_table.blockSignals(True)
+                self.env_table.selectRow(row)
+                self.env_table.blockSignals(False)
+                break
 
     def _update_ql_buttons(self, env_name: str = ""):
         """package_panel'deki yükleme bittikten sonra çağrılır — fresh data kullan."""
@@ -737,15 +754,17 @@ class MainWindow(QMainWindow):
             name = self.env_table.item(row, 0).text().strip()
             self.selected_env = name
             self.statusBar().showMessage(f"Selected: {name}")
-            # Sync quick launch dropdown
+            # Sync QL dropdown
             if hasattr(self, "ql_env_selector"):
                 idx = self.ql_env_selector.findData(name)
                 if idx >= 0:
                     self.ql_env_selector.blockSignals(True)
                     self.ql_env_selector.setCurrentIndex(idx)
                     self.ql_env_selector.blockSignals(False)
-            # Update QL buttons instantly from cache — no subprocess
-            self._update_ql_buttons(env_name=name)
+            # Sync package_panel
+            venv_path = self.venv_manager.base_dir / name
+            if venv_path.exists():
+                self.package_panel.set_venv(venv_path)
 
     def _open_default_env(self):
         """On startup, open default env in Packages if set."""

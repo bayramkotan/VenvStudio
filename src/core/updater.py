@@ -6,7 +6,6 @@ Checks PyPI for new versions and notifies the user.
 import json
 import http.client
 import ssl
-from packaging import version as pkg_version
 
 from src.utils.constants import APP_VERSION
 
@@ -14,10 +13,18 @@ PYPI_HOST = "pypi.org"
 PYPI_PATH = "/pypi/venvstudio/json"
 
 
+def _parse_version(ver_str: str) -> tuple:
+    """Parse version string to comparable tuple. e.g. '1.3.23' → (1, 3, 23)"""
+    try:
+        return tuple(int(x) for x in ver_str.strip().split(".")[:4])
+    except Exception:
+        return (0,)
+
+
 def check_for_update() -> dict:
     """
     Check PyPI for a newer version of VenvStudio.
-    Uses http.client directly to avoid email module dependency in PyInstaller builds.
+    Uses http.client directly to avoid email/packaging module issues in PyInstaller builds.
     """
     result = {
         "update_available": False,
@@ -46,12 +53,8 @@ def check_for_update() -> dict:
         latest = data.get("info", {}).get("version", APP_VERSION)
         result["latest_version"] = latest
 
-        try:
-            if pkg_version.parse(latest) > pkg_version.parse(APP_VERSION):
-                result["update_available"] = True
-        except Exception:
-            if latest != APP_VERSION:
-                result["update_available"] = True
+        if _parse_version(latest) > _parse_version(APP_VERSION):
+            result["update_available"] = True
 
     except Exception as e:
         result["error"] = str(e)

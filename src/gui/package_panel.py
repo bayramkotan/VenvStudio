@@ -16,6 +16,79 @@ from PySide6.QtGui import QFont, QColor, QIcon
 
 from src.core.pip_manager import PipManager
 from src.utils.constants import PACKAGE_CATALOG, PRESETS, COMMAND_HINTS
+
+# Docs URLs for popular packages
+_PACKAGE_DOCS = {
+    "numpy": "https://numpy.org/doc/",
+    "pandas": "https://pandas.pydata.org/docs/",
+    "matplotlib": "https://matplotlib.org/stable/",
+    "scipy": "https://docs.scipy.org/doc/scipy/",
+    "scikit-learn": "https://scikit-learn.org/stable/documentation.html",
+    "tensorflow": "https://www.tensorflow.org/api_docs",
+    "torch": "https://pytorch.org/docs/stable/",
+    "keras": "https://keras.io/api/",
+    "xgboost": "https://xgboost.readthedocs.io/",
+    "lightgbm": "https://lightgbm.readthedocs.io/",
+    "seaborn": "https://seaborn.pydata.org/",
+    "plotly": "https://plotly.com/python/",
+    "bokeh": "https://docs.bokeh.org/",
+    "altair": "https://altair-viz.github.io/",
+    "dash": "https://dash.plotly.com/",
+    "streamlit": "https://docs.streamlit.io/",
+    "fastapi": "https://fastapi.tiangolo.com/",
+    "flask": "https://flask.palletsprojects.com/",
+    "django": "https://docs.djangoproject.com/",
+    "sqlalchemy": "https://docs.sqlalchemy.org/",
+    "requests": "https://requests.readthedocs.io/",
+    "httpx": "https://www.python-httpx.org/",
+    "aiohttp": "https://docs.aiohttp.org/",
+    "pydantic": "https://docs.pydantic.dev/",
+    "celery": "https://docs.celeryq.dev/",
+    "redis": "https://redis-py.readthedocs.io/",
+    "pillow": "https://pillow.readthedocs.io/",
+    "opencv-python": "https://docs.opencv.org/",
+    "nltk": "https://www.nltk.org/",
+    "spacy": "https://spacy.io/api",
+    "transformers": "https://huggingface.co/docs/transformers/",
+    "pytest": "https://docs.pytest.org/",
+    "black": "https://black.readthedocs.io/",
+    "mypy": "https://mypy.readthedocs.io/",
+    "jupyter": "https://jupyter.org/documentation",
+    "jupyterlab": "https://jupyterlab.readthedocs.io/",
+    "ipython": "https://ipython.readthedocs.io/",
+    "rich": "https://rich.readthedocs.io/",
+    "click": "https://click.palletsprojects.com/",
+    "typer": "https://typer.tiangolo.com/",
+    "pyside6": "https://doc.qt.io/qtforpython/",
+    "pyqt6": "https://www.riverbankcomputing.com/static/Docs/PyQt6/",
+    "sqlmodel": "https://sqlmodel.tiangolo.com/",
+    "alembic": "https://alembic.sqlalchemy.org/",
+    "paramiko": "https://www.paramiko.org/",
+    "cryptography": "https://cryptography.io/en/latest/",
+    "arrow": "https://arrow.readthedocs.io/",
+    "pendulum": "https://pendulum.eustace.io/docs/",
+    "dask": "https://docs.dask.org/",
+    "polars": "https://docs.pola.rs/",
+    "pyarrow": "https://arrow.apache.org/docs/python/",
+    "numba": "https://numba.readthedocs.io/",
+    "sympy": "https://docs.sympy.org/",
+    "statsmodels": "https://www.statsmodels.org/stable/",
+    "networkx": "https://networkx.org/documentation/",
+    "scrapy": "https://docs.scrapy.org/",
+    "beautifulsoup4": "https://www.crummy.com/software/BeautifulSoup/bs4/doc/",
+    "selenium": "https://selenium-python.readthedocs.io/",
+    "playwright": "https://playwright.dev/python/docs/intro",
+    "pymongo": "https://pymongo.readthedocs.io/",
+    "motor": "https://motor.readthedocs.io/",
+    "psycopg2": "https://www.psycopg.org/docs/",
+    "aiomysql": "https://aiomysql.readthedocs.io/",
+    "boto3": "https://boto3.amazonaws.com/v1/documentation/api/latest/index.html",
+    "google-cloud-storage": "https://cloud.google.com/python/docs/reference/storage/latest",
+    "azure-storage-blob": "https://learn.microsoft.com/en-us/python/api/azure-storage-blob/",
+    "docker": "https://docker-py.readthedocs.io/",
+    "fabric": "https://docs.fabfile.org/",
+    "ansible": "https://docs.ansible.com/",
+}
 from src.utils.i18n import tr
 from src.utils.platform_utils import get_platform, get_python_executable, subprocess_args
 
@@ -1129,13 +1202,15 @@ $s.Save()
         layout.addWidget(legend)
 
         self.catalog_table = QTableWidget()
-        self.catalog_table.setColumnCount(4)
-        self.catalog_table.setHorizontalHeaderLabels(["Install", "Package", "Description", "Category"])
+        self.catalog_table.setColumnCount(5)
+        self.catalog_table.setHorizontalHeaderLabels(["Install", "Package", "Description", "Category", "Links"])
         self.catalog_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
         self.catalog_table.setColumnWidth(0, 55)
         self.catalog_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.catalog_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         self.catalog_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
+        self.catalog_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Fixed)
+        self.catalog_table.setColumnWidth(4, 80)
         self.catalog_table.setAlternatingRowColors(True)
         self.catalog_table.verticalHeader().setVisible(False)
         layout.addWidget(self.catalog_table)
@@ -1883,6 +1958,39 @@ $s.Save()
                 self.catalog_table.setItem(row, 3, cat_item)
 
                 self._catalog_initial_state[row] = is_installed
+
+                # Links column: PyPI + optional Docs
+                links_widget = QWidget()
+                links_layout = QHBoxLayout(links_widget)
+                links_layout.setContentsMargins(2, 1, 2, 1)
+                links_layout.setSpacing(3)
+                pkg_name_for_link = pkg["name"]
+                docs_url = _PACKAGE_DOCS.get(pkg_name_for_link.lower())
+
+                pypi_btn = QPushButton("PyPI")
+                pypi_btn.setFixedSize(34, 20)
+                pypi_btn.setStyleSheet(
+                    "QPushButton { font-size: 10px; padding: 0; background: #313244; "
+                    "color: #89b4fa; border: 1px solid #45475a; border-radius: 3px; }"
+                    "QPushButton:hover { background: #45475a; }"
+                )
+                pypi_btn.clicked.connect(lambda _, n=pkg_name_for_link: self._open_pypi(n))
+                links_layout.addWidget(pypi_btn)
+
+                if docs_url:
+                    docs_btn = QPushButton("Docs")
+                    docs_btn.setFixedSize(34, 20)
+                    docs_btn.setStyleSheet(
+                        "QPushButton { font-size: 10px; padding: 0; background: #313244; "
+                        "color: #a6e3a1; border: 1px solid #45475a; border-radius: 3px; }"
+                        "QPushButton:hover { background: #45475a; }"
+                    )
+                    docs_btn.clicked.connect(lambda _, u=docs_url: __import__("webbrowser").open(u))
+                    links_layout.addWidget(docs_btn)
+
+                links_layout.addStretch()
+                self.catalog_table.setCellWidget(row, 4, links_widget)
+
                 row += 1
 
         self._update_apply_button()

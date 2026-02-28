@@ -493,16 +493,70 @@ class MainWindow(QMainWindow):
             self.quick_launch_frame.setVisible(index != 2)
 
     def _on_ql_env_changed(self, idx):
-        """Sol sidebar QL dropdown değişti — sadece o env için butonları göster."""
+        """Sol sidebar QL dropdown değişti — sadece butonları güncelle, sağ panel değişmez."""
         if not hasattr(self, "ql_env_selector"):
             return
         venv_name = self.ql_env_selector.itemData(idx)
         if not venv_name:
             self._rebuild_ql_buttons(set())
             return
-        # Cache'den anında oku
+        # Önce cache'den dene
         installed = self._get_installed_from_cache(venv_name)
-        self._rebuild_ql_buttons(installed)
+        if installed:
+            self._rebuild_ql_buttons(installed)
+        else:
+            # Cache yok — arka planda sadece pip list çalıştır, sağ panel değişmez
+            self._rebuild_ql_buttons(set())  # Önce boş göster
+            self._ql_load_env_packages(venv_name)
+
+    def _ql_load_env_packages(self, venv_name: str):
+        """Sadece QL için paket listesi yükle — sağ paneli değiştirme."""
+        from pathlib import Path
+        from src.core.pip_manager import PipManager
+        from src.core.venv_manager import VenvManager
+        import json
+
+        venv_path = self.venv_manager.base_dir / venv_name
+        if not venv_path.exists():
+            return
+
+        class _QLWorker(QThread):
+            done = Signal(str, list)
+            def __init__(self, venv_path, parent=None):
+                super().__init__(parent)
+                self._vp = venv_path
+            def run(self):
+                try:
+                    import subprocess, sys
+                    python = self._vp / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+                    r = subprocess.run(
+                        [str(python), "-m", "pip", "list", "--format=json"],
+                        capture_output=True, text=True, timeout=30
+                    )
+                    if r.returncode == 0:
+                        pkgs = json.loads(r.stdout)
+                        self.done.emit(self._vp.name, pkgs)
+                except Exception:
+                    self.done.emit(self._vp.name, [])
+
+        def _on_done(env_name, pkgs):
+            # Cache'e kaydet
+            try:
+                vm = VenvManager(self.config.get_venv_base_dir())
+                all_cache = vm._load_all_cache()
+                key = "pkg_list:" + str(self.venv_manager.base_dir / env_name).replace("\\", "/")
+                all_cache[key] = {"packages": [{"name": p["name"], "version": p["version"]} for p in pkgs], "needs_refresh": 0}
+                vm._save_all_cache(all_cache)
+            except Exception:
+                pass
+            # Sadece QL hâlâ bu env'i gösteriyorsa güncelle
+            if hasattr(self, "ql_env_selector") and self.ql_env_selector.currentData() == env_name:
+                installed = {p["name"].lower() for p in pkgs}
+                self._rebuild_ql_buttons(installed)
+
+        self._ql_worker = _QLWorker(venv_path, parent=self)
+        self._ql_worker.done.connect(_on_done)
+        self._ql_worker.start()
 
     def _get_installed_from_cache(self, env_name: str) -> set:
         """Cache'den paket isimlerini oku — subprocess yok."""

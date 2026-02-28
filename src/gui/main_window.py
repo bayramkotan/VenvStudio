@@ -493,21 +493,18 @@ class MainWindow(QMainWindow):
             self.quick_launch_frame.setVisible(index != 2)
 
     def _on_ql_env_changed(self, idx):
-        """Sol sidebar QL dropdown değişti — sadece butonları güncelle, sağ panel değişmez."""
+        """Sol sidebar QL dropdown değişti — her şeyi sync et."""
         if not hasattr(self, "ql_env_selector"):
             return
         venv_name = self.ql_env_selector.itemData(idx)
         if not venv_name:
             self._rebuild_ql_buttons(set())
             return
-        # Önce cache'den dene
-        installed = self._get_installed_from_cache(venv_name)
-        if installed:
-            self._rebuild_ql_buttons(installed)
-        else:
-            # Cache yok — arka planda sadece pip list çalıştır, sağ panel değişmez
-            self._rebuild_ql_buttons(set())  # Önce boş göster
-            self._ql_load_env_packages(venv_name)
+        # Sağ paneli de güncelle
+        venv_path = self.venv_manager.base_dir / venv_name
+        if venv_path.exists():
+            self.package_panel.set_venv(venv_path)
+            self._switch_page(0)
 
     def _ql_load_env_packages(self, venv_name: str):
         """Sadece QL için paket listesi yükle — sağ paneli değiştirme."""

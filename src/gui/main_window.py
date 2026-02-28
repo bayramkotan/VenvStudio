@@ -511,9 +511,8 @@ class MainWindow(QMainWindow):
                 self.env_table.selectRow(row)
                 self.env_table.blockSignals(False)
                 break
-        # package_panel sync
+        # package_panel sync (sayfa değiştirme!)
         self.package_panel.set_venv(venv_path)
-        self._switch_page(0)
 
     def _ql_load_env_packages(self, venv_name: str):
         """Sadece QL için paket listesi yükle — sağ paneli değiştirme."""

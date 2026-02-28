@@ -285,16 +285,16 @@ class MainWindow(QMainWindow):
 
         self.nav_buttons = []
 
-        self.btn_envs = SidebarButton(tr("environments"), "\U0001f4c1")
-        self.btn_envs.setChecked(True)
-        self.btn_envs.clicked.connect(lambda: self._switch_page(0))
-        sidebar_layout.addWidget(self.btn_envs)
-        self.nav_buttons.append(self.btn_envs)
-
         self.btn_packages = SidebarButton(tr("packages"), "\U0001f4e6")
-        self.btn_packages.clicked.connect(lambda: self._switch_page(1))
+        self.btn_packages.setChecked(True)
+        self.btn_packages.clicked.connect(lambda: self._switch_page(0))
         sidebar_layout.addWidget(self.btn_packages)
         self.nav_buttons.append(self.btn_packages)
+
+        self.btn_envs = SidebarButton(tr("environments"), "\U0001f4c1")
+        self.btn_envs.clicked.connect(lambda: self._switch_page(1))
+        sidebar_layout.addWidget(self.btn_envs)
+        self.nav_buttons.append(self.btn_envs)
 
         self.btn_settings = SidebarButton(tr("settings"), "⚙️")
         self.btn_settings.clicked.connect(lambda: self._switch_page(2))
@@ -347,11 +347,11 @@ class MainWindow(QMainWindow):
 
         # Content Area
         self.stack = QStackedWidget()
-        self.stack.addWidget(self._create_env_page())       # Page 0
         self.package_panel = PackagePanel()
         self.package_panel.env_refresh_requested.connect(self._refresh_env_list)
         self.package_panel._ql_update_callback = self._update_ql_buttons
-        self.stack.addWidget(self.package_panel)             # Page 1
+        self.stack.addWidget(self.package_panel)             # Page 0
+        self.stack.addWidget(self._create_env_page())       # Page 1
 
         # Settings page
         self.settings_page = SettingsPage(self.config)
@@ -689,7 +689,7 @@ class MainWindow(QMainWindow):
         if not venv_path.exists():
             return
         self.package_panel.set_venv(venv_path)
-        self._switch_page(1)
+        self._switch_page(0)
         # Sync env table selection
         for row in range(self.env_table.rowCount()):
             item = self.env_table.item(row, 0)
@@ -1051,7 +1051,7 @@ class MainWindow(QMainWindow):
             return
         venv_path = self.venv_manager.base_dir / name
         self.package_panel.set_venv(venv_path)
-        self._switch_page(1)
+        self._switch_page(0)
 
     def _open_terminal(self):
         name = self._get_selected_env_name()

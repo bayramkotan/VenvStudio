@@ -1,55 +1,54 @@
 """
-VenvStudio Updater
-Checks PyPI for newer versions using only stdlib (urllib).
-No external dependencies — works in PyInstaller builds.
+VenvStudio - Auto Update Checker
+Checks PyPI using only http.client — no urllib, no email, no packaging.
+Works reliably in PyInstaller builds.
 """
 
+import http.client
 import json
 import ssl
-import urllib.request
+
 from src.utils.constants import APP_VERSION
 
-PYPI_URL = "https://pypi.org/pypi/venvstudio/json"
+PYPI_HOST = "pypi.org"
+PYPI_PATH = "/pypi/venvstudio/json"
 
 
-def _parse_version(ver_str: str) -> tuple:
-    """Parse version string to comparable tuple. e.g. '1.3.24' → (1, 3, 24)"""
+def _parse_version(ver: str) -> tuple:
+    """'1.3.25' -> (1, 3, 25)"""
     try:
-        return tuple(int(x) for x in ver_str.strip().split(".")[:4])
+        return tuple(int(x) for x in ver.strip().split(".")[:4])
     except Exception:
         return (0,)
 
 
 def check_for_update() -> dict:
-    """
-    Check PyPI for a newer version.
-    Returns dict with keys:
-      - update_available (bool)
-      - latest (str)
-      - current (str)
-      - error (str or None)
-    """
     result = {
         "update_available": False,
-        "latest": APP_VERSION,
-        "current": APP_VERSION,
+        "latest_version": APP_VERSION,
+        "current_version": APP_VERSION,
+        "download_url": "https://pypi.org/project/venvstudio/",
+        "release_url": "https://github.com/bayramkotan/VenvStudio/releases/latest",
         "error": None,
     }
 
     try:
         ctx = ssl.create_default_context()
-        req = urllib.request.Request(
-            PYPI_URL,
+        conn = http.client.HTTPSConnection(PYPI_HOST, context=ctx, timeout=10)
+        conn.request(
+            "GET", PYPI_PATH,
             headers={
-                "User-Agent": f"VenvStudio/{APP_VERSION}",
                 "Accept": "application/json",
+                "User-Agent": f"VenvStudio/{APP_VERSION}",
+                "Host": PYPI_HOST,
             }
         )
-        with urllib.request.urlopen(req, context=ctx, timeout=10) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
+        resp = conn.getresponse()
+        data = json.loads(resp.read().decode("utf-8"))
+        conn.close()
 
         latest = data.get("info", {}).get("version", APP_VERSION)
-        result["latest"] = latest
+        result["latest_version"] = latest
 
         if _parse_version(latest) > _parse_version(APP_VERSION):
             result["update_available"] = True

@@ -733,39 +733,6 @@ class SettingsPage(QWidget):
         diag_group.setLayout(diag_layout)
         layout.addWidget(diag_group)
 
-        # ── 9. ABOUT ──
-        about_group = QGroupBox(f"ℹ️ About {APP_NAME}")
-        about_layout = QVBoxLayout()
-        about_layout.setSpacing(8)
-
-        about_text = QLabel(
-            f"<h3>{APP_NAME} v{APP_VERSION}</h3>"
-            f"<p>Lightweight Python Virtual Environment Manager</p>"
-            f"<p>Create, manage, and organize your Python environments with ease.</p>"
-            f"<p><b>License:</b> LGPL-3.0</p>"
-            f"<p><b>Platform:</b> {get_platform().title()}</p>"
-            f"<p><b>Built with:</b> PySide6 (Qt for Python)</p>"
-        )
-        about_text.setWordWrap(True)
-        about_text.setTextFormat(Qt.RichText)
-        about_layout.addWidget(about_text)
-
-        # Update check section
-        update_row = QHBoxLayout()
-        self.update_status_label = QLabel("")
-        self.update_status_label.setStyleSheet("font-size: 12px;")
-        update_row.addWidget(self.update_status_label, 1)
-
-        check_update_btn = QPushButton("🔄 Check for Updates")
-        check_update_btn.setObjectName("secondary")
-        check_update_btn.clicked.connect(self._check_for_updates)
-        update_row.addWidget(check_update_btn)
-
-        about_layout.addLayout(update_row)
-
-        about_group.setLayout(about_layout)
-        layout.addWidget(about_group)
-
         # ── CLI/TUI TOOLS ──
         cli_group = QGroupBox("🖥️ CLI/TUI Tools")
         cli_layout = QVBoxLayout()
@@ -850,6 +817,37 @@ class SettingsPage(QWidget):
         layout.addWidget(cli_group)
 
         layout.addStretch()
+
+        # ── ABOUT (always at bottom) ──
+        about_group = QGroupBox(f"ℹ️ About {APP_NAME}")
+        about_layout = QVBoxLayout()
+        about_layout.setSpacing(8)
+
+        about_text = QLabel(
+            f"<h3>{APP_NAME} v{APP_VERSION}</h3>"
+            f"<p>Lightweight Python Virtual Environment Manager</p>"
+            f"<p>Create, manage, and organize your Python environments with ease.</p>"
+            f"<p><b>License:</b> LGPL-3.0</p>"
+            f"<p><b>Platform:</b> {get_platform().title()}</p>"
+            f"<p><b>Built with:</b> PySide6 (Qt for Python)</p>"
+        )
+        about_text.setWordWrap(True)
+        about_text.setTextFormat(Qt.RichText)
+        about_layout.addWidget(about_text)
+
+        update_row = QHBoxLayout()
+        self.update_status_label = QLabel("")
+        self.update_status_label.setStyleSheet("font-size: 12px;")
+        update_row.addWidget(self.update_status_label, 1)
+
+        check_update_btn = QPushButton("🔄 Check for Updates")
+        check_update_btn.setObjectName("secondary")
+        check_update_btn.clicked.connect(self._check_for_updates)
+        update_row.addWidget(check_update_btn)
+
+        about_layout.addLayout(update_row)
+        about_group.setLayout(about_layout)
+        layout.addWidget(about_group)
 
         # ── SAVE / RESET BUTTONS ──
         btn_layout = QHBoxLayout()

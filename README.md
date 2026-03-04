@@ -6,15 +6,21 @@
 
 <p align="center">
   <strong>Lightweight Python Virtual Environment Manager</strong><br>
-  A modern, cross-platform virtual environment manager
+  A modern, cross-platform GUI for managing Python virtual environments
 </p>
 
 <p align="center">
+  <a href="https://github.com/bayramkotan/VenvStudio/releases/latest">
+    <img src="https://img.shields.io/github/v/release/bayramkotan/VenvStudio?style=for-the-badge&color=89b4fa&logo=github" alt="Release">
+  </a>
+  <a href="https://pypi.org/project/venvstudio/">
+    <img src="https://img.shields.io/pypi/v/venvstudio?style=for-the-badge&color=a6e3a1&logo=pypi&logoColor=white" alt="PyPI">
+  </a>
   <a href="https://pypi.org/project/venvstudio/">
     <img src="https://img.shields.io/pypi/pyversions/venvstudio?style=for-the-badge&color=f9e2af&logo=python&logoColor=white" alt="Python">
   </a>
   <a href="LICENSE">
-    <img src="https://img.shields.io/badge/License-LGPL--3.0-cba6f7?style=for-the-badge" alt="License">
+    <img src="https://img.shields.io/github/license/bayramkotan/VenvStudio?style=for-the-badge&color=cba6f7" alt="License">
   </a>
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=for-the-badge" alt="Platform">
 </p>
@@ -25,46 +31,70 @@
 
 ```bash
 pip install venvstudio
+venvstudio
 ```
 
-Or download the standalone binary from [GitHub Releases](https://github.com/bayramkotan/VenvStudio/releases/latest):
+Or download the standalone binary from [GitHub Releases](https://github.com/bayramkotan/VenvStudio/releases/latest) — no Python required:
 
 | Platform | File |
 |----------|------|
-| Windows | `VenvStudio.exe` |
-| Linux | `VenvStudio-x86_64.AppImage` |
-| macOS | `VenvStudio-macOS` |
-| PyPI | `pip install venvstudio` |
+| 🪟 Windows | `VenvStudio.exe` |
+| 🐧 Linux | `VenvStudio-x86_64.AppImage` |
+| 🍎 macOS | `VenvStudio-macOS` |
 
 ---
 
 ## ✨ Features
 
-- **Create & manage** Python virtual environments with a modern GUI
-- **Package management** — install, uninstall, update packages via pip or uv
-- **200+ package catalog** with categories (Data Science, Web, ML, NLP, DevOps...) and PyPI/Docs links
-- **Quick presets** — Data Science Starter, Web API, Django, Flask, ML, NLP, Testing... + custom presets
-- **Launch apps** — JupyterLab, Orange Data Mining, Spyder, IPython, Streamlit with one click
-- **Quick Launch sidebar** — instantly launch installed apps from any page, per-environment
-- **Default environment** — set a default env that opens automatically on startup
-- **Desktop shortcuts** — create `.lnk` shortcuts with app-specific icons
-- **Export** — requirements.txt, Dockerfile, docker-compose.yml, pyproject.toml, Conda environment.yml
-- **Python downloader** — download standalone Python builds (astral-sh/python-build-standalone)
-- **Custom terminals** — add and manage your own terminal emulators (Git Bash, Kitty, Alacritty...)
-- **Smart cache** — instant environment and package list loading with background refresh
-- **PATH management** — set User/System default Python with admin elevation
-- **Auto-update** — check PyPI for new versions on startup
-- **Cross-platform** — Windows, macOS, Linux
-- **Dark theme** — modern Catppuccin-based UI
-- **Multilingual** — English & Turkish
+### 🗂️ Environment Management
+- Create, rename, clone, delete virtual environments
+- Auto-detect existing environments on disk at startup
+- Per-environment cache — instant load, no subprocess delays
+- Set a **Default Environment** that opens automatically on launch
+- Open terminal with environment pre-activated (cmd, PowerShell, pwsh, bash, zsh, fish...)
+- Export environments as `requirements.txt`, `Dockerfile`, `docker-compose.yml`, `pyproject.toml`, `environment.yml`
+
+### 📦 Package Management
+- **Installed** tab — filter, select, uninstall, export, import packages
+- **Catalog** tab — 200+ curated packages across 15 categories with PyPI & Docs links
+- **Presets** tab — one-click install bundles (Data Science, Web API, Django, Flask, ML, NLP, CV, Testing...)
+- **Manual Install** tab — paste package names or version specs (`numpy==1.24`, `pandas>=2.0`)
+- Check for package updates (pip list --outdated)
+- Custom categories and custom catalog packages via Settings
+- pip or **uv** backend (uv is 10–100× faster)
+
+### 🚀 Quick Launch
+- Sidebar shows installed apps for the active environment
+- One-click launch: JupyterLab, Jupyter Notebook, Spyder IDE, IPython, Orange Data Mining, Streamlit
+- **Create Desktop Shortcut** for any app
+- Instant sync between sidebar dropdown, environment table, and package panel
+
+### 🐍 Python Management
+- Auto-detect all system Python installations
+- Add custom Python paths
+- Set **User Default** or **System Default** Python (PATH management with optional admin elevation)
+- Download standalone Python builds from [astral-sh/python-build-standalone](https://github.com/astral-sh/python-build-standalone)
+
+### ⚙️ Settings
+- Dark (Catppuccin) and Light themes
+- Font family and size customization
+- Interface language: English / Turkish
+- Custom venv base directory
+- Custom terminal configuration (add, edit, remove)
+- Custom Catalog categories and packages
+- Diagnostics: open log folder, config folder, add Python to PATH, export/import settings
+- Auto-check for updates on startup
+
+### 🖥️ CLI/TUI Tools
+- Install and configure **Starship**, **Oh My Posh** prompt themes
+- Install **Nerd Fonts** for proper rendering
+- pip-installable tools: **Rich**, **Textual**, **Prompt Toolkit**
 
 ---
 
 ## 📸 Screenshots
 
 ### Environments
-
-Create, manage, clone, rename, delete virtual environments. Open terminal with activated environment.
 
 <p align="center">
   <img src="assets/screenshots/Environment1.png" alt="Virtual Environments" width="800">
@@ -76,23 +106,23 @@ Create, manage, clone, rename, delete virtual environments. Open terminal with a
 
 ### Create New Environment
 
-Select Python version, location, and options. Shows equivalent terminal commands.
+<p align="center">
+  <img src="assets/screenshots/create_environment.png" alt="Create New Environment" width="800">
+</p>
+
+### Launch Apps
 
 <p align="center">
-  <img src="assets/screenshots/create_environment.png" alt="Create Environment" width="800">
+  <img src="assets/screenshots/Launch.png" alt="Launch Applications" width="800">
 </p>
 
 ### Installed Packages
-
-View, filter, update, uninstall packages. Export in 6 formats. Right-click for pip show, copy pip commands, and PyPI link.
 
 <p align="center">
   <img src="assets/screenshots/Installed.png" alt="Installed Packages" width="800">
 </p>
 
 ### Package Catalog
-
-Browse 200+ packages organized by category. Check to install, uncheck to remove. Direct PyPI and Docs links for every package.
 
 <p align="center">
   <img src="assets/screenshots/catalog1.png" alt="Package Catalog" width="800">
@@ -102,32 +132,34 @@ Browse 200+ packages organized by category. Check to install, uncheck to remove.
   <img src="assets/screenshots/catalog2.png" alt="Catalog Categories" width="800">
 </p>
 
-### Quick Presets
-
-One-click install for common project setups: Data Science, Web API, Django, Flask, ML, NLP, Testing, and more. Create and manage your own custom presets in Settings.
+### Presets
 
 <p align="center">
   <img src="assets/screenshots/presets_1.png" alt="Presets" width="800">
 </p>
 
 <p align="center">
-  <img src="assets/screenshots/presets_1_install.png" alt="Preset Install" width="800">
-</p>
-
-### Launch Applications
-
-Launch JupyterLab, Jupyter Notebook, Orange Data Mining, Spyder, IPython, Streamlit directly. Create desktop shortcuts. The **Quick Launch sidebar** shows installed apps for the selected environment at a glance.
-
-<p align="center">
-  <img src="assets/screenshots/Launch.png" alt="Launch Applications" width="800">
+  <img src="assets/screenshots/presets_1_install.png" alt="Preset Install Confirm" width="800">
 </p>
 
 ### Manual Install
 
-Type or paste package names. Automatic cleanup of `pip install` prefixes and noise words.
-
 <p align="center">
   <img src="assets/screenshots/manual_install.png" alt="Manual Install" width="800">
+</p>
+
+### Settings
+
+<p align="center">
+  <img src="assets/screenshots/settings_1.png" alt="Settings - Appearance" width="800">
+</p>
+
+<p align="center">
+  <img src="assets/screenshots/settings_2.png" alt="Settings - Python & Paths" width="800">
+</p>
+
+<p align="center">
+  <img src="assets/screenshots/settings_3.png" alt="Settings - Custom Catalog & Diagnostics" width="800">
 </p>
 
 ---
@@ -162,7 +194,7 @@ venvstudio -h       # Help
 
 ## 📤 Export Formats
 
-Export your environment in multiple formats from the **Export ▾** dropdown:
+Export your environment from the **Export ▾** dropdown:
 
 | Format | File(s) | Use Case |
 |--------|---------|----------|
@@ -177,35 +209,10 @@ Export your environment in multiple formats from the **Export ▾** dropdown:
 
 ## ⬇️ Python Downloader
 
-Download standalone Python builds from [astral-sh/python-build-standalone](https://github.com/astral-sh/python-build-standalone) (same builds used by `uv`):
+Download standalone Python builds from [astral-sh/python-build-standalone](https://github.com/astral-sh/python-build-standalone):
 
 - **User Install** — no admin required, stored in VenvStudio config
-- **System Install** — Windows (`C:\Program Files`), Linux (`/opt/python`), macOS (`/usr/local/python`)
-
----
-
-## 🐍 PATH Management
-
-Manage which Python is the default on your system:
-
-- **Set User Default** — adds to User PATH, removes conflicting entries
-- **Set System Default** — adds to System PATH with admin elevation
-- Both modes clean conflicting Python entries from both User and System PATH
-
----
-
-## 🔧 Settings
-
-- Theme: Dark (Catppuccin), Light
-- Language: English, Turkish
-- Default package manager: pip or uv
-- Custom venv base directory (default: `C:\venv` on Windows, `~/venv` on Linux/macOS)
-- Python version management (System, User Install, Custom, Downloaded)
-- **Custom terminals** — add your own terminal emulators (Git Bash, Kitty, Alacritty, etc.)
-- **Custom presets** — create and manage your own package preset bundles
-- **Default environment** — automatically open a specific environment on startup
-- Check for updates on startup
-- Export/Import settings
+- **System Install** — `C:\Program Files` on Windows, `/opt/python` on Linux, `/usr/local/python` on macOS
 
 ---
 
@@ -216,7 +223,7 @@ pip install pyinstaller PySide6 Pillow
 python build.py
 ```
 
-This creates platform-specific binaries in the `dist/` folder.
+GitHub Actions automatically builds Windows, Linux (AppImage), and macOS binaries on every tagged release.
 
 ---
 
@@ -231,4 +238,4 @@ This creates platform-specific binaries in the `dist/` folder.
 - [GitHub Repository](https://github.com/bayramkotan/VenvStudio)
 - [PyPI Package](https://pypi.org/project/venvstudio/)
 - [Releases](https://github.com/bayramkotan/VenvStudio/releases)
-- [Issues](https://github.com/bayramkotan/VenvStudio/issues)
+- [Issues & Feature Requests](https://github.com/bayramkotan/VenvStudio/issues)

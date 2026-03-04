@@ -52,14 +52,14 @@ Or download the standalone binary from [GitHub Releases](https://github.com/bayr
 - Per-environment cache — instant load, no subprocess delays
 - Set a **Default Environment** that opens automatically on launch
 - Open terminal with environment pre-activated (cmd, PowerShell, pwsh, bash, zsh, fish...)
-- Export environments as `requirements.txt`, `Dockerfile`, `docker-compose.yml`, `pyproject.toml`, `environment.yml`
+- Export as `requirements.txt`, `Dockerfile`, `docker-compose.yml`, `pyproject.toml`, `environment.yml`
 
 ### 📦 Package Management
 - **Installed** tab — filter, select, uninstall, export, import packages
 - **Catalog** tab — 200+ curated packages across 15 categories with PyPI & Docs links
 - **Presets** tab — one-click install bundles (Data Science, Web API, Django, Flask, ML, NLP, CV, Testing...)
 - **Manual Install** tab — paste package names or version specs (`numpy==1.24`, `pandas>=2.0`)
-- Check for package updates (pip list --outdated)
+- Check for package updates via pip
 - Custom categories and custom catalog packages via Settings
 - pip or **uv** backend (uv is 10–100× faster)
 
@@ -97,69 +97,55 @@ Or download the standalone binary from [GitHub Releases](https://github.com/bayr
 ### Environments
 
 <p align="center">
-  <img src="assets/screenshots/Environment1.png" alt="Virtual Environments" width="800">
+  <img src="assets/screenshots/environment1.png" alt="Virtual Environments" width="800">
+</p>
+
+### Packages — Launch Apps
+
+<p align="center">
+  <img src="assets/screenshots/packages-launch1.png" alt="Launch Applications" width="800">
+</p>
+
+### Packages — Installed
+
+<p align="center">
+  <img src="assets/screenshots/packages1.png" alt="Installed Packages" width="800">
+</p>
+
+### Packages — Catalog
+
+<p align="center">
+  <img src="assets/screenshots/packages-catalog1.png" alt="Package Catalog" width="800">
+</p>
+
+### Packages — Presets
+
+<p align="center">
+  <img src="assets/screenshots/packages-presets1.png" alt="Presets" width="800">
 </p>
 
 <p align="center">
-  <img src="assets/screenshots/Environment2.png" alt="Environment with Terminal" width="800">
+  <img src="assets/screenshots/packages-presets2.png" alt="Preset Install" width="800">
 </p>
 
-### Create New Environment
+### Packages — Manual Install
 
 <p align="center">
-  <img src="assets/screenshots/create_environment.png" alt="Create New Environment" width="800">
-</p>
-
-### Launch Apps
-
-<p align="center">
-  <img src="assets/screenshots/Launch.png" alt="Launch Applications" width="800">
-</p>
-
-### Installed Packages
-
-<p align="center">
-  <img src="assets/screenshots/Installed.png" alt="Installed Packages" width="800">
-</p>
-
-### Package Catalog
-
-<p align="center">
-  <img src="assets/screenshots/catalog1.png" alt="Package Catalog" width="800">
-</p>
-
-<p align="center">
-  <img src="assets/screenshots/catalog2.png" alt="Catalog Categories" width="800">
-</p>
-
-### Presets
-
-<p align="center">
-  <img src="assets/screenshots/presets_1.png" alt="Presets" width="800">
-</p>
-
-<p align="center">
-  <img src="assets/screenshots/presets_1_install.png" alt="Preset Install Confirm" width="800">
-</p>
-
-### Manual Install
-
-<p align="center">
-  <img src="assets/screenshots/manual_install.png" alt="Manual Install" width="800">
+  <img src="assets/screenshots/packages-manual_install_1.png" alt="Manual Install" width="800">
 </p>
 
 ### Settings
 
 <p align="center">
-  <img src="assets/screenshots/settings_1.png" alt="Settings - Appearance" width="800">
+  <img src="assets/screenshots/settings1.png" alt="Settings - Appearance & Language" width="800">
 </p>
 
 <p align="center">
-  <img src="assets/screenshots/settings_2.png" alt="Settings - Python & Paths" width="800">
+  <img src="assets/screenshots/settings2_python_install.png" alt="Settings - Python & Paths" width="800">
 </p>
 
 <p align="center">
-  <img src="assets/screenshots/settings_3.png" alt="Settings - Custom Catalog & Diagnostics" width="800">
+  <img src="assets/screenshots/settings3.png" alt="Settings - Custom Catalog & Diagnostics" width="800">
 </p>
 
 ---
@@ -193,8 +179,6 @@ venvstudio -h       # Help
 ---
 
 ## 📤 Export Formats
-
-Export your environment from the **Export ▾** dropdown:
 
 | Format | File(s) | Use Case |
 |--------|---------|----------|

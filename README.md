@@ -112,6 +112,14 @@ Or download the standalone binary from [GitHub Releases](https://github.com/bayr
   <img src="assets/screenshots/packages1.png" alt="Installed Packages" width="800">
 </p>
 
+<p align="center">
+  <img src="assets/screenshots/packages2.png" alt="Right-click Context Menu" width="800">
+</p>
+
+<p align="center">
+  <img src="assets/screenshots/packages3.png" alt="Package Info (pip show)" width="800">
+</p>
+
 ### Packages — Catalog
 
 <p align="center">

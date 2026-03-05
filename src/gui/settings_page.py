@@ -764,9 +764,15 @@ class SettingsPage(QWidget):
         font_inner.setSpacing(8)
 
         from src.core.cli_tools_manager import NERD_FONTS
+        nerd_font_cb = QCheckBox()
+        nerd_font_cb.setChecked(False)
+        font_inner.addWidget(nerd_font_cb)
+
         self.nerd_font_combo = QComboBox()
         for font_id, font_name in NERD_FONTS:
             self.nerd_font_combo.addItem(font_name, font_id)
+        self.nerd_font_combo.setEnabled(False)
+        nerd_font_cb.toggled.connect(self.nerd_font_combo.setEnabled)
         font_inner.addWidget(self.nerd_font_combo, 1)
 
         install_font_btn = QPushButton("⬇️ Download & Install Font")

@@ -934,11 +934,17 @@ class SettingsPage(QWidget):
         preset_lbl.setStyleSheet("font-size: 11px; color: #cdd6f4;")
         controls.addWidget(preset_lbl)
 
+        preset_cb = QCheckBox()
+        preset_cb.setChecked(False)
+        controls.addWidget(preset_cb)
+
         combo = QComboBox()
         combo.setMaximumWidth(180)
         for p in presets:
             combo.addItem(p)
         combo.setObjectName(f"preset_{tool_id.replace('-','_')}")
+        combo.setEnabled(False)
+        preset_cb.toggled.connect(combo.setEnabled)
         controls.addWidget(combo)
 
         controls.addStretch()

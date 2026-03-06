@@ -197,6 +197,7 @@ class PackagePanel(QWidget):
         self.pip_manager = None
         self.current_worker = None
         self.installed_package_names = set()
+        self._launcher_py_version_cache: dict = {}  # venv_path -> tuple
         self._catalog_initial_state = {}  # Track original checkbox states
         self._setup_ui()
 
@@ -603,20 +604,25 @@ class PackagePanel(QWidget):
 
     def _update_launcher_status(self):
         """Update launcher cards to show installed/not-installed status."""
-        # Get current env Python version once
+        # Get current env Python version — use cache to avoid subprocess on every call
         env_py_version = None
         if self.pip_manager:
-            try:
-                python_exe = get_python_executable(self.pip_manager.venv_path)
-                from src.utils.platform_utils import subprocess_args
-                result = subprocess.run(
-                    [str(python_exe), "--version"],
-                    **subprocess_args(capture_output=True, text=True, timeout=5)
-                )
-                ver_str = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
-                env_py_version = tuple(int(x) for x in ver_str.split(".")[:2])
-            except Exception:
-                pass
+            venv_key = str(self.pip_manager.venv_path)
+            if venv_key in self._launcher_py_version_cache:
+                env_py_version = self._launcher_py_version_cache[venv_key]
+            else:
+                try:
+                    python_exe = get_python_executable(self.pip_manager.venv_path)
+                    from src.utils.platform_utils import subprocess_args
+                    result = subprocess.run(
+                        [str(python_exe), "--version"],
+                        **subprocess_args(capture_output=True, text=True, timeout=5)
+                    )
+                    ver_str = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
+                    env_py_version = tuple(int(x) for x in ver_str.split(".")[:2])
+                    self._launcher_py_version_cache[venv_key] = env_py_version
+                except Exception:
+                    pass
 
         for name, card in self.launcher_cards.items():
             app_def = card._app_def
@@ -1653,6 +1659,7 @@ $s.Save()
 
         self.pip_manager = None
         self.installed_package_names = set()
+        self._launcher_py_version_cache.clear()
         self.packages_table.setRowCount(0)
         self.env_pkg_count.setText("")
         self.python_version_label.setText("")

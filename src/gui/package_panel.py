@@ -668,6 +668,14 @@ class PackagePanel(QWidget):
         launch_btn.clicked.connect(lambda checked, a=app_def: self._launch_app(a))
         btn_layout.addWidget(launch_btn)
 
+        # "Open Script" button for framework apps (Dash, Gradio, FastAPI etc.)
+        if app_def.get("script_launcher", False):
+            script_btn = QPushButton("📂 Open Script")
+            script_btn.setObjectName("secondary")
+            script_btn.setToolTip("Select a .py file to run with this framework")
+            script_btn.clicked.connect(lambda checked, a=app_def: self._launch_script(a))
+            btn_layout.addWidget(script_btn)
+
         layout.addLayout(btn_layout)
 
         # Buttons row 2: Uninstall + Shortcut
@@ -830,6 +838,85 @@ class PackagePanel(QWidget):
             return ["PyQt5", "PyQtWebEngine", "chardet<4.0", "orange3<=3.36.2"]
         else:
             return ["PyQt5", "PyQtWebEngine", "chardet<4.0", "orange3"]
+
+    def _launch_script(self, app_def: dict):
+        """Let user pick a .py file and run it with the selected framework."""
+        import os
+        from PySide6.QtWidgets import QFileDialog
+
+        if not self.pip_manager:
+            QMessageBox.warning(self, tr("warning"), tr("select_environment"))
+            return
+
+        filepath, _ = QFileDialog.getOpenFileName(
+            self, f"Select Python script for {app_def['name']}", "",
+            "Python Files (*.py);;All Files (*)"
+        )
+        if not filepath:
+            return
+
+        venv_path = self.pip_manager.venv_path
+        python_exe = get_python_executable(venv_path)
+        work_dir = os.path.dirname(filepath)
+        pkg = app_def["package"].lower()
+
+        # Build command based on framework
+        if pkg == "streamlit":
+            cmd = [str(python_exe), "-m", "streamlit", "run", filepath, "--server.headless", "true"]
+            url = "http://localhost:8501"
+        elif pkg == "dash":
+            cmd = [str(python_exe), filepath]
+            url = "http://localhost:8050"
+        elif pkg == "gradio":
+            cmd = [str(python_exe), filepath]
+            url = "http://localhost:7860"
+        elif pkg == "fastapi":
+            # Extract module name for uvicorn
+            module = os.path.splitext(os.path.basename(filepath))[0]
+            cmd = [str(python_exe), "-m", "uvicorn", f"{module}:app", "--reload"]
+            url = "http://localhost:8000/docs"
+        elif pkg == "panel":
+            cmd = [str(python_exe), "-m", "panel", "serve", filepath, "--show"]
+            url = ""
+        elif pkg == "voila":
+            cmd = [str(python_exe), "-m", "voila", filepath]
+            url = "http://localhost:8866"
+        elif pkg == "mlflow":
+            cmd = [str(python_exe), filepath]
+            url = ""
+        elif pkg == "tensorboard":
+            cmd = [str(python_exe), "-m", "tensorboard.main", "--logdir", work_dir]
+            url = "http://localhost:6006"
+        elif pkg == "datasette":
+            cmd = [str(python_exe), "-m", "datasette", filepath]
+            url = "http://localhost:8001"
+        else:
+            cmd = [str(python_exe), filepath]
+            url = ""
+
+        try:
+            from src.utils.platform_utils import get_platform
+            import subprocess
+            if get_platform() == "windows":
+                subprocess.Popen(cmd, cwd=work_dir, creationflags=subprocess.CREATE_NEW_CONSOLE)
+            else:
+                cmd_str = " ".join(f'"{c}"' for c in cmd)
+                try:
+                    subprocess.Popen(["x-terminal-emulator", "-e", f"bash -c '{cmd_str}; read -p Press_Enter'"], cwd=work_dir)
+                except FileNotFoundError:
+                    subprocess.Popen(cmd, cwd=work_dir)
+
+            self.status_label.setText(f"🚀 Running {os.path.basename(filepath)}")
+
+            if url:
+                import threading, webbrowser, time as _t
+                def _open(u):
+                    _t.sleep(3)
+                    webbrowser.open(u)
+                threading.Thread(target=_open, args=(url,), daemon=True).start()
+
+        except Exception as e:
+            QMessageBox.critical(self, tr("error"), f"Failed to launch script:\n{e}")
 
     def _launch_app(self, app_def: dict):
         """Launch an app from the selected environment."""

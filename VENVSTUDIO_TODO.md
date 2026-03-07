@@ -108,3 +108,15 @@
 - Crash logs: `%APPDATA%\VenvStudio\logs\crash_YYYYMMDD_HHMMSS.log`
 - PyPI: https://pypi.org/project/venvstudio/
 - GitHub: https://github.com/bayramkotan/VenvStudio
+
+---
+
+## 📌 ÖNEMLİ TEKNİK NOTLAR
+
+### Orange3 Bağımlılıkları
+- Orange3, AnyQt üzerinden çalışır → **PyQt5 + PyQtWebEngine gerektirir**, PySide6 desteklenmez
+- `chardet>=4.0` ile uyumsuz → `chardet<4.0` zorunlu
+- Her env tamamen izole — Orange3 için PyQt5 kurmak diğer env'leri veya VenvStudio'yu **etkilemez**
+- VenvStudio kendisi PySide6 kullanır, env'lerdeki PyQt5 ile çakışmaz
+- Python 3.9 ve altı: `orange3<=3.36.2` (wheel desteği kesildi)
+- Python 3.10+: `orange3` latest

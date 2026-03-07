@@ -875,9 +875,23 @@ class PackagePanel(QWidget):
         """After installing an app package, refresh and launch."""
         self._set_busy(False)
         if success:
-            self.refresh_packages()
             self.status_label.setText(f"✅ {app_def['package']} installed. Launching...")
-            self._launch_app(app_def)
+            # Must wait for package list to refresh before launching,
+            # otherwise installed_package_names won't contain the new package
+            # and _launch_app will show the install dialog again.
+            self._invalidate_pkg_cache()
+            self._async_refresh_packages(force=True)
+            # Connect one-shot signal to launch after refresh completes
+            def _launch_after_refresh():
+                try:
+                    self._pkg_loader.done.disconnect(_launch_after_refresh)
+                except Exception:
+                    pass
+                self._launch_app(app_def)
+            if self._pkg_loader:
+                self._pkg_loader.done.connect(_launch_after_refresh)
+            else:
+                self._launch_app(app_def)
         else:
             self.status_label.setText(tr("operation_failed"))
             from src.utils.platform_utils import get_platform

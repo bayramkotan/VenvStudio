@@ -1532,113 +1532,105 @@ class SettingsPage(QWidget):
     def _scan_pythons(self):
         """Scan system for Python installations."""
         import os
+        import shutil
         self.python_table.setRowCount(0)
         self.default_python_combo.clear()
         self.default_python_combo.addItem("System Default", "")
 
-        # System pythons
-        system_pythons = find_system_pythons()
         excluded_pythons = {
             os.path.normcase(os.path.normpath(p))
             for p in self.config.get("excluded_pythons", [])
         }
-        system_paths = set()
-        home_lower = os.path.expanduser("~").lower()
+
+        # Determine the one true "default" Python — what `python` resolves to in PATH
+        default_exe = shutil.which("python") or shutil.which("python3") or ""
+        default_norm = os.path.normcase(os.path.normpath(default_exe)) if default_exe else ""
+
+        # All pythons from system scan
+        system_pythons = find_system_pythons()
+        listed_paths = set()
+
         for version, path in system_pythons:
             norm_path = os.path.normpath(path)
-            norm_lower = norm_path.lower()
-            # Determine if this is a user-level install
-            is_user_install = (
-                home_lower in norm_lower or
-                "appdata" in norm_lower or
-                ".local" in norm_lower
-            )
-            # Skip excluded paths
-            if os.path.normcase(norm_path) in excluded_pythons:
-                continue
+            norm_case = os.path.normcase(norm_path)
 
-            if is_user_install:
-                # Treat as custom so it can be removed
-                row = self.python_table.rowCount()
-                self.python_table.insertRow(row)
-                self.python_table.setItem(row, 0, QTableWidgetItem(version))
-                self.python_table.setItem(row, 1, QTableWidgetItem(norm_path))
-                source_item = QTableWidgetItem("User Install")
-                source_item.setForeground(__import__('PySide6.QtGui', fromlist=['QColor']).QColor("#f9e2af"))
-                self.python_table.setItem(row, 2, source_item)
-                self.default_python_combo.addItem(f"Python {version}", norm_path)
+            if norm_case in excluded_pythons:
                 continue
-            system_paths.add(os.path.normcase(norm_path))
+            if norm_case in listed_paths:
+                continue
+            listed_paths.add(norm_case)
+
             row = self.python_table.rowCount()
             self.python_table.insertRow(row)
             self.python_table.setItem(row, 0, QTableWidgetItem(version))
             self.python_table.setItem(row, 1, QTableWidgetItem(norm_path))
-            self.python_table.setItem(row, 2, QTableWidgetItem("System"))
+
+            if norm_case == default_norm:
+                source_item = QTableWidgetItem("System")
+                source_item.setForeground(__import__('PySide6.QtGui', fromlist=['QColor']).QColor("#a6e3a1"))
+            else:
+                source_item = QTableWidgetItem("Custom")
+                source_item.setForeground(Qt.cyan)
+
+            self.python_table.setItem(row, 2, source_item)
             self.default_python_combo.addItem(f"Python {version}", norm_path)
 
-        # Custom pythons from config (skip duplicates of system pythons)
+        # Custom pythons from config (skip already listed)
         custom_pythons = self.config.get("custom_pythons", [])
         cleaned_custom = []
         for entry in custom_pythons:
             norm_path = os.path.normpath(entry.get("path", ""))
-            if os.path.normcase(norm_path) in system_paths:
-                continue  # already listed as System — skip duplicate
+            norm_case = os.path.normcase(norm_path)
+            if norm_case in listed_paths:
+                continue  # already shown above
             cleaned_custom.append(entry)
+            listed_paths.add(norm_case)
             row = self.python_table.rowCount()
             self.python_table.insertRow(row)
             self.python_table.setItem(row, 0, QTableWidgetItem(entry.get("version", "?")))
             self.python_table.setItem(row, 1, QTableWidgetItem(norm_path))
-
             source_item = QTableWidgetItem("Custom")
             source_item.setForeground(Qt.cyan)
             self.python_table.setItem(row, 2, source_item)
-
             self.default_python_combo.addItem(
                 f"Python {entry.get('version', '?')} (Custom)", norm_path
             )
 
-        # Auto-clean config if duplicates were removed
         if len(cleaned_custom) != len(custom_pythons):
             self.config.set("custom_pythons", cleaned_custom)
 
         # Standalone (downloaded) Pythons
         try:
             from src.core.python_downloader import get_installed_pythons
-            all_listed_paths = system_paths.copy()
-            for entry in cleaned_custom:
-                all_listed_paths.add(os.path.normcase(os.path.normpath(entry.get("path", ""))))
-
             for py in get_installed_pythons():
                 exe_path = os.path.normpath(str(py["python_exe"]))
-                if os.path.normcase(exe_path) in all_listed_paths:
+                if os.path.normcase(exe_path) in listed_paths:
                     continue
+                listed_paths.add(os.path.normcase(exe_path))
                 row = self.python_table.rowCount()
                 self.python_table.insertRow(row)
                 self.python_table.setItem(row, 0, QTableWidgetItem(py["version"]))
                 self.python_table.setItem(row, 1, QTableWidgetItem(exe_path))
-
                 source_item = QTableWidgetItem("Downloaded")
                 source_item.setForeground(QColor("#a6e3a1"))
                 self.python_table.setItem(row, 2, source_item)
-
                 self.default_python_combo.addItem(
                     f"Python {py['version']} (Downloaded)", exe_path
                 )
         except Exception:
-            pass  # downloader module may not be available
+            pass
 
-        # Set default python selection — only enable checkbox if user explicitly changed it
+        # Set default python combo selection
         default_py = self.config.get("default_python", "")
         if default_py and default_py.strip():
             default_py_norm = os.path.normpath(default_py)
-            # Find matching index (case-insensitive on Windows)
             found_idx = -1
             for i in range(self.default_python_combo.count()):
                 item_data = self.default_python_combo.itemData(i) or ""
                 if item_data and os.path.normpath(item_data).lower() == default_py_norm.lower():
                     found_idx = i
                     break
-            if found_idx > 0:  # index 0 is "System Default" — don't enable for that
+            if found_idx > 0:
                 self.default_py_cb.setChecked(True)
                 self.default_python_combo.setEnabled(True)
                 self.default_python_combo.setCurrentIndex(found_idx)
@@ -1646,7 +1638,6 @@ class SettingsPage(QWidget):
                 self.default_py_cb.setChecked(False)
                 self.default_python_combo.setEnabled(False)
                 self.default_python_combo.setCurrentIndex(0)
-                # Clear invalid config value
                 self.config.set("default_python", "")
         else:
             self.default_py_cb.setChecked(False)

@@ -1542,9 +1542,9 @@ class SettingsPage(QWidget):
             for p in self.config.get("excluded_pythons", [])
         }
 
-        # Determine the one true "default" Python — what `python` resolves to in PATH
-        default_exe = shutil.which("python") or shutil.which("python3") or ""
-        default_norm = os.path.normcase(os.path.normpath(default_exe)) if default_exe else ""
+        # Which Python is system default — saved to config by Set Default button
+        saved_default = self.config.get("system_default_python", "")
+        default_norm = os.path.normcase(os.path.normpath(saved_default)) if saved_default else ""
 
         # All pythons from system scan
         system_pythons = find_system_pythons()
@@ -2026,6 +2026,9 @@ try {{
                     f"  python --version\n\n"
                     f"It should show: Python {version}"
                 )
+                self.config.set("system_default_python", python_path)
+                # Save as system default so _scan_pythons shows correct Source
+                self.config.set("system_default_python", python_path)
                 self._scan_pythons()
             else:
                 QMessageBox.warning(

@@ -501,8 +501,11 @@ class PackagePanel(QWidget):
                 "icon": "🎈",
                 "icon_key": "streamlit",
                 "package": "streamlit",
-                "command": ["-m", "streamlit", "hello"],
+                "command": ["-m", "streamlit", "hello", "--server.headless", "false"],
                 "desc": "Build data apps in minutes — launches demo app",
+                "needs_console": True,
+                "open_browser": "http://localhost:8501",
+                "browser_delay": 3,
             },
         ]
 
@@ -865,6 +868,17 @@ class PackagePanel(QWidget):
                     )
 
             self.status_label.setText(f"🚀 Launched {app_def['name']}")
+
+            # Open browser if app requested it (e.g. Streamlit, Jupyter)
+            open_browser_url = app_def.get("open_browser", "")
+            if open_browser_url:
+                import threading, webbrowser, time as _time
+                delay = app_def.get("browser_delay", 3)
+                def _open_browser(url, d):
+                    _time.sleep(d)
+                    webbrowser.open(url)
+                threading.Thread(target=_open_browser, args=(open_browser_url, delay), daemon=True).start()
+
         except Exception as e:
             QMessageBox.critical(
                 self, tr("error"),

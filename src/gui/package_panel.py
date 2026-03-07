@@ -501,7 +501,7 @@ class PackagePanel(QWidget):
                 "icon": "🎈",
                 "icon_key": "streamlit",
                 "package": "streamlit",
-                "command": ["-m", "streamlit", "hello", "--server.headless", "false"],
+                "command": ["-m", "streamlit", "hello", "--server.headless", "true"],
                 "desc": "Build data apps in minutes — launches demo app",
                 "needs_console": True,
                 "open_browser": "http://localhost:8501",

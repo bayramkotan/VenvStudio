@@ -764,15 +764,9 @@ class SettingsPage(QWidget):
         font_inner.setSpacing(8)
 
         from src.core.cli_tools_manager import NERD_FONTS
-        nerd_font_cb = QCheckBox()
-        nerd_font_cb.setChecked(False)
-        font_inner.addWidget(nerd_font_cb)
-
         self.nerd_font_combo = QComboBox()
         for font_id, font_name in NERD_FONTS:
             self.nerd_font_combo.addItem(font_name, font_id)
-        self.nerd_font_combo.setEnabled(False)
-        nerd_font_cb.toggled.connect(self.nerd_font_combo.setEnabled)
         font_inner.addWidget(self.nerd_font_combo, 1)
 
         install_font_btn = QPushButton("⬇️ Download & Install Font")
@@ -940,17 +934,11 @@ class SettingsPage(QWidget):
         preset_lbl.setStyleSheet("font-size: 11px; color: #cdd6f4;")
         controls.addWidget(preset_lbl)
 
-        preset_cb = QCheckBox()
-        preset_cb.setChecked(False)
-        controls.addWidget(preset_cb)
-
         combo = QComboBox()
         combo.setMaximumWidth(180)
         for p in presets:
             combo.addItem(p)
         combo.setObjectName(f"preset_{tool_id.replace('-','_')}")
-        combo.setEnabled(False)
-        preset_cb.toggled.connect(combo.setEnabled)
         controls.addWidget(combo)
 
         controls.addStretch()
@@ -2020,9 +2008,9 @@ try {{
 
             success = False
             if os.path.exists(result_file):
-                with open(result_file, 'r', encoding='utf-8') as f:
+                with open(result_file, 'r', encoding='utf-8-sig') as f:  # utf-8-sig strips BOM
                     result_text = f.read().strip()
-                if result_text.startswith("OK"):
+                if "OK" in result_text:
                     success = True
                 else:
                     raise RuntimeError(result_text)

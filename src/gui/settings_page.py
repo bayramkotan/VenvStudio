@@ -2035,6 +2035,7 @@ try {{
                     f"  python --version\n\n"
                     f"It should show: Python {version}"
                 )
+                self._scan_pythons()
             else:
                 QMessageBox.warning(
                     self, "⚠️ Partial",
@@ -2042,6 +2043,7 @@ try {{
                     f"Admin permission may have been denied.\n\n"
                     f"Check Environment Variables manually."
                 )
+                self._scan_pythons()
 
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to update PATH:\n{e}")

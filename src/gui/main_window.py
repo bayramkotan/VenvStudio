@@ -421,9 +421,10 @@ class MainWindow(QMainWindow):
         # Loading indicator (shown during refresh)
         self.loading_label = QLabel(f"⏳ {tr('loading_environments')}")
         self.loading_label.setAlignment(Qt.AlignCenter)
+        self.loading_label.setFixedHeight(40)
         self.loading_label.setStyleSheet(
-            "color: #f9e2af; font-size: 13px; padding: 8px; "
-            "background-color: rgba(249, 226, 175, 0.1); "
+            "color: #1e1e2e; font-size: 13px; font-weight: bold; padding: 8px; "
+            "background-color: #f9e2af; "
             "border-radius: 6px;"
         )
         self.loading_label.setVisible(False)
@@ -650,13 +651,17 @@ class MainWindow(QMainWindow):
         # Manual refresh: invalidate all caches, show overlay, disable button
         if force:
             self.venv_manager.invalidate_all_caches()
-            # Disable refresh button and show progress overlay
+            # Disable refresh button
             if hasattr(self, "_refresh_btn"):
                 self._refresh_btn.setEnabled(False)
                 self._refresh_btn.setText("⏳ Refreshing...")
-            self.loading_label.setText("🔄 Recalculating environment data...")
+            # Show prominent banner immediately
+            self.loading_label.setText("🔄  Refreshing environments — please wait...")
             self.loading_label.setVisible(True)
             self.statusBar().showMessage("Refreshing environments...")
+            # Force UI update so banner appears before heavy work starts
+            from PySide6.QtWidgets import QApplication
+            QApplication.processEvents()
 
         # Fast load — skip_calc=True when force so no subprocess on main thread
         envs = self.venv_manager.list_venvs_fast(skip_calc=force)

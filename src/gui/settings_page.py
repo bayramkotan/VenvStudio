@@ -232,6 +232,12 @@ class SettingsPage(QWidget):
         set_system_btn.clicked.connect(lambda: self._set_python_default("system"))
         py_btn_layout.addWidget(set_system_btn)
 
+        verify_pip_btn = QPushButton("🔍 Verify pip")
+        verify_pip_btn.setObjectName("secondary")
+        verify_pip_btn.setToolTip("Check if pip is installed and working for selected Python")
+        verify_pip_btn.clicked.connect(self._verify_pip)
+        py_btn_layout.addWidget(verify_pip_btn)
+
         download_py_btn = QPushButton("⬇️ Download Python")
         download_py_btn.setObjectName("secondary")
         download_py_btn.setToolTip("Download standalone Python from python-build-standalone")
@@ -1068,6 +1074,101 @@ class SettingsPage(QWidget):
             lambda ok, msg: self._cli_log_append(msg)
         )
         self._cli_worker.start()
+
+    def _verify_pip(self):
+        """Check pip for selected Python, offer to fix if missing."""
+        import os, subprocess
+        from src.utils.platform_utils import subprocess_args as sp_args
+
+        rows = self.python_table.selectionModel().selectedRows()
+        if not rows:
+            QMessageBox.information(self, "Info", "Select a Python version first.")
+            return
+
+        row = rows[0].row()
+        version = self.python_table.item(row, 0).text()
+        python_path = self.python_table.item(row, 1).text()
+        scripts_dir = os.path.join(os.path.dirname(python_path), "Scripts")
+        pip_exe = os.path.join(scripts_dir, "pip.exe")
+
+        pip_exists = os.path.isfile(pip_exe)
+
+        pip_version_str = ""
+        pip_runnable = False
+        try:
+            result = subprocess.run(
+                [python_path, "-m", "pip", "--version"],
+                **sp_args(capture_output=True, text=True, timeout=10)
+            )
+            if result.returncode == 0:
+                pip_runnable = True
+                pip_version_str = result.stdout.strip()
+        except Exception:
+            pass
+
+        current_path = os.environ.get("PATH", "")
+        scripts_in_path = scripts_dir.lower() in current_path.lower()
+
+        ok = "OK" if pip_exists else "NOT FOUND"
+        ok2 = "Yes" if pip_runnable else "No"
+        ok3 = "Yes" if scripts_in_path else "Not in current session (open new terminal)"
+
+        msg = (
+            "Python: " + version + "\n"
+            "Path:   " + python_path + "\n\n"
+            "pip.exe on disk:   " + ok + "\n"
+            "pip module works:  " + ok2 + "\n"
+            "Scripts in PATH:   " + ok3
+        )
+        if pip_runnable and pip_version_str:
+            msg += "\n\n" + pip_version_str
+
+        issues = []
+        if not pip_runnable:
+            issues.append("pip module is not working.")
+        if not scripts_in_path:
+            issues.append("Scripts folder not in current PATH - open a new terminal after Set Default.")
+
+        if issues:
+            msg += "\n\nIssues found:\n" + "\n".join("  * " + i for i in issues)
+            if not pip_runnable:
+                msg += "\n\nWould you like to reinstall pip now?"
+                reply = QMessageBox.question(self, "pip Status", msg, QMessageBox.Yes | QMessageBox.No)
+                if reply == QMessageBox.Yes:
+                    self._fix_pip(python_path, version)
+            else:
+                QMessageBox.warning(self, "pip Status", msg)
+        else:
+            QMessageBox.information(self, "pip OK", msg)
+
+    def _fix_pip(self, python_path, version):
+        """Reinstall pip for the given Python executable."""
+        import subprocess
+        from src.utils.platform_utils import subprocess_args as sp_args
+
+        try:
+            result = subprocess.run(
+                [python_path, "-m", "pip", "install", "--upgrade", "--force-reinstall", "pip"],
+                **sp_args(capture_output=True, text=True, timeout=60)
+            )
+            if result.returncode == 0:
+                QMessageBox.information(
+                    self, "pip Fixed",
+                    "pip reinstalled for Python " + version + "!\n\n"
+                    "Open a new terminal and run: pip --version"
+                )
+            else:
+                err = result.stderr.strip() or result.stdout.strip()
+                QMessageBox.critical(
+                    self, "pip Fix Failed",
+                    "Could not reinstall pip.\n\n" + err + "\n\n"
+                    "Try manually (as admin):\n"
+                    '  "' + python_path + '" -m pip install --upgrade --force-reinstall pip'
+                )
+        except Exception as e:
+            QMessageBox.critical(self, "Error", "Failed to run pip fix:\n" + str(e))
+        self._scan_pythons()
+
 
     def _set_python_default_unix(self, version, python_path, scope):
         """Set default Python on Linux/macOS using update-alternatives or symlinks."""
@@ -2009,13 +2110,28 @@ try {{
                     success = True
 
             if success:
+                # Verify pip.exe actually exists in Scripts dir
+                pip_exe = os.path.join(scripts_dir, "pip.exe")
+                pip_status = ""
+                if not os.path.isfile(pip_exe):
+                    pip_status = (
+                        f"\n\n⚠️ pip.exe not found in Scripts folder!\n"
+                        f"   Run: python -m pip install --upgrade pip\n"
+                        f"   (in an admin terminal)"
+                    )
+                else:
+                    pip_status = f"\n\n✅ pip.exe found in Scripts folder."
+
                 QMessageBox.information(
                     self, "✅ Success",
                     f"Python {version} is now the {scope_label} default!\n\n"
-                    f"Other Python entries cleaned from both User and System PATH.\n\n"
+                    f"📂 Added to PATH:\n"
+                    f"   {python_dir}\n"
+                    f"   {scripts_dir}"
+                    f"{pip_status}\n\n"
                     f"Open a new terminal and type:\n"
-                    f"  python --version\n\n"
-                    f"It should show: Python {version}"
+                    f"  python --version\n"
+                    f"  pip --version"
                 )
                 self.config.set("system_default_python", python_path)
                 # Save as system default so _scan_pythons shows correct Source

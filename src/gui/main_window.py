@@ -381,6 +381,7 @@ class MainWindow(QMainWindow):
         refresh_btn.setObjectName("secondary")
         refresh_btn.setFixedHeight(40)
         refresh_btn.clicked.connect(lambda: self._refresh_env_list(force=True))
+        self._refresh_btn = refresh_btn
         header_layout.addWidget(refresh_btn)
 
         create_btn = QPushButton(f"  + {tr('new_environment')}  ")
@@ -641,25 +642,31 @@ class MainWindow(QMainWindow):
             self.ql_buttons_layout.addWidget(lbl)
 
     def _refresh_env_list(self, force: bool = False):
-        """Phase 1: Load from cache instantly. Phase 2: only fetch missing caches.
+        """Phase 1: Load from cache instantly. Phase 2: fetch missing in background.
         If force=True (manual Refresh button), invalidates all caches first.
         """
         self.env_table.setRowCount(0)
 
-        # Manual refresh: invalidate all caches so sizes/packages are recalculated
+        # Manual refresh: invalidate all caches, show overlay, disable button
         if force:
             self.venv_manager.invalidate_all_caches()
+            # Disable refresh button and show progress overlay
+            if hasattr(self, "_refresh_btn"):
+                self._refresh_btn.setEnabled(False)
+                self._refresh_btn.setText("⏳ Refreshing...")
+            self.loading_label.setText("🔄 Recalculating environment data...")
+            self.loading_label.setVisible(True)
+            self.statusBar().showMessage("Refreshing environments...")
 
-        # Fast load - reads cache, no subprocess
-        envs = self.venv_manager.list_venvs_fast()
+        # Fast load — skip_calc=True when force so no subprocess on main thread
+        envs = self.venv_manager.list_venvs_fast(skip_calc=force)
 
-        # Only show loading if some envs are missing cache
-        has_missing_cache = any(
-            e.python_version == "..." for e in envs
-        )
-        self.loading_label.setVisible(has_missing_cache)
-        if has_missing_cache:
-            self.statusBar().showMessage("Loading environments...")
+        # Also show loading if some envs are missing cache in normal load
+        has_missing_cache = any(e.python_version == "..." for e in envs)
+        if not force:
+            self.loading_label.setVisible(has_missing_cache)
+            if has_missing_cache:
+                self.statusBar().showMessage("Loading environments...")
         self.env_table.setRowCount(len(envs))
 
         # Sync quick launch env selector
@@ -734,8 +741,13 @@ class MainWindow(QMainWindow):
 
     def _on_all_details_done(self):
         self.loading_label.setVisible(False)
+        self.loading_label.setText("Loading environments...")  # reset text
         count = self.env_table.rowCount()
         self.statusBar().showMessage(f"Found {count} environment(s)")
+        # Re-enable refresh button
+        if hasattr(self, "_refresh_btn"):
+            self._refresh_btn.setEnabled(True)
+            self._refresh_btn.setText(f"🔄 {tr('refresh')}")
 
     def _update_info_label_fast(self, count):
         base_dir = self.config.get_venv_base_dir()

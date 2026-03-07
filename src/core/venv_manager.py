@@ -174,8 +174,11 @@ class VenvManager:
         if len(cleaned) != len(all_cache):
             self._save_all_cache(cleaned)
 
-    def list_venvs_fast(self) -> List[VenvInfo]:
-        """Load env list. Uses cache if available, otherwise calculates and saves cache."""
+    def list_venvs_fast(self, skip_calc: bool = False) -> List[VenvInfo]:
+        """Load env list. Uses cache if available, otherwise calculates and saves cache.
+        If skip_calc=True, cache misses return placeholder '...' instead of running subprocess.
+        Used by manual Refresh so calculation happens in background thread.
+        """
         venvs = []
         if not self.base_dir.exists():
             return venvs
@@ -210,7 +213,15 @@ class VenvManager:
                     info.package_count = cached.get("package_count", 0)
                     info.size = cached.get("size", "?")
                 else:
-                    # Cache miss - calculate now and save
+                    # Cache miss
+                    if skip_calc:
+                        # Caller will recalculate in background thread
+                        info.python_version = "..."
+                        info.package_count = 0
+                        info.size = "..."
+                        venvs.append(info)
+                        continue
+                    # Calculate now and save
                     try:
                         result = subprocess.run(
                             [str(python_exe), "--version"],

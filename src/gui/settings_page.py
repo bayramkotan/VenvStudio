@@ -2035,6 +2035,13 @@ try {{
                     f"  python --version\n\n"
                     f"It should show: Python {version}"
                 )
+                # Remove from custom_pythons config since it's now a System Python
+                try:
+                    custom = self.config.get("custom_pythons", [])
+                    custom = [c for c in custom if os.path.normcase(os.path.normpath(c.get("path",""))) != os.path.normcase(os.path.normpath(path))]
+                    self.config.set("custom_pythons", custom)
+                except Exception:
+                    pass
                 self._scan_pythons()
             else:
                 QMessageBox.warning(

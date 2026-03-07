@@ -568,14 +568,16 @@ class PackagePanel(QWidget):
             },
             {
                 "name": "TensorBoard",
+                "script_launcher": True,
                 "icon": "📈",
                 "icon_key": "tensorboard",
                 "package": "tensorboard",
                 "command": ["-m", "tensorboard.main", "--logdir", "."],
-                "desc": "Visualize TensorFlow training & metrics",
+                "desc": "Visualize training metrics — pick a log directory",
                 "needs_console": True,
                 "open_browser": "http://localhost:6006",
-                "browser_delay": 4,
+                "browser_delay": 6,
+                "pick_logdir": True,
             },
             {
                 "name": "FastAPI",
@@ -920,9 +922,27 @@ class PackagePanel(QWidget):
 
     def _launch_app(self, app_def: dict):
         """Launch an app from the selected environment."""
+        import os
+        from PySide6.QtWidgets import QFileDialog
+
         if not self.pip_manager:
             QMessageBox.warning(self, tr("warning"), tr("select_environment"))
             return
+
+        # TensorBoard and similar tools need a log directory
+        if app_def.get("pick_logdir", False):
+            logdir = QFileDialog.getExistingDirectory(
+                self,
+                f"Select log directory for {app_def['name']}",
+                os.path.expanduser("~")
+            )
+            if not logdir:
+                return
+            # Replace "." in command with chosen dir
+            app_def = dict(app_def)
+            app_def["command"] = [
+                c if c != "." else logdir for c in app_def["command"]
+            ]
 
         venv_path = self.pip_manager.venv_path
         python_exe = get_python_executable(venv_path)

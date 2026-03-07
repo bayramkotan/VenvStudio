@@ -2038,7 +2038,7 @@ try {{
                 # Remove from custom_pythons config since it's now a System Python
                 try:
                     custom = self.config.get("custom_pythons", [])
-                    custom = [c for c in custom if os.path.normcase(os.path.normpath(c.get("path",""))) != os.path.normcase(os.path.normpath(path))]
+                    custom = [c for c in custom if os.path.normcase(os.path.normpath(c.get("path",""))) != os.path.normcase(os.path.normpath(python_path))]
                     self.config.set("custom_pythons", custom)
                 except Exception:
                     pass

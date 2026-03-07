@@ -1844,6 +1844,11 @@ class SettingsPage(QWidget):
 
         # Find ALL Python dirs in a PATH string (excluding our target)
         def find_python_dirs(path_str, exclude_dirs):
+            """Find PATH entries that belong to OTHER Python installations.
+            ONLY removes dirs where python.exe exists directly,
+            or Scripts dirs whose PARENT contains python.exe AND pip.exe.
+            Never touches non-Python dirs like winget, oh-my-posh, etc.
+            """
             exclude_set = {os.path.normcase(d.rstrip("\\")) for d in exclude_dirs}
             found = []
             for p in path_str.split(";"):
@@ -1853,14 +1858,16 @@ class SettingsPage(QWidget):
                 p_norm = os.path.normcase(p.rstrip("\\"))
                 if p_norm in exclude_set:
                     continue
-                # Direct python.exe check
+                # Must have python.exe directly in this dir
                 if os.path.exists(os.path.join(p, "python.exe")):
                     found.append(p)
                     continue
-                # Scripts dir of a Python installation
+                # Scripts dir — ONLY if parent has BOTH python.exe AND pip.exe
                 if os.path.basename(p).lower() == "scripts":
                     parent = os.path.dirname(p)
-                    if os.path.exists(os.path.join(parent, "python.exe")):
+                    has_python = os.path.exists(os.path.join(parent, "python.exe"))
+                    has_pip = os.path.exists(os.path.join(p, "pip.exe"))
+                    if has_python and has_pip:
                         found.append(p)
             return found
 

@@ -734,8 +734,28 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("No environments found")
             return
 
-        # All data already loaded from cache in list_venvs_fast
-        self._on_all_details_done()
+        # Start background worker for any envs with missing data ("...")
+        missing_names = [
+            self.env_table.item(i, 0).text().strip()
+            for i in range(self.env_table.rowCount())
+            if self.env_table.item(i, 1) and self.env_table.item(i, 1).text().strip() in ("...", "")
+        ]
+
+        if missing_names:
+            # Stop previous worker if running
+            if hasattr(self, "_detail_worker") and self._detail_worker.isRunning():
+                self._detail_worker.quit()
+                self._detail_worker.wait(2000)
+
+            self._detail_worker = EnvDetailWorker(
+                self.venv_manager,
+                [e.name for e in envs]  # pass all when force=True so worker checks needs_refresh
+            )
+            self._detail_worker.env_detail_ready.connect(self._on_env_detail_ready)
+            self._detail_worker.all_done.connect(self._on_all_details_done)
+            self._detail_worker.start()
+        else:
+            self._on_all_details_done()
 
     def _on_env_detail_ready(self, row, python_version, package_count, size):
         """Update a single row with detailed info from background thread."""

@@ -668,6 +668,10 @@ class MainWindow(QMainWindow):
             idx = self.ql_env_selector.findData(current_ql)
             if idx >= 0:
                 self.ql_env_selector.setCurrentIndex(idx)
+            else:
+                # Previously selected env no longer exists — clear QL buttons
+                self.ql_env_selector.setCurrentIndex(0)
+                self._rebuild_ql_buttons(set())
             self.ql_env_selector.blockSignals(False)
 
         for i, env in enumerate(envs):
@@ -885,6 +889,9 @@ class MainWindow(QMainWindow):
     def _on_delete_finished(self, success, message):
         self.delete_progress.close()
         if success:
+            # Clear package panel so launcher doesn't show stale installed state
+            self.package_panel.installed_package_names.clear()
+            self.package_panel._update_launcher_status()
             self._refresh_env_list()
             self.statusBar().showMessage(message)
         else:

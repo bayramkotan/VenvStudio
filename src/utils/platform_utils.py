@@ -80,89 +80,106 @@ def get_activate_command(venv_path: Path) -> str:
     return f"source {venv_path / 'bin' / 'activate'}"
 
 
-def _is_user_python(path: str) -> bool:
-    """Return True if this Python is a user-level install.
-    Covers: AppData, .local/bin, pyenv, conda user env, pipx — all under home dir.
-    Does NOT flag /usr/local (Homebrew system-wide).
-    """
-    norm = os.path.normpath(path).lower()
-    home = os.path.expanduser("~").lower()
-
-    # Must be under home directory to be user-level
-    if home not in norm:
-        return False
-
-    # Known user-level subdirs under home
-    user_subdirs = [
-        ".local",          # Linux pip user install
-        "appdata",         # Windows pip user install
-        ".pyenv",          # pyenv
-        ".conda",          # conda user env
-        "miniconda",       # miniconda in home
-        "anaconda",        # anaconda in home
-        "miniforge",       # miniforge in home
-        ".rye",            # rye
-        ".uv",             # uv
-        "pipx",            # pipx
-    ]
-    return any(sub in norm for sub in user_subdirs)
-
-
-
 def find_system_pythons() -> List[Tuple[str, str]]:
     """
     Find available Python installations on the system.
     Returns list of (version_string, executable_path) tuples.
-    Skips user-level installs (AppData, .local/bin) to avoid duplicates.
+    Searches PATH, Windows Registry, and known install directories.
+    No version range limit — future-proof.
     """
     pythons = []
-    seen_versions = set()
     seen_paths = set()
 
-    candidates = ["python3", "python"]
-    for major in [3]:
-        for minor in range(6, 15):
-            candidates.append(f"python{major}.{minor}")
-
-    for candidate in candidates:
-        exe_path = shutil.which(candidate)
-        if not exe_path:
-            continue
-
-        # Windows Store alias filtrele
-        normalized = os.path.normpath(exe_path).lower()
+    def _try_add(exe_path: str):
+        if not exe_path or not os.path.isfile(exe_path):
+            return
+        normalized = os.path.normcase(os.path.normpath(exe_path))
         if "windowsapps" in normalized:
-            continue
-
-        # User-level installs filtrele (AppData, .local/bin)
-        if _is_user_python(exe_path):
-            continue
-
+            return
         if normalized in seen_paths:
-            continue
+            return
         seen_paths.add(normalized)
-
         try:
             result = subprocess.run(
                 [exe_path, "--version"],
                 **subprocess_args(capture_output=True, text=True, timeout=5)
             )
-            version = result.stdout.strip() or result.stderr.strip()
-            version = version.replace("Python ", "")
-
-            if not version or not version[0].isdigit():
-                continue
-
-            if version not in seen_versions:
-                seen_versions.add(version)
+            version = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
+            if version and version[0].isdigit():
                 pythons.append((version, exe_path))
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
-            continue
+            pass
+
+    # 1) PATH'deki python / python3 komutları
+    for candidate in ["python", "python3"]:
+        exe = shutil.which(candidate)
+        if exe:
+            _try_add(exe)
+
+    # 2) Windows: Registry + bilinen kurulum dizinleri
+    if os.name == "nt":
+        try:
+            import winreg
+            for hive in [winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER]:
+                for reg_path in [
+                    r"SOFTWARE\Python\PythonCore",
+                    r"SOFTWARE\WOW6432Node\Python\PythonCore",
+                ]:
+                    try:
+                        with winreg.OpenKey(hive, reg_path) as key:
+                            i = 0
+                            while True:
+                                try:
+                                    ver = winreg.EnumKey(key, i)
+                                    i += 1
+                                    with winreg.OpenKey(key, ver + r"\InstallPath") as ip:
+                                        install_dir = winreg.QueryValue(ip, None)
+                                        exe = os.path.join(install_dir.rstrip("\\"), "python.exe")
+                                        _try_add(exe)
+                                except OSError:
+                                    break
+                    except OSError:
+                        continue
+        except ImportError:
+            pass
+
+        # Bilinen Windows kurulum dizinleri
+        search_roots = [
+            os.environ.get("PROGRAMFILES", r"C:\Program Files"),
+            os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"),
+            os.environ.get("LOCALAPPDATA", ""),
+            os.path.expanduser("~"),
+        ]
+        for root in search_roots:
+            if not root or not os.path.isdir(root):
+                continue
+            try:
+                for entry in os.scandir(root):
+                    if entry.is_dir() and entry.name.lower().startswith("python"):
+                        exe = os.path.join(entry.path, "python.exe")
+                        _try_add(exe)
+            except PermissionError:
+                continue
+
+    # 3) Linux/macOS: /usr/bin, /usr/local/bin, pyenv, .local/bin
+    else:
+        search_dirs = [
+            "/usr/bin", "/usr/local/bin", "/opt/homebrew/bin",
+            os.path.expanduser("~/.local/bin"),
+            os.path.expanduser("~/.pyenv/shims"),
+        ]
+        for d in search_dirs:
+            if not os.path.isdir(d):
+                continue
+            try:
+                for entry in os.scandir(d):
+                    if entry.name.startswith("python") and entry.is_file():
+                        _try_add(entry.path)
+            except PermissionError:
+                continue
 
     pythons.sort(key=lambda x: x[0], reverse=True)
     return pythons
-
-
 def open_terminal_at(path: Path, terminal_type: str = "") -> None:
     """Open a terminal/console at the given path with the venv activated."""
     system = get_platform()
@@ -214,44 +231,26 @@ def open_terminal_at(path: Path, terminal_type: str = "") -> None:
             activate = path / "bin" / "activate"
             bash_cmd = f"cd '{path}' && source '{activate}' && exec bash"
 
-            # AppImage: restore host system PATH so terminals can be found
-            host_env = os.environ.copy()
-            if "APPDIR" in os.environ or "APPIMAGE" in os.environ:
-                # Remove AppImage-injected paths, restore original PATH
-                original_path = os.environ.get("PATH_ORIG", os.environ.get("PATH", ""))
-                # Also add common terminal locations
-                extra = "/usr/bin:/usr/local/bin:/bin:/snap/bin:/usr/games"
-                host_env["PATH"] = original_path + ":" + extra
-                # Unset Qt/library overrides that would confuse the terminal
-                for var in ("QT_PLUGIN_PATH", "QT_QPA_PLATFORM_PLUGIN_PATH",
-                            "LD_LIBRARY_PATH", "LD_PRELOAD"):
-                    host_env.pop(var, None)
-
-            def _find_term(term: str) -> str:
-                """Find terminal executable, checking host PATH for AppImage."""
-                found = shutil.which(term, path=host_env.get("PATH"))
-                return found or ""
-
             def _launch_linux_terminal(term: str) -> bool:
                 """Try to launch a specific terminal. Returns True on success."""
-                exe = _find_term(term)
-                if not exe:
+                if not shutil.which(term):
                     return False
                 try:
                     if term == "gnome-terminal":
-                        subprocess.Popen([exe, "--", "bash", "-c", bash_cmd], env=host_env)
+                        subprocess.Popen([term, "--", "bash", "-c", bash_cmd])
                     elif term in ("konsole", "yakuake"):
-                        subprocess.Popen([exe, "--noclose", "-e", "bash", "-c", bash_cmd], env=host_env)
+                        subprocess.Popen([term, "--noclose", "-e", "bash", "-c", bash_cmd])
                     elif term in ("xfce4-terminal", "mate-terminal", "lxterminal", "tilix"):
-                        subprocess.Popen([exe, "-e", f"bash -c '{bash_cmd}'"], env=host_env)
+                        subprocess.Popen([term, "-e", f"bash -c '{bash_cmd}'"])
                     elif term == "kitty":
-                        subprocess.Popen([exe, "bash", "-c", bash_cmd], env=host_env)
+                        subprocess.Popen([term, "bash", "-c", bash_cmd])
                     elif term == "alacritty":
-                        subprocess.Popen([exe, "-e", "bash", "-c", bash_cmd], env=host_env)
+                        subprocess.Popen([term, "-e", "bash", "-c", bash_cmd])
                     elif term == "wezterm":
-                        subprocess.Popen([exe, "start", "--", "bash", "-c", bash_cmd], env=host_env)
+                        subprocess.Popen([term, "start", "--", "bash", "-c", bash_cmd])
                     else:
-                        subprocess.Popen([exe, "-e", f"bash -c '{bash_cmd}'"], env=host_env)
+                        # xterm, x-terminal-emulator and others
+                        subprocess.Popen([term, "-e", f"bash -c '{bash_cmd}'"])
                     return True
                 except Exception:
                     return False
@@ -259,7 +258,7 @@ def open_terminal_at(path: Path, terminal_type: str = "") -> None:
             # Explicit terminal selected (not "default" or empty)
             if terminal_type and terminal_type not in ("", "default"):
                 if _launch_linux_terminal(terminal_type):
-                    return
+                    return  # success, done
 
             # Auto-detect: try common terminals in order of preference
             auto_order = [

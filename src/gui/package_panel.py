@@ -478,7 +478,7 @@ class PackagePanel(QWidget):
                 "command": ["-m", "Orange.canvas"],
                 "desc": "Visual programming for data mining and machine learning",
                 "min_python": "3.9",
-                "note": "PyQt and Orange3 version selected automatically based on Python version.",
+                "note": "Orange3 version selected automatically based on Python version.",
             },
             {
                 "name": "Spyder IDE",
@@ -717,7 +717,10 @@ class PackagePanel(QWidget):
         self.quick_sidebar.setVisible(len(self._sidebar_buttons) > 0)
 
     def _get_orange3_packages(self, python_exe) -> list:
-        """Return the right Orange3 + PyQt packages based on Python version."""
+        """Return the right Orange3 packages based on Python version.
+        Orange3 bundles its own Qt — only orange3 itself is needed.
+        PyQt5/PyQt6 should NOT be pre-installed as orange3 manages its own Qt deps.
+        """
         try:
             from src.utils.platform_utils import subprocess_args
             result = subprocess.run(
@@ -727,14 +730,14 @@ class PackagePanel(QWidget):
             ver_str = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
             ver_parts = tuple(int(x) for x in ver_str.split(".")[:2])
         except Exception:
-            ver_parts = (3, 12)  # safe default
+            ver_parts = (3, 11)  # safe default
 
         if ver_parts <= (3, 9):
-            # Orange3 v3.40+ dropped cp39 wheels, use older version
-            return ["PyQt6", "PyQt6-WebEngine", "orange3<=3.36.2"]
+            # Orange3 v3.40+ dropped cp39 wheels
+            return ["orange3<=3.36.2"]
         else:
-            # 3.10+: latest Orange3 with PyQt6
-            return ["PyQt6", "PyQt6-WebEngine", "orange3"]
+            # 3.10–3.12: latest Orange3 (handles its own Qt deps)
+            return ["orange3"]
 
     def _launch_app(self, app_def: dict):
         """Launch an app from the selected environment."""

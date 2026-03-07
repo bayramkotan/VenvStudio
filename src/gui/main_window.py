@@ -879,6 +879,7 @@ class MainWindow(QMainWindow):
             self.delete_progress.setCancelButton(None)
             self.delete_progress.show()
 
+            self._deleting_env_name = name
             self._delete_worker = DeleteWorker(self.venv_manager, name)
             self._delete_worker.progress.connect(
                 lambda msg: self.delete_progress.setLabelText(f"⏳ {msg}")
@@ -889,8 +890,22 @@ class MainWindow(QMainWindow):
     def _on_delete_finished(self, success, message):
         self.delete_progress.close()
         if success:
+            # Remove pkg_list cache entry for the deleted env
+            try:
+                from src.core.venv_manager import VenvManager
+                vm = VenvManager(self.config.get_venv_base_dir())
+                all_cache = vm._load_all_cache()
+                deleted_name = getattr(self, "_deleting_env_name", "")
+                if deleted_name:
+                    key = "pkg_list:" + str(self.venv_manager.base_dir / deleted_name).replace("\\", "/")
+                    all_cache.pop(key, None)
+                    vm._save_all_cache(all_cache)
+                    vm.invalidate_cache(self.venv_manager.base_dir / deleted_name)
+            except Exception:
+                pass
             # Clear package panel so launcher doesn't show stale installed state
             self.package_panel.installed_package_names.clear()
+            self.package_panel._launcher_py_version_cache.clear()
             self.package_panel._update_launcher_status()
             self._refresh_env_list()
             self.statusBar().showMessage(message)

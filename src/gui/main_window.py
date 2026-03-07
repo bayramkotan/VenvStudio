@@ -380,7 +380,7 @@ class MainWindow(QMainWindow):
         refresh_btn = QPushButton(f"\U0001f504 {tr('refresh')}")
         refresh_btn.setObjectName("secondary")
         refresh_btn.setFixedHeight(40)
-        refresh_btn.clicked.connect(self._refresh_env_list)
+        refresh_btn.clicked.connect(lambda: self._refresh_env_list(force=True))
         header_layout.addWidget(refresh_btn)
 
         create_btn = QPushButton(f"  + {tr('new_environment')}  ")
@@ -640,9 +640,15 @@ class MainWindow(QMainWindow):
             lbl.setStyleSheet("color: #45475a; font-size: 11px; padding: 4px;")
             self.ql_buttons_layout.addWidget(lbl)
 
-    def _refresh_env_list(self):
-        """Phase 1: Load from cache instantly. Phase 2: only fetch missing caches."""
+    def _refresh_env_list(self, force: bool = False):
+        """Phase 1: Load from cache instantly. Phase 2: only fetch missing caches.
+        If force=True (manual Refresh button), invalidates all caches first.
+        """
         self.env_table.setRowCount(0)
+
+        # Manual refresh: invalidate all caches so sizes/packages are recalculated
+        if force:
+            self.venv_manager.invalidate_all_caches()
 
         # Fast load - reads cache, no subprocess
         envs = self.venv_manager.list_venvs_fast()

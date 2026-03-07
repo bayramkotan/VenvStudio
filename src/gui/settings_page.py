@@ -1917,30 +1917,22 @@ class SettingsPage(QWidget):
                 conds.append(f"($lower -ne '{escaped}')")
             return " -and ".join(conds) if conds else "$true"
 
-        ps_filter = build_ps_filter(all_remove)
         result_file = os.path.join(tempfile.gettempdir(), "_venvstudio_path_result.txt")
 
-        # Target scope gets Python added at top; other scope just gets cleaned
+        # SAFE approach: only PREPEND selected Python to PATH — never delete anything else
+        # This avoids accidentally removing winget, oh-my-posh, or other tools from PATH.
+        # Users with multiple Python versions can use `py -3.x` launcher to choose.
         if scope == "user":
             ps_script = f'''
 try {{
-    $f = '{ps_filter}'
-    # Clean + prepend User PATH
+    # Remove only the exact target Python dirs from User PATH (to avoid duplicates), then prepend
     $uPath = [Environment]::GetEnvironmentVariable('Path', 'User')
     $uParts = ($uPath -split ';') | Where-Object {{ $_.Trim() -ne '' }} | Where-Object {{
         $lower = $_.ToLower().TrimEnd('\\')
-        {ps_filter}
+        ($lower -ne '{python_dir.lower()}') -and ($lower -ne '{scripts_dir.lower()}')
     }}
     $newUser = ('{python_dir};{scripts_dir};' + ($uParts -join ';'))
     [Environment]::SetEnvironmentVariable('Path', $newUser, 'User')
-
-    # Clean System PATH
-    $sPath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
-    $sParts = ($sPath -split ';') | Where-Object {{ $_.Trim() -ne '' }} | Where-Object {{
-        $lower = $_.ToLower().TrimEnd('\\')
-        {ps_filter}
-    }}
-    [Environment]::SetEnvironmentVariable('Path', ($sParts -join ';'), 'Machine')
 
     'OK' | Out-File -FilePath '{result_file}' -Encoding utf8
 }} catch {{
@@ -1950,22 +1942,14 @@ try {{
         else:  # system
             ps_script = f'''
 try {{
-    # Clean + prepend System PATH
+    # Remove only the exact target Python dirs from System PATH (to avoid duplicates), then prepend
     $sPath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
     $sParts = ($sPath -split ';') | Where-Object {{ $_.Trim() -ne '' }} | Where-Object {{
         $lower = $_.ToLower().TrimEnd('\\')
-        {ps_filter}
+        ($lower -ne '{python_dir.lower()}') -and ($lower -ne '{scripts_dir.lower()}')
     }}
     $newSys = ('{python_dir};{scripts_dir};' + ($sParts -join ';'))
     [Environment]::SetEnvironmentVariable('Path', $newSys, 'Machine')
-
-    # Clean User PATH
-    $uPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-    $uParts = ($uPath -split ';') | Where-Object {{ $_.Trim() -ne '' }} | Where-Object {{
-        $lower = $_.ToLower().TrimEnd('\\')
-        {ps_filter}
-    }}
-    [Environment]::SetEnvironmentVariable('Path', ($uParts -join ';'), 'User')
 
     'OK' | Out-File -FilePath '{result_file}' -Encoding utf8
 }} catch {{

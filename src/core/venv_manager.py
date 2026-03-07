@@ -158,6 +158,22 @@ class VenvManager:
             all_cache[key]["needs_refresh"] = 1
         self._save_all_cache(all_cache)
 
+    def sync_cache_with_disk(self) -> None:
+        """Remove cache entries for envs that no longer exist on disk.
+        Called on startup to keep cache clean.
+        """
+        if not self.base_dir.exists():
+            return
+        existing_keys = {
+            self._cache_key(item)
+            for item in self.base_dir.iterdir()
+            if item.is_dir()
+        }
+        all_cache = self._load_all_cache()
+        cleaned = {k: v for k, v in all_cache.items() if k in existing_keys}
+        if len(cleaned) != len(all_cache):
+            self._save_all_cache(cleaned)
+
     def list_venvs_fast(self) -> List[VenvInfo]:
         """Load env list. Uses cache if available, otherwise calculates and saves cache."""
         venvs = []

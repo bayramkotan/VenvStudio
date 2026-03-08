@@ -177,29 +177,68 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get changelog from commit messages
+      - name: Get categorized changelog
         id: changelog
         run: |
           PREV_TAG=$(git tag --sort=-version:refname | grep -v "${{ github.ref_name }}" | head -n1)
           if [ -z "$PREV_TAG" ]; then
-            COMMITS=$(git log --pretty=format:"- %s" HEAD)
+            COMMITS=$(git log --pretty=format:"%s" HEAD)
           else
-            COMMITS=$(git log --pretty=format:"- %s" ${PREV_TAG}..HEAD)
+            COMMITS=$(git log --pretty=format:"%s" ${PREV_TAG}..HEAD)
           fi
-          CHANGES=$(echo "$COMMITS" | grep -v "^- release:" | head -20)
+
+          # Filter out release commits
+          COMMITS=$(echo "$COMMITS" | grep -v "^release:")
+
+          # Categorize commits
+          FEATURES=$(echo "$COMMITS" | grep -i "^feat:" | sed 's/^feat:\s*//' | sed 's/^/- /' || true)
+          FIXES=$(echo "$COMMITS" | grep -i "^fix:" | sed 's/^fix:\s*//' | sed 's/^/- /' || true)
+          IMPROVEMENTS=$(echo "$COMMITS" | grep -iE "^(chore|refactor|build|ci|perf|style|docs):" | sed 's/^[a-zA-Z]*:\s*//' | sed 's/^/- /' || true)
+          OTHERS=$(echo "$COMMITS" | grep -ivE "^(feat|fix|chore|refactor|build|ci|perf|style|docs):" | sed 's/^/- /' || true)
+
+          # Build changelog body
+          BODY=""
+          if [ -n "$FEATURES" ] && [ "$FEATURES" != "- " ]; then
+            BODY="${BODY}### ✨ New Features\n${FEATURES}\n\n"
+          fi
+          if [ -n "$FIXES" ] && [ "$FIXES" != "- " ]; then
+            BODY="${BODY}### 🐛 Bug Fixes\n${FIXES}\n\n"
+          fi
+          if [ -n "$IMPROVEMENTS" ] && [ "$IMPROVEMENTS" != "- " ]; then
+            BODY="${BODY}### 🔧 Improvements\n${IMPROVEMENTS}\n\n"
+          fi
+          if [ -n "$OTHERS" ] && [ "$OTHERS" != "- " ]; then
+            BODY="${BODY}### 📌 Other Changes\n${OTHERS}\n\n"
+          fi
+
+          # Fallback if all empty
+          if [ -z "$BODY" ]; then
+            BODY="- Maintenance release\n"
+          fi
+
           echo "changes<<EOF" >> $GITHUB_OUTPUT
-          echo "$CHANGES" >> $GITHUB_OUTPUT
+          echo -e "$BODY" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
       - uses: actions/download-artifact@v4
         continue-on-error: true
 
-      - name: Prepare files
+      - name: Prepare files & sizes
+        id: sizes
         continue-on-error: true
         run: |
           ls -laR
-          # Rename macOS binary so it's clearly identifiable
+          # Rename macOS binary
           mv VenvStudio-macOS/VenvStudio VenvStudio-macOS/VenvStudio-macOS 2>/dev/null || true
+
+          # Calculate file sizes for release notes
+          WIN_SIZE=$(du -sh VenvStudio-Windows/VenvStudio.exe 2>/dev/null | cut -f1 || echo "—")
+          MAC_SIZE=$(du -sh VenvStudio-macOS/VenvStudio-macOS 2>/dev/null | cut -f1 || echo "—")
+          LNX_SIZE=$(du -sh VenvStudio-Linux-AppImage/VenvStudio*.AppImage 2>/dev/null | cut -f1 || echo "—")
+
+          echo "win_size=$WIN_SIZE" >> $GITHUB_OUTPUT
+          echo "mac_size=$MAC_SIZE" >> $GITHUB_OUTPUT
+          echo "lnx_size=$LNX_SIZE" >> $GITHUB_OUTPUT
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -209,18 +248,44 @@ jobs:
             VenvStudio-Linux-AppImage/VenvStudio*.AppImage
             VenvStudio-macOS/VenvStudio-macOS
           body: |
-            ## ${{ github.ref_name }}
+            <div align="center">
 
-            ### What's Changed
+            # 🐍 VenvStudio ${{ github.ref_name }}
+
+            **Lightweight Python Virtual Environment Manager**
+
+            [![PyPI](https://img.shields.io/pypi/v/venvstudio?style=flat-square&logo=pypi&logoColor=white&label=PyPI)](https://pypi.org/project/venvstudio/)
+            [![License](https://img.shields.io/github/license/bayramkotan/VenvStudio?style=flat-square)](https://github.com/bayramkotan/VenvStudio/blob/main/LICENSE)
+            [![Python](https://img.shields.io/badge/Python-3.9%2B-blue?style=flat-square&logo=python&logoColor=white)](https://python.org)
+
+            </div>
+
+            ---
+
+            ## 📋 What's Changed
+
             ${{ steps.changelog.outputs.changes }}
 
-            ### Download
-            | Platform | File |
-            |----------|------|
-            | Windows x64 | `VenvStudio.exe` |
-            | Linux x64 | `VenvStudio-x86_64.AppImage` |
-            | macOS (Apple Silicon + Rosetta 2) | `VenvStudio-macOS` |
-            | PyPI | `pip install --upgrade venvstudio` |
+            ---
+
+            ## 📥 Downloads
+
+            | Platform | File | Size | Notes |
+            |:--------:|:-----|:----:|:------|
+            | 🪟 **Windows** x64 | `VenvStudio.exe` | ${{ steps.sizes.outputs.win_size }} | Portable — no install needed |
+            | 🐧 **Linux** x64 | `VenvStudio-x86_64.AppImage` | ${{ steps.sizes.outputs.lnx_size }} | `chmod +x` then run |
+            | 🍎 **macOS** ARM64 | `VenvStudio-macOS` | ${{ steps.sizes.outputs.mac_size }} | Apple Silicon + Rosetta 2 |
+            | 📦 **PyPI** | `pip install venvstudio` | — | `pip install --upgrade venvstudio` |
+
+            ---
+
+            <div align="center">
+
+            ⭐ **If VenvStudio helps you, consider [giving it a star](https://github.com/bayramkotan/VenvStudio)!** ⭐
+
+            [📖 Documentation](https://github.com/bayramkotan/VenvStudio#readme) · [🐛 Report Bug](https://github.com/bayramkotan/VenvStudio/issues) · [💡 Request Feature](https://github.com/bayramkotan/VenvStudio/issues)
+
+            </div>
           fail_on_unmatched_files: false
 
   publish-pypi:

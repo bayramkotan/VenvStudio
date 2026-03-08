@@ -2,11 +2,11 @@
   <img src="assets/icon.png" alt="VenvStudio" width="128" height="128">
 </p>
 
-<h1 align="center">VenvStudio</h1>
+<h1 align="center">🐍 VenvStudio</h1>
 
 <p align="center">
   <strong>Lightweight Python Virtual Environment Manager</strong><br>
-  A modern, cross-platform GUI for managing Python virtual environments
+  <sub>Create, manage, and launch your Python environments — all from a modern GUI</sub>
 </p>
 
 <p align="center">
@@ -16,13 +16,22 @@
   <a href="https://pypi.org/project/venvstudio/">
     <img src="https://img.shields.io/pypi/v/venvstudio?style=for-the-badge&color=a6e3a1&logo=pypi&logoColor=white" alt="PyPI">
   </a>
-  <a href="https://pypi.org/project/venvstudio/">
-    <img src="https://img.shields.io/pypi/pyversions/venvstudio?style=for-the-badge&color=f9e2af&logo=python&logoColor=white" alt="Python">
-  </a>
   <a href="LICENSE">
     <img src="https://img.shields.io/github/license/bayramkotan/VenvStudio?style=for-the-badge&color=cba6f7" alt="License">
   </a>
-  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-blue?style=for-the-badge" alt="Platform">
+  <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-f9e2af?style=for-the-badge" alt="Platform">
+  <a href="https://github.com/bayramkotan/VenvStudio/stargazers">
+    <img src="https://img.shields.io/github/stars/bayramkotan/VenvStudio?style=for-the-badge&color=f5c2e7&logo=github" alt="Stars">
+  </a>
+</p>
+
+<p align="center">
+  <a href="#-install">Install</a> •
+  <a href="#-features">Features</a> •
+  <a href="#-screenshots">Screenshots</a> •
+  <a href="#-quick-start">Quick Start</a> •
+  <a href="#-export-formats">Export</a> •
+  <a href="#-build-from-source">Build</a>
 </p>
 
 ---
@@ -34,127 +43,162 @@ pip install venvstudio
 venvstudio
 ```
 
-Or download the standalone binary from [GitHub Releases](https://github.com/bayramkotan/VenvStudio/releases/latest) — no Python required:
+Or download the standalone binary — **no Python required:**
 
-| Platform | File |
-|----------|------|
-| 🪟 Windows | `VenvStudio.exe` |
-| 🐧 Linux | `VenvStudio-x86_64.AppImage` |
-| 🍎 macOS | `VenvStudio-macOS` |
+| Platform | File | Notes |
+|:--------:|:-----|:------|
+| 🪟 **Windows** | [`VenvStudio.exe`](https://github.com/bayramkotan/VenvStudio/releases/latest) | Portable — just run |
+| 🐧 **Linux** | [`VenvStudio-x86_64.AppImage`](https://github.com/bayramkotan/VenvStudio/releases/latest) | `chmod +x` then run |
+| 🍎 **macOS** | [`VenvStudio-macOS`](https://github.com/bayramkotan/VenvStudio/releases/latest) | Apple Silicon + Rosetta 2 |
 
 ---
 
 ## ✨ Features
 
+<table>
+<tr>
+<td width="50%" valign="top">
+
 ### 🗂️ Environment Management
 - Create, rename, clone, delete virtual environments
-- Auto-detect existing environments on disk at startup
-- Per-environment cache — instant load, no subprocess delays
-- Set a **Default Environment** that opens automatically on launch
-- Open terminal with environment pre-activated (cmd, PowerShell, pwsh, bash, zsh, fish...)
-- Export as `requirements.txt`, `Dockerfile`, `docker-compose.yml`, `pyproject.toml`, `environment.yml`
+- Auto-detect existing environments at startup
+- Per-environment cache — instant load, zero delays
+- **Default Environment** — opens automatically on launch
+- Open terminal with env pre-activated
+- Export to 6 formats (see below)
+
+</td>
+<td width="50%" valign="top">
 
 ### 📦 Package Management
-- **Installed** tab — filter, select, uninstall, export, import packages
-- **Catalog** tab — 200+ curated packages across 15 categories with PyPI & Docs links
-- **Presets** tab — one-click install bundles (Data Science, Web API, Django, Flask, ML, NLP, CV, Testing...)
-- **Manual Install** tab — paste package names or version specs (`numpy==1.24`, `pandas>=2.0`)
-- Check for package updates via pip
-- Custom categories and custom catalog packages via Settings
-- pip or **uv** backend (uv is 10–100× faster)
+- **Installed** — filter, select, uninstall, export, import
+- **Catalog** — 200+ curated packages across 15 categories
+- **Presets** — one-click bundles (Data Science, Web API, Django, ML, NLP...)
+- **Manual Install** — paste package names or version specs
+- pip or **uv** backend (10–100× faster)
+- Check for package updates
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
 ### 🚀 Quick Launch
-- Sidebar shows installed apps for the active environment
-- One-click launch: JupyterLab, Jupyter Notebook, Spyder IDE, IPython, Orange Data Mining, Streamlit
+- Sidebar shows installed apps for active env
+- One-click: JupyterLab, Notebook, Spyder, IPython, Orange, Streamlit, Gradio, Dash, FastAPI, TensorBoard, MLflow, and more
+- **Jupyter Working Directory** — configurable per launch
 - **Create Desktop Shortcut** for any app
-- Instant sync between sidebar dropdown, environment table, and package panel
+- Instant sync across sidebar, table, and panel
+
+</td>
+<td width="50%" valign="top">
 
 ### 🐍 Python Management
 - Auto-detect all system Python installations
 - Add custom Python paths
-- Set **User Default** or **System Default** Python (PATH management with optional admin elevation)
-- Download standalone Python builds from [astral-sh/python-build-standalone](https://github.com/astral-sh/python-build-standalone)
+- Set **User** or **System Default** Python (PATH management)
+- Download standalone builds from [python-build-standalone](https://github.com/astral-sh/python-build-standalone)
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
 
 ### ⚙️ Settings
-- Dark (Catppuccin) and Light themes
+- 🌙 Dark (Catppuccin) and ☀️ Light themes
 - Font family and size customization
-- Interface language: English / Turkish
-- Custom venv base directory
-- Custom terminal configuration (add, edit, remove)
-- Custom Catalog categories and packages
-- Diagnostics: open log folder, config folder, add Python to PATH, export/import settings
-- Auto-check for updates on startup
+- 🌍 English & Turkish
+- Custom venv directory, terminal, catalog, presets
+- Export/Import settings
+- Auto-check for updates
+
+</td>
+<td width="50%" valign="top">
 
 ### 🖥️ CLI/TUI Tools
-- Install and configure **Starship**, **Oh My Posh** prompt themes
+- Install & configure **Starship** prompt
+- Install & configure **Oh My Posh** prompt
 - Install **Nerd Fonts** for proper rendering
-- pip-installable tools: **Rich**, **Textual**, **Prompt Toolkit**
+- pip-installable: **Rich**, **Textual**, **Prompt Toolkit**
+
+</td>
+</tr>
+</table>
 
 ---
 
 ## 📸 Screenshots
 
-### Environments
-
+<details open>
+<summary><b>🗂️ Environments</b></summary>
+<br>
 <p align="center">
   <img src="assets/screenshots/environment1.png" alt="Virtual Environments" width="800">
 </p>
+</details>
 
-### Packages — Launch Apps
-
+<details>
+<summary><b>🚀 Launch Apps</b></summary>
+<br>
 <p align="center">
   <img src="assets/screenshots/packages-launch1.png" alt="Launch Applications" width="800">
 </p>
+</details>
 
-### Packages — Installed
-
+<details>
+<summary><b>📦 Installed Packages</b></summary>
+<br>
 <p align="center">
   <img src="assets/screenshots/packages1.png" alt="Installed Packages" width="800">
 </p>
-
 <p align="center">
   <img src="assets/screenshots/packages2.png" alt="Right-click Context Menu" width="800">
 </p>
-
 <p align="center">
   <img src="assets/screenshots/packages3.png" alt="Package Info (pip show)" width="800">
 </p>
+</details>
 
-### Packages — Catalog
-
+<details>
+<summary><b>📚 Package Catalog</b></summary>
+<br>
 <p align="center">
   <img src="assets/screenshots/packages-catalog1.png" alt="Package Catalog" width="800">
 </p>
+</details>
 
-### Packages — Presets
-
+<details>
+<summary><b>⚡ Presets</b></summary>
+<br>
 <p align="center">
   <img src="assets/screenshots/packages-presets1.png" alt="Presets" width="800">
 </p>
-
 <p align="center">
   <img src="assets/screenshots/packages-presets2.png" alt="Preset Install" width="800">
 </p>
+</details>
 
-### Packages — Manual Install
-
+<details>
+<summary><b>📝 Manual Install</b></summary>
+<br>
 <p align="center">
   <img src="assets/screenshots/packages-manual_install_1.png" alt="Manual Install" width="800">
 </p>
+</details>
 
-### Settings
-
+<details>
+<summary><b>⚙️ Settings</b></summary>
+<br>
 <p align="center">
   <img src="assets/screenshots/settings1.png" alt="Settings - Appearance & Language" width="800">
 </p>
-
 <p align="center">
   <img src="assets/screenshots/settings2_python_install.png" alt="Settings - Python & Paths" width="800">
 </p>
-
 <p align="center">
   <img src="assets/screenshots/settings3.png" alt="Settings - Custom Catalog & Diagnostics" width="800">
 </p>
+</details>
 
 ---
 
@@ -188,6 +232,8 @@ venvstudio -h       # Help
 
 ## 📤 Export Formats
 
+Export your environment from the **Export ▾** dropdown:
+
 | Format | File(s) | Use Case |
 |--------|---------|----------|
 | 📄 requirements.txt | `requirements.txt` | Standard pip |
@@ -201,10 +247,10 @@ venvstudio -h       # Help
 
 ## ⬇️ Python Downloader
 
-Download standalone Python builds from [astral-sh/python-build-standalone](https://github.com/astral-sh/python-build-standalone):
+Download standalone Python builds from [astral-sh/python-build-standalone](https://github.com/astral-sh/python-build-standalone) (same builds used by `uv`):
 
 - **User Install** — no admin required, stored in VenvStudio config
-- **System Install** — `C:\Program Files` on Windows, `/opt/python` on Linux, `/usr/local/python` on macOS
+- **System Install** — Windows (`C:\Program Files`), Linux (`/opt/python`), macOS (`/usr/local/python`)
 
 ---
 
@@ -225,9 +271,12 @@ GitHub Actions automatically builds Windows, Linux (AppImage), and macOS binarie
 
 ---
 
-## 🔗 Links
+<div align="center">
 
-- [GitHub Repository](https://github.com/bayramkotan/VenvStudio)
-- [PyPI Package](https://pypi.org/project/venvstudio/)
-- [Releases](https://github.com/bayramkotan/VenvStudio/releases)
-- [Issues & Feature Requests](https://github.com/bayramkotan/VenvStudio/issues)
+**Made with ❤️ by [Bayram Kotan](https://github.com/bayramkotan)**
+
+[GitHub](https://github.com/bayramkotan/VenvStudio) · [PyPI](https://pypi.org/project/venvstudio/) · [Releases](https://github.com/bayramkotan/VenvStudio/releases) · [Issues](https://github.com/bayramkotan/VenvStudio/issues)
+
+⭐ **If VenvStudio helps you, give it a star!** ⭐
+
+</div>

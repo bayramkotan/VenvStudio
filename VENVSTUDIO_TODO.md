@@ -104,6 +104,11 @@
 - `pick_logdir: True` → klasör seçici (TensorBoard)
 - `script_launcher: True` → "📂 Open Script" butonu
 
+### GitHub Release Notes Kuralı
+- Commit'ler otomatik kategorize edilir: ✨ feat / 🐛 fix / 🔧 chore,refactor,build,ci / 📌 diğer
+- Release body: centered başlık + badge'ler + kategorize changelog + download tablosu (boyutlarla) + star CTA
+- **Kural:** Release notes her zaman çok gösterişli ve profesyonel olmalı
+
 ---
 
 ## 🚀 YENİ VERSİYON RELEASE KOMUTU

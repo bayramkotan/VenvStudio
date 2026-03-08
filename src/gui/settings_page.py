@@ -3211,6 +3211,17 @@ try {{
         else:
             self.config.set("default_terminal", "")
 
+        # Jupyter Working Directory
+        if self.jupyter_workdir_cb.isChecked():
+            self.config.set("jupyter_workdir", self.jupyter_workdir_combo.currentData() or "home")
+            if self.jupyter_workdir_combo.currentData() == "custom":
+                self.config.set("jupyter_workdir_custom", self.jupyter_custom_path_label.text())
+            else:
+                self.config.set("jupyter_workdir_custom", "")
+        else:
+            self.config.set("jupyter_workdir", "home")
+            self.config.set("jupyter_workdir_custom", "")
+
         # Save custom terminals
         self._save_custom_terminals()
 
@@ -6071,6 +6082,17 @@ try {{
             self.config.set("default_terminal", self.terminal_combo.currentData())
         else:
             self.config.set("default_terminal", "")
+
+        # Jupyter Working Directory
+        if self.jupyter_workdir_cb.isChecked():
+            self.config.set("jupyter_workdir", self.jupyter_workdir_combo.currentData() or "home")
+            if self.jupyter_workdir_combo.currentData() == "custom":
+                self.config.set("jupyter_workdir_custom", self.jupyter_custom_path_label.text())
+            else:
+                self.config.set("jupyter_workdir_custom", "")
+        else:
+            self.config.set("jupyter_workdir", "home")
+            self.config.set("jupyter_workdir_custom", "")
 
         # Save custom terminals
         self._save_custom_terminals()

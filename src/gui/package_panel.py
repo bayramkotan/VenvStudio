@@ -1027,14 +1027,18 @@ class PackagePanel(QWidget):
         # Working directory — Jupyter uses config setting, others use home
         is_jupyter = any("jupyter" in str(c).lower() for c in app_def.get("command", []))
         if is_jupyter:
-            jwd = self.config.get("jupyter_workdir", "home") if hasattr(self, "config") else "home"
-            jwd_custom = self.config.get("jupyter_workdir_custom", "") if hasattr(self, "config") else ""
+            jwd = self.config.get("jupyter_workdir", "home") if hasattr(self, "config") and self.config else "home"
+            jwd_custom = self.config.get("jupyter_workdir_custom", "") if hasattr(self, "config") and self.config else ""
             if jwd == "custom" and jwd_custom and os.path.isdir(jwd_custom):
-                work_dir = jwd_custom
+                notebook_dir = jwd_custom
             elif jwd == "env":
-                work_dir = str(venv_path)
+                notebook_dir = str(venv_path)
             else:
-                work_dir = os.path.expanduser("~")
+                notebook_dir = os.path.expanduser("~")
+            work_dir = notebook_dir
+            # Pass --notebook-dir so Jupyter actually opens in the chosen folder
+            app_def = dict(app_def)
+            app_def["command"] = list(app_def["command"]) + ["--notebook-dir", notebook_dir]
         elif get_platform() == "windows":
             work_dir = os.environ.get("USERPROFILE", "C:\\")
         else:

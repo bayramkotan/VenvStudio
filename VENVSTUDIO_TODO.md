@@ -47,13 +47,11 @@
 
 ## 🟡 ÖNEMLİ
 
-### F29 — Jupyter Working Directory Ayarı
-- [ ] Settings → Launch → "Jupyter Working Directory"
-- [ ] Seçenekler: Home, Env klasörü, Custom path, Son kullanılan
-- [ ] Windows farklı sürücü desteği (D:\, G:\...)
-- [ ] Per-env ayar + global default
-- [ ] --notebook-dir argümanı olarak geç
-- [ ] package_panel._launch_app entegrasyonu
+### ✅ F29 — Jupyter Working Directory Ayarı (TAMAMLANDI)
+- Settings → "🚀 Launch Settings" bölümü eklendi
+- 3 seçenek: 🏠 Home / 📁 Env Folder / 📂 Custom Path
+- `--notebook-dir` argümanı ile Jupyter'a geçiliyor
+- Config'e `jupyter_workdir` + `jupyter_workdir_custom` kaydediliyor
 
 ### F30 — CLI/TUI Tools (Detaylı Geliştirme)
 **Starship:**
@@ -86,6 +84,7 @@
 - **M5:** Global default Python gösterimi (Settings)
 - **M6:** Env tablosunda sütun genişliği kaydetme
 - **M7:** CHANGELOG.md tutulması
+- **M11:** About (ℹ️) bölümü Settings'te her zaman en altta olmalı — Launch Settings dahil tüm bölümlerden sonra
 - **M10:** ✅ Her release'de GitHub Release notes otomatik oluşturuluyor — önceki tag'den bu yana commit mesajları listeleniyor (fix/feat/chore)
 - **M8:** Quick Launch — cache boşken ilk geçişte kısa gecikme (UX)
 
@@ -125,4 +124,4 @@ git push origin main
 git push origin v1.3.NEW
 ```
 
-**Mevcut versiyon:** v1.3.35
+**Mevcut versiyon:** v1.3.36

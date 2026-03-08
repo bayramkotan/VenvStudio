@@ -21,7 +21,6 @@ from src.utils.i18n import tr
 import os
 from pathlib import Path
 
-
 class NoScrollComboBox(QComboBox):
     """ComboBox that ignores mouse wheel events unless explicitly focused by click."""
 
@@ -58,7 +57,6 @@ LANGUAGES = {
     "ko": "한국어",
     "ar": "العربية",
 }
-
 
 class SettingsPage(QWidget):
     """Full settings page with all configuration options."""
@@ -830,6 +828,39 @@ class SettingsPage(QWidget):
 
         layout.addStretch()
 
+        # ── LAUNCH SETTINGS ──
+        launch_group = QGroupBox("🚀 Launch Settings")
+        launch_layout = QFormLayout()
+        launch_layout.setSpacing(12)
+
+        # Jupyter Working Directory
+        jupyter_dir_row = QHBoxLayout()
+        self.jupyter_workdir_combo = NoScrollComboBox()
+        self.jupyter_workdir_combo.addItem("🏠 Home Directory", "home")
+        self.jupyter_workdir_combo.addItem("📁 Environment Folder", "env")
+        self.jupyter_workdir_combo.addItem("📂 Custom Path...", "custom")
+        self.jupyter_workdir_combo.currentIndexChanged.connect(self._on_jupyter_workdir_changed)
+        jupyter_dir_row.addWidget(self.jupyter_workdir_combo, 1)
+
+        self.jupyter_custom_path_btn = QPushButton("📂")
+        self.jupyter_custom_path_btn.setFixedWidth(36)
+        self.jupyter_custom_path_btn.setToolTip("Pick custom folder")
+        self.jupyter_custom_path_btn.setEnabled(False)
+        self.jupyter_custom_path_btn.clicked.connect(self._pick_jupyter_workdir)
+        jupyter_dir_row.addWidget(self.jupyter_custom_path_btn)
+
+        launch_layout.addRow("Jupyter Working Dir:", jupyter_dir_row)
+
+        self.jupyter_custom_path_label = QLabel("")
+        self.jupyter_custom_path_label.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        self.jupyter_custom_path_label.setVisible(False)
+        launch_layout.addRow("", self.jupyter_custom_path_label)
+
+        launch_group.setLayout(launch_layout)
+        layout.addWidget(launch_group)
+
+
+
         # ── ABOUT (always at bottom) ──
         about_group = QGroupBox(f"ℹ️ About {APP_NAME}")
         about_layout = QVBoxLayout()
@@ -862,36 +893,6 @@ class SettingsPage(QWidget):
         layout.addWidget(about_group)
 
 
-        # ── LAUNCH SETTINGS ──
-        launch_group = QGroupBox("🚀 Launch Settings")
-        launch_layout = QFormLayout()
-        launch_layout.setSpacing(12)
-
-        # Jupyter Working Directory
-        jupyter_dir_row = QHBoxLayout()
-        self.jupyter_workdir_combo = NoScrollComboBox()
-        self.jupyter_workdir_combo.addItem("🏠 Home Directory", "home")
-        self.jupyter_workdir_combo.addItem("📁 Environment Folder", "env")
-        self.jupyter_workdir_combo.addItem("📂 Custom Path...", "custom")
-        self.jupyter_workdir_combo.currentIndexChanged.connect(self._on_jupyter_workdir_changed)
-        jupyter_dir_row.addWidget(self.jupyter_workdir_combo, 1)
-
-        self.jupyter_custom_path_btn = QPushButton("📂")
-        self.jupyter_custom_path_btn.setFixedWidth(36)
-        self.jupyter_custom_path_btn.setToolTip("Pick custom folder")
-        self.jupyter_custom_path_btn.setEnabled(False)
-        self.jupyter_custom_path_btn.clicked.connect(self._pick_jupyter_workdir)
-        jupyter_dir_row.addWidget(self.jupyter_custom_path_btn)
-
-        launch_layout.addRow("Jupyter Working Dir:", jupyter_dir_row)
-
-        self.jupyter_custom_path_label = QLabel("")
-        self.jupyter_custom_path_label.setStyleSheet("color: #a6adc8; font-size: 11px;")
-        self.jupyter_custom_path_label.setVisible(False)
-        launch_layout.addRow("", self.jupyter_custom_path_label)
-
-        launch_group.setLayout(launch_layout)
-        layout.addWidget(launch_group)
 
         # ── SAVE / RESET BUTTONS ──
         btn_layout = QHBoxLayout()
@@ -1213,7 +1214,6 @@ class SettingsPage(QWidget):
         except Exception as e:
             QMessageBox.critical(self, "Error", "Failed to run pip fix:\n" + str(e))
         self._scan_pythons()
-
 
     def _set_python_default_unix(self, version, python_path, scope):
         """Set default Python on Linux/macOS using update-alternatives or symlinks."""
@@ -1995,7 +1995,6 @@ class SettingsPage(QWidget):
         custom_pythons = [e for e in custom_pythons if e.get("path") != path]
         self.config.set("custom_pythons", custom_pythons)
         self._scan_pythons()
-
 
     def _set_python_default(self, scope="user"):
         """
@@ -3248,6 +3247,2857 @@ try {{
             self.theme_changed.emit("dark")
             QMessageBox.information(self, "Settings", "All settings reset to defaults.")
 
+class _DownloadWorker(QThread):
+    """Background worker for downloading Python."""
+    progress = Signal(str)
+    finished = Signal(bool, str)  # success, message
+
+    def __init__(self, version_info, parent=None):
+        super().__init__(parent)
+        self.version_info = version_info
+
+    def run(self):
+        try:
+            from src.core.python_downloader import download_python
+            result = download_python(self.version_info, progress_callback=self.progress.emit)
+            self.finished.emit(True, str(result))
+        except Exception as e:
+            self.finished.emit(False, str(e))
+
+class _UpdateCheckWorker(QThread):
+    """Background worker for checking PyPI updates."""
+    finished = Signal(dict)
+
+    def run(self):
+        try:
+            from src.core.updater import check_for_update
+            result = check_for_update()
+            self.finished.emit(result)
+        except Exception as e:
+            self.finished.emit({"error": str(e), "update_available": False})
+
+class _FetchWorker(QThread):
+    """Background worker for fetching available versions."""
+    progress = Signal(str)
+    finished = Signal(list)
+
+    def run(self):
+        try:
+            from src.core.python_downloader import get_available_versions
+            versions = get_available_versions(progress_callback=self.progress.emit)
+            self.finished.emit(versions)
+        except Exception:
+            self.finished.emit([])
+
+class PythonDownloadDialog(QDialog):
+    """Dialog for downloading standalone Python builds."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("⬇️ Download Python")
+        self.setMinimumSize(550, 420)
+        self._versions = []
+        self._setup_ui()
+        self._fetch_versions()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+
+        # Header
+        header = QLabel(
+            "Download standalone Python builds from\n"
+            "astral-sh/python-build-standalone (same builds used by uv)"
+        )
+        header.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        header.setWordWrap(True)
+        layout.addWidget(header)
+
+        # Version list
+        self.version_list = QListWidget()
+        self.version_list.setStyleSheet(
+            "QListWidget { font-size: 13px; }"
+            "QListWidget::item { padding: 6px; }"
+            "QListWidget::item:selected { background-color: #89b4fa; color: #1e1e2e; }"
+        )
+        layout.addWidget(self.version_list)
+
+        # Progress
+        self.progress_label = QLabel("Fetching available versions...")
+        self.progress_label.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        layout.addWidget(self.progress_label)
+
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 0)  # indeterminate
+        self.progress_bar.setFixedHeight(6)
+        layout.addWidget(self.progress_bar)
+
+        # Install location
+        from src.core.python_downloader import get_pythons_dir
+        loc_label = QLabel(f"📂 Install location: {get_pythons_dir()}")
+        loc_label.setStyleSheet("color: #6c7086; font-size: 11px;")
+        loc_label.setWordWrap(True)
+        layout.addWidget(loc_label)
+
+        # Buttons
+        btn_layout = QHBoxLayout()
+
+        self.download_btn = QPushButton("👤 User Install")
+        self.download_btn.setToolTip("Install to VenvStudio pythons folder (no admin)")
+        self.download_btn.setEnabled(False)
+        self.download_btn.clicked.connect(lambda: self._start_download("user"))
+        btn_layout.addWidget(self.download_btn)
+
+        self.system_download_btn = QPushButton("🖥️ System Install")
+        self.system_download_btn.setToolTip("Install to Program Files (admin required)")
+        self.system_download_btn.setEnabled(False)
+        self.system_download_btn.clicked.connect(lambda: self._start_download("system"))
+        btn_layout.addWidget(self.system_download_btn)
+
+        self.remove_btn = QPushButton("🗑️ Remove")
+        self.remove_btn.setObjectName("danger")
+        self.remove_btn.setEnabled(False)
+        self.remove_btn.clicked.connect(self._remove_selected)
+        btn_layout.addWidget(self.remove_btn)
+
+        btn_layout.addStretch()
+
+        close_btn = QPushButton("Close")
+        close_btn.clicked.connect(self.accept)
+        btn_layout.addWidget(close_btn)
+
+        layout.addLayout(btn_layout)
+
+        self.version_list.currentRowChanged.connect(self._on_selection_changed)
+
+    def _fetch_versions(self):
+        """Fetch available versions in background."""
+        self._fetch_worker = _FetchWorker(parent=self)
+        self._fetch_worker.progress.connect(self._on_progress)
+        self._fetch_worker.finished.connect(self._on_versions_fetched)
+        self._fetch_worker.start()
+
+    def _on_versions_fetched(self, versions):
+        self._versions = versions
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(100)
+
+        if not versions:
+            self.progress_label.setText("❌ Could not fetch versions. Check your internet connection.")
+            return
+
+        # Also get installed versions
+        from src.core.python_downloader import get_installed_pythons
+        installed = {py["version"] for py in get_installed_pythons()}
+
+        self.version_list.clear()
+        for v in versions:
+            size_mb = v.get("size", 0) / (1024 * 1024)
+            is_installed = v["version"] in installed
+
+            if is_installed:
+                text = f"✅ Python {v['version']}  —  {size_mb:.0f} MB  (installed)"
+            else:
+                text = f"🐍 Python {v['version']}  —  {size_mb:.0f} MB"
+
+            item = QListWidgetItem(text)
+            item.setData(Qt.UserRole, v)
+            if is_installed:
+                item.setForeground(QColor("#a6e3a1"))
+            self.version_list.addItem(item)
+
+        self.progress_label.setText(f"Found {len(versions)} available versions.")
+        self.download_btn.setEnabled(True)
+        self.system_download_btn.setEnabled(True)
+
+    def _on_selection_changed(self, row):
+        if row < 0:
+            self.download_btn.setEnabled(False)
+            self.system_download_btn.setEnabled(False)
+            self.remove_btn.setEnabled(False)
+            return
+        item = self.version_list.item(row)
+        v = item.data(Qt.UserRole)
+        from src.core.python_downloader import get_installed_pythons
+        installed = {py["version"] for py in get_installed_pythons()}
+        is_installed = v["version"] in installed
+        self.download_btn.setEnabled(not is_installed)
+        self.system_download_btn.setEnabled(not is_installed)
+        self.remove_btn.setEnabled(is_installed)
+
+    def _on_progress(self, text):
+        self.progress_label.setText(text)
+        # Parse percentage if available
+        if "%" in text:
+            try:
+                pct_str = text.split("(")[-1].split("%")[0]
+                pct = int(float(pct_str))
+                self.progress_bar.setRange(0, 100)
+                self.progress_bar.setValue(pct)
+            except (ValueError, IndexError):
+                pass
+
+    def _start_download(self, mode="user"):
+        row = self.version_list.currentRow()
+        if row < 0:
+            return
+
+        item = self.version_list.item(row)
+        version_info = item.data(Qt.UserRole).copy()
+        version_info["_install_mode"] = mode
+
+        if mode == "system":
+            from src.utils.platform_utils import get_platform
+            version = version_info["version"]
+            plat = get_platform()
+
+            if plat == "windows":
+                ver_short = version.replace(".", "")[:3]
+                target_dir = f"C:\\Program Files\\Python{ver_short}"
+            elif plat == "macos":
+                target_dir = f"/usr/local/python/{version}"
+            else:  # linux
+                target_dir = f"/opt/python/{version}"
+
+            confirm = QMessageBox.question(
+                self, "🖥️ System Install",
+                f"Install Python {version} to:\n\n"
+                f"  📂 {target_dir}\n\n"
+                f"This requires {'admin' if plat == 'windows' else 'sudo'} permission.\n"
+                f"Continue?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if confirm != QMessageBox.Yes:
+                return
+
+        self.download_btn.setEnabled(False)
+        self.system_download_btn.setEnabled(False)
+        self.progress_bar.setRange(0, 0)
+
+        self._dl_worker = _DownloadWorker(version_info, parent=self)
+        self._dl_worker.progress.connect(self._on_progress)
+        self._dl_worker.finished.connect(
+            lambda ok, msg: self._on_download_finished(ok, msg, mode)
+        )
+        self._dl_worker.start()
+
+    def _on_download_finished(self, success, message, mode="user"):
+        self.progress_bar.setRange(0, 100)
+        if success:
+            if mode == "system":
+                # Move from user dir to Program Files via admin
+                self._move_to_system(message)
+            else:
+                self.progress_bar.setValue(100)
+                self.progress_label.setText("✅ Download complete!")
+                QMessageBox.information(self, "✅ Success", f"Python installed to:\n{message}")
+                self._fetch_versions()
+        else:
+            self.progress_bar.setValue(0)
+            self.progress_label.setText(f"❌ Download failed")
+            QMessageBox.critical(self, "Error", f"Download failed:\n{message}")
+            self.download_btn.setEnabled(True)
+            self.system_download_btn.setEnabled(True)
+
+    def _move_to_system(self, source_dir):
+        """Move downloaded Python to system directory (admin/sudo required)."""
+        import subprocess, tempfile, os, shutil
+        from src.utils.platform_utils import get_platform, subprocess_args
+        from pathlib import Path
+
+        source = Path(source_dir)
+        plat = get_platform()
+
+        # Find python executable to detect version
+        from src.core.python_downloader import get_python_exe
+        exe = get_python_exe(source)
+        if not exe:
+            QMessageBox.critical(self, "Error", "Could not find python executable in downloaded files.")
+            return
+
+        try:
+            result = subprocess.run(
+                [str(exe), "--version"],
+                capture_output=True, text=True, timeout=10,
+                **subprocess_args()
+            )
+            ver = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
+        except Exception:
+            ver = source.name.replace("cpython-", "")
+
+        # The extracted content has a 'python' subfolder
+        python_subdir = source / "python"
+        actual_source = str(python_subdir) if python_subdir.exists() else str(source)
+
+        # Determine target based on platform
+        if plat == "windows":
+            ver_short = ver.replace(".", "")[:3]
+            target = Path(f"C:\\Program Files\\Python{ver_short}")
+        elif plat == "macos":
+            target = Path(f"/usr/local/python/{ver}")
+        else:  # linux
+            target = Path(f"/opt/python/{ver}")
+
+        self.progress_label.setText(f"Installing to {target}...")
+
+        try:
+            if plat == "windows":
+                self._system_install_windows(actual_source, target, ver, source)
+            else:
+                self._system_install_unix(actual_source, target, ver, source, plat)
+        except Exception as e:
+            self.progress_bar.setRange(0, 100)
+            self.progress_bar.setValue(0)
+            self.progress_label.setText("❌ System install failed")
+            QMessageBox.critical(self, "Error", f"System install failed:\n{e}")
+
+    def _system_install_windows(self, actual_source, target, ver, source):
+        """Windows system install via PowerShell admin elevation."""
+        import subprocess, tempfile, os, shutil
+        from src.utils.platform_utils import subprocess_args
+
+        result_file = os.path.join(tempfile.gettempdir(), "_venvstudio_install_result.txt")
+        ps_script = f'''
+try {{
+    if (Test-Path '{target}') {{ Remove-Item -Recurse -Force '{target}' }}
+    Copy-Item -Recurse '{actual_source}' '{target}'
+    'OK' | Out-File -FilePath '{result_file}' -Encoding utf8
+}} catch {{
+    $_.Exception.Message | Out-File -FilePath '{result_file}' -Encoding utf8
+}}
+'''
+        ps_file = os.path.join(tempfile.gettempdir(), "_venvstudio_install_py.ps1")
+        with open(ps_file, 'w', encoding='utf-8') as f:
+            f.write(ps_script)
+
+        if os.path.exists(result_file):
+            os.unlink(result_file)
+
+        try:
+            subprocess.run(
+                [
+                    "powershell", "-NoProfile", "-Command",
+                    f"Start-Process -FilePath 'powershell.exe' "
+                    f"-ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','\"{ps_file}\"' "
+                    f"-Verb RunAs -Wait"
+                ],
+                capture_output=True, text=True, timeout=300,
+                **subprocess_args()
+            )
+
+            import time
+            time.sleep(1)
+
+            if os.path.exists(result_file):
+                with open(result_file, 'r', encoding='utf-8') as f:
+                    result_text = f.read().strip()
+                if result_text.startswith("OK"):
+                    shutil.rmtree(str(source), ignore_errors=True)
+                    self._show_system_install_success(ver, target)
+                    return
+                else:
+                    raise RuntimeError(result_text)
+
+            raise RuntimeError("Admin operation may have been cancelled.")
+        finally:
+            for fp in [ps_file, result_file]:
+                try:
+                    os.unlink(fp)
+                except Exception:
+                    pass
+
+    def _system_install_unix(self, actual_source, target, ver, source, plat):
+        """Linux/macOS system install via sudo."""
+        import subprocess, shutil
+
+        # Build shell script
+        script = f'''#!/bin/bash
+set -e
+if [ -d "{target}" ]; then
+    rm -rf "{target}"
+fi
+mkdir -p "{target}"
+cp -a "{actual_source}/." "{target}/"
+
+# Create symlinks in /usr/local/bin
+PYTHON_EXE=""
+if [ -f "{target}/bin/python3" ]; then
+    PYTHON_EXE="{target}/bin/python3"
+elif [ -f "{target}/bin/python" ]; then
+    PYTHON_EXE="{target}/bin/python"
+fi
+
+if [ -n "$PYTHON_EXE" ]; then
+    VER_SHORT=$(echo "{ver}" | cut -d. -f1,2)
+    ln -sf "$PYTHON_EXE" "/usr/local/bin/python$VER_SHORT" 2>/dev/null || true
+fi
+
+echo "OK"
+'''
+        import tempfile, os
+        script_file = os.path.join(tempfile.gettempdir(), "_venvstudio_install_py.sh")
+        with open(script_file, 'w') as f:
+            f.write(script)
+        os.chmod(script_file, 0o755)
+
+        try:
+            # Try pkexec first (graphical sudo), fallback to sudo in terminal
+            sudo_cmds = [
+                ["pkexec", "bash", script_file],
+                ["sudo", "bash", script_file],
+            ]
+
+            success = False
+            for cmd in sudo_cmds:
+                try:
+                    result = subprocess.run(
+                        cmd, capture_output=True, text=True, timeout=120
+                    )
+                    if result.returncode == 0 and "OK" in result.stdout:
+                        success = True
+                        break
+                except FileNotFoundError:
+                    continue
+
+            if success:
+                shutil.rmtree(str(source), ignore_errors=True)
+                symlink_note = ""
+                if plat == "linux":
+                    ver_short = ".".join(ver.split(".")[:2])
+                    symlink_note = f"\n\nSymlink created: /usr/local/bin/python{ver_short}"
+                self._show_system_install_success(ver, target, symlink_note)
+            else:
+                raise RuntimeError(
+                    "sudo/pkexec failed. You can manually install with:\n"
+                    f"  sudo cp -a {actual_source} {target}"
+                )
+        finally:
+            try:
+                os.unlink(script_file)
+            except Exception:
+                pass
+
+    def _show_system_install_success(self, ver, target, extra_note=""):
+        """Show success message after system install."""
+        self.progress_bar.setRange(0, 100)
+        self.progress_bar.setValue(100)
+        self.progress_label.setText("✅ System install complete!")
+        QMessageBox.information(
+            self, "✅ Success",
+            f"Python {ver} installed to:\n{target}{extra_note}\n\n"
+            f"You may want to add it to PATH or use 'Set System Default'."
+        )
+        self._fetch_versions()
+
+    def _remove_selected(self):
+        row = self.version_list.currentRow()
+        if row < 0:
+            return
+
+        item = self.version_list.item(row)
+        version_info = item.data(Qt.UserRole)
+        version = version_info["version"]
+
+        confirm = QMessageBox.question(
+            self, "Remove Python",
+            f"Remove Python {version}?\nThis will delete the standalone installation.",
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if confirm != QMessageBox.Yes:
+            return
+
+        from src.core.python_downloader import get_installed_pythons, remove_python
+        for py in get_installed_pythons():
+            if py["version"] == version:
+                remove_python(py["path"])
+                break
+
+        self._fetch_versions()
+
+        # ── LAUNCH SETTINGS ──
+        launch_group = QGroupBox("🚀 Launch Settings")
+        launch_layout = QFormLayout()
+        launch_layout.setSpacing(12)
+
+        # Jupyter Working Directory
+        jupyter_dir_row = QHBoxLayout()
+        self.jupyter_workdir_combo = NoScrollComboBox()
+        self.jupyter_workdir_combo.addItem("🏠 Home Directory", "home")
+        self.jupyter_workdir_combo.addItem("📁 Environment Folder", "env")
+        self.jupyter_workdir_combo.addItem("📂 Custom Path...", "custom")
+        self.jupyter_workdir_combo.currentIndexChanged.connect(self._on_jupyter_workdir_changed)
+        jupyter_dir_row.addWidget(self.jupyter_workdir_combo, 1)
+
+        self.jupyter_custom_path_btn = QPushButton("📂")
+        self.jupyter_custom_path_btn.setFixedWidth(36)
+        self.jupyter_custom_path_btn.setToolTip("Pick custom folder")
+        self.jupyter_custom_path_btn.setEnabled(False)
+        self.jupyter_custom_path_btn.clicked.connect(self._pick_jupyter_workdir)
+        jupyter_dir_row.addWidget(self.jupyter_custom_path_btn)
+
+        launch_layout.addRow("Jupyter Working Dir:", jupyter_dir_row)
+
+        self.jupyter_custom_path_label = QLabel("")
+        self.jupyter_custom_path_label.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        self.jupyter_custom_path_label.setVisible(False)
+        launch_layout.addRow("", self.jupyter_custom_path_label)
+
+        launch_group.setLayout(launch_layout)
+        layout.addWidget(launch_group)
+
+
+
+        # ── SAVE / RESET BUTTONS ──
+        btn_layout = QHBoxLayout()
+
+        save_btn = QPushButton(f"  💾 {tr('save_settings')}  ")
+        save_btn.setObjectName("success")
+        save_btn.setFixedHeight(40)
+        save_btn.clicked.connect(self._save_settings)
+        btn_layout.addWidget(save_btn)
+
+        btn_layout.addStretch()
+
+        reset_all_btn = QPushButton(tr("reset_defaults"))
+        reset_all_btn.setObjectName("danger")
+        reset_all_btn.clicked.connect(self._reset_all)
+        btn_layout.addWidget(reset_all_btn)
+
+        layout.addLayout(btn_layout)
+
+        scroll.setWidget(container)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        # Main layout
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(scroll)
+
+    # ── CLI/TUI Tools helpers ─────────────────────────────────────────────────
+
+    def _cli_log_append(self, text: str):
+        import html as _html
+        for line in text.split("\n"):
+            t = line.strip()
+            if not t:
+                continue
+            escaped = _html.escape(t)
+            if t.startswith("✅"):
+                color = "#a6e3a1"
+            elif t.startswith("❌"):
+                color = "#f38ba8"
+            elif t.startswith("⬇️") or t.startswith("📦"):
+                color = "#89b4fa"
+            elif t.startswith("⚠️"):
+                color = "#f9e2af"
+            else:
+                color = "#cdd6f4"
+            self.cli_log.append(f'<span style="color:{color};">{escaped}</span>')
+
+    def _make_cli_card(self, tool_id, title, desc, preset_label, presets, preset_key):
+        """Create a card widget for binary CLI tools (starship, oh-my-posh)."""
+        from src.core.cli_tools_manager import is_tool_installed, get_tool_version
+        card = QFrame()
+        card.setStyleSheet(
+            "QFrame { background: #1e1e2e; border: 1px solid #313244; border-radius: 6px; padding: 8px; }"
+        )
+        layout = QVBoxLayout(card)
+        layout.setSpacing(6)
+
+        # Title + status
+        header = QHBoxLayout()
+        title_lbl = QLabel(title)
+        title_lbl.setStyleSheet("font-weight: bold; font-size: 13px; color: #cdd6f4;")
+        header.addWidget(title_lbl)
+
+        installed = is_tool_installed(tool_id)
+        version = get_tool_version(tool_id) or ""
+        status_lbl = QLabel(f"✅ {version}" if installed else "❌ Not installed")
+        status_lbl.setStyleSheet(f"color: {'#a6e3a1' if installed else '#f38ba8'}; font-size: 11px;")
+        status_lbl.setObjectName(f"status_{tool_id.replace('-','_')}")
+        header.addWidget(status_lbl)
+        header.addStretch()
+        layout.addLayout(header)
+
+        desc_lbl = QLabel(desc)
+        desc_lbl.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        desc_lbl.setWordWrap(True)
+        layout.addWidget(desc_lbl)
+
+        # Preset selector + buttons
+        controls = QHBoxLayout()
+        controls.setSpacing(6)
+
+        cb_key = f"cb_preset_{tool_id.replace('-','_')}"
+        preset_cb = QCheckBox(preset_label)
+        preset_cb.setStyleSheet("font-size: 11px; color: #cdd6f4;")
+        preset_cb.setObjectName(cb_key)
+        controls.addWidget(preset_cb)
+
+        combo = QComboBox()
+        combo.setMaximumWidth(180)
+        for p in presets:
+            combo.addItem(p)
+        combo.setObjectName(f"preset_{tool_id.replace('-','_')}")
+        combo.setEnabled(False)
+        preset_cb.toggled.connect(combo.setEnabled)
+        controls.addWidget(combo)
+
+        controls.addStretch()
+
+        install_btn = QPushButton("⬇️ Install" if not installed else "🔄 Reinstall")
+        install_btn.setObjectName("secondary")
+        install_btn.setFixedHeight(26)
+        install_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_install(t, sb, sl))
+        controls.addWidget(install_btn)
+
+        if installed:
+            cfg_btn = QPushButton("⚙️ Configure Shell")
+            cfg_btn.setObjectName("secondary")
+            cfg_btn.setFixedHeight(26)
+            cfg_btn.clicked.connect(lambda _, t=tool_id, c=combo, pk=preset_key: self._cli_configure(t, c, pk))
+            controls.addWidget(cfg_btn)
+
+            uninst_btn = QPushButton("🗑️ Uninstall")
+            uninst_btn.setObjectName("danger")
+            uninst_btn.setFixedHeight(26)
+            uninst_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_uninstall(t, sb, sl))
+            controls.addWidget(uninst_btn)
+
+        layout.addLayout(controls)
+        return card
+
+    def _make_pip_card(self, tool_id, title, desc):
+        """Create a card widget for pip-based tools (rich, textual, prompt_toolkit)."""
+        from src.core.cli_tools_manager import is_tool_installed, get_tool_version
+        card = QFrame()
+        card.setStyleSheet(
+            "QFrame { background: #1e1e2e; border: 1px solid #313244; border-radius: 6px; padding: 8px; }"
+        )
+        layout = QVBoxLayout(card)
+        layout.setSpacing(6)
+
+        header = QHBoxLayout()
+        title_lbl = QLabel(title)
+        title_lbl.setStyleSheet("font-weight: bold; font-size: 13px; color: #cdd6f4;")
+        header.addWidget(title_lbl)
+
+        installed = is_tool_installed(tool_id)
+        version = get_tool_version(tool_id) or ""
+        status_lbl = QLabel(f"✅ {version}" if installed else "❌ Not installed")
+        status_lbl.setStyleSheet(f"color: {'#a6e3a1' if installed else '#f38ba8'}; font-size: 11px;")
+        header.addWidget(status_lbl)
+        header.addStretch()
+
+        install_btn = QPushButton("⬇️ Install" if not installed else "🔄 Reinstall")
+        install_btn.setObjectName("secondary")
+        install_btn.setFixedHeight(26)
+        install_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_install(t, sb, sl))
+        header.addWidget(install_btn)
+
+        if installed:
+            uninst_btn = QPushButton("🗑️")
+            uninst_btn.setObjectName("danger")
+            uninst_btn.setFixedHeight(26)
+            uninst_btn.setFixedWidth(32)
+            uninst_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_uninstall(t, sb, sl))
+            header.addWidget(uninst_btn)
+
+        layout.addLayout(header)
+
+        desc_lbl = QLabel(desc)
+        desc_lbl.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        layout.addWidget(desc_lbl)
+        return card
+
+    def _cli_install(self, tool_id, btn, status_lbl):
+        from src.core.cli_tools_manager import CliToolWorker
+        btn.setEnabled(False)
+        btn.setText("⏳ Installing...")
+        self.cli_log.clear()
+        self._cli_worker = CliToolWorker("install", tool_id, parent=self)
+        self._cli_worker.progress.connect(self._cli_log_append)
+        self._cli_worker.finished.connect(
+            lambda ok, msg, b=btn, sl=status_lbl, t=tool_id: self._cli_done(ok, msg, b, sl, t)
+        )
+        self._cli_worker.start()
+
+    def _cli_uninstall(self, tool_id, btn, status_lbl):
+        from src.core.cli_tools_manager import CliToolWorker
+        reply = QMessageBox.question(self, "Uninstall", f"Uninstall {tool_id}?",
+                                     QMessageBox.Yes | QMessageBox.No)
+        if reply != QMessageBox.Yes:
+            return
+        self._cli_worker = CliToolWorker("uninstall", tool_id, parent=self)
+        self._cli_worker.progress.connect(self._cli_log_append)
+        self._cli_worker.finished.connect(
+            lambda ok, msg, b=btn, sl=status_lbl, t=tool_id: self._cli_done(ok, msg, b, sl, t)
+        )
+        self._cli_worker.start()
+
+    def _cli_configure(self, tool_id, combo, preset_key):
+        from src.core.cli_tools_manager import CliToolWorker
+        theme = combo.currentText()
+        self._cli_worker = CliToolWorker("configure", tool_id, {preset_key: theme}, parent=self)
+        self._cli_worker.progress.connect(self._cli_log_append)
+        self._cli_worker.finished.connect(
+            lambda ok, msg: self._cli_log_append(msg)
+        )
+        self._cli_worker.start()
+
+    def _cli_done(self, ok, msg, btn, status_lbl, tool_id):
+        from src.core.cli_tools_manager import is_tool_installed, get_tool_version
+        self._cli_log_append(msg)
+        installed = is_tool_installed(tool_id)
+        version = get_tool_version(tool_id) or ""
+        status_lbl.setText(f"✅ {version}" if installed else "❌ Not installed")
+        status_lbl.setStyleSheet(f"color: {'#a6e3a1' if installed else '#f38ba8'}; font-size: 11px;")
+        btn.setEnabled(True)
+        btn.setText("🔄 Reinstall" if installed else "⬇️ Install")
+
+    def _install_nerd_font(self):
+        from src.core.cli_tools_manager import CliToolWorker
+        if not self.nerd_font_cb.isChecked():
+            QMessageBox.information(self, "Info", "Enable the Font checkbox first to select a font.")
+            return
+        font_id   = self.nerd_font_combo.currentData()
+        font_name = self.nerd_font_combo.currentText()
+        self.cli_log.clear()
+        self._cli_worker = CliToolWorker(
+            "install_font", "font",
+            {"font_id": font_id, "font_name": font_name},
+            parent=self
+        )
+        self._cli_worker.progress.connect(self._cli_log_append)
+        self._cli_worker.finished.connect(
+            lambda ok, msg: self._cli_log_append(msg)
+        )
+        self._cli_worker.start()
+
+    def _verify_pip(self):
+        """Check pip for selected Python, offer to fix if missing."""
+        import os, subprocess
+        from src.utils.platform_utils import subprocess_args as sp_args
+
+        rows = self.python_table.selectionModel().selectedRows()
+        if not rows:
+            QMessageBox.information(self, "Info", "Select a Python version first.")
+            return
+
+        row = rows[0].row()
+        version = self.python_table.item(row, 0).text()
+        python_path = self.python_table.item(row, 1).text()
+        scripts_dir = os.path.join(os.path.dirname(python_path), "Scripts")
+        pip_exe = os.path.join(scripts_dir, "pip.exe")
+
+        pip_exists = os.path.isfile(pip_exe)
+
+        pip_version_str = ""
+        pip_runnable = False
+        try:
+            result = subprocess.run(
+                [python_path, "-m", "pip", "--version"],
+                **sp_args(capture_output=True, text=True, timeout=10)
+            )
+            if result.returncode == 0:
+                pip_runnable = True
+                pip_version_str = result.stdout.strip()
+        except Exception:
+            pass
+
+        current_path = os.environ.get("PATH", "")
+        scripts_in_path = scripts_dir.lower() in current_path.lower()
+
+        ok = "OK" if pip_exists else "NOT FOUND"
+        ok2 = "Yes" if pip_runnable else "No"
+        ok3 = "Yes" if scripts_in_path else "Not in current session (open new terminal)"
+
+        msg = (
+            "Python: " + version + "\n"
+            "Path:   " + python_path + "\n\n"
+            "pip.exe on disk:   " + ok + "\n"
+            "pip module works:  " + ok2 + "\n"
+            "Scripts in PATH:   " + ok3
+        )
+        if pip_runnable and pip_version_str:
+            msg += "\n\n" + pip_version_str
+
+        issues = []
+        if not pip_runnable:
+            issues.append("pip module is not working.")
+        if not scripts_in_path:
+            issues.append("Scripts folder not in current PATH - open a new terminal after Set Default.")
+
+        if issues:
+            msg += "\n\nIssues found:\n" + "\n".join("  * " + i for i in issues)
+            if not pip_runnable:
+                msg += "\n\nWould you like to reinstall pip now?"
+                reply = QMessageBox.question(self, "pip Status", msg, QMessageBox.Yes | QMessageBox.No)
+                if reply == QMessageBox.Yes:
+                    self._fix_pip(python_path, version)
+            else:
+                QMessageBox.warning(self, "pip Status", msg)
+        else:
+            QMessageBox.information(self, "pip OK", msg)
+
+    def _fix_pip(self, python_path, version):
+        """Reinstall pip for the given Python executable."""
+        import subprocess
+        from src.utils.platform_utils import subprocess_args as sp_args
+
+        try:
+            result = subprocess.run(
+                [python_path, "-m", "pip", "install", "--upgrade", "--force-reinstall", "pip"],
+                **sp_args(capture_output=True, text=True, timeout=60)
+            )
+            if result.returncode == 0:
+                QMessageBox.information(
+                    self, "pip Fixed",
+                    "pip reinstalled for Python " + version + "!\n\n"
+                    "Open a new terminal and run: pip --version"
+                )
+            else:
+                err = result.stderr.strip() or result.stdout.strip()
+                QMessageBox.critical(
+                    self, "pip Fix Failed",
+                    "Could not reinstall pip.\n\n" + err + "\n\n"
+                    "Try manually (as admin):\n"
+                    '  "' + python_path + '" -m pip install --upgrade --force-reinstall pip'
+                )
+        except Exception as e:
+            QMessageBox.critical(self, "Error", "Failed to run pip fix:\n" + str(e))
+        self._scan_pythons()
+
+    def _set_python_default_unix(self, version, python_path, scope):
+        """Set default Python on Linux/macOS using update-alternatives or symlinks."""
+        import subprocess, shutil
+
+        platform = get_platform()
+        ver_short = ".".join(version.split(".")[:2])  # e.g. "3.12"
+        ver_nodot = ver_short.replace(".", "")          # e.g. "312"
+
+        if platform == "linux":
+            # Use update-alternatives if available
+            if shutil.which("update-alternatives"):
+                priority = 100
+
+                reply = QMessageBox.question(
+                    self, f"Set Default Python",
+                    f"Register Python {version} as system default?\n\n"
+                    f"  python3   → {python_path}\n"
+                    f"  python3.{ver_short.split('.')[-1]} → {python_path}\n\n"
+                    f"Uses update-alternatives (requires admin password).",
+                    QMessageBox.Yes | QMessageBox.No,
+                )
+                if reply != QMessageBox.Yes:
+                    return
+
+                cmds = [
+                    ["update-alternatives", "--install",
+                     "/usr/bin/python3", "python3", python_path, str(priority)],
+                    ["update-alternatives", "--install",
+                     "/usr/bin/python", "python", python_path, str(priority)],
+                    ["update-alternatives", "--set", "python3", python_path],
+                    ["update-alternatives", "--set", "python", python_path],
+                ]
+
+                success = True
+                for cmd in cmds:
+                    for sudo in [["pkexec"], ["sudo"]]:
+                        try:
+                            r = subprocess.run(
+                                sudo + cmd,
+                                capture_output=True, text=True, timeout=30
+                            )
+                            if r.returncode == 0:
+                                break
+                        except (FileNotFoundError, subprocess.TimeoutExpired):
+                            continue
+                    else:
+                        success = False
+                        break
+
+                if success:
+                    QMessageBox.information(
+                        self, "✅ Success",
+                        f"Python {version} set as system default!\n\n"
+                        f"Verify with:  python3 --version"
+                    )
+                else:
+                    QMessageBox.critical(
+                        self, "❌ Failed",
+                        f"Could not set default Python.\n\n"
+                        f"Try manually:\n"
+                        f"  sudo update-alternatives --install /usr/bin/python3 python3 {python_path} 100\n"
+                        f"  sudo update-alternatives --set python3 {python_path}"
+                    )
+            else:
+                # No update-alternatives — create symlink in /usr/local/bin
+                reply = QMessageBox.question(
+                    self, "Set Default Python",
+                    f"Create symlinks for Python {version}?\n\n"
+                    f"  /usr/local/bin/python3  → {python_path}\n"
+                    f"  /usr/local/bin/python   → {python_path}\n\n"
+                    f"Requires admin password.",
+                    QMessageBox.Yes | QMessageBox.No,
+                )
+                if reply != QMessageBox.Yes:
+                    return
+
+                script = (
+                    f"ln -sf '{python_path}' /usr/local/bin/python3 && "
+                    f"ln -sf '{python_path}' /usr/local/bin/python"
+                )
+                success = False
+                for sudo in [["pkexec", "bash", "-c"], ["sudo", "bash", "-c"]]:
+                    try:
+                        r = subprocess.run(sudo + [script], capture_output=True, text=True, timeout=30)
+                        if r.returncode == 0:
+                            success = True
+                            break
+                    except (FileNotFoundError, subprocess.TimeoutExpired):
+                        continue
+
+                if success:
+                    QMessageBox.information(
+                        self, "✅ Success",
+                        f"Symlinks created for Python {version}.\n\nVerify: python3 --version"
+                    )
+                else:
+                    QMessageBox.critical(
+                        self, "❌ Failed",
+                        f"Could not create symlinks.\n\nTry manually:\n"
+                        f"  sudo ln -sf {python_path} /usr/local/bin/python3"
+                    )
+
+        elif platform == "macos":
+            # macOS: symlink in /usr/local/bin
+            reply = QMessageBox.question(
+                self, "Set Default Python",
+                f"Create symlinks for Python {version}?\n\n"
+                f"  /usr/local/bin/python3  → {python_path}\n"
+                f"  /usr/local/bin/python   → {python_path}\n\n"
+                f"Requires admin password.",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+
+            script = (
+                f"ln -sf '{python_path}' /usr/local/bin/python3 && "
+                f"ln -sf '{python_path}' /usr/local/bin/python"
+            )
+            try:
+                r = subprocess.run(
+                    ["osascript", "-e",
+                     f'do shell script "{script}" with administrator privileges'],
+                    capture_output=True, text=True, timeout=60
+                )
+                if r.returncode == 0:
+                    QMessageBox.information(
+                        self, "✅ Success",
+                        f"Symlinks created for Python {version}.\n\nVerify: python3 --version"
+                    )
+                else:
+                    QMessageBox.critical(self, "❌ Failed", f"Could not create symlinks:\n{r.stderr}")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", str(e))
+
+    def _load_custom_terminals(self):
+        """Load custom terminals from config into table."""
+        terminals = self.config.get("custom_terminals", [])
+        self.custom_term_table.setRowCount(0)
+        for t in terminals:
+            row = self.custom_term_table.rowCount()
+            self.custom_term_table.insertRow(row)
+            self.custom_term_table.setItem(row, 0, QTableWidgetItem(t.get("name", "")))
+            self.custom_term_table.setItem(row, 1, QTableWidgetItem(t.get("command", "")))
+            chk = QTableWidgetItem()
+            chk.setCheckState(Qt.Checked if t.get("enabled", True) else Qt.Unchecked)
+            self.custom_term_table.setItem(row, 2, chk)
+            # Also add to terminal_combo if enabled
+            if t.get("enabled", True):
+                name = t.get("name", "")
+                if self.terminal_combo.findData(f"custom:{name}") < 0:
+                    self.terminal_combo.addItem(f"⚡ {name}", f"custom:{name}")
+
+    def _save_custom_terminals(self):
+        """Save custom terminals from table to config."""
+        terminals = []
+        for row in range(self.custom_term_table.rowCount()):
+            name = self.custom_term_table.item(row, 0).text() if self.custom_term_table.item(row, 0) else ""
+            cmd = self.custom_term_table.item(row, 1).text() if self.custom_term_table.item(row, 1) else ""
+            chk = self.custom_term_table.item(row, 2)
+            enabled = chk.checkState() == Qt.Checked if chk else True
+            if name and cmd:
+                terminals.append({"name": name, "command": cmd, "enabled": enabled})
+        self.config.set("custom_terminals", terminals)
+
+    def _add_custom_terminal(self):
+        """Add a new custom terminal."""
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLineEdit
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Add Custom Terminal")
+        dialog.setMinimumWidth(480)
+        layout = QFormLayout(dialog)
+
+        name_edit = QLineEdit()
+        name_edit.setPlaceholderText("e.g. My Terminal")
+        cmd_edit = QLineEdit()
+        cmd_edit.setPlaceholderText('e.g. wt -d "{path}" cmd /k "{activate}"')
+
+        hint = QLabel("Variables: {path} = env path, {activate} = activate script")
+        hint.setStyleSheet("color: #a6adc8; font-size: 11px;")
+
+        layout.addRow("Name:", name_edit)
+        layout.addRow("Command:", cmd_edit)
+        layout.addRow(hint)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(dialog.accept)
+        btns.rejected.connect(dialog.reject)
+        layout.addRow(btns)
+
+        if dialog.exec() == QDialog.Accepted:
+            name = name_edit.text().strip()
+            cmd = cmd_edit.text().strip()
+            if name and cmd:
+                row = self.custom_term_table.rowCount()
+                self.custom_term_table.insertRow(row)
+                self.custom_term_table.setItem(row, 0, QTableWidgetItem(name))
+                self.custom_term_table.setItem(row, 1, QTableWidgetItem(cmd))
+                chk = QTableWidgetItem()
+                chk.setCheckState(Qt.Checked)
+                self.custom_term_table.setItem(row, 2, chk)
+                # Add to combo
+                self.terminal_combo.addItem(f"⚡ {name}", f"custom:{name}")
+
+    def _edit_custom_terminal(self):
+        """Edit selected custom terminal."""
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLineEdit
+        row = self.custom_term_table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Edit", "Please select a terminal to edit.")
+            return
+        old_name = self.custom_term_table.item(row, 0).text()
+        old_cmd = self.custom_term_table.item(row, 1).text()
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Edit Custom Terminal")
+        dialog.setMinimumWidth(480)
+        layout = QFormLayout(dialog)
+
+        name_edit = QLineEdit(old_name)
+        cmd_edit = QLineEdit(old_cmd)
+        hint = QLabel("Variables: {path} = env path, {activate} = activate script")
+        hint.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        layout.addRow("Name:", name_edit)
+        layout.addRow("Command:", cmd_edit)
+        layout.addRow(hint)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(dialog.accept)
+        btns.rejected.connect(dialog.reject)
+        layout.addRow(btns)
+
+        if dialog.exec() == QDialog.Accepted:
+            new_name = name_edit.text().strip()
+            new_cmd = cmd_edit.text().strip()
+            if new_name and new_cmd:
+                self.custom_term_table.setItem(row, 0, QTableWidgetItem(new_name))
+                self.custom_term_table.setItem(row, 1, QTableWidgetItem(new_cmd))
+                # Update combo
+                idx = self.terminal_combo.findData(f"custom:{old_name}")
+                if idx >= 0:
+                    self.terminal_combo.setItemText(idx, f"⚡ {new_name}")
+                    self.terminal_combo.setItemData(idx, f"custom:{new_name}")
+
+    def _remove_custom_terminal(self):
+        """Remove selected custom terminal."""
+        row = self.custom_term_table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Remove", "Please select a terminal to remove.")
+            return
+        name = self.custom_term_table.item(row, 0).text()
+        reply = QMessageBox.question(self, "Remove Terminal",
+            f"Remove '{name}'?", QMessageBox.Yes | QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            self.custom_term_table.removeRow(row)
+            idx = self.terminal_combo.findData(f"custom:{name}")
+            if idx >= 0:
+                self.terminal_combo.removeItem(idx)
+
+    def _detect_terminals(self):
+        """Scan for installed terminals on Linux, offer to install missing ones via pkexec."""
+        import shutil
+
+        ALL_TERMINALS = [
+            ("GNOME Terminal", "gnome-terminal", "gnome-terminal"),
+            ("Konsole", "konsole", "konsole"),
+            ("Xfce4 Terminal", "xfce4-terminal", "xfce4-terminal"),
+            ("Tilix", "tilix", "tilix"),
+            ("Mate Terminal", "mate-terminal", "mate-terminal"),
+            ("Alacritty", "alacritty", "alacritty"),
+            ("Kitty", "kitty", "kitty"),
+            ("xterm", "xterm", "xterm"),
+        ]
+
+        installed = [(label, data) for label, data, cmd in ALL_TERMINALS if shutil.which(cmd)]
+        not_installed = [(label, data, cmd) for label, data, cmd in ALL_TERMINALS if not shutil.which(cmd)]
+
+        # Update dropdown — show only installed + System Default
+        current_data = self.terminal_combo.currentData()
+        self.terminal_combo.blockSignals(True)
+        self.terminal_combo.clear()
+        self.terminal_combo.addItem("System Default", "default")
+        for label, data in installed:
+            self.terminal_combo.addItem(f"✅ {label}", data)
+        for label, data, _ in not_installed:
+            self.terminal_combo.addItem(f"❌ {label} (not installed)", data)
+        # Restore selection
+        idx = self.terminal_combo.findData(current_data)
+        self.terminal_combo.setCurrentIndex(idx if idx >= 0 else 0)
+        self.terminal_combo.blockSignals(False)
+
+        if not installed:
+            msg = "No supported terminals found on your system.\n\n"
+        else:
+            names = ", ".join(l for l, _ in installed)
+            msg = f"Found: {names}\n\n"
+
+        if not not_installed:
+            QMessageBox.information(self, "Terminal Detection", msg + "All supported terminals are installed.")
+            return
+
+        missing_names = "\n".join(f"  • {l}" for l, _, _ in not_installed)
+        reply = QMessageBox.question(
+            self, "Terminal Detection",
+            msg + f"Not installed:\n{missing_names}\n\n"
+            f"Install a terminal? (requires admin password)",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        # Let user pick which one to install
+        items = [l for l, _, _ in not_installed]
+        from PySide6.QtWidgets import QInputDialog
+        choice, ok = QInputDialog.getItem(
+            self, "Install Terminal",
+            "Select a terminal to install:",
+            items, 0, False,
+        )
+        if not ok or not choice:
+            return
+
+        pkg = next((cmd for l, _, cmd in not_installed if l == choice), None)
+        if not pkg:
+            return
+
+        # Try pkexec first, fallback to sudo
+        import subprocess
+        success = False
+        for sudo_cmd in [["pkexec"], ["sudo"]]:
+            try:
+                result = subprocess.run(
+                    sudo_cmd + ["apt-get", "install", "-y", pkg],
+                    capture_output=True, text=True, timeout=120,
+                )
+                if result.returncode == 0:
+                    success = True
+                    break
+            except (FileNotFoundError, subprocess.TimeoutExpired):
+                continue
+
+        if success:
+            QMessageBox.information(
+                self, "✅ Installed",
+                f"{choice} installed successfully!\n\nIt has been added to the terminal list.",
+            )
+            self._detect_terminals()  # Refresh dropdown
+        else:
+            QMessageBox.critical(
+                self, "❌ Failed",
+                f"Could not install {choice}.\n\n"
+                f"Try manually:\n  sudo apt-get install {pkg}",
+            )
+
+    def _toggle_language(self, enabled):
+        """Enable/disable language combo based on checkbox."""
+        self.lang_combo.setEnabled(enabled)
+
+    def _load_current_settings(self):
+        """Load current settings into UI widgets."""
+        # Theme
+        theme = self.config.get("theme", "dark")
+        idx = self.theme_combo.findData(theme)
+        if idx >= 0:
+            self.theme_combo.setCurrentIndex(idx)
+        if theme != "dark":
+            self.theme_cb.setChecked(True)
+            self.theme_combo.setEnabled(True)
+        else:
+            self.theme_cb.setChecked(False)
+            self.theme_combo.setEnabled(False)
+
+        # Font — ALWAYS start unticked, only tick if config has explicit non-default
+        font_family = self.config.get("font_family", "")
+        # Clear old default values from config
+        default_fonts = ("", "Segoe UI", "Yu Gothic UI", "MS Shell Dlg 2", "Arial", "Tahoma")
+        if not font_family or font_family in default_fonts:
+            self.font_cb.setChecked(False)
+            self.font_combo.setEnabled(False)
+            self.config.set("font_family", "")
+        else:
+            self.font_cb.setChecked(True)
+            self.font_combo.setEnabled(True)
+            self.font_combo.setCurrentFont(QFont(font_family))
+
+        font_size = self.config.get("font_size", 13)
+        default_sizes = (0, 12, 13, 14)
+        if not font_size or font_size in default_sizes:
+            self.font_size_cb.setChecked(False)
+            self.font_size_spin.setEnabled(False)
+            self.font_size_spin.setValue(13)
+            self.config.set("font_size", 13)
+        else:
+            self.font_size_cb.setChecked(True)
+            self.font_size_spin.setEnabled(True)
+            self.font_size_spin.setValue(font_size)
+
+        # Language
+        lang = self.config.get("language", "en")
+        idx = self.lang_combo.findData(lang)
+        if idx >= 0:
+            self.lang_combo.setCurrentIndex(idx)
+        # Always start unticked — user must tick to change language
+        self.lang_enabled_cb.setChecked(False)
+        self.lang_combo.setEnabled(False)
+
+        # Venv dir
+        self.venv_dir_input.setText(str(self.config.get_venv_base_dir()))
+
+        # General options
+        self.auto_pip_cb.setChecked(self.config.get("auto_upgrade_pip", True))
+        self.confirm_delete_cb.setChecked(self.config.get("confirm_delete", True))
+        self.show_hidden_cb.setChecked(self.config.get("show_hidden_packages", False))
+        self.check_updates_cb.setChecked(self.config.get("check_updates", False))
+        self.save_window_cb.setChecked(self.config.get("save_window_geometry", True))
+
+        # Package manager
+        pkg_mgr = self.config.get("package_manager", "pip")
+        idx = self.pkg_manager_combo.findData(pkg_mgr)
+        if idx >= 0:
+            self.pkg_manager_combo.setCurrentIndex(idx)
+        if pkg_mgr != "pip":
+            self.pkg_mgr_cb.setChecked(True)
+            self.pkg_manager_combo.setEnabled(True)
+        else:
+            self.pkg_mgr_cb.setChecked(False)
+            self.pkg_manager_combo.setEnabled(False)
+
+        # Terminal — only enable if explicitly set to non-default
+        terminal = self.config.get("default_terminal", "")
+        if terminal and terminal.strip():
+            idx = self.terminal_combo.findData(terminal)
+            if idx > 0:
+                self.terminal_cb.setChecked(True)
+                self.terminal_combo.setEnabled(True)
+                self.terminal_combo.setCurrentIndex(idx)
+            else:
+                self.terminal_cb.setChecked(False)
+                self.terminal_combo.setEnabled(False)
+                self.terminal_combo.setCurrentIndex(0)
+        else:
+            self.terminal_cb.setChecked(False)
+            self.terminal_combo.setEnabled(False)
+            self.terminal_combo.setCurrentIndex(0)
+
+        # Load custom terminals into table and combo
+        self._load_custom_terminals()
+
+        # Load custom presets
+        self._load_custom_presets()
+
+        # Scan pythons
+        self._scan_pythons()
+
+        # Load custom categories
+        self._load_custom_categories()
+
+        # Load custom catalog
+        self._load_custom_catalog()
+
+        # Jupyter working dir
+        jwd = self.config.get("jupyter_workdir", "home")
+        jwd_custom = self.config.get("jupyter_workdir_custom", "")
+        idx_jwd = self.jupyter_workdir_combo.findData(jwd)
+        if idx_jwd >= 0:
+            self.jupyter_workdir_combo.setCurrentIndex(idx_jwd)
+        if jwd == "custom" and jwd_custom:
+            self.jupyter_custom_path_label.setText(jwd_custom)
+            self.jupyter_custom_path_label.setVisible(True)
+            self.jupyter_custom_path_btn.setEnabled(True)
+
+    def _on_jupyter_workdir_changed(self, idx):
+        """Enable/disable custom path button based on selection."""
+        data = self.jupyter_workdir_combo.currentData()
+        is_custom = data == "custom"
+        self.jupyter_custom_path_btn.setEnabled(is_custom)
+        self.jupyter_custom_path_label.setVisible(is_custom)
+
+    def _pick_jupyter_workdir(self):
+        """Open folder picker for custom Jupyter working directory."""
+        import os
+        current = self.jupyter_custom_path_label.text() or os.path.expanduser("~")
+        folder = QFileDialog.getExistingDirectory(self, "Select Jupyter Working Directory", current)
+        if folder:
+            self.jupyter_custom_path_label.setText(folder)
+            self.jupyter_custom_path_label.setVisible(True)
+
+    def _scan_pythons(self):
+        """Scan system for Python installations."""
+        import os
+        import shutil
+        self.python_table.setRowCount(0)
+        self.default_python_combo.clear()
+        self.default_python_combo.addItem("System Default", "")
+
+        excluded_pythons = {
+            os.path.normcase(os.path.normpath(p))
+            for p in self.config.get("excluded_pythons", [])
+        }
+
+        # Which Python is system default — detect from PATH directly (registry on Windows)
+        default_norm = ""
+        try:
+            if os.name == "nt":
+                import subprocess as _sp
+                # Read System PATH from registry (fresh, not cached process env)
+                sys_path = _sp.run(
+                    ["powershell", "-NoProfile", "-Command",
+                     "[Environment]::GetEnvironmentVariable('Path', 'Machine')"],
+                    capture_output=True, text=True, timeout=5
+                ).stdout.strip()
+                usr_path = _sp.run(
+                    ["powershell", "-NoProfile", "-Command",
+                     "[Environment]::GetEnvironmentVariable('Path', 'User')"],
+                    capture_output=True, text=True, timeout=5
+                ).stdout.strip()
+                # User PATH takes priority (prepended by Set Default)
+                for p in (usr_path + ";" + sys_path).split(";"):
+                    p = p.strip()
+                    if not p:
+                        continue
+                    candidate = os.path.join(p, "python.exe")
+                    if os.path.isfile(candidate) and "windowsapps" not in p.lower():
+                        default_norm = os.path.normcase(os.path.normpath(candidate))
+                        break
+            else:
+                import shutil
+                exe = shutil.which("python") or shutil.which("python3") or ""
+                default_norm = os.path.normcase(os.path.normpath(exe)) if exe else ""
+        except Exception:
+            # Fallback: use saved config value
+            saved_default = self.config.get("system_default_python", "")
+            default_norm = os.path.normcase(os.path.normpath(saved_default)) if saved_default else ""
+
+        # All pythons from system scan
+        system_pythons = find_system_pythons()
+        listed_paths = set()
+
+        for version, path in system_pythons:
+            norm_path = os.path.normpath(path)
+            norm_case = os.path.normcase(norm_path)
+
+            if norm_case in excluded_pythons:
+                continue
+            if norm_case in listed_paths:
+                continue
+            listed_paths.add(norm_case)
+
+            row = self.python_table.rowCount()
+            self.python_table.insertRow(row)
+            self.python_table.setItem(row, 0, QTableWidgetItem(version))
+            self.python_table.setItem(row, 1, QTableWidgetItem(norm_path))
+
+            if norm_case == default_norm:
+                source_item = QTableWidgetItem("System")
+                source_item.setForeground(__import__('PySide6.QtGui', fromlist=['QColor']).QColor("#a6e3a1"))
+            else:
+                source_item = QTableWidgetItem("Custom")
+                source_item.setForeground(Qt.cyan)
+
+            self.python_table.setItem(row, 2, source_item)
+            self.default_python_combo.addItem(f"Python {version}", norm_path)
+
+        # Custom pythons from config (skip already listed)
+        custom_pythons = self.config.get("custom_pythons", [])
+        cleaned_custom = []
+        for entry in custom_pythons:
+            norm_path = os.path.normpath(entry.get("path", ""))
+            norm_case = os.path.normcase(norm_path)
+            if norm_case in listed_paths:
+                continue  # already shown above
+            cleaned_custom.append(entry)
+            listed_paths.add(norm_case)
+            row = self.python_table.rowCount()
+            self.python_table.insertRow(row)
+            self.python_table.setItem(row, 0, QTableWidgetItem(entry.get("version", "?")))
+            self.python_table.setItem(row, 1, QTableWidgetItem(norm_path))
+            source_item = QTableWidgetItem("Custom")
+            source_item.setForeground(Qt.cyan)
+            self.python_table.setItem(row, 2, source_item)
+            self.default_python_combo.addItem(
+                f"Python {entry.get('version', '?')} (Custom)", norm_path
+            )
+
+        if len(cleaned_custom) != len(custom_pythons):
+            self.config.set("custom_pythons", cleaned_custom)
+
+        # Standalone (downloaded) Pythons
+        try:
+            from src.core.python_downloader import get_installed_pythons
+            for py in get_installed_pythons():
+                exe_path = os.path.normpath(str(py["python_exe"]))
+                if os.path.normcase(exe_path) in listed_paths:
+                    continue
+                listed_paths.add(os.path.normcase(exe_path))
+                row = self.python_table.rowCount()
+                self.python_table.insertRow(row)
+                self.python_table.setItem(row, 0, QTableWidgetItem(py["version"]))
+                self.python_table.setItem(row, 1, QTableWidgetItem(exe_path))
+                source_item = QTableWidgetItem("Downloaded")
+                source_item.setForeground(QColor("#a6e3a1"))
+                self.python_table.setItem(row, 2, source_item)
+                self.default_python_combo.addItem(
+                    f"Python {py['version']} (Downloaded)", exe_path
+                )
+        except Exception:
+            pass
+
+        # Set default python combo selection
+        default_py = self.config.get("default_python", "")
+        if default_py and default_py.strip():
+            default_py_norm = os.path.normpath(default_py)
+            found_idx = -1
+            for i in range(self.default_python_combo.count()):
+                item_data = self.default_python_combo.itemData(i) or ""
+                if item_data and os.path.normpath(item_data).lower() == default_py_norm.lower():
+                    found_idx = i
+                    break
+            if found_idx > 0:
+                self.default_py_cb.setChecked(True)
+                self.default_python_combo.setEnabled(True)
+                self.default_python_combo.setCurrentIndex(found_idx)
+            else:
+                self.default_py_cb.setChecked(False)
+                self.default_python_combo.setEnabled(False)
+                self.default_python_combo.setCurrentIndex(0)
+                self.config.set("default_python", "")
+        else:
+            self.default_py_cb.setChecked(False)
+            self.default_python_combo.setEnabled(False)
+            self.default_python_combo.setCurrentIndex(0)
+
+    def _add_custom_python(self):
+        """Add a custom Python executable path."""
+        import os
+        import subprocess
+        from src.utils.platform_utils import subprocess_args as sp_args
+
+        if get_platform() == "windows":
+            filter_str = "Python Executable (python.exe);;All Files (*)"
+        else:
+            filter_str = "All Files (*)"
+
+        filepath, _ = QFileDialog.getOpenFileName(
+            self, "Select Python Executable", "", filter_str
+        )
+        if not filepath:
+            return
+
+        filepath = os.path.normpath(filepath)
+
+        # If user selected a directory or a non-exe file, try to find python inside
+        if os.path.isdir(filepath):
+            candidates = []
+            if get_platform() == "windows":
+                candidates = [
+                    os.path.join(filepath, "python.exe"),
+                    os.path.join(filepath, "Scripts", "python.exe"),
+                ]
+            else:
+                candidates = [
+                    os.path.join(filepath, "bin", "python3"),
+                    os.path.join(filepath, "bin", "python"),
+                    os.path.join(filepath, "python3"),
+                    os.path.join(filepath, "python"),
+                ]
+            found = None
+            for c in candidates:
+                if os.path.isfile(c):
+                    found = c
+                    break
+            if not found:
+                QMessageBox.warning(self, "Error", f"Could not find python executable in:\n{filepath}")
+                return
+            filepath = os.path.normpath(found)
+
+        # If selected file is not named python*, try to find it in parent dir
+        basename = os.path.basename(filepath).lower()
+        if not basename.startswith("python") and os.path.isfile(filepath):
+            parent = os.path.dirname(filepath)
+            if get_platform() == "windows":
+                alt = os.path.join(parent, "python.exe")
+            else:
+                alt = os.path.join(parent, "python3")
+                if not os.path.isfile(alt):
+                    alt = os.path.join(parent, "python")
+            if os.path.isfile(alt):
+                filepath = os.path.normpath(alt)
+
+        # Verify it's a valid Python
+        try:
+            result = subprocess.run(
+                [filepath, "--version"],
+                **sp_args(capture_output=True, text=True, timeout=5)
+            )
+            if result.returncode != 0:
+                QMessageBox.critical(self, "Error", f"Not a valid Python executable:\n{filepath}")
+                return
+            version = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Not a valid Python executable:\n{e}")
+            return
+
+        # Save to config
+        custom_pythons = self.config.get("custom_pythons", [])
+        for entry in custom_pythons:
+            if os.path.normpath(entry.get("path", "")) == filepath:
+                QMessageBox.information(self, "Info", "This Python path is already added.")
+                return
+
+        custom_pythons.append({"version": version, "path": filepath})
+        self.config.set("custom_pythons", custom_pythons)
+        self._scan_pythons()
+
+        QMessageBox.information(self, "Success", f"Added Python {version}\n{filepath}")
+
+    def _remove_custom_python(self):
+        """Remove a custom or downloaded Python path."""
+        rows = self.python_table.selectionModel().selectedRows()
+        if not rows:
+            QMessageBox.information(self, "Info", "Select a Python version to remove.")
+            return
+
+        row = rows[0].row()
+        source = self.python_table.item(row, 2).text()
+        version = self.python_table.item(row, 0).text()
+        path = self.python_table.item(row, 1).text()
+
+        if source == "System":
+            QMessageBox.information(
+                self, "Info",
+                "System-detected Python installations cannot be removed here.\n"
+                "Use your system package manager to uninstall them."
+            )
+            return
+
+        if source == "User Install":
+            reply = QMessageBox.question(
+                self, "Remove User Install",
+                f"Remove Python {version} from the list?\n\n"
+                f"  {path}\n\n"
+                f"Note: This only removes it from VenvStudio's list.\n"
+                f"To fully uninstall, use: pip uninstall python (or your package manager).",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply == QMessageBox.Yes:
+                # Save to config as excluded path so it won't reappear on next scan
+                excluded = self.config.get("excluded_pythons", [])
+                if path not in excluded:
+                    excluded.append(path)
+                    self.config.set("excluded_pythons", excluded)
+                self._scan_pythons()
+            return
+
+        if source == "Downloaded":
+            reply = QMessageBox.question(
+                self, "Remove Downloaded Python",
+                f"Permanently delete Python {version}?\n\n"
+                f"  {path}\n\n"
+                f"This will remove the downloaded files from disk.",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+            try:
+                from src.core.python_downloader import get_installed_pythons, remove_python
+                for py in get_installed_pythons():
+                    if py["version"] == version or os.path.normpath(str(py.get("python_exe", ""))) == os.path.normpath(path):
+                        remove_python(py["path"])
+                        break
+                self._scan_pythons()
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to remove Python {version}:\n{e}")
+            return
+
+        # source == "Custom"
+        custom_pythons = self.config.get("custom_pythons", [])
+        custom_pythons = [e for e in custom_pythons if e.get("path") != path]
+        self.config.set("custom_pythons", custom_pythons)
+        self._scan_pythons()
+
+    def _set_python_default(self, scope="user"):
+        """
+        Set selected Python as default.
+        scope='user'   → Update User PATH (no admin needed if System PATH is clean)
+        scope='system' → Update System PATH (admin required)
+        Both modes remove OTHER Python entries from BOTH scopes.
+        """
+        import os, subprocess, tempfile
+        from src.utils.platform_utils import get_platform, subprocess_args
+
+        rows = self.python_table.selectionModel().selectedRows()
+        if not rows:
+            QMessageBox.information(self, "Info", "Select a Python version first.")
+            return
+
+        row = rows[0].row()
+        version = self.python_table.item(row, 0).text()
+        python_path = self.python_table.item(row, 1).text()
+
+        platform = get_platform()
+
+        # ── Linux / macOS ──
+        if platform != "windows":
+            self._set_python_default_unix(version, python_path, scope)
+            return
+
+        python_dir = os.path.normpath(os.path.dirname(python_path))
+        scripts_dir = os.path.join(python_dir, "Scripts")
+
+        scope_label = "User" if scope == "user" else "System"
+
+        # Read both PATHs
+        try:
+            user_path = subprocess.run(
+                ["powershell", "-NoProfile", "-Command",
+                 "[Environment]::GetEnvironmentVariable('Path', 'User')"],
+                capture_output=True, text=True, timeout=10, **subprocess_args()
+            ).stdout.strip() or ""
+
+            system_path = subprocess.run(
+                ["powershell", "-NoProfile", "-Command",
+                 "[Environment]::GetEnvironmentVariable('Path', 'Machine')"],
+                capture_output=True, text=True, timeout=10, **subprocess_args()
+            ).stdout.strip() or ""
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to read PATH:\n{e}")
+            return
+
+        # Find ALL Python dirs in a PATH string (excluding our target)
+        def find_python_dirs(path_str, exclude_dirs):
+            """Find PATH entries that belong to OTHER Python installations.
+            ONLY removes dirs where python.exe exists directly,
+            or Scripts dirs whose PARENT contains python.exe AND pip.exe.
+            Never touches non-Python dirs like winget, oh-my-posh, etc.
+            """
+            exclude_set = {os.path.normcase(d.rstrip("\\")) for d in exclude_dirs}
+            found = []
+            for p in path_str.split(";"):
+                p = p.strip()
+                if not p:
+                    continue
+                p_norm = os.path.normcase(p.rstrip("\\"))
+                if p_norm in exclude_set:
+                    continue
+                # Must have python.exe directly in this dir
+                if os.path.exists(os.path.join(p, "python.exe")):
+                    found.append(p)
+                    continue
+                # Scripts dir — ONLY if parent has BOTH python.exe AND pip.exe
+                if os.path.basename(p).lower() == "scripts":
+                    parent = os.path.dirname(p)
+                    has_python = os.path.exists(os.path.join(parent, "python.exe"))
+                    has_pip = os.path.exists(os.path.join(p, "pip.exe"))
+                    if has_python and has_pip:
+                        found.append(p)
+            return found
+
+        target_dirs = [python_dir, scripts_dir]
+        other_in_user = find_python_dirs(user_path, target_dirs)
+        other_in_system = find_python_dirs(system_path, target_dirs)
+
+        # Build confirmation message
+        changes = [f"✅ Add to {scope_label} PATH:\n   📂 {python_dir}\n   📂 {scripts_dir}"]
+
+        if other_in_user:
+            changes.append("🗑️ Remove from User PATH:\n" +
+                          "\n".join(f"   ❌ {p}" for p in other_in_user))
+        if other_in_system:
+            changes.append("🗑️ Remove from System PATH:\n" +
+                          "\n".join(f"   ❌ {p}" for p in other_in_system))
+
+        needs_admin = scope == "system" or bool(other_in_system)
+        admin_note = "\n\n🔒 Admin permission required." if needs_admin else ""
+
+        confirm = QMessageBox.question(
+            self, f"Set {scope_label} Default",
+            f"Set Python {version} as {scope_label} default?\n\n" +
+            "\n\n".join(changes) + admin_note,
+            QMessageBox.Yes | QMessageBox.No
+        )
+        if confirm != QMessageBox.Yes:
+            return
+
+        # Build set of ALL dirs to remove (+ their Scripts counterparts)
+        all_remove = set()
+        for p in other_in_user + other_in_system:
+            norm = os.path.normcase(p.rstrip("\\"))
+            all_remove.add(norm)
+            all_remove.add(os.path.normcase(os.path.join(p, "Scripts").rstrip("\\")))
+            if os.path.basename(p).lower() == "scripts":
+                all_remove.add(os.path.normcase(os.path.dirname(p).rstrip("\\")))
+
+        # Also include target dirs in removal filter (we re-add them at top)
+        all_remove.add(os.path.normcase(python_dir.rstrip("\\")))
+        all_remove.add(os.path.normcase(scripts_dir.rstrip("\\")))
+
+        def build_ps_filter(dirs):
+            conds = []
+            for d in sorted(dirs):
+                escaped = d.replace("'", "''")
+                conds.append(f"($lower -ne '{escaped}')")
+            return " -and ".join(conds) if conds else "$true"
+
+        result_file = os.path.join(tempfile.gettempdir(), "_venvstudio_path_result.txt")
+
+        # SAFE approach: only PREPEND selected Python to PATH — never delete anything else
+        # This avoids accidentally removing winget, oh-my-posh, or other tools from PATH.
+        # Users with multiple Python versions can use `py -3.x` launcher to choose.
+        if scope == "user":
+            ps_script = f'''
+try {{
+    # Remove only the exact target Python dirs from User PATH (to avoid duplicates), then prepend
+    $uPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    $uParts = ($uPath -split ';') | Where-Object {{ $_.Trim() -ne '' }} | Where-Object {{
+        $lower = $_.ToLower().TrimEnd('\\')
+        ($lower -ne '{python_dir.lower()}') -and ($lower -ne '{scripts_dir.lower()}')
+    }}
+    $newUser = ('{python_dir};{scripts_dir};' + ($uParts -join ';'))
+    [Environment]::SetEnvironmentVariable('Path', $newUser, 'User')
+
+    'OK' | Out-File -FilePath '{result_file}' -Encoding utf8
+}} catch {{
+    $_.Exception.Message | Out-File -FilePath '{result_file}' -Encoding utf8
+}}
+'''
+        else:  # system
+            ps_script = f'''
+try {{
+    # Remove only the exact target Python dirs from System PATH (to avoid duplicates), then prepend
+    $sPath = [Environment]::GetEnvironmentVariable('Path', 'Machine')
+    $sParts = ($sPath -split ';') | Where-Object {{ $_.Trim() -ne '' }} | Where-Object {{
+        $lower = $_.ToLower().TrimEnd('\\')
+        ($lower -ne '{python_dir.lower()}') -and ($lower -ne '{scripts_dir.lower()}')
+    }}
+    $newSys = ('{python_dir};{scripts_dir};' + ($sParts -join ';'))
+    [Environment]::SetEnvironmentVariable('Path', $newSys, 'Machine')
+
+    'OK' | Out-File -FilePath '{result_file}' -Encoding utf8
+}} catch {{
+    $_.Exception.Message | Out-File -FilePath '{result_file}' -Encoding utf8
+}}
+'''
+
+        # Write and execute
+        ps_file = os.path.join(tempfile.gettempdir(), "_venvstudio_set_path.ps1")
+        with open(ps_file, 'w', encoding='utf-8') as f:
+            f.write(ps_script)
+
+        if os.path.exists(result_file):
+            os.unlink(result_file)
+
+        try:
+            if needs_admin:
+                subprocess.run(
+                    [
+                        "powershell", "-NoProfile", "-Command",
+                        f"Start-Process -FilePath 'powershell.exe' "
+                        f"-ArgumentList '-NoProfile','-ExecutionPolicy','Bypass','-File','\"{ps_file}\"' "
+                        f"-Verb RunAs -Wait"
+                    ],
+                    capture_output=True, text=True, timeout=120,
+                    **subprocess_args()
+                )
+            else:
+                subprocess.run(
+                    ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                     "-File", ps_file],
+                    capture_output=True, text=True, timeout=30,
+                    **subprocess_args()
+                )
+
+            import time
+            time.sleep(1)
+
+            success = False
+            if os.path.exists(result_file):
+                with open(result_file, 'r', encoding='utf-8-sig') as f:  # utf-8-sig strips BOM
+                    result_text = f.read().strip()
+                if "OK" in result_text:
+                    success = True
+                else:
+                    raise RuntimeError(result_text)
+
+            if not success:
+                target_scope_name = 'Machine' if scope == 'system' else 'User'
+                verify = subprocess.run(
+                    ["powershell", "-NoProfile", "-Command",
+                     f"[Environment]::GetEnvironmentVariable('Path', '{target_scope_name}')"],
+                    capture_output=True, text=True, timeout=10,
+                    **subprocess_args()
+                )
+                if python_dir.lower() in verify.stdout.strip().lower():
+                    success = True
+
+            if success:
+                # Verify pip.exe actually exists in Scripts dir
+                pip_exe = os.path.join(scripts_dir, "pip.exe")
+                pip_status = ""
+                if not os.path.isfile(pip_exe):
+                    pip_status = (
+                        f"\n\n⚠️ pip.exe not found in Scripts folder!\n"
+                        f"   Run: python -m pip install --upgrade pip\n"
+                        f"   (in an admin terminal)"
+                    )
+                else:
+                    pip_status = f"\n\n✅ pip.exe found in Scripts folder."
+
+                QMessageBox.information(
+                    self, "✅ Success",
+                    f"Python {version} is now the {scope_label} default!\n\n"
+                    f"📂 Added to PATH:\n"
+                    f"   {python_dir}\n"
+                    f"   {scripts_dir}"
+                    f"{pip_status}\n\n"
+                    f"Open a new terminal and type:\n"
+                    f"  python --version\n"
+                    f"  pip --version"
+                )
+                self.config.set("system_default_python", python_path)
+                # Save as system default so _scan_pythons shows correct Source
+                self.config.set("system_default_python", python_path)
+                self._scan_pythons()
+            else:
+                QMessageBox.warning(
+                    self, "⚠️ Partial",
+                    f"Could not verify the change.\n"
+                    f"Admin permission may have been denied.\n\n"
+                    f"Check Environment Variables manually."
+                )
+                self._scan_pythons()
+
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to update PATH:\n{e}")
+        finally:
+            for fp in [ps_file, result_file]:
+                try:
+                    os.unlink(fp)
+                except Exception:
+                    pass
+
+    def _download_python(self):
+        """Open dialog to download a standalone Python version."""
+        dlg = PythonDownloadDialog(self)
+        if dlg.exec() == QDialog.Accepted:
+            self._scan_pythons()
+
+    def _browse_venv_dir(self):
+        """Browse for environment base directory."""
+        directory = QFileDialog.getExistingDirectory(
+            self, "Select Base Directory for Environments",
+            self.venv_dir_input.text(),
+        )
+        if directory:
+            self.venv_dir_input.setText(directory)
+
+    def _reset_venv_dir(self):
+        """Reset venv directory to default."""
+        from src.utils.platform_utils import get_default_venv_base_dir
+        self.venv_dir_input.setText(str(get_default_venv_base_dir()))
+
+    def _set_vscode_interpreter(self):
+        """Set VS Code python interpreter path for the selected env."""
+        env_path = self.vscode_env_combo.currentData()
+        if not env_path:
+            QMessageBox.warning(self, tr("warning"), "Please select an environment first.")
+            return
+
+        from src.utils.platform_utils import get_python_executable
+        python_exe = get_python_executable(Path(env_path))
+
+        import os
+        norm_path = os.path.normpath(str(python_exe))
+
+        # Try to write .vscode/settings.json in current working directory
+        vscode_dir = Path.cwd() / ".vscode"
+        vscode_dir.mkdir(exist_ok=True)
+        settings_file = vscode_dir / "settings.json"
+
+        import json
+        settings = {}
+        if settings_file.exists():
+            try:
+                with open(settings_file, "r", encoding="utf-8") as f:
+                    settings = json.load(f)
+            except Exception:
+                settings = {}
+
+        settings["python.defaultInterpreterPath"] = norm_path
+
+        try:
+            with open(settings_file, "w", encoding="utf-8") as f:
+                json.dump(settings, f, indent=4, ensure_ascii=False)
+
+            QMessageBox.information(
+                self, tr("success"),
+                f"VS Code interpreter set to:\n{norm_path}\n\n"
+                f"Settings written to:\n{settings_file}\n\n"
+                f"Tip: Install the 'Python' extension in VS Code if not already installed."
+            )
+        except Exception as e:
+            QMessageBox.critical(self, tr("error"), f"Failed to write VS Code settings:\n{e}")
+
+    def _get_all_categories(self):
+        """Get built-in + custom category names."""
+        from src.utils.constants import PACKAGE_CATALOG
+        cats = list(PACKAGE_CATALOG.keys())
+        custom_cats = self.config.get("custom_categories", [])
+        for c in custom_cats:
+            name = c.get("name", "")
+            if name:
+                icon = c.get("icon", "⭐")
+                full = f"{icon} {name}"
+                if full not in cats:
+                    cats.append(full)
+        # Always include ⭐ Custom as fallback
+        if "⭐ Custom" not in cats:
+            cats.append("⭐ Custom")
+        return cats
+
+    def _toggle_builtin_presets(self, visible: bool):
+        self.builtin_presets_table.setVisible(visible)
+
+    def _load_custom_presets(self):
+        """Load custom presets from config into table."""
+        presets = self.config.get("custom_presets", {})
+        self.custom_presets_table.setRowCount(0)
+        for name, pkgs in presets.items():
+            row = self.custom_presets_table.rowCount()
+            self.custom_presets_table.insertRow(row)
+            self.custom_presets_table.setItem(row, 0, QTableWidgetItem(name))
+            self.custom_presets_table.setItem(row, 1, QTableWidgetItem(", ".join(pkgs)))
+
+    def _save_custom_presets(self):
+        """Save custom presets from table to config."""
+        presets = {}
+        for row in range(self.custom_presets_table.rowCount()):
+            name_item = self.custom_presets_table.item(row, 0)
+            pkgs_item = self.custom_presets_table.item(row, 1)
+            if name_item and pkgs_item:
+                name = name_item.text().strip()
+                pkgs = [p.strip() for p in pkgs_item.text().split(",") if p.strip()]
+                if name and pkgs:
+                    presets[name] = pkgs
+        self.config.set("custom_presets", presets)
+
+    def _add_custom_preset(self):
+        """Add a new custom preset."""
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLineEdit, QTextEdit
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Add Custom Preset")
+        dialog.setMinimumWidth(480)
+        layout = QFormLayout(dialog)
+
+        name_edit = QLineEdit()
+        name_edit.setPlaceholderText("e.g. 🚀 My Stack")
+        pkgs_edit = QLineEdit()
+        pkgs_edit.setPlaceholderText("e.g. numpy, pandas, matplotlib, scikit-learn")
+
+        hint = QLabel("Separate package names with commas.")
+        hint.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        layout.addRow("Preset Name:", name_edit)
+        layout.addRow("Packages:", pkgs_edit)
+        layout.addRow(hint)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(dialog.accept)
+        btns.rejected.connect(dialog.reject)
+        layout.addRow(btns)
+
+        if dialog.exec() == QDialog.Accepted:
+            name = name_edit.text().strip()
+            pkgs_raw = pkgs_edit.text().strip()
+            if name and pkgs_raw:
+                pkgs = [p.strip() for p in pkgs_raw.split(",") if p.strip()]
+                row = self.custom_presets_table.rowCount()
+                self.custom_presets_table.insertRow(row)
+                self.custom_presets_table.setItem(row, 0, QTableWidgetItem(name))
+                self.custom_presets_table.setItem(row, 1, QTableWidgetItem(", ".join(pkgs)))
+
+    def _edit_custom_preset(self):
+        """Edit selected custom preset."""
+        from PySide6.QtWidgets import QDialog, QDialogButtonBox, QFormLayout, QLineEdit
+        row = self.custom_presets_table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Edit", "Please select a preset to edit.")
+            return
+        old_name = self.custom_presets_table.item(row, 0).text()
+        old_pkgs = self.custom_presets_table.item(row, 1).text()
+
+        dialog = QDialog(self)
+        dialog.setWindowTitle("Edit Custom Preset")
+        dialog.setMinimumWidth(480)
+        layout = QFormLayout(dialog)
+
+        name_edit = QLineEdit(old_name)
+        pkgs_edit = QLineEdit(old_pkgs)
+        hint = QLabel("Separate package names with commas.")
+        hint.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        layout.addRow("Preset Name:", name_edit)
+        layout.addRow("Packages:", pkgs_edit)
+        layout.addRow(hint)
+
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(dialog.accept)
+        btns.rejected.connect(dialog.reject)
+        layout.addRow(btns)
+
+        if dialog.exec() == QDialog.Accepted:
+            name = name_edit.text().strip()
+            pkgs_raw = pkgs_edit.text().strip()
+            if name and pkgs_raw:
+                self.custom_presets_table.setItem(row, 0, QTableWidgetItem(name))
+                self.custom_presets_table.setItem(row, 1, QTableWidgetItem(pkgs_raw))
+
+    def _remove_custom_preset(self):
+        """Remove selected custom preset."""
+        row = self.custom_presets_table.currentRow()
+        if row < 0:
+            QMessageBox.information(self, "Remove", "Please select a preset to remove.")
+            return
+        name = self.custom_presets_table.item(row, 0).text()
+        reply = QMessageBox.question(self, "Remove Preset",
+            f"Remove preset '{name}'?", QMessageBox.Yes | QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            self.custom_presets_table.removeRow(row)
+
+    def _load_custom_categories(self):
+        """Load custom categories from config."""
+        custom_cats = self.config.get("custom_categories", [])
+        self.custom_categories_list.setRowCount(len(custom_cats))
+        for i, c in enumerate(custom_cats):
+            self.custom_categories_list.setItem(i, 0, QTableWidgetItem(c.get("icon", "⭐")))
+            self.custom_categories_list.setItem(i, 1, QTableWidgetItem(c.get("name", "")))
+
+    def _save_custom_categories(self):
+        """Save custom categories to config."""
+        self.custom_categories_list.setCurrentItem(None)
+        cats = []
+        for row in range(self.custom_categories_list.rowCount()):
+            icon_item = self.custom_categories_list.item(row, 0)
+            name_item = self.custom_categories_list.item(row, 1)
+            icon = icon_item.text().strip() if icon_item else "⭐"
+            name = name_item.text().strip() if name_item else ""
+            if name:
+                cats.append({"icon": icon or "⭐", "name": name})
+        self.config.set("custom_categories", cats)
+
+    def _add_custom_category(self):
+        """Add a new custom category."""
+        row = self.custom_categories_list.rowCount()
+        self.custom_categories_list.insertRow(row)
+        self.custom_categories_list.setItem(row, 0, QTableWidgetItem("⭐"))
+        self.custom_categories_list.setItem(row, 1, QTableWidgetItem(""))
+        self.custom_categories_list.editItem(self.custom_categories_list.item(row, 1))
+
+    def _remove_custom_category(self):
+        """Remove selected custom category."""
+        row = self.custom_categories_list.currentRow()
+        if row >= 0:
+            self.custom_categories_list.removeRow(row)
+            self._save_custom_categories()
+        else:
+            QMessageBox.information(self, "Info", "Select a category to remove.")
+
+    def _make_category_combo(self, current_value="⭐ Custom"):
+        """Create a category dropdown for catalog table."""
+        combo = QComboBox()
+        combo.setStyleSheet(
+            "background-color: #313244; color: #cdd6f4; border: 1px solid #585b70; "
+            "padding: 3px; font-size: 12px;"
+        )
+        categories = self._get_all_categories()
+        for cat in categories:
+            combo.addItem(cat)
+        # Set current
+        idx = combo.findText(current_value)
+        if idx >= 0:
+            combo.setCurrentIndex(idx)
+        else:
+            combo.addItem(current_value)
+            combo.setCurrentIndex(combo.count() - 1)
+        return combo
+
+    def _load_custom_catalog(self):
+        """Load custom catalog packages from config into the table."""
+        custom_pkgs = self.config.get("custom_catalog", [])
+        print(f"[DEBUG] Loading custom catalog: {custom_pkgs}")
+        self.custom_catalog_table.setRowCount(len(custom_pkgs))
+        for i, pkg in enumerate(custom_pkgs):
+            self.custom_catalog_table.setItem(i, 0, QTableWidgetItem(pkg.get("name", "")))
+            self.custom_catalog_table.setItem(i, 1, QTableWidgetItem(pkg.get("desc", "")))
+            # Category as dropdown
+            cat_combo = self._make_category_combo(pkg.get("category", "⭐ Custom"))
+            self.custom_catalog_table.setCellWidget(i, 2, cat_combo)
+
+    def _add_custom_catalog_pkg(self):
+        """Add a new custom catalog package row."""
+        row = self.custom_catalog_table.rowCount()
+        self.custom_catalog_table.insertRow(row)
+        self.custom_catalog_table.setItem(row, 0, QTableWidgetItem(""))
+        self.custom_catalog_table.setItem(row, 1, QTableWidgetItem(""))
+        cat_combo = self._make_category_combo("⭐ Custom")
+        self.custom_catalog_table.setCellWidget(row, 2, cat_combo)
+        self.custom_catalog_table.editItem(self.custom_catalog_table.item(row, 0))
+
+    def _remove_custom_catalog_pkg(self):
+        """Remove selected custom catalog package."""
+        rows = self.custom_catalog_table.selectionModel().selectedRows()
+        if rows:
+            for r in sorted([r.row() for r in rows], reverse=True):
+                self.custom_catalog_table.removeRow(r)
+        else:
+            row = self.custom_catalog_table.currentRow()
+            if row >= 0:
+                self.custom_catalog_table.removeRow(row)
+            else:
+                QMessageBox.information(self, "Info", "Select a row to remove.")
+                return
+        self._save_custom_catalog()
+
+    def _save_custom_catalog(self):
+        """Save custom catalog table to config."""
+        self.custom_catalog_table.setCurrentItem(None)
+
+        pkgs = []
+        for row in range(self.custom_catalog_table.rowCount()):
+            name_item = self.custom_catalog_table.item(row, 0)
+            desc_item = self.custom_catalog_table.item(row, 1)
+            cat_widget = self.custom_catalog_table.cellWidget(row, 2)
+            name = name_item.text().strip() if name_item else ""
+            desc = desc_item.text().strip() if desc_item else ""
+            if isinstance(cat_widget, QComboBox):
+                cat = cat_widget.currentText()
+            else:
+                cat_item = self.custom_catalog_table.item(row, 2)
+                cat = cat_item.text().strip() if cat_item else "⭐ Custom"
+            if name or desc:
+                pkgs.append({
+                    "name": name,
+                    "desc": desc,
+                    "category": cat if cat else "⭐ Custom",
+                })
+        print(f"[DEBUG] Saving custom catalog: {pkgs}")
+        self.config.set("custom_catalog", pkgs)
+        verify = self.config.get("custom_catalog", [])
+        print(f"[DEBUG] Verify after save: {verify}")
+
+    def _open_log_folder(self):
+        """Open the log directory in file manager."""
+        import subprocess
+        from pathlib import Path
+        # Try to get log dir from logger module, fall back to known path
+        try:
+            from src.utils.logger import get_log_dir
+            log_dir = get_log_dir()
+        except ImportError:
+            import os
+            log_dir = Path(os.environ.get("APPDATA", "~")) / "VenvStudio" / "logs"
+            log_dir = log_dir.expanduser()
+        log_dir.mkdir(parents=True, exist_ok=True)
+        if get_platform() == "windows":
+            os.startfile(str(log_dir))
+        elif get_platform() == "macos":
+            subprocess.Popen(["open", str(log_dir)])
+        else:
+            subprocess.Popen(["xdg-open", str(log_dir)])
+
+    def _open_config_folder(self):
+        """Open the config directory in file manager."""
+        import subprocess
+        config_dir = self.config.config_file_path.parent
+        if get_platform() == "windows":
+            os.startfile(str(config_dir))
+        elif get_platform() == "macos":
+            subprocess.Popen(["open", str(config_dir)])
+        else:
+            subprocess.Popen(["xdg-open", str(config_dir)])
+
+    def _add_python_to_path(self):
+        """Add a Python installation to system PATH automatically."""
+        import subprocess
+
+        platform = get_platform()
+
+        # Collect all known Python paths from table
+        python_paths = []
+        for row in range(self.python_table.rowCount()):
+            path_item = self.python_table.item(row, 1)
+            ver_item = self.python_table.item(row, 0)
+            if path_item and ver_item:
+                exe_path = path_item.text()
+                python_paths.append({
+                    "version": ver_item.text(),
+                    "exe": exe_path,
+                    "folder": os.path.dirname(exe_path),
+                })
+
+        if not python_paths:
+            QMessageBox.warning(self, "Warning", "No Python installations found. Run Scan System first.")
+            return
+
+        # Let user choose which one
+        items = [f"Python {p['version']}  —  {p['folder']}" for p in python_paths]
+        item, ok = QInputDialog.getItem(
+            self, "Add Python to PATH",
+            "Select which Python to add to PATH:",
+            items, 0, False,
+        )
+        if not ok or not item:
+            return
+
+        selected = python_paths[items.index(item)]
+        folder = selected['folder']
+        version = selected['version']
+
+        if platform == "windows":
+            scripts = os.path.join(folder, "Scripts")
+            reply = QMessageBox.question(
+                self, "Confirm",
+                f"Add to User PATH?\n\n  {folder}\n  {scripts}\n\n"
+                f"A terminal restart may be needed.",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+
+            ps_cmd = (
+                f'$userPath = [Environment]::GetEnvironmentVariable("Path", "User"); '
+                f'$newPaths = @("{folder}", "{scripts}"); '
+                f'foreach ($p in $newPaths) {{ '
+                f'  if ($userPath -notlike "*$p*") {{ '
+                f'    $userPath = "$userPath;$p" '
+                f'  }} '
+                f'}}; '
+                f'[Environment]::SetEnvironmentVariable("Path", $userPath, "User")'
+            )
+            try:
+                result = subprocess.run(
+                    ["powershell", "-Command", ps_cmd],
+                    **subprocess_args(capture_output=True, text=True, timeout=15)
+                )
+                if result.returncode == 0:
+                    QMessageBox.information(
+                        self, "✅ Success",
+                        f"Python {version} added to User PATH!\n\n"
+                        f"  {folder}\n  {scripts}\n\n"
+                        f"Restart your terminal for the change to take effect."
+                    )
+                else:
+                    QMessageBox.critical(self, "Error", f"Failed to update PATH:\n{result.stderr}")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to run PowerShell:\n{e}")
+
+        else:
+            # Linux / macOS — write export line to shell config files
+            export_line = f'export PATH="{folder}:$PATH"'
+
+            # Detect shell config files
+            home = Path.home()
+            candidates = [home / ".bashrc", home / ".bash_profile", home / ".zshrc", home / ".profile"]
+            existing = [str(p) for p in candidates if p.exists()]
+
+            if not existing:
+                existing = [str(home / ".bashrc")]  # fallback: create .bashrc
+
+            # Let user pick which file
+            file_choice, ok = QInputDialog.getItem(
+                self, "Select Shell Config",
+                f"Add  {export_line}  to which file?",
+                existing, 0, False,
+            )
+            if not ok or not file_choice:
+                return
+
+            reply = QMessageBox.question(
+                self, "Confirm",
+                f"Append to {file_choice}:\n\n  {export_line}\n\n"
+                f"Run  source {file_choice}  or restart terminal after.",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+
+            try:
+                config_file = Path(file_choice)
+                existing_text = config_file.read_text(encoding="utf-8") if config_file.exists() else ""
+
+                # Check if already present
+                if folder in existing_text:
+                    QMessageBox.information(
+                        self, "Already in PATH",
+                        f"{folder} is already in {file_choice}.\nNo changes made."
+                    )
+                    return
+
+                with open(config_file, "a", encoding="utf-8") as f:
+                    f.write(f"\n# Added by VenvStudio\n{export_line}\n")
+
+                QMessageBox.information(
+                    self, "✅ Success",
+                    f"Added to {file_choice}:\n\n  {export_line}\n\n"
+                    f"Run the following to apply now:\n"
+                    f"  source {file_choice}"
+                )
+            except PermissionError:
+                # Try pkexec as fallback
+                import tempfile
+                script = f'#!/bin/bash\necho "\n# Added by VenvStudio\n{export_line}" >> "{file_choice}"\n'
+                with tempfile.NamedTemporaryFile("w", suffix=".sh", delete=False) as tmp:
+                    tmp.write(script)
+                    tmp_path = tmp.name
+                os.chmod(tmp_path, 0o755)
+                try:
+                    result = subprocess.run(["pkexec", "bash", tmp_path], timeout=30)
+                    if result.returncode == 0:
+                        QMessageBox.information(self, "✅ Success", f"Added to {file_choice} (admin).\n\nRun: source {file_choice}")
+                    else:
+                        QMessageBox.critical(self, "Error", f"pkexec failed. Try manually:\n  {export_line} >> {file_choice}")
+                finally:
+                    try:
+                        os.unlink(tmp_path)
+                    except Exception:
+                        pass
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed to write to {file_choice}:\n{e}")
+
+    def _toggle_vs_cli(self):
+        """Copy vs.bat/vs.py to venv base dir and add that dir to User PATH."""
+        import shutil, subprocess
+
+        venv_dir = str(self.config.get_venv_base_dir())
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        project_root = os.path.dirname(project_root)  # up to VenvStudio root
+
+        vs_py_src = os.path.join(project_root, "vs.py")
+        vs_bat_src = os.path.join(project_root, "vs.bat")
+
+        if not os.path.isfile(vs_py_src):
+            QMessageBox.critical(self, "Error", f"vs.py not found at:\n{vs_py_src}")
+            return
+
+        # Copy vs.py and vs.bat to venv base dir
+        vs_py_dst = os.path.join(venv_dir, "vs.py")
+        vs_bat_dst = os.path.join(venv_dir, "vs.bat")
+
+        try:
+            shutil.copy2(vs_py_src, vs_py_dst)
+            if os.path.isfile(vs_bat_src):
+                shutil.copy2(vs_bat_src, vs_bat_dst)
+            else:
+                # Create vs.bat pointing to vs.py in same dir
+                with open(vs_bat_dst, "w") as f:
+                    f.write(f'@echo off\npython "%~dp0vs.py" %*\n')
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to copy CLI files:\n{e}")
+            return
+
+        if get_platform() == "windows":
+            # Check if already in PATH
+            ps_check = (
+                f'$p = [Environment]::GetEnvironmentVariable("Path", "User"); '
+                f'$p -like "*{venv_dir}*"'
+            )
+            result = subprocess.run(
+                ["powershell", "-Command", ps_check],
+                **subprocess_args(capture_output=True, text=True, timeout=10)
+            )
+            already_in = "True" in result.stdout
+
+            if already_in:
+                QMessageBox.information(
+                    self, "Already Active",
+                    f"'vs' CLI is already active!\n\n"
+                    f"Directory: {venv_dir}\n\n"
+                    f"Usage:\n  vs list\n  vs create myenv\n  vs install myenv numpy"
+                )
+                return
+
+            reply = QMessageBox.question(
+                self, "Enable 'vs' CLI",
+                f"This will:\n\n"
+                f"1. Copy vs.py & vs.bat to:\n   {venv_dir}\n\n"
+                f"2. Add that folder to your User PATH\n\n"
+                f"After this you can use 'vs' from any terminal:\n"
+                f"  vs list\n  vs create myenv\n  vs install myenv numpy\n\n"
+                f"Continue?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+
+            ps_cmd = (
+                f'$userPath = [Environment]::GetEnvironmentVariable("Path", "User"); '
+                f'if ($userPath -notlike "*{venv_dir}*") {{ '
+                f'  [Environment]::SetEnvironmentVariable("Path", "$userPath;{venv_dir}", "User") '
+                f'}}; '
+            )
+            try:
+                result = subprocess.run(
+                    ["powershell", "-Command", ps_cmd],
+                    **subprocess_args(capture_output=True, text=True, timeout=15)
+                )
+                if result.returncode == 0:
+                    self.config.set("vs_cli_enabled", True)
+                    QMessageBox.information(
+                        self, "Success",
+                        f"'vs' CLI enabled! ✅\n\n"
+                        f"PATH added: {venv_dir}\n\n"
+                        f"Restart your terminal, then try:\n"
+                        f"  vs list\n  vs create myenv\n  vs install myenv numpy pandas"
+                    )
+                else:
+                    QMessageBox.critical(self, "Error", f"Failed:\n{result.stderr}")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Failed:\n{e}")
+        else:
+            self.config.set("vs_cli_enabled", True)
+            QMessageBox.information(
+                self, "Enable 'vs' CLI",
+                f"Files copied to: {venv_dir}\n\n"
+                f"Add to ~/.bashrc or ~/.zshrc:\n"
+                f'  export PATH="{venv_dir}:$PATH"\n\n'
+                f"Then: source ~/.bashrc"
+            )
+
+    def _clear_all_data(self):
+        """Remove all config, log, and cache files."""
+        import shutil
+        reply = QMessageBox.warning(
+            self, "Remove All Data",
+            "This will delete ALL VenvStudio settings, logs, and cache.\n\n"
+            "Your virtual environments will NOT be deleted.\n\n"
+            "The application will close. Are you sure?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        config_dir = self.config.config_file_path.parent
+        try:
+            # Remove config directory
+            if config_dir.exists():
+                shutil.rmtree(str(config_dir))
+            QMessageBox.information(
+                self, "Done",
+                f"All data removed from:\n{config_dir}\n\nApplication will now close."
+            )
+            from PySide6.QtWidgets import QApplication
+            QApplication.instance().quit()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to remove data:\n{e}")
+
+    def populate_vscode_envs(self, env_list):
+        """Populate VS Code env selector from main window."""
+        self.vscode_env_combo.blockSignals(True)
+        self.vscode_env_combo.clear()
+        self.vscode_env_combo.addItem("-- Select Environment --", "")
+        for name, path in env_list:
+            self.vscode_env_combo.addItem(name, str(path))
+        self.vscode_env_combo.blockSignals(False)
+
+    def _toggle_builtin_categories(self, visible):
+        """Show/hide built-in categories table."""
+        self.builtin_cats_table.setVisible(visible)
+
+    def _check_for_updates(self):
+        """Check PyPI for new version."""
+        self.update_status_label.setText("🔍 Checking...")
+        self.update_status_label.setStyleSheet("color: #a6adc8; font-size: 12px;")
+
+        # Run in background thread
+        self._update_worker = _UpdateCheckWorker(parent=self)
+        self._update_worker.finished.connect(self._on_update_check_done)
+        self._update_worker.start()
+
+    def _on_update_check_done(self, result):
+        """Handle update check result."""
+        if result.get("error"):
+            self.update_status_label.setText(f"⚠️ {result['error']}")
+            self.update_status_label.setStyleSheet("color: #f9e2af; font-size: 12px;")
+            return
+
+        if result["update_available"]:
+            self.update_status_label.setText(
+                f"🆕 New version available: v{result['latest_version']} (current: v{result['current_version']})"
+            )
+            self.update_status_label.setStyleSheet("color: #a6e3a1; font-size: 12px;")
+
+            reply = QMessageBox.question(
+                self, "🆕 Update Available",
+                f"VenvStudio v{result['latest_version']} is available!\n"
+                f"You have v{result['current_version']}.\n\n"
+                f"Update with:\n  pip install --upgrade venvstudio\n\n"
+                f"Or download from GitHub Releases.\n\n"
+                f"Open download page?",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply == QMessageBox.Yes:
+                import webbrowser
+                webbrowser.open(result["release_url"])
+        else:
+            self.update_status_label.setText(
+                f"✅ You're up to date! (v{result['current_version']})"
+            )
+            self.update_status_label.setStyleSheet("color: #a6e3a1; font-size: 12px;")
+
+    def _export_settings(self):
+        """Export settings to a JSON file."""
+        import json
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, "Export Settings", "venvstudio_settings.json",
+            "JSON Files (*.json);;All Files (*)"
+        )
+        if not filepath:
+            return
+        try:
+            # Read current config file
+            config_path = self.config.config_file_path
+            with open(config_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            with open(filepath, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            QMessageBox.information(self, "Success", f"Settings exported to:\n{filepath}")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to export:\n{e}")
+
+    def _import_settings(self):
+        """Import settings from a JSON file."""
+        import json
+        filepath, _ = QFileDialog.getOpenFileName(
+            self, "Import Settings", "",
+            "JSON Files (*.json);;All Files (*)"
+        )
+        if not filepath:
+            return
+        reply = QMessageBox.question(
+            self, "Import Settings",
+            "This will overwrite your current settings.\n\nContinue?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+        try:
+            with open(filepath, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            # Write to config
+            config_path = self.config.config_file_path
+            with open(config_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            self.config.load()
+            self._load_current_settings()
+            QMessageBox.information(self, "Success", "Settings imported! Some changes may need a restart.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to import:\n{e}")
+
+    # ── Environment Export (from Settings page) ──
+
+    def _pick_env_and_freeze(self):
+        """Let user pick an environment, return (freeze_text, python_version) or (None, None)."""
+        import subprocess
+        from src.core.venv_manager import VenvManager
+        from src.core.pip_manager import PipManager
+        from src.utils.platform_utils import get_python_executable, subprocess_args
+
+        vm = VenvManager(Path(self.config.get_venv_base_dir()))
+        envs = vm.list_venvs()
+        if not envs:
+            QMessageBox.warning(self, "Warning", "No environments found.")
+            return None, None
+
+        env_names = [e.name for e in envs]
+        name, ok = QInputDialog.getItem(
+            self, "Select Environment",
+            "Choose an environment to export:", env_names, 0, False
+        )
+        if not ok or not name:
+            return None, None
+
+        venv_path = vm.base_dir / name
+        pm = PipManager(venv_path)
+        freeze = pm.freeze()
+        if not freeze:
+            QMessageBox.warning(self, "Warning", f"No packages in '{name}'.")
+            return None, None
+
+        py_ver = "3.12"
+        try:
+            exe = get_python_executable(venv_path)
+            result = subprocess.run(
+                [str(exe), "--version"],
+                capture_output=True, text=True, timeout=10, **subprocess_args()
+            )
+            ver = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
+            py_ver = ".".join(ver.split(".")[:2])
+        except Exception:
+            pass
+        return freeze, py_ver
+
+    def _export_env_requirements(self):
+        freeze, _ = self._pick_env_and_freeze()
+        if not freeze:
+            return
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, "Export requirements.txt", "requirements.txt", "Text Files (*.txt)"
+        )
+        if filepath:
+            try:
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(freeze)
+                QMessageBox.information(self, "✅ Success", f"Exported to:\n{filepath}")
+            except IOError as e:
+                QMessageBox.critical(self, "Error", str(e))
+
+    def _export_env_dockerfile(self):
+        freeze, py_ver = self._pick_env_and_freeze()
+        if not freeze:
+            return
+        dockerfile = (
+            f"# Auto-generated by VenvStudio\n"
+            f"FROM python:{py_ver}-slim\nWORKDIR /app\n\n"
+            f"COPY requirements.txt .\n"
+            f"RUN pip install --no-cache-dir -r requirements.txt\n\n"
+            f"COPY . .\n# CMD [\"python\", \"main.py\"]\n"
+        )
+        filepath, _ = QFileDialog.getSaveFileName(self, "Export Dockerfile", "Dockerfile", "All Files (*)")
+        if filepath:
+            req_path = Path(filepath).parent / "requirements.txt"
+            try:
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(dockerfile)
+                with open(req_path, "w", encoding="utf-8") as f:
+                    f.write(freeze)
+                QMessageBox.information(self, "✅ Success", f"Exported:\n  {filepath}\n  {req_path}")
+            except IOError as e:
+                QMessageBox.critical(self, "Error", str(e))
+
+    def _export_env_docker_compose(self):
+        freeze, py_ver = self._pick_env_and_freeze()
+        if not freeze:
+            return
+        compose = (
+            f"version: '3.8'\nservices:\n  app:\n    build: .\n"
+            f"    ports:\n      - \"8000:8000\"\n    volumes:\n      - .:/app\n"
+        )
+        dockerfile = (
+            f"FROM python:{py_ver}-slim\nWORKDIR /app\n"
+            f"COPY requirements.txt .\nRUN pip install --no-cache-dir -r requirements.txt\n"
+            f"COPY . .\n"
+        )
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, "Export docker-compose.yml", "docker-compose.yml", "YAML Files (*.yml);;All Files (*)"
+        )
+        if filepath:
+            base = Path(filepath).parent
+            try:
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(compose)
+                with open(base / "Dockerfile", "w", encoding="utf-8") as f:
+                    f.write(dockerfile)
+                with open(base / "requirements.txt", "w", encoding="utf-8") as f:
+                    f.write(freeze)
+                QMessageBox.information(self, "✅ Success", f"Exported 3 files to {base}")
+            except IOError as e:
+                QMessageBox.critical(self, "Error", str(e))
+
+    def _export_env_pyproject(self):
+        freeze, py_ver = self._pick_env_and_freeze()
+        if not freeze:
+            return
+        deps = "\n".join(f'    "{l.strip()}",' for l in freeze.strip().splitlines()
+                         if l.strip() and not l.startswith("#"))
+        content = (
+            f'[build-system]\nrequires = ["setuptools>=68.0", "wheel"]\n'
+            f'build-backend = "setuptools.backends._legacy:_Backend"\n\n'
+            f'[project]\nname = "myproject"\nversion = "0.1.0"\n'
+            f'requires-python = ">={py_ver}"\ndependencies = [\n{deps}\n]\n'
+        )
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, "Export pyproject.toml", "pyproject.toml", "TOML Files (*.toml);;All Files (*)"
+        )
+        if filepath:
+            try:
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(content)
+                QMessageBox.information(self, "✅ Success", f"Exported to:\n{filepath}")
+            except IOError as e:
+                QMessageBox.critical(self, "Error", str(e))
+
+    def _export_env_conda_yml(self):
+        freeze, py_ver = self._pick_env_and_freeze()
+        if not freeze:
+            return
+        pip_deps = "\n".join(f"    - {l.strip()}" for l in freeze.strip().splitlines()
+                             if l.strip() and not l.startswith("#"))
+        content = (
+            f"name: myenv\nchannels:\n  - defaults\n  - conda-forge\n"
+            f"dependencies:\n  - python={py_ver}\n  - pip\n  - pip:\n{pip_deps}\n"
+        )
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, "Export environment.yml", "environment.yml", "YAML Files (*.yml);;All Files (*)"
+        )
+        if filepath:
+            try:
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(content)
+                QMessageBox.information(self, "✅ Success", f"Exported to:\n{filepath}")
+            except IOError as e:
+                QMessageBox.critical(self, "Error", str(e))
+
+    def _export_env_clipboard(self):
+        freeze, _ = self._pick_env_and_freeze()
+        if not freeze:
+            return
+        from PySide6.QtWidgets import QApplication
+        QApplication.clipboard().setText(freeze)
+        count = len(freeze.strip().splitlines())
+        QMessageBox.information(self, "✅ Copied", f"{count} packages copied to clipboard.")
+
+    def _save_settings(self):
+        """Save all settings."""
+        # Theme
+        if self.theme_cb.isChecked():
+            new_theme = self.theme_combo.currentData()
+        else:
+            new_theme = "dark"
+        old_theme = self.config.get("theme", "dark")
+        self.config.set("theme", new_theme)
+        if new_theme != old_theme:
+            self.theme_changed.emit(new_theme)
+
+        # Font
+        if self.font_cb.isChecked():
+            font_family = self.font_combo.currentFont().family()
+            self.config.set("font_family", font_family)
+        else:
+            font_family = "Segoe UI"
+            self.config.set("font_family", "")  # empty = default
+
+        if self.font_size_cb.isChecked():
+            font_size = self.font_size_spin.value()
+            self.config.set("font_size", font_size)
+        else:
+            font_size = 13
+            self.config.set("font_size", 13)  # 13 = default
+
+        self.font_changed.emit(font_family, font_size)
+
+        # Language
+        new_lang = self.lang_combo.currentData()
+        if not new_lang:
+            new_lang = "en"
+        old_lang = self.config.get("language", "en")
+        self.config.set("language", new_lang)
+        lang_changed = (new_lang != old_lang and self.lang_enabled_cb.isChecked())
+        if lang_changed:
+            self.language_changed.emit(new_lang)
+
+        # Default Python
+        # Default Python — only save if checkbox is enabled
+        if self.default_py_cb.isChecked():
+            self.config.set("default_python", self.default_python_combo.currentData() or "")
+        else:
+            self.config.set("default_python", "")
+
+        # Venv directory
+        new_dir = self.venv_dir_input.text()
+        self.config.set_venv_base_dir(new_dir)
+
+        # General
+        self.config.set("auto_upgrade_pip", self.auto_pip_cb.isChecked())
+        self.config.set("confirm_delete", self.confirm_delete_cb.isChecked())
+        self.config.set("show_hidden_packages", self.show_hidden_cb.isChecked())
+        self.config.set("check_updates", self.check_updates_cb.isChecked())
+        self.config.set("save_window_geometry", self.save_window_cb.isChecked())
+
+        # Package manager — only save if checkbox is enabled
+        if self.pkg_mgr_cb.isChecked():
+            self.config.set("package_manager", self.pkg_manager_combo.currentData() or "pip")
+        else:
+            self.config.set("package_manager", "pip")
+        # Default Terminal — only save if checkbox is enabled
+        if self.terminal_cb.isChecked():
+            self.config.set("default_terminal", self.terminal_combo.currentData())
+        else:
+            self.config.set("default_terminal", "")
+
+        # Save custom terminals
+        self._save_custom_terminals()
+
+        # Save custom presets
+        self._save_custom_presets()
+
+        # Save custom categories
+        self._save_custom_categories()
+
+        # Save custom catalog
+        self._save_custom_catalog()
+
+        self.settings_saved.emit()
+        QMessageBox.information(self, "Settings", "Settings saved successfully! ✅")
+
+        if lang_changed:
+            reply = QMessageBox.question(
+                self, "Restart Required",
+                "Language changed. VenvStudio needs to restart.\n\nRestart now?",
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply == QMessageBox.Yes:
+                import sys, subprocess
+                from PySide6.QtWidgets import QApplication
+                # Find the main script
+                main_script = sys.argv[0] if sys.argv else "main.py"
+                subprocess.Popen([sys.executable, main_script])
+                QApplication.instance().quit()
+
+    def _reset_all(self):
+        """Reset all settings to defaults."""
+        reply = QMessageBox.warning(
+            self, "Reset Settings",
+            "Are you sure you want to reset all settings to defaults?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            from src.core.config_manager import DEFAULT_SETTINGS
+            for key, value in DEFAULT_SETTINGS.items():
+                self.config.set(key, value)
+            self.config.set("custom_pythons", [])
+            self._load_current_settings()
+            self.theme_changed.emit("dark")
+            QMessageBox.information(self, "Settings", "All settings reset to defaults.")
 
 class _DownloadWorker(QThread):
     """Background worker for downloading Python."""
@@ -3266,7 +6116,6 @@ class _DownloadWorker(QThread):
         except Exception as e:
             self.finished.emit(False, str(e))
 
-
 class _UpdateCheckWorker(QThread):
     """Background worker for checking PyPI updates."""
     finished = Signal(dict)
@@ -3278,7 +6127,6 @@ class _UpdateCheckWorker(QThread):
             self.finished.emit(result)
         except Exception as e:
             self.finished.emit({"error": str(e), "update_available": False})
-
 
 class _FetchWorker(QThread):
     """Background worker for fetching available versions."""
@@ -3292,7 +6140,6 @@ class _FetchWorker(QThread):
             self.finished.emit(versions)
         except Exception:
             self.finished.emit([])
-
 
 class PythonDownloadDialog(QDialog):
     """Dialog for downloading standalone Python builds."""

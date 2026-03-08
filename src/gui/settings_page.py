@@ -770,9 +770,15 @@ class SettingsPage(QWidget):
         font_inner.setSpacing(8)
 
         from src.core.cli_tools_manager import NERD_FONTS
+        self.nerd_font_cb = QCheckBox("Font:")
+        self.nerd_font_cb.setStyleSheet("font-size: 11px; color: #cdd6f4;")
+        font_inner.addWidget(self.nerd_font_cb)
+
         self.nerd_font_combo = QComboBox()
         for font_id, font_name in NERD_FONTS:
             self.nerd_font_combo.addItem(font_name, font_id)
+        self.nerd_font_combo.setEnabled(False)
+        self.nerd_font_cb.toggled.connect(self.nerd_font_combo.setEnabled)
         font_inner.addWidget(self.nerd_font_combo, 1)
 
         install_font_btn = QPushButton("⬇️ Download & Install Font")
@@ -936,15 +942,19 @@ class SettingsPage(QWidget):
         controls = QHBoxLayout()
         controls.setSpacing(6)
 
-        preset_lbl = QLabel(preset_label)
-        preset_lbl.setStyleSheet("font-size: 11px; color: #cdd6f4;")
-        controls.addWidget(preset_lbl)
+        cb_key = f"cb_preset_{tool_id.replace('-','_')}"
+        preset_cb = QCheckBox(preset_label)
+        preset_cb.setStyleSheet("font-size: 11px; color: #cdd6f4;")
+        preset_cb.setObjectName(cb_key)
+        controls.addWidget(preset_cb)
 
         combo = QComboBox()
         combo.setMaximumWidth(180)
         for p in presets:
             combo.addItem(p)
         combo.setObjectName(f"preset_{tool_id.replace('-','_')}")
+        combo.setEnabled(False)
+        preset_cb.toggled.connect(combo.setEnabled)
         controls.addWidget(combo)
 
         controls.addStretch()
@@ -1061,6 +1071,9 @@ class SettingsPage(QWidget):
 
     def _install_nerd_font(self):
         from src.core.cli_tools_manager import CliToolWorker
+        if not self.nerd_font_cb.isChecked():
+            QMessageBox.information(self, "Info", "Enable the Font checkbox first to select a font.")
+            return
         font_id   = self.nerd_font_combo.currentData()
         font_name = self.nerd_font_combo.currentText()
         self.cli_log.clear()

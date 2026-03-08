@@ -120,3 +120,33 @@
 - VenvStudio kendisi PySide6 kullanır, env'lerdeki PyQt5 ile çakışmaz
 - Python 3.9 ve altı: `orange3<=3.36.2` (wheel desteği kesildi)
 - Python 3.10+: `orange3` latest
+
+---
+
+## 🚀 YENİ VERSİYON RELEASE KOMUTU
+
+"Yeni versiyonu yap" dendiğinde şu adımları uygula (X.Y.Z → X.Y.Z+1):
+
+```powershell
+# 1. Versiyon numaralarını güncelle
+(Get-Content src\utils\constants.py) -replace '1.3.OLD', '1.3.NEW' | Set-Content src\utils\constants.py
+(Get-Content pyproject.toml) -replace 'version = "1.3.OLD"', 'version = "1.3.NEW"' | Set-Content pyproject.toml
+
+# 2. Kontrol et
+findstr "APP_VERSION" src\utils\constants.py
+findstr "^version" pyproject.toml
+
+# 3. Commit + tag + push
+git add .
+git commit -m "release: v1.3.NEW - <kısa özet>"
+git tag v1.3.NEW
+git push origin main
+git push origin v1.3.NEW
+```
+
+**GitHub Actions otomatik olarak:**
+- PyPI'a publish eder (`pypi-publish` workflow)
+- GitHub Release oluşturur
+- Windows `.exe` build alır (PyInstaller)
+
+**Mevcut versiyon:** v1.3.30

@@ -254,9 +254,9 @@ jobs:
 
             **Lightweight Python Virtual Environment Manager**
 
-            [![PyPI](https://img.shields.io/pypi/v/venvstudio?style=flat-square&logo=pypi&logoColor=white&label=PyPI)](https://pypi.org/project/venvstudio/)
-            [![License](https://img.shields.io/github/license/bayramkotan/VenvStudio?style=flat-square)](https://github.com/bayramkotan/VenvStudio/blob/main/LICENSE)
-            [![Python](https://img.shields.io/badge/Python-3.9%2B-blue?style=flat-square&logo=python&logoColor=white)](https://python.org)
+            [![PyPI](https://img.shields.io/badge/PyPI-${{ github.ref_name }}-a6e3a1?style=flat-square&logo=pypi&logoColor=white)](https://pypi.org/project/venvstudio/)
+            [![License](https://img.shields.io/badge/License-LGPL--3.0-cba6f7?style=flat-square)](https://github.com/bayramkotan/VenvStudio/blob/main/LICENSE)
+            [![Python](https://img.shields.io/badge/Python-3.9%2B-89b4fa?style=flat-square&logo=python&logoColor=white)](https://python.org)
 
             </div>
 

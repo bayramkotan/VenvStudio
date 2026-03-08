@@ -77,7 +77,9 @@ class CloneWorker(QThread):
 
 
 class EnvDetailWorker(QThread):
-    """Background worker to load env details only for envs missing cache."""
+    """Background worker to load env details only for envs missing cache.
+    Uses ThreadPoolExecutor so large envs don't block each other.
+    """
     env_detail_ready = Signal(int, str, int, str)  # row, python_ver, pkg_count, size
     all_done = Signal()
 
@@ -86,19 +88,27 @@ class EnvDetailWorker(QThread):
         self.venv_manager = venv_manager
         self.env_names = env_names
 
+    def _fetch_one(self, args):
+        i, name = args
+        venv_path = self.venv_manager.base_dir / name
+        cached = self.venv_manager._read_cache(venv_path)
+        if cached:
+            return None  # already loaded by list_venvs_fast
+        info = self.venv_manager.get_venv_info(name, use_cache=False)
+        if info:
+            return (i, info.python_version, info.package_count, info.size)
+        return None
+
     def run(self):
-        for i, name in enumerate(self.env_names):
-            venv_path = self.venv_manager.base_dir / name
-            # Skip if cache already exists — list_venvs_fast already loaded it
-            cached = self.venv_manager._read_cache(venv_path)
-            if cached:
-                continue
-            # No cache — fetch and write cache
-            info = self.venv_manager.get_venv_info(name, use_cache=False)
-            if info:
-                self.env_detail_ready.emit(
-                    i, info.python_version, info.package_count, info.size
-                )
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+        args = list(enumerate(self.env_names))
+        # Max 4 threads — avoids hammering disk with too many simultaneous pip list calls
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            futures = {executor.submit(self._fetch_one, a): a for a in args}
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    self.env_detail_ready.emit(*result)
         self.all_done.emit()
 
 

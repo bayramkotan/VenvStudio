@@ -134,15 +134,21 @@ class VenvManager:
                 shutil.rmtree(venv_path, ignore_errors=True)
             return False, f"Error creating environment: {str(e)}"
 
-    def delete_venv(self, name: str) -> tuple[bool, str]:
-        """Delete a virtual environment."""
+    def delete_venv(self, name: str, callback=None) -> tuple[bool, str]:
+        """Delete a virtual environment.
+        callback: optional callable(str) for progress messages.
+        """
         venv_path = self.base_dir / name
 
         if not venv_path.exists():
             return False, f"Environment '{name}' not found"
 
         try:
+            if callback:
+                callback(f"Deleting {name}...")
             shutil.rmtree(venv_path)
+            if callback:
+                callback(f"Deleted {name} successfully.")
             return True, f"Environment '{name}' deleted successfully"
         except Exception as e:
             return False, f"Error deleting environment: {str(e)}"
@@ -151,34 +157,8 @@ class VenvManager:
         """Invalidate cache for a named env."""
         self.invalidate_cache(self.base_dir / name)
 
-    def invalidate_all_caches(self) -> None:
-        """Set needs_refresh=1 for ALL envs — called on manual Refresh button."""
-        all_cache = self._load_all_cache()
-        for key in all_cache:
-            all_cache[key]["needs_refresh"] = 1
-        self._save_all_cache(all_cache)
-
-    def sync_cache_with_disk(self) -> None:
-        """Remove cache entries for envs that no longer exist on disk.
-        Called on startup to keep cache clean.
-        """
-        if not self.base_dir.exists():
-            return
-        existing_keys = {
-            self._cache_key(item)
-            for item in self.base_dir.iterdir()
-            if item.is_dir()
-        }
-        all_cache = self._load_all_cache()
-        cleaned = {k: v for k, v in all_cache.items() if k in existing_keys}
-        if len(cleaned) != len(all_cache):
-            self._save_all_cache(cleaned)
-
-    def list_venvs_fast(self, skip_calc: bool = False) -> List[VenvInfo]:
-        """Load env list. Uses cache if available, otherwise calculates and saves cache.
-        If skip_calc=True, cache misses return placeholder '...' instead of running subprocess.
-        Used by manual Refresh so calculation happens in background thread.
-        """
+    def list_venvs_fast(self) -> List[VenvInfo]:
+        """Load env list. Uses cache if available, otherwise calculates and saves cache."""
         venvs = []
         if not self.base_dir.exists():
             return venvs
@@ -213,15 +193,7 @@ class VenvManager:
                     info.package_count = cached.get("package_count", 0)
                     info.size = cached.get("size", "?")
                 else:
-                    # Cache miss
-                    if skip_calc:
-                        # Caller will recalculate in background thread
-                        info.python_version = "..."
-                        info.package_count = 0
-                        info.size = "..."
-                        venvs.append(info)
-                        continue
-                    # Calculate now and save
+                    # Cache miss - calculate now and save
                     try:
                         result = subprocess.run(
                             [str(python_exe), "--version"],

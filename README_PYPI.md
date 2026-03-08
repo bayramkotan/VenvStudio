@@ -47,25 +47,10 @@ Or download the standalone binary — **no Python required:**
 
 ### 🚀 Quick Launch
 - Sidebar shows installed apps for the active environment
+- **13+ one-click launchers** — see full list below
 - **Jupyter Working Directory** — configurable (Home / Env Folder / Custom Path)
 - **Create Desktop Shortcut** for any app
 - Instant sync between sidebar dropdown, environment table, and package panel
-
-**Supported Launchers:**
-
-[![Jupyter](https://img.shields.io/badge/Jupyter-Lab%20%26%20Notebook-F37626?style=flat-square&logo=jupyter&logoColor=white)](https://jupyter.org/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=flat-square&logo=streamlit&logoColor=white)](https://streamlit.io/)
-[![Gradio](https://img.shields.io/badge/Gradio-F97316?style=flat-square&logo=gradio&logoColor=white)](https://gradio.app/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
-[![TensorBoard](https://img.shields.io/badge/TensorBoard-FF6F00?style=flat-square&logo=tensorflow&logoColor=white)](https://www.tensorflow.org/tensorboard)
-[![MLflow](https://img.shields.io/badge/MLflow-0194E2?style=flat-square&logo=mlflow&logoColor=white)](https://mlflow.org/)
-[![Spyder](https://img.shields.io/badge/Spyder_IDE-838485?style=flat-square&logo=spyderide&logoColor=white)](https://www.spyder-ide.org/)
-[![Orange](https://img.shields.io/badge/Orange-Data_Mining-E6812C?style=flat-square)](https://orangedatamining.com/)
-[![Dash](https://img.shields.io/badge/Plotly_Dash-3F4F75?style=flat-square&logo=plotly&logoColor=white)](https://dash.plotly.com/)
-[![Panel](https://img.shields.io/badge/Panel-4E8BBE?style=flat-square)](https://panel.holoviz.org/)
-[![Voilà](https://img.shields.io/badge/Voil%C3%A0-5B4B8A?style=flat-square)](https://voila.readthedocs.io/)
-[![Datasette](https://img.shields.io/badge/Datasette-4A8B6E?style=flat-square)](https://datasette.io/)
-[![IPython](https://img.shields.io/badge/IPython-3776AB?style=flat-square&logo=python&logoColor=white)](https://ipython.org/)
 
 ### 🐍 Python Management
 - Auto-detect all system Python installations
@@ -81,6 +66,31 @@ Or download the standalone binary — **no Python required:**
 - Custom terminal, catalog categories, and packages
 - CLI/TUI Tools: **Starship** (preset preview, inline config editor, test terminal), **Oh My Posh**, **Nerd Fonts**
 - Auto-check for updates on startup
+
+---
+
+---
+
+## 🚀 Supported Launchers
+
+*Launch any of these tools directly from VenvStudio — if installed in the active environment, it appears in the sidebar automatically.*
+
+| | Tool | Description | Category | Website |
+|:---:|:-----|:-----------|:--------:|:-------:|
+| ![Jupyter](https://img.shields.io/badge/-F37626?style=flat-square&logo=jupyter&logoColor=white) | **JupyterLab** | Next-gen interactive development environment for notebooks | 📓 Notebooks | [jupyter.org](https://jupyter.org/) |
+| ![Jupyter](https://img.shields.io/badge/-F37626?style=flat-square&logo=jupyter&logoColor=white) | **Jupyter Notebook** | Classic notebook interface for interactive computing | 📓 Notebooks | [jupyter.org](https://jupyter.org/) |
+| ![Streamlit](https://img.shields.io/badge/-FF4B4B?style=flat-square&logo=streamlit&logoColor=white) | **Streamlit** | Build data apps in minutes with pure Python | 🌐 Web Apps | [streamlit.io](https://streamlit.io/) |
+| ![Gradio](https://img.shields.io/badge/-F97316?style=flat-square&logo=gradio&logoColor=white) | **Gradio** | Build and share ML demos and web apps | 🌐 Web Apps | [gradio.app](https://gradio.app/) |
+| ![Dash](https://img.shields.io/badge/-3F4F75?style=flat-square&logo=plotly&logoColor=white) | **Plotly Dash** | Analytical web applications with Python | 🌐 Web Apps | [dash.plotly.com](https://dash.plotly.com/) |
+| ![Panel](https://img.shields.io/badge/-4E8BBE?style=flat-square) | **Panel** | High-level app and dashboarding framework | 🌐 Web Apps | [panel.holoviz.org](https://panel.holoviz.org/) |
+| ![Voilà](https://img.shields.io/badge/-5B4B8A?style=flat-square) | **Voilà** | Turn Jupyter notebooks into standalone web apps | 🌐 Web Apps | [voila.readthedocs.io](https://voila.readthedocs.io/) |
+| ![FastAPI](https://img.shields.io/badge/-009688?style=flat-square&logo=fastapi&logoColor=white) | **FastAPI** | Modern, fast web framework for building APIs | ⚡ API | [fastapi.tiangolo.com](https://fastapi.tiangolo.com/) |
+| ![TensorBoard](https://img.shields.io/badge/-FF6F00?style=flat-square&logo=tensorflow&logoColor=white) | **TensorBoard** | Visualization toolkit for machine learning experiments | 📊 ML Ops | [tensorflow.org/tensorboard](https://www.tensorflow.org/tensorboard) |
+| ![MLflow](https://img.shields.io/badge/-0194E2?style=flat-square&logo=mlflow&logoColor=white) | **MLflow** | Platform for the complete ML lifecycle | 📊 ML Ops | [mlflow.org](https://mlflow.org/) |
+| ![Spyder](https://img.shields.io/badge/-838485?style=flat-square&logo=spyderide&logoColor=white) | **Spyder IDE** | Scientific Python development environment | 🔬 IDE | [spyder-ide.org](https://www.spyder-ide.org/) |
+| ![Orange](https://img.shields.io/badge/-E6812C?style=flat-square) | **Orange Data Mining** | Visual programming for data analysis and ML | 🔬 Data Science | [orangedatamining.com](https://orangedatamining.com/) |
+| ![Datasette](https://img.shields.io/badge/-4A8B6E?style=flat-square) | **Datasette** | Explore and publish data with instant JSON API | 🗄️ Data | [datasette.io](https://datasette.io/) |
+| ![IPython](https://img.shields.io/badge/-3776AB?style=flat-square&logo=python&logoColor=white) | **IPython** | Enhanced interactive Python shell | 🐍 Shell | [ipython.org](https://ipython.org/) |
 
 ---
 

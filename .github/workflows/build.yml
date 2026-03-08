@@ -182,6 +182,26 @@ jobs:
           ls -laR
           mv VenvStudio-macOS-universal/VenvStudio-macOS-universal . 2>/dev/null || true
 
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get changelog from commit messages
+        id: changelog
+        run: |
+          # Get all commits since last tag
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "${{ github.ref_name }}" | head -n1)
+          if [ -z "$PREV_TAG" ]; then
+            COMMITS=$(git log --pretty=format:"- %s" HEAD)
+          else
+            COMMITS=$(git log --pretty=format:"- %s" ${PREV_TAG}..HEAD)
+          fi
+          # Remove release: prefix line itself, keep fix/feat/chore lines
+          CHANGES=$(echo "$COMMITS" | grep -v "^- release:" | head -20)
+          echo "changes<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -192,13 +212,16 @@ jobs:
           body: |
             ## ${{ github.ref_name }}
 
+            ### What's Changed
+            ${{ steps.changelog.outputs.changes }}
+
             ### Download
             | Platform | File |
             |----------|------|
             | Windows x64 | `VenvStudio.exe` |
             | Linux x64 | `VenvStudio-x86_64.AppImage` |
             | macOS (Apple Silicon + Rosetta 2) | `VenvStudio-macOS` |
-            | PyPI | `pip install venvstudio` |
+            | PyPI | `pip install --upgrade venvstudio` |
           fail_on_unmatched_files: false
 
   publish-pypi:

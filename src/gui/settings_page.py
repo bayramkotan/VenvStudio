@@ -833,12 +833,18 @@ class SettingsPage(QWidget):
         launch_layout = QFormLayout()
         launch_layout.setSpacing(12)
 
-        # Jupyter Working Directory
+        # Jupyter Working Directory — protected by checkbox
         jupyter_dir_row = QHBoxLayout()
+        self.jupyter_workdir_cb = QCheckBox()
+        self.jupyter_workdir_cb.setChecked(False)
+        self.jupyter_workdir_cb.toggled.connect(lambda on: self.jupyter_workdir_combo.setEnabled(on))
+        jupyter_dir_row.addWidget(self.jupyter_workdir_cb)
+
         self.jupyter_workdir_combo = NoScrollComboBox()
         self.jupyter_workdir_combo.addItem("🏠 Home Directory", "home")
         self.jupyter_workdir_combo.addItem("📁 Environment Folder", "env")
         self.jupyter_workdir_combo.addItem("📂 Custom Path...", "custom")
+        self.jupyter_workdir_combo.setEnabled(False)
         self.jupyter_workdir_combo.currentIndexChanged.connect(self._on_jupyter_workdir_changed)
         jupyter_dir_row.addWidget(self.jupyter_workdir_combo, 1)
 
@@ -1681,6 +1687,9 @@ class SettingsPage(QWidget):
         idx_jwd = self.jupyter_workdir_combo.findData(jwd)
         if idx_jwd >= 0:
             self.jupyter_workdir_combo.setCurrentIndex(idx_jwd)
+        if jwd != "home":
+            self.jupyter_workdir_cb.setChecked(True)
+            self.jupyter_workdir_combo.setEnabled(True)
         if jwd == "custom" and jwd_custom:
             self.jupyter_custom_path_label.setText(jwd_custom)
             self.jupyter_custom_path_label.setVisible(True)
@@ -1689,7 +1698,7 @@ class SettingsPage(QWidget):
     def _on_jupyter_workdir_changed(self, idx):
         """Enable/disable custom path button based on selection."""
         data = self.jupyter_workdir_combo.currentData()
-        is_custom = data == "custom"
+        is_custom = data == "custom" and self.jupyter_workdir_cb.isChecked()
         self.jupyter_custom_path_btn.setEnabled(is_custom)
         self.jupyter_custom_path_label.setVisible(is_custom)
 
@@ -3718,12 +3727,18 @@ echo "OK"
         launch_layout = QFormLayout()
         launch_layout.setSpacing(12)
 
-        # Jupyter Working Directory
+        # Jupyter Working Directory — protected by checkbox
         jupyter_dir_row = QHBoxLayout()
+        self.jupyter_workdir_cb = QCheckBox()
+        self.jupyter_workdir_cb.setChecked(False)
+        self.jupyter_workdir_cb.toggled.connect(lambda on: self.jupyter_workdir_combo.setEnabled(on))
+        jupyter_dir_row.addWidget(self.jupyter_workdir_cb)
+
         self.jupyter_workdir_combo = NoScrollComboBox()
         self.jupyter_workdir_combo.addItem("🏠 Home Directory", "home")
         self.jupyter_workdir_combo.addItem("📁 Environment Folder", "env")
         self.jupyter_workdir_combo.addItem("📂 Custom Path...", "custom")
+        self.jupyter_workdir_combo.setEnabled(False)
         self.jupyter_workdir_combo.currentIndexChanged.connect(self._on_jupyter_workdir_changed)
         jupyter_dir_row.addWidget(self.jupyter_workdir_combo, 1)
 
@@ -4533,6 +4548,9 @@ echo "OK"
         idx_jwd = self.jupyter_workdir_combo.findData(jwd)
         if idx_jwd >= 0:
             self.jupyter_workdir_combo.setCurrentIndex(idx_jwd)
+        if jwd != "home":
+            self.jupyter_workdir_cb.setChecked(True)
+            self.jupyter_workdir_combo.setEnabled(True)
         if jwd == "custom" and jwd_custom:
             self.jupyter_custom_path_label.setText(jwd_custom)
             self.jupyter_custom_path_label.setVisible(True)
@@ -4541,7 +4559,7 @@ echo "OK"
     def _on_jupyter_workdir_changed(self, idx):
         """Enable/disable custom path button based on selection."""
         data = self.jupyter_workdir_combo.currentData()
-        is_custom = data == "custom"
+        is_custom = data == "custom" and self.jupyter_workdir_cb.isChecked()
         self.jupyter_custom_path_btn.setEnabled(is_custom)
         self.jupyter_custom_path_label.setVisible(is_custom)
 

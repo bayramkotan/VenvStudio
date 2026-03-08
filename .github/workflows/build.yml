@@ -198,6 +198,8 @@ jobs:
         continue-on-error: true
         run: |
           ls -laR
+          # Rename macOS binary so it's clearly identifiable
+          mv VenvStudio-macOS/VenvStudio VenvStudio-macOS/VenvStudio-macOS 2>/dev/null || true
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
@@ -205,7 +207,7 @@ jobs:
           files: |
             VenvStudio-Windows/VenvStudio.exe
             VenvStudio-Linux-AppImage/VenvStudio*.AppImage
-            VenvStudio-macOS/VenvStudio
+            VenvStudio-macOS/VenvStudio-macOS
           body: |
             ## ${{ github.ref_name }}
 

@@ -84,7 +84,8 @@
 - **M5:** Global default Python gösterimi (Settings)
 - **M6:** Env tablosunda sütun genişliği kaydetme
 - **M7:** CHANGELOG.md tutulması
-- **M11:** About (ℹ️) bölümü Settings'te her zaman en altta olmalı — Launch Settings dahil tüm bölümlerden sonra
+- **M11:** ✅ About (ℹ️) bölümü Settings'te her zaman en altta — tüm bölümlerden sonra
+- **M12:** Settings'e eklenen her dropdown önüne mutlaka checkbox konulmalı — checkbox işaretlenmeden combo disabled olmalı — Launch Settings dahil tüm bölümlerden sonra
 - **M10:** ✅ Her release'de GitHub Release notes otomatik oluşturuluyor — önceki tag'den bu yana commit mesajları listeleniyor (fix/feat/chore)
 - **M8:** Quick Launch — cache boşken ilk geçişte kısa gecikme (UX)
 
@@ -124,4 +125,4 @@ git push origin main
 git push origin v1.3.NEW
 ```
 
-**Mevcut versiyon:** v1.3.36
+**Mevcut versiyon:** v1.3.37

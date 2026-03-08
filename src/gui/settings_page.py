@@ -2477,9 +2477,16 @@ try {{
 
     def _open_log_folder(self):
         """Open the log directory in file manager."""
-        from src.utils.logger import get_log_dir
         import subprocess
-        log_dir = get_log_dir()
+        from pathlib import Path
+        # Try to get log dir from logger module, fall back to known path
+        try:
+            from src.utils.logger import get_log_dir
+            log_dir = get_log_dir()
+        except ImportError:
+            import os
+            log_dir = Path(os.environ.get("APPDATA", "~")) / "VenvStudio" / "logs"
+            log_dir = log_dir.expanduser()
         log_dir.mkdir(parents=True, exist_ok=True)
         if get_platform() == "windows":
             os.startfile(str(log_dir))

@@ -1,10 +1,16 @@
 # VenvStudio TODO — v1.3.34+
 
+> **📌 Bu proje Eğitimi ön planda tutmak için geliştirmeler yapacaktır.**
+
 ## ✅ TAMAMLANDI
 
 ### Bug Fixes
 - B1–B22: Önceki versiyonlar
-- B23: ~~Çift Ekran DPI Crash~~ — devam ediyor
+- B23: ~~Çift Ekran DPI Crash~~ — ✅ TAMAMLANDI (v1.3.38)
+  - `main.py`'ye `QT_ENABLE_HIGHDPI_SCALING` + `QT_SCALE_FACTOR_ROUNDING_POLICY` env variables eklendi
+  - `_apply_theme()` re-entrant guard + RuntimeError try/catch eklendi
+  - `screenChanged` signal'ı bağlandı → 150ms delay ile güvenli theme re-apply
+  - `showEvent` override ile windowHandle bağlantısı garanti edildi
 - B31: System Python registry PATH'den tespit (config'e bağımlılık kaldırıldı)
 - B32: Set Default PATH güvenlik fix (winget/omp silmiyordu)
 - B33: Streamlit browser iki kez açılıyordu — `--server.headless true` fix
@@ -29,19 +35,6 @@
 - v1.3.32: System Python registry fix (B31)
 - v1.3.33: delete_venv callback, parallel Refresh, macOS universal binary
 - v1.3.34: Intel macOS build kaldırıldı, ARM-only (Rosetta 2)
-
----
-
-## 🔴 KRİTİK
-
-### B23 — Çift Ekran DPI Crash
-- [ ] Crash log sistemi mevcut — yeni crash logu bekleniyor
-- [ ] `main.py`'ye QT env variable'ları eklenmeli (QApplication'dan önce):
-  ```python
-  os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
-  os.environ.setdefault("QT_SCALE_FACTOR_ROUNDING_POLICY", "PassThrough")
-  ```
-- [ ] `_apply_theme()` ekran geçişinde çağrılmamalı — crash yapar
 
 ---
 

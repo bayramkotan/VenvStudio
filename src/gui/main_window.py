@@ -153,6 +153,7 @@ class MainWindow(QMainWindow):
         self.config = ConfigManager()
         self.venv_manager = VenvManager(self.config.get_venv_base_dir())
         self.selected_env = None
+        self._applying_theme = False  # Guard against re-entrant / screen-change crashes
 
         self._setup_window()
         self._setup_menubar()
@@ -162,6 +163,9 @@ class MainWindow(QMainWindow):
         self._check_linux_venv_module()
         self.venv_manager.sync_cache_with_disk()
         self._refresh_env_list()
+
+        # ── Screen change safety: re-apply theme when moving between monitors ──
+        self._connect_screen_changed()
 
         # Open default env on startup
         from PySide6.QtCore import QTimer
@@ -1231,10 +1235,40 @@ class MainWindow(QMainWindow):
         self._apply_theme()
 
     def _apply_theme(self):
-        theme = self.config.get("theme", "dark")
-        self.setStyleSheet(get_theme(theme))
-        if hasattr(self, "package_panel"):
-            self.package_panel.apply_theme(theme)
+        """Apply current theme. Guarded against re-entrant calls and
+        RuntimeError during screen transitions (dual-monitor DPI changes).
+        """
+        if self._applying_theme:
+            return  # prevent re-entrant calls during screen change
+        self._applying_theme = True
+        try:
+            theme = self.config.get("theme", "dark")
+            self.setStyleSheet(get_theme(theme))
+            if hasattr(self, "package_panel"):
+                self.package_panel.apply_theme(theme)
+        except RuntimeError:
+            # Widget may be in an unstable state during screen transition
+            pass
+        finally:
+            self._applying_theme = False
+
+    def _connect_screen_changed(self):
+        """Connect to windowHandle().screenChanged so theme is re-applied
+        safely when the window moves between monitors with different DPI.
+        """
+        try:
+            handle = self.windowHandle()
+            if handle:
+                handle.screenChanged.connect(self._on_screen_changed)
+        except Exception:
+            pass  # windowHandle() can return None before show()
+
+    def _on_screen_changed(self, new_screen):
+        """Re-apply theme after a short delay so Qt finishes its internal
+        DPI recalculation before we touch stylesheets.
+        """
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(150, self._apply_theme)
 
     def _on_theme_changed(self, theme_name):
         """Handle theme change from settings page."""
@@ -1434,3 +1468,8 @@ class MainWindow(QMainWindow):
         if hasattr(self, "_detail_worker") and self._detail_worker.isRunning():
             self._detail_worker.wait(5000)
         super().closeEvent(event)
+
+    def showEvent(self, event):
+        """Re-connect screenChanged after window handle becomes available."""
+        super().showEvent(event)
+        self._connect_screen_changed()

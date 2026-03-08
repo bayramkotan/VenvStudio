@@ -38,6 +38,10 @@ else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     sys.path.insert(0, BASE_DIR)
 
+# ── High DPI: env variables MUST be set before QApplication ──
+os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
+os.environ.setdefault("QT_SCALE_FACTOR_ROUNDING_POLICY", "PassThrough")
+
 
 def main():
     try:

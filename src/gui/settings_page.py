@@ -1656,9 +1656,39 @@ class SettingsPage(QWidget):
             for p in self.config.get("excluded_pythons", [])
         }
 
-        # Which Python is system default — saved to config by Set Default button
-        saved_default = self.config.get("system_default_python", "")
-        default_norm = os.path.normcase(os.path.normpath(saved_default)) if saved_default else ""
+        # Which Python is system default — detect from PATH directly (registry on Windows)
+        default_norm = ""
+        try:
+            if os.name == "nt":
+                import subprocess as _sp
+                # Read System PATH from registry (fresh, not cached process env)
+                sys_path = _sp.run(
+                    ["powershell", "-NoProfile", "-Command",
+                     "[Environment]::GetEnvironmentVariable('Path', 'Machine')"],
+                    capture_output=True, text=True, timeout=5
+                ).stdout.strip()
+                usr_path = _sp.run(
+                    ["powershell", "-NoProfile", "-Command",
+                     "[Environment]::GetEnvironmentVariable('Path', 'User')"],
+                    capture_output=True, text=True, timeout=5
+                ).stdout.strip()
+                # User PATH takes priority (prepended by Set Default)
+                for p in (usr_path + ";" + sys_path).split(";"):
+                    p = p.strip()
+                    if not p:
+                        continue
+                    candidate = os.path.join(p, "python.exe")
+                    if os.path.isfile(candidate) and "windowsapps" not in p.lower():
+                        default_norm = os.path.normcase(os.path.normpath(candidate))
+                        break
+            else:
+                import shutil
+                exe = shutil.which("python") or shutil.which("python3") or ""
+                default_norm = os.path.normcase(os.path.normpath(exe)) if exe else ""
+        except Exception:
+            # Fallback: use saved config value
+            saved_default = self.config.get("system_default_python", "")
+            default_norm = os.path.normcase(os.path.normpath(saved_default)) if saved_default else ""
 
         # All pythons from system scan
         system_pythons = find_system_pythons()

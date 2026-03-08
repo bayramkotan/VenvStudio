@@ -198,13 +198,14 @@ class PackagePanel(QWidget):
     """Package management panel with catalog browsing and pip operations."""
     env_refresh_requested = Signal()  # Signal to refresh env list in main window
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, config=None):
         super().__init__(parent)
         self.pip_manager = None
         self.current_worker = None
         self.installed_package_names = set()
         self._launcher_py_version_cache: dict = {}  # venv_path -> tuple
         self._catalog_initial_state = {}  # Track original checkbox states
+        self.config = config  # ConfigManager — for Jupyter workdir etc.
         self._setup_ui()
 
     # ── Theme color palettes ──
@@ -1023,8 +1024,18 @@ class PackagePanel(QWidget):
         # Check if app needs console (e.g. IPython)
         show_console = app_def.get("needs_console", False)
 
-        # Working directory: user's home, not venv path
-        if get_platform() == "windows":
+        # Working directory — Jupyter uses config setting, others use home
+        is_jupyter = any("jupyter" in str(c).lower() for c in app_def.get("command", []))
+        if is_jupyter:
+            jwd = self.config.get("jupyter_workdir", "home") if hasattr(self, "config") else "home"
+            jwd_custom = self.config.get("jupyter_workdir_custom", "") if hasattr(self, "config") else ""
+            if jwd == "custom" and jwd_custom and os.path.isdir(jwd_custom):
+                work_dir = jwd_custom
+            elif jwd == "env":
+                work_dir = str(venv_path)
+            else:
+                work_dir = os.path.expanduser("~")
+        elif get_platform() == "windows":
             work_dir = os.environ.get("USERPROFILE", "C:\\")
         else:
             work_dir = os.environ.get("HOME", os.path.expanduser("~"))

@@ -861,6 +861,38 @@ class SettingsPage(QWidget):
         about_group.setLayout(about_layout)
         layout.addWidget(about_group)
 
+
+        # ── LAUNCH SETTINGS ──
+        launch_group = QGroupBox("🚀 Launch Settings")
+        launch_layout = QFormLayout()
+        launch_layout.setSpacing(12)
+
+        # Jupyter Working Directory
+        jupyter_dir_row = QHBoxLayout()
+        self.jupyter_workdir_combo = NoScrollComboBox()
+        self.jupyter_workdir_combo.addItem("🏠 Home Directory", "home")
+        self.jupyter_workdir_combo.addItem("📁 Environment Folder", "env")
+        self.jupyter_workdir_combo.addItem("📂 Custom Path...", "custom")
+        self.jupyter_workdir_combo.currentIndexChanged.connect(self._on_jupyter_workdir_changed)
+        jupyter_dir_row.addWidget(self.jupyter_workdir_combo, 1)
+
+        self.jupyter_custom_path_btn = QPushButton("📂")
+        self.jupyter_custom_path_btn.setFixedWidth(36)
+        self.jupyter_custom_path_btn.setToolTip("Pick custom folder")
+        self.jupyter_custom_path_btn.setEnabled(False)
+        self.jupyter_custom_path_btn.clicked.connect(self._pick_jupyter_workdir)
+        jupyter_dir_row.addWidget(self.jupyter_custom_path_btn)
+
+        launch_layout.addRow("Jupyter Working Dir:", jupyter_dir_row)
+
+        self.jupyter_custom_path_label = QLabel("")
+        self.jupyter_custom_path_label.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        self.jupyter_custom_path_label.setVisible(False)
+        launch_layout.addRow("", self.jupyter_custom_path_label)
+
+        launch_group.setLayout(launch_layout)
+        layout.addWidget(launch_group)
+
         # ── SAVE / RESET BUTTONS ──
         btn_layout = QHBoxLayout()
 
@@ -1642,6 +1674,33 @@ class SettingsPage(QWidget):
 
         # Load custom catalog
         self._load_custom_catalog()
+
+        # Jupyter working dir
+        jwd = self.config.get("jupyter_workdir", "home")
+        jwd_custom = self.config.get("jupyter_workdir_custom", "")
+        idx_jwd = self.jupyter_workdir_combo.findData(jwd)
+        if idx_jwd >= 0:
+            self.jupyter_workdir_combo.setCurrentIndex(idx_jwd)
+        if jwd == "custom" and jwd_custom:
+            self.jupyter_custom_path_label.setText(jwd_custom)
+            self.jupyter_custom_path_label.setVisible(True)
+            self.jupyter_custom_path_btn.setEnabled(True)
+
+    def _on_jupyter_workdir_changed(self, idx):
+        """Enable/disable custom path button based on selection."""
+        data = self.jupyter_workdir_combo.currentData()
+        is_custom = data == "custom"
+        self.jupyter_custom_path_btn.setEnabled(is_custom)
+        self.jupyter_custom_path_label.setVisible(is_custom)
+
+    def _pick_jupyter_workdir(self):
+        """Open folder picker for custom Jupyter working directory."""
+        import os
+        current = self.jupyter_custom_path_label.text() or os.path.expanduser("~")
+        folder = QFileDialog.getExistingDirectory(self, "Select Jupyter Working Directory", current)
+        if folder:
+            self.jupyter_custom_path_label.setText(folder)
+            self.jupyter_custom_path_label.setVisible(True)
 
     def _scan_pythons(self):
         """Scan system for Python installations."""

@@ -357,7 +357,7 @@ class MainWindow(QMainWindow):
 
         # Content Area
         self.stack = QStackedWidget()
-        self.package_panel = PackagePanel()
+        self.package_panel = PackagePanel(config=self.config)
         self.package_panel.env_refresh_requested.connect(self._refresh_env_list)
         self.package_panel._ql_update_callback = self._update_ql_buttons
         self.package_panel._ql_env_changed_callback = self._sync_ql_selector

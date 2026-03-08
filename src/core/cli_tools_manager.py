@@ -69,12 +69,47 @@ OMP_THEMES = [
     "uvarain", "velvet", "wholespace", "wopian", "xtoys", "ys", "zash",
 ]
 
-# Starship presets
-STARSHIP_PRESETS = [
-    "no-nerd-font", "bracketed-segments", "plain-text-symbols",
-    "no-runtime-versions", "no-empty-icons", "gruvbox-rainbow",
-    "jetpack", "tokyo-night", "pastel-powerline", "nerd-font-symbols",
-]
+# Starship presets (id → description)
+STARSHIP_PRESETS = {
+    "no-nerd-font":          "🔤 Works without Nerd Font — uses plain Unicode",
+    "bracketed-segments":    "[ ] Wraps each module in brackets",
+    "plain-text-symbols":    "📝 Text-only symbols (no special glyphs)",
+    "no-runtime-versions":   "🚫 Hides runtime versions (node, python, rust...)",
+    "no-empty-icons":        "🧹 Hides icons when module has no content",
+    "gruvbox-rainbow":       "🌈 Gruvbox colors with rainbow powerline",
+    "jetpack":               "🚀 Futuristic prompt with powerline arrows",
+    "tokyo-night":           "🌃 Tokyo Night color scheme",
+    "pastel-powerline":      "🎨 Soft pastel colors with powerline glyphs",
+    "nerd-font-symbols":     "🔣 Replaces text with Nerd Font symbols",
+}
+STARSHIP_PRESET_NAMES = list(STARSHIP_PRESETS.keys())
+
+
+def get_starship_toml_path() -> Path:
+    """Return the path to starship.toml config file."""
+    return _get_config_dir() / "starship.toml"
+
+
+def read_starship_toml() -> str:
+    """Read starship.toml content. Returns empty string if not found."""
+    p = get_starship_toml_path()
+    if p.exists():
+        try:
+            return p.read_text(encoding="utf-8")
+        except Exception:
+            return ""
+    return ""
+
+
+def write_starship_toml(content: str) -> bool:
+    """Write content to starship.toml. Returns True on success."""
+    p = get_starship_toml_path()
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+        return True
+    except Exception:
+        return False
 
 # Nerd Fonts (popular)
 NERD_FONTS = [
@@ -223,7 +258,7 @@ def configure_starship(preset: Optional[str] = None) -> list[str]:
         try:
             subprocess.run(
                 ["starship", "preset", preset, "-o",
-                 str(_get_config_dir() / "starship.toml")],
+                 str(get_starship_toml_path())],
                 timeout=10
             )
         except Exception:

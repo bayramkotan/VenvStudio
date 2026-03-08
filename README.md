@@ -13,12 +13,6 @@
   <a href="https://github.com/bayramkotan/VenvStudio/releases/latest">
     <img src="https://img.shields.io/github/v/release/bayramkotan/VenvStudio?style=for-the-badge&color=89b4fa&logo=github" alt="Release">
   </a>
-  <a href="https://pypi.org/project/venvstudio/">
-    <img src="https://img.shields.io/pypi/v/venvstudio?style=for-the-badge&color=a6e3a1&logo=pypi&logoColor=white" alt="PyPI">
-  </a>
-  <a href="LICENSE">
-    <img src="https://img.shields.io/github/license/bayramkotan/VenvStudio?style=for-the-badge&color=cba6f7" alt="License">
-  </a>
   <img src="https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-f9e2af?style=for-the-badge" alt="Platform">
   <a href="https://github.com/bayramkotan/VenvStudio/stargazers">
     <img src="https://img.shields.io/github/stars/bayramkotan/VenvStudio?style=for-the-badge&color=f5c2e7&logo=github" alt="Stars">
@@ -85,10 +79,25 @@ Or download the standalone binary — **no Python required:**
 
 ### 🚀 Quick Launch
 - Sidebar shows installed apps for active env
-- One-click: JupyterLab, Notebook, Spyder, IPython, Orange, Streamlit, Gradio, Dash, FastAPI, TensorBoard, MLflow, and more
 - **Jupyter Working Directory** — configurable per launch
 - **Create Desktop Shortcut** for any app
 - Instant sync across sidebar, table, and panel
+
+**Supported Launchers:**
+
+[![Jupyter](https://img.shields.io/badge/Jupyter-Lab%20%26%20Notebook-F37626?style=flat-square&logo=jupyter&logoColor=white)](https://jupyter.org/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=flat-square&logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![Gradio](https://img.shields.io/badge/Gradio-F97316?style=flat-square&logo=gradio&logoColor=white)](https://gradio.app/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![TensorBoard](https://img.shields.io/badge/TensorBoard-FF6F00?style=flat-square&logo=tensorflow&logoColor=white)](https://www.tensorflow.org/tensorboard)
+[![MLflow](https://img.shields.io/badge/MLflow-0194E2?style=flat-square&logo=mlflow&logoColor=white)](https://mlflow.org/)
+[![Spyder](https://img.shields.io/badge/Spyder_IDE-838485?style=flat-square&logo=spyderide&logoColor=white)](https://www.spyder-ide.org/)
+[![Orange](https://img.shields.io/badge/Orange-Data_Mining-E6812C?style=flat-square)](https://orangedatamining.com/)
+[![Dash](https://img.shields.io/badge/Plotly_Dash-3F4F75?style=flat-square&logo=plotly&logoColor=white)](https://dash.plotly.com/)
+[![Panel](https://img.shields.io/badge/Panel-4E8BBE?style=flat-square)](https://panel.holoviz.org/)
+[![Voilà](https://img.shields.io/badge/Voil%C3%A0-5B4B8A?style=flat-square)](https://voila.readthedocs.io/)
+[![Datasette](https://img.shields.io/badge/Datasette-4A8B6E?style=flat-square)](https://datasette.io/)
+[![IPython](https://img.shields.io/badge/IPython-3776AB?style=flat-square&logo=python&logoColor=white)](https://ipython.org/)
 
 </td>
 <td width="50%" valign="top">
@@ -117,6 +126,9 @@ Or download the standalone binary — **no Python required:**
 
 ### 🖥️ CLI/TUI Tools
 - Install & configure **Starship** prompt
+  - Preset preview with descriptions
+  - Inline `starship.toml` editor
+  - "Test in terminal" button
 - Install & configure **Oh My Posh** prompt
 - Install **Nerd Fonts** for proper rendering
 - pip-installable: **Rich**, **Textual**, **Prompt Toolkit**

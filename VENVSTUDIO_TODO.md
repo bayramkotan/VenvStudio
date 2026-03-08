@@ -47,10 +47,10 @@
 - Config'e `jupyter_workdir` + `jupyter_workdir_custom` kaydediliyor
 
 ### F30 — CLI/TUI Tools (Detaylı Geliştirme)
-**Starship:**
-- [ ] Preset önizleme
-- [ ] starship.toml inline editörü
-- [ ] "Test in terminal" butonu
+**Starship:** ✅ TAMAMLANDI (v1.3.41)
+- [x] Preset önizleme (açıklamalı dropdown + description hint)
+- [x] starship.toml inline editörü (syntax-highlighted dialog, save/reload/open folder)
+- [x] "Test in terminal" butonu (yeni terminal açar, starship init ile)
 
 **Oh My Posh:**
 - [ ] Tema önizleme görseli
@@ -81,6 +81,13 @@
 - **M12:** Settings'e eklenen her dropdown önüne mutlaka checkbox konulmalı — checkbox işaretlenmeden combo disabled olmalı — Launch Settings dahil tüm bölümlerden sonra
 - **M10:** ✅ Her release'de GitHub Release notes otomatik oluşturuluyor — önceki tag'den bu yana commit mesajları listeleniyor (fix/feat/chore)
 - **M8:** Quick Launch — cache boşken ilk geçişte kısa gecikme (UX)
+
+## 💡 FİKİRLER (Gemini önerileri + topluluk)
+- **F32:** Yeni Launcher adayları: Locust (yük testi), Flower (Celery izleme), Pytest (test dashboard), Pdoc/Sphinx (dokümantasyon)
+- **F33:** Port Killer butonu — asılı kalmış servis portlarını temizle
+- **F34:** Cache Cleaner — `__pycache__` + pip cache temizliği
+- **F35:** Bağımlılık ağacı (pipdeptree entegrasyonu) — hangi paket neye bağlı görselleştirme
+- **F36:** requirements.txt algılama — klasörde varsa "Bağımlılıkları kur?" uyarısı
 
 ## 📋 TEKNİK NOTLAR
 - Cache: `%APPDATA%\VenvStudio\env_cache.json`

@@ -788,14 +788,15 @@ class SettingsPage(QWidget):
 
         # ── Tool cards ──
         from src.core.cli_tools_manager import (
-            STARSHIP_PRESETS, OMP_THEMES, PIP_TOOLS, is_tool_installed
+            STARSHIP_PRESETS, STARSHIP_PRESET_NAMES, OMP_THEMES, PIP_TOOLS, is_tool_installed
         )
 
         # Starship
         cli_layout.addWidget(self._make_cli_card(
             "starship", "🚀 Starship",
             "The minimal, blazing-fast, and infinitely customizable prompt for any shell",
-            "Preset:", STARSHIP_PRESETS, "preset"
+            "Preset:", STARSHIP_PRESET_NAMES, "preset",
+            preset_descriptions=STARSHIP_PRESETS
         ))
 
         # Oh My Posh
@@ -947,7 +948,8 @@ class SettingsPage(QWidget):
                 color = "#cdd6f4"
             self.cli_log.append(f'<span style="color:{color};">{escaped}</span>')
 
-    def _make_cli_card(self, tool_id, title, desc, preset_label, presets, preset_key):
+    def _make_cli_card(self, tool_id, title, desc, preset_label, presets, preset_key,
+                        preset_descriptions=None):
         """Create a card widget for binary CLI tools (starship, oh-my-posh)."""
         from src.core.cli_tools_manager import is_tool_installed, get_tool_version
         card = QFrame()
@@ -965,7 +967,7 @@ class SettingsPage(QWidget):
 
         installed = is_tool_installed(tool_id)
         version = get_tool_version(tool_id) or ""
-        status_lbl = QLabel(f"✅ {version}" if installed else "❌ Not installed")
+        status_lbl = QLabel(f"\u2705 {version}" if installed else "\u274c Not installed")
         status_lbl.setStyleSheet(f"color: {'#a6e3a1' if installed else '#f38ba8'}; font-size: 11px;")
         status_lbl.setObjectName(f"status_{tool_id.replace('-','_')}")
         header.addWidget(status_lbl)
@@ -988,36 +990,77 @@ class SettingsPage(QWidget):
         controls.addWidget(preset_cb)
 
         combo = QComboBox()
-        combo.setMaximumWidth(180)
+        combo.setMaximumWidth(200)
         for p in presets:
-            combo.addItem(p)
+            label = p
+            if preset_descriptions and p in preset_descriptions:
+                label = f"{p}  \u2014  {preset_descriptions[p]}"
+            combo.addItem(label, p)
         combo.setObjectName(f"preset_{tool_id.replace('-','_')}")
         combo.setEnabled(False)
         preset_cb.toggled.connect(combo.setEnabled)
         controls.addWidget(combo)
 
+        # Preset description label (updates on selection)
+        desc_hint = None
+        if preset_descriptions:
+            desc_hint = QLabel("")
+            desc_hint.setStyleSheet("color: #6c7086; font-size: 10px; font-style: italic;")
+            desc_hint.setFixedHeight(16)
+
+            def _update_preset_hint(idx, _dh=desc_hint, _c=combo, _pd=preset_descriptions):
+                key = _c.itemData(idx)
+                if key and key in _pd:
+                    _dh.setText(_pd[key])
+                else:
+                    _dh.setText("")
+
+            combo.currentIndexChanged.connect(_update_preset_hint)
+            _update_preset_hint(0)
+
         controls.addStretch()
 
-        install_btn = QPushButton("⬇️ Install" if not installed else "🔄 Reinstall")
+        install_btn = QPushButton("\u2b07\ufe0f Install" if not installed else "\U0001f504 Reinstall")
         install_btn.setObjectName("secondary")
         install_btn.setFixedHeight(26)
         install_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_install(t, sb, sl))
         controls.addWidget(install_btn)
 
         if installed:
-            cfg_btn = QPushButton("⚙️ Configure Shell")
+            cfg_btn = QPushButton("\u2699\ufe0f Configure Shell")
             cfg_btn.setObjectName("secondary")
             cfg_btn.setFixedHeight(26)
             cfg_btn.clicked.connect(lambda _, t=tool_id, c=combo, pk=preset_key: self._cli_configure(t, c, pk))
             controls.addWidget(cfg_btn)
 
-            uninst_btn = QPushButton("🗑️ Uninstall")
+            # Starship-specific: Edit Config + Test buttons
+            if tool_id == "starship":
+                edit_btn = QPushButton("\U0001f4dd Edit Config")
+                edit_btn.setObjectName("secondary")
+                edit_btn.setFixedHeight(26)
+                edit_btn.setToolTip("Open starship.toml inline editor")
+                edit_btn.clicked.connect(self._open_starship_editor)
+                controls.addWidget(edit_btn)
+
+                test_btn = QPushButton("\u25b6\ufe0f Test")
+                test_btn.setObjectName("secondary")
+                test_btn.setFixedHeight(26)
+                test_btn.setToolTip("Open a terminal to test your Starship prompt")
+                test_btn.clicked.connect(self._test_starship_in_terminal)
+                controls.addWidget(test_btn)
+
+            uninst_btn = QPushButton("\U0001f5d1\ufe0f Uninstall")
             uninst_btn.setObjectName("danger")
             uninst_btn.setFixedHeight(26)
             uninst_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_uninstall(t, sb, sl))
             controls.addWidget(uninst_btn)
 
         layout.addLayout(controls)
+
+        # Preset description below controls
+        if desc_hint:
+            layout.addWidget(desc_hint)
+
         return card
 
     def _make_pip_card(self, tool_id, title, desc):
@@ -1090,13 +1133,111 @@ class SettingsPage(QWidget):
 
     def _cli_configure(self, tool_id, combo, preset_key):
         from src.core.cli_tools_manager import CliToolWorker
-        theme = combo.currentText()
+        theme = combo.currentData() or combo.currentText()
         self._cli_worker = CliToolWorker("configure", tool_id, {preset_key: theme}, parent=self)
         self._cli_worker.progress.connect(self._cli_log_append)
         self._cli_worker.finished.connect(
             lambda ok, msg: self._cli_log_append(msg)
         )
         self._cli_worker.start()
+
+
+    def _open_starship_editor(self):
+        """Open inline editor for starship.toml."""
+        from src.core.cli_tools_manager import read_starship_toml, write_starship_toml, get_starship_toml_path
+        from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPlainTextEdit, QPushButton, QLabel, QMessageBox
+        from PySide6.QtGui import QFont
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("📝 Starship Config Editor — starship.toml")
+        dlg.resize(700, 500)
+        dlg.setStyleSheet(
+            "QDialog { background: #1e1e2e; }"
+            "QPlainTextEdit { background: #181825; color: #cdd6f4; border: 1px solid #313244; "
+            "border-radius: 4px; font-family: 'Consolas', 'JetBrains Mono', monospace; font-size: 12px; }"
+            "QPushButton { padding: 6px 16px; border-radius: 4px; font-size: 12px; }"
+            "QPushButton#save { background: #a6e3a1; color: #1e1e2e; font-weight: bold; }"
+            "QPushButton#save:hover { background: #94d89d; }"
+            "QPushButton#secondary { background: #313244; color: #cdd6f4; }"
+            "QPushButton#secondary:hover { background: #45475a; }"
+            "QLabel { color: #6c7086; font-size: 11px; }"
+        )
+
+        layout = QVBoxLayout(dlg)
+
+        path_label = QLabel(f"📂 {get_starship_toml_path()}")
+        layout.addWidget(path_label)
+
+        editor = QPlainTextEdit()
+        editor.setFont(QFont("Consolas", 12))
+        editor.setPlainText(read_starship_toml())
+        editor.setTabStopDistance(28)
+        layout.addWidget(editor)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+
+        reload_btn = QPushButton("🔄 Reload")
+        reload_btn.setObjectName("secondary")
+        reload_btn.clicked.connect(lambda: editor.setPlainText(read_starship_toml()))
+        btn_row.addWidget(reload_btn)
+
+        open_folder_btn = QPushButton("📂 Open Folder")
+        open_folder_btn.setObjectName("secondary")
+        open_folder_btn.clicked.connect(lambda: __import__("subprocess").Popen(
+            ["explorer" if __import__("sys").platform == "win32" else "xdg-open",
+             str(get_starship_toml_path().parent)]
+        ))
+        btn_row.addWidget(open_folder_btn)
+
+        save_btn = QPushButton("💾 Save")
+        save_btn.setObjectName("save")
+        def _do_save():
+            if write_starship_toml(editor.toPlainText()):
+                self._cli_log_append("✅ starship.toml saved")
+                QMessageBox.information(dlg, "Saved", "starship.toml saved successfully! ✅\n\nOpen a new terminal to see changes.")
+            else:
+                QMessageBox.critical(dlg, "Error", "Failed to save starship.toml")
+        save_btn.clicked.connect(_do_save)
+        btn_row.addWidget(save_btn)
+
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setObjectName("secondary")
+        cancel_btn.clicked.connect(dlg.reject)
+        btn_row.addWidget(cancel_btn)
+
+        layout.addLayout(btn_row)
+        dlg.exec()
+
+    def _test_starship_in_terminal(self):
+        """Open a terminal so user can see their Starship prompt in action."""
+        import sys as _sys
+        from src.core.cli_tools_manager import is_tool_installed
+        if not is_tool_installed("starship"):
+            QMessageBox.warning(self, "Starship", "Starship is not installed.")
+            return
+        try:
+            if _sys.platform == "win32":
+                import subprocess
+                # Open PowerShell with starship init
+                subprocess.Popen(
+                    ["powershell", "-NoExit", "-Command",
+                     "Invoke-Expression (&starship init powershell)"],
+                    creationflags=0x00000010  # CREATE_NEW_CONSOLE
+                )
+            elif _sys.platform == "darwin":
+                import subprocess
+                subprocess.Popen(["open", "-a", "Terminal"])
+            else:
+                import subprocess
+                for term in ["gnome-terminal", "konsole", "xfce4-terminal", "xterm"]:
+                    import shutil
+                    if shutil.which(term):
+                        subprocess.Popen([term])
+                        break
+            self._cli_log_append("✅ Terminal opened — check your Starship prompt!")
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Could not open terminal:\n{e}")
 
     def _cli_done(self, ok, msg, btn, status_lbl, tool_id):
         from src.core.cli_tools_manager import is_tool_installed, get_tool_version
@@ -3819,7 +3960,8 @@ echo "OK"
                 color = "#cdd6f4"
             self.cli_log.append(f'<span style="color:{color};">{escaped}</span>')
 
-    def _make_cli_card(self, tool_id, title, desc, preset_label, presets, preset_key):
+    def _make_cli_card(self, tool_id, title, desc, preset_label, presets, preset_key,
+                        preset_descriptions=None):
         """Create a card widget for binary CLI tools (starship, oh-my-posh)."""
         from src.core.cli_tools_manager import is_tool_installed, get_tool_version
         card = QFrame()
@@ -3837,7 +3979,7 @@ echo "OK"
 
         installed = is_tool_installed(tool_id)
         version = get_tool_version(tool_id) or ""
-        status_lbl = QLabel(f"✅ {version}" if installed else "❌ Not installed")
+        status_lbl = QLabel(f"\u2705 {version}" if installed else "\u274c Not installed")
         status_lbl.setStyleSheet(f"color: {'#a6e3a1' if installed else '#f38ba8'}; font-size: 11px;")
         status_lbl.setObjectName(f"status_{tool_id.replace('-','_')}")
         header.addWidget(status_lbl)
@@ -3860,36 +4002,77 @@ echo "OK"
         controls.addWidget(preset_cb)
 
         combo = QComboBox()
-        combo.setMaximumWidth(180)
+        combo.setMaximumWidth(200)
         for p in presets:
-            combo.addItem(p)
+            label = p
+            if preset_descriptions and p in preset_descriptions:
+                label = f"{p}  \u2014  {preset_descriptions[p]}"
+            combo.addItem(label, p)
         combo.setObjectName(f"preset_{tool_id.replace('-','_')}")
         combo.setEnabled(False)
         preset_cb.toggled.connect(combo.setEnabled)
         controls.addWidget(combo)
 
+        # Preset description label (updates on selection)
+        desc_hint = None
+        if preset_descriptions:
+            desc_hint = QLabel("")
+            desc_hint.setStyleSheet("color: #6c7086; font-size: 10px; font-style: italic;")
+            desc_hint.setFixedHeight(16)
+
+            def _update_preset_hint(idx, _dh=desc_hint, _c=combo, _pd=preset_descriptions):
+                key = _c.itemData(idx)
+                if key and key in _pd:
+                    _dh.setText(_pd[key])
+                else:
+                    _dh.setText("")
+
+            combo.currentIndexChanged.connect(_update_preset_hint)
+            _update_preset_hint(0)
+
         controls.addStretch()
 
-        install_btn = QPushButton("⬇️ Install" if not installed else "🔄 Reinstall")
+        install_btn = QPushButton("\u2b07\ufe0f Install" if not installed else "\U0001f504 Reinstall")
         install_btn.setObjectName("secondary")
         install_btn.setFixedHeight(26)
         install_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_install(t, sb, sl))
         controls.addWidget(install_btn)
 
         if installed:
-            cfg_btn = QPushButton("⚙️ Configure Shell")
+            cfg_btn = QPushButton("\u2699\ufe0f Configure Shell")
             cfg_btn.setObjectName("secondary")
             cfg_btn.setFixedHeight(26)
             cfg_btn.clicked.connect(lambda _, t=tool_id, c=combo, pk=preset_key: self._cli_configure(t, c, pk))
             controls.addWidget(cfg_btn)
 
-            uninst_btn = QPushButton("🗑️ Uninstall")
+            # Starship-specific: Edit Config + Test buttons
+            if tool_id == "starship":
+                edit_btn = QPushButton("\U0001f4dd Edit Config")
+                edit_btn.setObjectName("secondary")
+                edit_btn.setFixedHeight(26)
+                edit_btn.setToolTip("Open starship.toml inline editor")
+                edit_btn.clicked.connect(self._open_starship_editor)
+                controls.addWidget(edit_btn)
+
+                test_btn = QPushButton("\u25b6\ufe0f Test")
+                test_btn.setObjectName("secondary")
+                test_btn.setFixedHeight(26)
+                test_btn.setToolTip("Open a terminal to test your Starship prompt")
+                test_btn.clicked.connect(self._test_starship_in_terminal)
+                controls.addWidget(test_btn)
+
+            uninst_btn = QPushButton("\U0001f5d1\ufe0f Uninstall")
             uninst_btn.setObjectName("danger")
             uninst_btn.setFixedHeight(26)
             uninst_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_uninstall(t, sb, sl))
             controls.addWidget(uninst_btn)
 
         layout.addLayout(controls)
+
+        # Preset description below controls
+        if desc_hint:
+            layout.addWidget(desc_hint)
+
         return card
 
     def _make_pip_card(self, tool_id, title, desc):
@@ -3962,13 +4145,111 @@ echo "OK"
 
     def _cli_configure(self, tool_id, combo, preset_key):
         from src.core.cli_tools_manager import CliToolWorker
-        theme = combo.currentText()
+        theme = combo.currentData() or combo.currentText()
         self._cli_worker = CliToolWorker("configure", tool_id, {preset_key: theme}, parent=self)
         self._cli_worker.progress.connect(self._cli_log_append)
         self._cli_worker.finished.connect(
             lambda ok, msg: self._cli_log_append(msg)
         )
         self._cli_worker.start()
+
+
+    def _open_starship_editor(self):
+        """Open inline editor for starship.toml."""
+        from src.core.cli_tools_manager import read_starship_toml, write_starship_toml, get_starship_toml_path
+        from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPlainTextEdit, QPushButton, QLabel, QMessageBox
+        from PySide6.QtGui import QFont
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("📝 Starship Config Editor — starship.toml")
+        dlg.resize(700, 500)
+        dlg.setStyleSheet(
+            "QDialog { background: #1e1e2e; }"
+            "QPlainTextEdit { background: #181825; color: #cdd6f4; border: 1px solid #313244; "
+            "border-radius: 4px; font-family: 'Consolas', 'JetBrains Mono', monospace; font-size: 12px; }"
+            "QPushButton { padding: 6px 16px; border-radius: 4px; font-size: 12px; }"
+            "QPushButton#save { background: #a6e3a1; color: #1e1e2e; font-weight: bold; }"
+            "QPushButton#save:hover { background: #94d89d; }"
+            "QPushButton#secondary { background: #313244; color: #cdd6f4; }"
+            "QPushButton#secondary:hover { background: #45475a; }"
+            "QLabel { color: #6c7086; font-size: 11px; }"
+        )
+
+        layout = QVBoxLayout(dlg)
+
+        path_label = QLabel(f"📂 {get_starship_toml_path()}")
+        layout.addWidget(path_label)
+
+        editor = QPlainTextEdit()
+        editor.setFont(QFont("Consolas", 12))
+        editor.setPlainText(read_starship_toml())
+        editor.setTabStopDistance(28)
+        layout.addWidget(editor)
+
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+
+        reload_btn = QPushButton("🔄 Reload")
+        reload_btn.setObjectName("secondary")
+        reload_btn.clicked.connect(lambda: editor.setPlainText(read_starship_toml()))
+        btn_row.addWidget(reload_btn)
+
+        open_folder_btn = QPushButton("📂 Open Folder")
+        open_folder_btn.setObjectName("secondary")
+        open_folder_btn.clicked.connect(lambda: __import__("subprocess").Popen(
+            ["explorer" if __import__("sys").platform == "win32" else "xdg-open",
+             str(get_starship_toml_path().parent)]
+        ))
+        btn_row.addWidget(open_folder_btn)
+
+        save_btn = QPushButton("💾 Save")
+        save_btn.setObjectName("save")
+        def _do_save():
+            if write_starship_toml(editor.toPlainText()):
+                self._cli_log_append("✅ starship.toml saved")
+                QMessageBox.information(dlg, "Saved", "starship.toml saved successfully! ✅\n\nOpen a new terminal to see changes.")
+            else:
+                QMessageBox.critical(dlg, "Error", "Failed to save starship.toml")
+        save_btn.clicked.connect(_do_save)
+        btn_row.addWidget(save_btn)
+
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.setObjectName("secondary")
+        cancel_btn.clicked.connect(dlg.reject)
+        btn_row.addWidget(cancel_btn)
+
+        layout.addLayout(btn_row)
+        dlg.exec()
+
+    def _test_starship_in_terminal(self):
+        """Open a terminal so user can see their Starship prompt in action."""
+        import sys as _sys
+        from src.core.cli_tools_manager import is_tool_installed
+        if not is_tool_installed("starship"):
+            QMessageBox.warning(self, "Starship", "Starship is not installed.")
+            return
+        try:
+            if _sys.platform == "win32":
+                import subprocess
+                # Open PowerShell with starship init
+                subprocess.Popen(
+                    ["powershell", "-NoExit", "-Command",
+                     "Invoke-Expression (&starship init powershell)"],
+                    creationflags=0x00000010  # CREATE_NEW_CONSOLE
+                )
+            elif _sys.platform == "darwin":
+                import subprocess
+                subprocess.Popen(["open", "-a", "Terminal"])
+            else:
+                import subprocess
+                for term in ["gnome-terminal", "konsole", "xfce4-terminal", "xterm"]:
+                    import shutil
+                    if shutil.which(term):
+                        subprocess.Popen([term])
+                        break
+            self._cli_log_append("✅ Terminal opened — check your Starship prompt!")
+        except Exception as e:
+            QMessageBox.warning(self, "Error", f"Could not open terminal:\n{e}")
 
     def _cli_done(self, ok, msg, btn, status_lbl, tool_id):
         from src.core.cli_tools_manager import is_tool_installed, get_tool_version

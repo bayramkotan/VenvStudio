@@ -5,8 +5,6 @@
 **Lightweight Python Virtual Environment Manager**  
 Create, manage, and launch your Python environments — all from a modern GUI
 
-[![PyPI](https://img.shields.io/pypi/v/venvstudio?style=for-the-badge&color=a6e3a1&logo=pypi&logoColor=white)](https://pypi.org/project/venvstudio/)
-[![License](https://img.shields.io/badge/License-LGPL--3.0-cba6f7?style=for-the-badge)](https://github.com/bayramkotan/VenvStudio/blob/main/LICENSE)
 ![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20macOS%20%7C%20Linux-f9e2af?style=for-the-badge)
 
 </div>
@@ -49,10 +47,25 @@ Or download the standalone binary — **no Python required:**
 
 ### 🚀 Quick Launch
 - Sidebar shows installed apps for the active environment
-- One-click launch: JupyterLab, Jupyter Notebook, Spyder IDE, IPython, Orange Data Mining, Streamlit, Gradio, Dash, FastAPI, TensorBoard, MLflow, and more
 - **Jupyter Working Directory** — configurable (Home / Env Folder / Custom Path)
 - **Create Desktop Shortcut** for any app
 - Instant sync between sidebar dropdown, environment table, and package panel
+
+**Supported Launchers:**
+
+[![Jupyter](https://img.shields.io/badge/Jupyter-Lab%20%26%20Notebook-F37626?style=flat-square&logo=jupyter&logoColor=white)](https://jupyter.org/)
+[![Streamlit](https://img.shields.io/badge/Streamlit-FF4B4B?style=flat-square&logo=streamlit&logoColor=white)](https://streamlit.io/)
+[![Gradio](https://img.shields.io/badge/Gradio-F97316?style=flat-square&logo=gradio&logoColor=white)](https://gradio.app/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![TensorBoard](https://img.shields.io/badge/TensorBoard-FF6F00?style=flat-square&logo=tensorflow&logoColor=white)](https://www.tensorflow.org/tensorboard)
+[![MLflow](https://img.shields.io/badge/MLflow-0194E2?style=flat-square&logo=mlflow&logoColor=white)](https://mlflow.org/)
+[![Spyder](https://img.shields.io/badge/Spyder_IDE-838485?style=flat-square&logo=spyderide&logoColor=white)](https://www.spyder-ide.org/)
+[![Orange](https://img.shields.io/badge/Orange-Data_Mining-E6812C?style=flat-square)](https://orangedatamining.com/)
+[![Dash](https://img.shields.io/badge/Plotly_Dash-3F4F75?style=flat-square&logo=plotly&logoColor=white)](https://dash.plotly.com/)
+[![Panel](https://img.shields.io/badge/Panel-4E8BBE?style=flat-square)](https://panel.holoviz.org/)
+[![Voilà](https://img.shields.io/badge/Voil%C3%A0-5B4B8A?style=flat-square)](https://voila.readthedocs.io/)
+[![Datasette](https://img.shields.io/badge/Datasette-4A8B6E?style=flat-square)](https://datasette.io/)
+[![IPython](https://img.shields.io/badge/IPython-3776AB?style=flat-square&logo=python&logoColor=white)](https://ipython.org/)
 
 ### 🐍 Python Management
 - Auto-detect all system Python installations
@@ -66,7 +79,7 @@ Or download the standalone binary — **no Python required:**
 - 🌍 Interface language: English / Turkish
 - Custom venv base directory
 - Custom terminal, catalog categories, and packages
-- CLI/TUI Tools: **Starship**, **Oh My Posh**, **Nerd Fonts**
+- CLI/TUI Tools: **Starship** (preset preview, inline config editor, test terminal), **Oh My Posh**, **Nerd Fonts**
 - Auto-check for updates on startup
 
 ---

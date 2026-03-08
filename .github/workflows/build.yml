@@ -52,8 +52,8 @@ jobs:
           path: dist/VenvStudio
           if-no-files-found: warn
 
-  build-macos-intel:
-    runs-on: macos-13  # Last Intel runner
+  build-macos:
+    runs-on: macos-latest  # Apple Silicon — runs on Intel via Rosetta 2
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -63,35 +63,12 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install PySide6 pyinstaller Pillow
-      - name: Build (x86_64)
+      - name: Build
         run: python build.py
       - uses: actions/upload-artifact@v4
         with:
-          name: VenvStudio-macOS-x86_64
+          name: VenvStudio-macOS
           path: dist/VenvStudio
-          if-no-files-found: warn
-
-  build-macos-universal:
-    needs: [build-macos-arm, build-macos-intel]
-    runs-on: macos-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: VenvStudio-macOS-arm64
-          path: arm64/
-      - uses: actions/download-artifact@v4
-        with:
-          name: VenvStudio-macOS-x86_64
-          path: x86_64/
-      - name: Create Universal Binary
-        run: |
-          chmod +x arm64/VenvStudio x86_64/VenvStudio
-          lipo -create -output VenvStudio-macOS-universal arm64/VenvStudio x86_64/VenvStudio
-          file VenvStudio-macOS-universal
-      - uses: actions/upload-artifact@v4
-        with:
-          name: VenvStudio-macOS-universal
-          path: VenvStudio-macOS-universal
           if-no-files-found: warn
 
   build-linux-appimage:
@@ -191,9 +168,9 @@ jobs:
           if-no-files-found: warn
 
   release:
-    needs: [build-windows, build-macos-universal, build-linux-appimage]
+    needs: [build-windows, build-macos, build-linux-appimage]
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: always() && startsWith(github.ref, 'refs/tags/v') && needs.build-windows.result == 'success'
 
     steps:
       - uses: actions/download-artifact@v4
@@ -211,7 +188,7 @@ jobs:
           files: |
             VenvStudio-Windows/VenvStudio.exe
             VenvStudio-Linux-AppImage/VenvStudio*.AppImage
-            VenvStudio-macOS-universal/VenvStudio-macOS-universal
+            VenvStudio-macOS/VenvStudio
           body: |
             ## ${{ github.ref_name }}
 
@@ -220,7 +197,7 @@ jobs:
             |----------|------|
             | Windows x64 | `VenvStudio.exe` |
             | Linux x64 | `VenvStudio-x86_64.AppImage` |
-            | macOS Universal (Intel + Apple Silicon) | `VenvStudio-macOS-universal` |
+            | macOS (Apple Silicon + Rosetta 2) | `VenvStudio-macOS` |
             | PyPI | `pip install venvstudio` |
           fail_on_unmatched_files: false
 

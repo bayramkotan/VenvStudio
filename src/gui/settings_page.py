@@ -105,8 +105,9 @@ class SettingsPage(QWidget):
         self.theme_cb.toggled.connect(lambda on: self.theme_combo.setEnabled(on))
         theme_row.addWidget(self.theme_cb)
         self.theme_combo = NoScrollComboBox()
-        self.theme_combo.addItem("🌙 Dark", "dark")
-        self.theme_combo.addItem("☀️ Light", "light")
+        from src.gui.styles import THEME_OPTIONS
+        for theme_id, theme_label in THEME_OPTIONS:
+            self.theme_combo.addItem(theme_label, theme_id)
         self.theme_combo.setEnabled(False)
         theme_row.addWidget(self.theme_combo, 1)
         appearance_layout.addRow(f"{tr('theme')}", theme_row)

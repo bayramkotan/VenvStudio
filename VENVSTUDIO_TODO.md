@@ -81,8 +81,72 @@
 - **M12:** Settings'e eklenen her dropdown önüne mutlaka checkbox konulmalı — checkbox işaretlenmeden combo disabled olmalı — Launch Settings dahil tüm bölümlerden sonra
 - **M10:** ✅ Her release'de GitHub Release notes otomatik oluşturuluyor — önceki tag'den bu yana commit mesajları listeleniyor (fix/feat/chore)
 - **M8:** Quick Launch — cache boşken ilk geçişte kısa gecikme (UX)
+- **M13:** README'ye Linux kurulum rehberi ekle:
+  - `--break-system-packages` parametresi açıklaması
+  - pip kurulumu: Arch (`sudo pacman -S python-pip`), Debian (`sudo apt install python3-pip`), Fedora/CentOS (`sudo dnf install python3-pip`), openSUSE (`sudo zypper install python3-pip`), NixOS (`nix-env -iA nixpkgs.python3Packages.pip`)
+  - `pip install venvstudio` yerine `python -m pip install venvstudio -U` öner
+  - Windows ARM + macOS Apple Silicon notları
+- **M14:** README'ye `python3-venv` paket kurulumu da ekle (Debian/Ubuntu: `sudo apt install python3-venv`)
 
-## 💡 FİKİRLER (Gemini önerileri + topluluk)
+## 🔴 KRİTİK BUG'LAR
+- **B41:** Linux'te Python yüklendikten sonra Settings'te görünmüyor — program yeniden başlatılana kadar. `_scan_pythons()` install sonrası otomatik tetiklenmeli
+- **B42:** Python yükleyici sistemi çökertiyor — detaylı inceleme gerekli, güvenlik kontrolleri eklenmeli
+- **B43:** Arch Linux'te Orange3 crash — `chardet.universaldetector` modülü bulunamıyor (Python 3.14 + chardet uyumsuzluğu). `chardet<4.0` pin'i yeterli değil, `charset-normalizer` fallback gerekebilir
+- **B44:** Arch Linux'te IPython çalışmıyor — detaylı hata logu gerekli
+- **B45:** QThread SIGABRT crash — "QThread: Destroyed while thread is still running" — her kapanışta oluyor. Muhtemelen `EnvDetailWorker` veya `_QLWorker` parent destroy edilirken hâlâ çalışıyor. `closeEvent` ve dialog kapanışlarında tüm worker'lar `wait()` edilmeli
+- **B46:** Oh My Posh "command not found" — fish shell'de `~/.local/bin/VenvStudio/bin/` PATH'e eklenmiyor. `config.fish`'e PATH inject kontrolü gerekli. Ayrıca "Open Terminal" ile açılan shell'de PATH henüz yüklenmemiş olabilir
+- **B47:** Yeni temalar çalışmıyor — Settings'ten değiştirince uygulanmıyor. Muhtemelen `package_panel.apply_theme()` sadece "dark"/"light" kontrol ediyor, yeni tema adlarını ("light-github", "light-vscode" vb.) tanımıyor. `apply_theme()` güncellenmeli
+
+## 🟡 PLANLI GELİŞTİRMELER (öncelik sırasıyla)
+
+### 1️⃣ F30 — CLI/TUI Tools tamamlama (devam)
+*(Oh My Posh, Nerd Fonts, Genel — Starship tamamlandı)*
+
+### 2️⃣ F37 — CLI Komut Seti Genişletme
+- [ ] `vs create <name>` — yeni env oluştur
+- [ ] `vs delete <name>` — env sil
+- [ ] `vs activate <name>` — env aktif et (shell'e inject)
+- [ ] `vs list` — tüm env'leri listele
+- [ ] `vs install <pkg>` — aktif env'e paket kur
+- [ ] `vs run <command>` — env içinde komut çalıştır
+- [ ] `vs info <name>` — env detayları (python ver, paket sayısı, boyut)
+- [ ] `vs export <name>` — requirements.txt oluştur
+- [ ] `venvstudio --help` gelişmiş yardım çıktısı
+
+### 3️⃣ F38 — Eğitici Özellikler (Education-First)
+- [ ] Her ekranda contextual tooltip'ler — "Bu ne işe yarar?" açıklamaları
+- [ ] İlk açılış rehberi (onboarding wizard) — adım adım VenvStudio turu
+- [ ] Paket kartlarında "Bu paket ne yapar?" kısa açıklamalar
+- [ ] Launcher'larda "Bu araç nedir?" bilgi butonları
+- [ ] Terminal komutlarını göster — "Arka planda şu komut çalışıyor: ..." şeffaflık modu
+- [ ] Venv kavramı açıklaması — "Virtual Environment nedir?" yardım sayfası
+- [ ] pip vs uv karşılaştırma bilgi kutusu
+- [ ] Hata mesajlarında çözüm önerileri (educational error messages)
+
+### 4️⃣ Diğer Bug Fix'ler ve İyileştirmeler
+*(B41–B47, M13–M18)*
+
+## 🟢 İYİLEŞTİRME
+- **M5:** Global default Python gösterimi (Settings)
+- **M6:** Env tablosunda sütun genişliği kaydetme
+- **M7:** CHANGELOG.md tutulması
+- **M8:** Quick Launch — cache boşken ilk geçişte kısa gecikme (UX)
+- **M10:** ✅ Her release'de GitHub Release notes otomatik oluşturuluyor
+- **M11:** ✅ About (ℹ️) bölümü Settings'te her zaman en altta
+- **M12:** Settings'e eklenen her dropdown önüne mutlaka checkbox konulmalı
+- **M13:** README'ye Linux kurulum rehberi ekle:
+  - `--break-system-packages` parametresi açıklaması
+  - pip kurulumu: Arch (`sudo pacman -S python-pip`), Debian (`sudo apt install python3-pip`), Fedora/CentOS (`sudo dnf install python3-pip`), openSUSE (`sudo zypper install python3-pip`), NixOS (`nix-env -iA nixpkgs.python3Packages.pip`)
+  - `pip install venvstudio` yerine `python -m pip install venvstudio -U` öner
+  - Windows ARM + macOS Apple Silicon notları
+- **M14:** README'ye `python3-venv` paket kurulumu da ekle (Debian/Ubuntu: `sudo apt install python3-venv`)
+- **M15:** Package Info sabit panel olsun — "More" butonu ile detaylı bilgi açılsın. Catalog kısmında da Package Info gösterilsin
+- **M16:** Manual Install parsing iyileştirmesi:
+  - `pandas==1.0.1`, `pandas=1.0.1`, `pandas 1.0.1` hepsi geçerli olsun
+  - Paket adı case-insensitive (`PandAS` → `pandas`)
+  - Versiyon formatı: `1`, `1.0`, `1.0.0`, `1.000` hepsi kabul edilsin
+- **M17:** Yeni sürümlerde eski env'i kaldırmayı teklif et — farklı kütüphane versiyonlarından doğan hataları önlemek için
+- **M18:** Dil desteği README'de güncellenmeli — 11 dil varsa hepsini README'de göster (şu an sadece English/Turkish yazıyor)
 - **F32:** Yeni Launcher adayları: Locust (yük testi), Flower (Celery izleme), Pytest (test dashboard), Pdoc/Sphinx (dokümantasyon)
 - **F33:** Port Killer butonu — asılı kalmış servis portlarını temizle
 - **F34:** Cache Cleaner — `__pycache__` + pip cache temizliği
@@ -104,6 +168,7 @@
 - Orange3, AnyQt üzerinden çalışır → **PyQt5 + PyQtWebEngine gerektirir**, PySide6 desteklenmez
 - `chardet>=4.0` ile uyumsuz → `chardet<4.0` zorunlu
 - Python 3.9 ve altı: `orange3<=3.36.2`; Python 3.10+: `orange3` latest
+- **Arch Linux + Python 3.14:** `chardet.universaldetector` bulunamıyor hatası — `chardet<4.0` pin'i yetmiyor, `charset-normalizer` fallback araştırılmalı
 
 ### Launcher Architecture
 - `needs_console: True` → `CREATE_NEW_CONSOLE`
@@ -130,4 +195,4 @@ git push origin main
 git push origin v1.3.NEW
 ```
 
-**Mevcut versiyon:** v1.3.37
+**Mevcut versiyon:** v1.3.44

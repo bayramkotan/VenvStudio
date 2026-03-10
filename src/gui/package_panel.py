@@ -238,7 +238,7 @@ class PackagePanel(QWidget):
 
     def apply_theme(self, theme: str = "dark"):
         """Update hardcoded colors when theme changes."""
-        c = self.LIGHT if theme == "light" else self.DARK
+        c = self.LIGHT if theme.startswith("light") else self.DARK
 
         if hasattr(self, "env_bar"):
             self.env_bar.setStyleSheet(

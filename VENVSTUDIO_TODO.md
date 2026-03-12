@@ -95,7 +95,27 @@
 - **B44:** Arch Linux'te IPython çalışmıyor — detaylı hata logu gerekli
 - **B45:** QThread SIGABRT crash — "QThread: Destroyed while thread is still running" — her kapanışta oluyor. Muhtemelen `EnvDetailWorker` veya `_QLWorker` parent destroy edilirken hâlâ çalışıyor. `closeEvent` ve dialog kapanışlarında tüm worker'lar `wait()` edilmeli
 - **B46:** Oh My Posh "command not found" — fish shell'de `~/.local/bin/VenvStudio/bin/` PATH'e eklenmiyor. `config.fish`'e PATH inject kontrolü gerekli. Ayrıca "Open Terminal" ile açılan shell'de PATH henüz yüklenmemiş olabilir
-- **B47:** Yeni temalar çalışmıyor — Settings'ten değiştirince uygulanmıyor. Muhtemelen `package_panel.apply_theme()` sadece "dark"/"light" kontrol ediyor, yeni tema adlarını ("light-github", "light-vscode" vb.) tanımıyor. `apply_theme()` güncellenmeli
+- **B47:** Yeni temalar çalışmıyor — 182 satır hardcoded dark renk var. Tam refactor gerekli (sonraki chat'te)
+- **B48:** Uygulama genel stabilite sorunu — çok sık crash ediyor. Kapsamlı crash analizi ve defensive coding gerekli
+
+### B48 — Stabilite ve Log Sistemi İyileştirme Planı
+- [ ] **Detaylı log seviyesi:** Her fonksiyon girişine `logger.debug()` ekle — hangi fonksiyon ne zaman çağrıldı, parametreler ne
+- [ ] **Exception handler wrapper:** Tüm QThread `run()` metotları `try/except` ile sarılmalı — catch edilen hata loglanmalı, sessiz crash olmamalı
+- [ ] **Global exception hook:** `sys.excepthook` ve `threading.excepthook` ile yakalanmamış exception'ları logla + crash dialog göster
+- [ ] **QThread safety audit:** Tüm QThread subclass'lar incelenmeli:
+  - `EnvDetailWorker` — `closeEvent`'te `wait()` ediliyor mu?
+  - `DeleteWorker`, `CloneWorker`, `RenameWorker` — dialog kapanınca ne oluyor?
+  - `_QLWorker` (inline class) — parent destroy edilince?
+  - `CliToolWorker` — settings page kapanınca?
+- [ ] **Signal/Slot safety:** Thread'den UI update yapan signal'lar `Qt.QueuedConnection` mi?
+- [ ] **Null/None guard'lar:** `pip_manager`, `venv_path`, `selected_env` None olabilecek her yerde kontrol
+- [ ] **Subprocess timeout:** Tüm `subprocess.run()` çağrılarında timeout var mı? Timeout sonrası ne oluyor?
+- [ ] **Crash log iyileştirme:** Mevcut crash log'a ek olarak:
+  - Son 50 log satırını crash dosyasına dahil et
+  - Sistem bilgisi (OS, Python ver, Qt ver, RAM, disk) crash log'a ekle
+  - Crash sonrası "Bug Report" butonu — GitHub Issues'a otomatik template ile yönlendir
+- [ ] **Startup diagnostics:** Uygulama açılışında kısa self-check — PySide6 import, config dosyası okuma, venv dizini erişim
+- [ ] **Graceful degradation:** Bir bileşen crash ederse tüm uygulama kapanmasın — hatalı bileşen devre dışı bırakılsın
 
 ## 🟡 PLANLI GELİŞTİRMELER (öncelik sırasıyla)
 

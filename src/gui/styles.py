@@ -243,12 +243,14 @@ QTabWidget::pane {{
     border: 1px solid {c['border']};
     border-radius: 8px;
     background-color: {c['bg']};
+    margin-top: -1px;
 }}
 
 QTabBar::tab {{
     background-color: {c['sidebar']};
     color: {c['fg_muted']};
-    border: none;
+    border: 1px solid {c['border']};
+    border-bottom: 2px solid {c['border']};
     padding: 10px 20px;
     border-top-left-radius: 8px;
     border-top-right-radius: 8px;
@@ -259,10 +261,12 @@ QTabBar::tab:selected {{
     background-color: {c['bg']};
     color: {c['accent']};
     font-weight: bold;
+    border-bottom: 3px solid {c['accent']};
 }}
 
 QTabBar::tab:hover:!selected {{
     background-color: {c['hover']};
+    color: {c['fg']};
 }}
 
 /* ── Progress Bar ── */

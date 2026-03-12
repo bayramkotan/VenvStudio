@@ -501,3 +501,18 @@ THEME_OPTIONS = [
 def get_theme(name: str = "dark") -> str:
     """Return stylesheet for the given theme name."""
     return THEMES.get(name, THEMES['dark'])
+
+
+def get_colors(name: str = "dark") -> dict:
+    """Return the color palette dict for the given theme name.
+    Use this in widgets that apply inline styles.
+    """
+    palettes = {
+        'dark':         _DARK_CATPPUCCIN,
+        'light-latte':  _LIGHT_LATTE,
+        'light-github': _LIGHT_GITHUB,
+        'light-vscode': _LIGHT_VSCODE,
+        'light-nord':   _LIGHT_NORD,
+        'light':        _LIGHT_LATTE,
+    }
+    return palettes.get(name, _DARK_CATPPUCCIN).copy()

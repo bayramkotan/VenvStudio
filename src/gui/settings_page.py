@@ -102,13 +102,14 @@ class SettingsPage(QWidget):
         theme_row = QHBoxLayout()
         self.theme_cb = QCheckBox()
         self.theme_cb.setChecked(False)
-        self.theme_cb.toggled.connect(lambda on: self.theme_combo.setEnabled(on))
+        self.theme_cb.toggled.connect(lambda on: self._on_theme_cb_toggled(on))
         theme_row.addWidget(self.theme_cb)
         self.theme_combo = NoScrollComboBox()
         from src.gui.styles import THEME_OPTIONS
         for theme_id, theme_label in THEME_OPTIONS:
             self.theme_combo.addItem(theme_label, theme_id)
         self.theme_combo.setEnabled(False)
+        self.theme_combo.currentIndexChanged.connect(self._on_theme_live_preview)
         theme_row.addWidget(self.theme_combo, 1)
         appearance_layout.addRow(f"{tr('theme')}", theme_row)
 
@@ -929,6 +930,26 @@ class SettingsPage(QWidget):
         main_layout.addWidget(scroll)
 
     # ── CLI/TUI Tools helpers ─────────────────────────────────────────────────
+
+
+    def _on_theme_cb_toggled(self, on):
+        """Enable/disable theme combo and apply theme live."""
+        self.theme_combo.setEnabled(on)
+        if on:
+            self._on_theme_live_preview()
+        else:
+            # Checkbox unchecked → revert to dark
+            self.config.set("theme", "dark")
+            self.theme_changed.emit("dark")
+
+    def _on_theme_live_preview(self, _idx=None):
+        """Apply theme instantly when dropdown changes — no Save needed."""
+        if not self.theme_cb.isChecked():
+            return
+        theme = self.theme_combo.currentData()
+        if theme:
+            self.config.set("theme", theme)
+            self.theme_changed.emit(theme)
 
     def _cli_log_append(self, text: str):
         import html as _html
@@ -3941,6 +3962,26 @@ echo "OK"
         main_layout.addWidget(scroll)
 
     # ── CLI/TUI Tools helpers ─────────────────────────────────────────────────
+
+
+    def _on_theme_cb_toggled(self, on):
+        """Enable/disable theme combo and apply theme live."""
+        self.theme_combo.setEnabled(on)
+        if on:
+            self._on_theme_live_preview()
+        else:
+            # Checkbox unchecked → revert to dark
+            self.config.set("theme", "dark")
+            self.theme_changed.emit("dark")
+
+    def _on_theme_live_preview(self, _idx=None):
+        """Apply theme instantly when dropdown changes — no Save needed."""
+        if not self.theme_cb.isChecked():
+            return
+        theme = self.theme_combo.currentData()
+        if theme:
+            self.config.set("theme", theme)
+            self.theme_changed.emit(theme)
 
     def _cli_log_append(self, text: str):
         import html as _html

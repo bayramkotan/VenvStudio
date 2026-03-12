@@ -95,7 +95,7 @@
 - **B44:** Arch Linux'te IPython çalışmıyor — detaylı hata logu gerekli
 - **B45:** QThread SIGABRT crash — "QThread: Destroyed while thread is still running" — her kapanışta oluyor. Muhtemelen `EnvDetailWorker` veya `_QLWorker` parent destroy edilirken hâlâ çalışıyor. `closeEvent` ve dialog kapanışlarında tüm worker'lar `wait()` edilmeli
 - **B46:** Oh My Posh "command not found" — fish shell'de `~/.local/bin/VenvStudio/bin/` PATH'e eklenmiyor. `config.fish`'e PATH inject kontrolü gerekli. Ayrıca "Open Terminal" ile açılan shell'de PATH henüz yüklenmemiş olabilir
-- **B47:** Yeni temalar çalışmıyor — 182 satır hardcoded dark renk var. Tam refactor gerekli (sonraki chat'te)
+- **B47:** Yeni temalar çalışmıyor — 182 satır hardcoded dark renk var. Tam refactor gerekli (sonraki chat'te). Kısmi fix: `startswith("light")` + **live preview** (dropdown değişince anında tema değişiyor, Save gerekmez)
 - **B48:** Uygulama genel stabilite sorunu — çok sık crash ediyor. Kapsamlı crash analizi ve defensive coding gerekli
 
 ### B48 — Stabilite ve Log Sistemi İyileştirme Planı

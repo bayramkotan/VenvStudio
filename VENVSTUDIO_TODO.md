@@ -90,7 +90,10 @@
 
 ## 🔴 KRİTİK BUG'LAR
 - **B41:** Linux'te Python yüklendikten sonra Settings'te görünmüyor — program yeniden başlatılana kadar. `_scan_pythons()` install sonrası otomatik tetiklenmeli
-- **B42:** Python yükleyici sistemi çökertiyor — detaylı inceleme gerekli, güvenlik kontrolleri eklenmeli
+- **B42:** Python yükleyici sorunları:
+  - System Install hâlâ lokal path (`AppData\VenvStudio\pythons`) veriyor — `C:\Program Files` kullanmalı
+  - Dialog'da "astral-sh/python-build-standalone" linki gereksiz, kaldırılmalı veya sadeleştirilmeli
+  - Sistemi çökertme riski — güvenlik kontrolleri eklenmeli
 - **B43:** Arch Linux'te Orange3 crash — `chardet.universaldetector` modülü bulunamıyor (Python 3.14 + chardet uyumsuzluğu). `chardet<4.0` pin'i yeterli değil, `charset-normalizer` fallback gerekebilir
 - **B44:** Arch Linux'te IPython çalışmıyor — detaylı hata logu gerekli
 - **B45:** QThread SIGABRT crash — "QThread: Destroyed while thread is still running" — her kapanışta oluyor. Muhtemelen `EnvDetailWorker` veya `_QLWorker` parent destroy edilirken hâlâ çalışıyor. `closeEvent` ve dialog kapanışlarında tüm worker'lar `wait()` edilmeli

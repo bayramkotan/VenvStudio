@@ -98,7 +98,38 @@ class VenvManager:
                 # Clean up on failure
                 if venv_path.exists():
                     shutil.rmtree(venv_path, ignore_errors=True)
-                return False, f"Failed to create environment:\n{result.stderr}"
+
+                # Check if python3-venv is missing (Debian/Ubuntu/Pardus)
+                stderr_lower = (result.stderr or "").lower()
+                if ("ensurepip" in stderr_lower
+                        or "no module named venv" in stderr_lower
+                        or "returned non-zero exit" in stderr_lower):
+                    venv_installed = self._try_install_venv_package(python_exe, callback)
+                    if venv_installed:
+                        # Retry venv creation after installing python3-venv
+                        if callback:
+                            callback(f"Retrying environment creation...")
+                        retry = subprocess.run(
+                            cmd, capture_output=True, text=True, timeout=120,
+                        )
+                        if retry.returncode == 0:
+                            # Success on retry — continue to pip upgrade below
+                            pass
+                        else:
+                            if venv_path.exists():
+                                shutil.rmtree(venv_path, ignore_errors=True)
+                            return False, f"Failed to create environment after installing python3-venv:\n{retry.stderr}"
+                    else:
+                        return False, (
+                            f"Failed to create environment:\n{result.stderr}\n\n"
+                            f"💡 The 'venv' module may be missing.\n"
+                            f"Install it with your package manager:\n"
+                            f"  Debian/Ubuntu/Pardus: sudo apt install python3-venv\n"
+                            f"  Fedora: sudo dnf install python3-libs\n"
+                            f"  openSUSE: sudo zypper install python3-venv"
+                        )
+                else:
+                    return False, f"Failed to create environment:\n{result.stderr}"
 
             # Upgrade pip if requested
             pip_exe = get_pip_executable(venv_path)
@@ -133,6 +164,106 @@ class VenvManager:
             if venv_path.exists():
                 shutil.rmtree(venv_path, ignore_errors=True)
             return False, f"Error creating environment: {str(e)}"
+
+    # ── Auto-install python3-venv ──────────────────────────────────────────
+
+    @staticmethod
+    def _detect_distro_family() -> str:
+        """Detect Linux distro family from /etc/os-release.
+        Returns: 'debian', 'fedora', 'arch', 'suse', or 'unknown'.
+        """
+        try:
+            with open("/etc/os-release") as f:
+                content = f.read().lower()
+            # ID_LIKE is more reliable for derivatives (Pardus→debian, Manjaro→arch, etc.)
+            for line in content.splitlines():
+                if line.startswith("id_like=") or line.startswith("id="):
+                    val = line.split("=", 1)[1].strip('"').strip("'")
+                    if any(d in val for d in ("debian", "ubuntu")):
+                        return "debian"
+                    if any(d in val for d in ("fedora", "rhel", "centos")):
+                        return "fedora"
+                    if "arch" in val:
+                        return "arch"
+                    if "suse" in val:
+                        return "suse"
+        except (FileNotFoundError, OSError):
+            pass
+        # Fallback: check for apt/dnf/pacman
+        if shutil.which("apt"):
+            return "debian"
+        if shutil.which("dnf"):
+            return "fedora"
+        if shutil.which("pacman"):
+            return "arch"
+        if shutil.which("zypper"):
+            return "suse"
+        return "unknown"
+
+    def _try_install_venv_package(self, python_exe: str, callback=None) -> bool:
+        """Try to install python3-venv package via system package manager.
+        Uses pkexec for graphical root elevation.
+        Returns True if installation succeeded.
+        """
+        import platform as _platform
+        if _platform.system().lower() != "linux":
+            return False
+
+        distro = self._detect_distro_family()
+
+        # Determine python version suffix (e.g. python3.14-venv)
+        py_ver = ""
+        try:
+            r = subprocess.run(
+                [python_exe, "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"],
+                capture_output=True, text=True, timeout=5,
+            )
+            py_ver = r.stdout.strip()
+        except Exception:
+            pass
+
+        if distro == "debian":
+            # Try versioned first (python3.14-venv), fallback to python3-venv
+            packages = []
+            if py_ver:
+                packages.append(f"python{py_ver}-venv")
+            packages.append("python3-venv")
+            install_cmd = ["apt", "install", "-y"] + packages
+        elif distro == "fedora":
+            return True  # Fedora includes venv by default
+        elif distro == "arch":
+            return True  # Arch includes venv by default
+        elif distro == "suse":
+            install_cmd = ["zypper", "--non-interactive", "install", "python3-venv"]
+        else:
+            return False
+
+        if callback:
+            callback(f"Installing python3-venv (requires root)...")
+
+        # Try pkexec (graphical sudo), then sudo
+        sudo_cmds = [
+            ["pkexec"] + install_cmd,
+            ["sudo"] + install_cmd,
+        ]
+
+        for cmd in sudo_cmds:
+            try:
+                result = subprocess.run(
+                    cmd, capture_output=True, text=True, timeout=120,
+                )
+                if result.returncode == 0:
+                    if callback:
+                        callback("✅ python3-venv installed successfully!")
+                    return True
+            except FileNotFoundError:
+                continue
+            except subprocess.TimeoutExpired:
+                continue
+
+        return False
+
+    # ── Delete ─────────────────────────────────────────────────────────────
 
     def delete_venv(self, name: str, callback=None) -> tuple[bool, str]:
         """Delete a virtual environment."""

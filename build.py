@@ -200,6 +200,8 @@ def get_hidden_imports():
         "src.gui.package_panel", "src.gui.settings_page", "src.gui.styles",
         "src.utils", "src.utils.constants", "src.utils.i18n",
         "src.utils.logger", "src.utils.platform_utils",
+        "src.core.python_downloader", "src.core.updater",
+        "src.core.cli_tools_manager",
     ]
 
 
@@ -220,7 +222,7 @@ def get_excludes():
         "PySide6.QtSvg", "PySide6.QtSvgWidgets",
         "PySide6.QtCharts", "PySide6.QtDataVisualization",
         "PySide6.QtNetworkAuth",
-        "tkinter", "unittest", "email", "html", "http", "xml",
+        "tkinter", "unittest", "email", "html", "xml",
         "pydoc", "doctest", "ftplib", "imaplib", "smtplib", "xmlrpc",
         "turtle", "turtledemo",
     ]

@@ -1921,16 +1921,31 @@ class SettingsPage(QWidget):
             saved_default = self.config.get("system_default_python", "")
             default_norm = os.path.normcase(os.path.normpath(saved_default)) if saved_default else ""
 
-        # All pythons from system scan
+        # All pythons from system scan — deduplicate symlinks
         system_pythons = find_system_pythons()
         listed_paths = set()
 
+        # Resolve symlinks: group by real binary, keep shortest path
+        seen_real = {}  # realpath -> (version, norm_path)
         for version, path in system_pythons:
             norm_path = os.path.normpath(path)
             norm_case = os.path.normcase(norm_path)
-
             if norm_case in excluded_pythons:
                 continue
+            try:
+                real = os.path.realpath(path)
+            except OSError:
+                real = norm_path
+            if real in seen_real:
+                # Keep the shorter/cleaner path (e.g. /usr/bin/python over /usr/bin/python3.14)
+                existing = seen_real[real]
+                if len(norm_path) < len(existing[1]):
+                    seen_real[real] = (version, norm_path)
+            else:
+                seen_real[real] = (version, norm_path)
+
+        for _real, (version, norm_path) in seen_real.items():
+            norm_case = os.path.normcase(norm_path)
             if norm_case in listed_paths:
                 continue
             listed_paths.add(norm_case)
@@ -4953,16 +4968,31 @@ echo "OK"
             saved_default = self.config.get("system_default_python", "")
             default_norm = os.path.normcase(os.path.normpath(saved_default)) if saved_default else ""
 
-        # All pythons from system scan
+        # All pythons from system scan — deduplicate symlinks
         system_pythons = find_system_pythons()
         listed_paths = set()
 
+        # Resolve symlinks: group by real binary, keep shortest path
+        seen_real = {}  # realpath -> (version, norm_path)
         for version, path in system_pythons:
             norm_path = os.path.normpath(path)
             norm_case = os.path.normcase(norm_path)
-
             if norm_case in excluded_pythons:
                 continue
+            try:
+                real = os.path.realpath(path)
+            except OSError:
+                real = norm_path
+            if real in seen_real:
+                # Keep the shorter/cleaner path (e.g. /usr/bin/python over /usr/bin/python3.14)
+                existing = seen_real[real]
+                if len(norm_path) < len(existing[1]):
+                    seen_real[real] = (version, norm_path)
+            else:
+                seen_real[real] = (version, norm_path)
+
+        for _real, (version, norm_path) in seen_real.items():
+            norm_case = os.path.normcase(norm_path)
             if norm_case in listed_paths:
                 continue
             listed_paths.add(norm_case)

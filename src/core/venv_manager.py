@@ -224,10 +224,12 @@ class VenvManager:
 
         if distro == "debian":
             # Try versioned first (python3.14-venv), fallback to python3-venv
+            # Also install python-is-python3 so /usr/bin/python → python3
             packages = []
             if py_ver:
                 packages.append(f"python{py_ver}-venv")
             packages.append("python3-venv")
+            packages.append("python-is-python3")
             install_cmd = ["apt", "install", "-y"] + packages
         elif distro == "fedora":
             return True  # Fedora includes venv by default

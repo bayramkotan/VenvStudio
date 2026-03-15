@@ -130,8 +130,12 @@ class EnvCreateDialog(QDialog):
             else:
                 seen_real[real] = (version, norm)
 
+        # Collect all listed paths for deduplication (case-insensitive on Windows)
+        listed_paths = set()
+
         for _real, (version, norm) in seen_real.items():
             self.python_combo.addItem(f"Python {version} ({norm})", norm)
+            listed_paths.add(os.path.normcase(norm))
 
         # Also add custom pythons from config
         custom_pythons = self.config.get("custom_pythons", [])
@@ -141,19 +145,31 @@ class EnvCreateDialog(QDialog):
             if not raw_path:
                 continue
             norm = os.path.normpath(raw_path)
+            norm_case = os.path.normcase(norm)
             ver = entry.get("version", "?")
-            # Avoid duplicate (case-insensitive on Windows)
-            found = False
-            for i in range(self.python_combo.count()):
-                existing = self.python_combo.itemData(i) or ""
-                if existing and os.path.normpath(existing).lower() == norm.lower():
-                    found = True
-                    break
-            if not found:
-                self.python_combo.addItem(f"Python {ver} (Custom: {norm})", norm)
-                print(f"[DEBUG] Added custom python to env dialog: {ver} → {norm}")
-            else:
+            if norm_case in listed_paths:
                 print(f"[DEBUG] Skipped duplicate: {norm}")
+                continue
+            listed_paths.add(norm_case)
+            self.python_combo.addItem(f"Python {ver} (Custom: {norm})", norm)
+            print(f"[DEBUG] Added custom python to env dialog: {ver} → {norm}")
+
+        # Also add standalone (downloaded) Pythons
+        try:
+            from src.core.python_downloader import get_installed_pythons
+            for py in get_installed_pythons():
+                exe_path = os.path.normpath(str(py["python_exe"]))
+                exe_case = os.path.normcase(exe_path)
+                if exe_case in listed_paths:
+                    continue
+                listed_paths.add(exe_case)
+                ver = py.get("version", "?")
+                self.python_combo.addItem(
+                    f"Python {ver} (Downloaded: {exe_path})", exe_path
+                )
+                print(f"[DEBUG] Added downloaded python to env dialog: {ver} → {exe_path}")
+        except Exception as e:
+            print(f"[DEBUG] Could not load downloaded pythons: {e}")
 
         form_layout.addRow("Python:", self.python_combo)
 

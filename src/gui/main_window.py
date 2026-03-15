@@ -1464,9 +1464,24 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event):
         self.config.set("window_width", self.width())
         self.config.set("window_height", self.height())
-        # Wait for background worker to finish writing cache
-        if hasattr(self, "_detail_worker") and self._detail_worker.isRunning():
-            self._detail_worker.wait(5000)
+
+        # B45 fix: wait for ALL background workers before closing
+        workers = []
+        for attr in ("_detail_worker", "_ql_worker", "_delete_worker",
+                      "_rename_worker", "clone_worker"):
+            w = getattr(self, attr, None)
+            if w is not None and hasattr(w, "isRunning") and w.isRunning():
+                workers.append((attr, w))
+
+        for attr, w in workers:
+            try:
+                w.quit()
+                if not w.wait(3000):
+                    w.terminate()
+                    w.wait(1000)
+            except RuntimeError:
+                pass  # already destroyed
+
         super().closeEvent(event)
 
     def showEvent(self, event):

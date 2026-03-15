@@ -43,6 +43,190 @@ os.environ.setdefault("QT_ENABLE_HIGHDPI_SCALING", "1")
 os.environ.setdefault("QT_SCALE_FACTOR_ROUNDING_POLICY", "PassThrough")
 
 
+def _check_and_install_linux_deps(app, config, logger):
+    """Check if pip and venv are available on Linux. If not, offer to install them."""
+    import subprocess
+    import shutil
+
+    # Skip if already checked and installed
+    if config.get("linux_deps_checked", False):
+        return
+
+    python_exe = shutil.which("python3") or shutil.which("python") or sys.executable
+    missing = []
+
+    # Check pip
+    try:
+        result = subprocess.run(
+            [python_exe, "-m", "pip", "--version"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            missing.append("pip")
+    except Exception:
+        missing.append("pip")
+
+    # Check venv
+    try:
+        result = subprocess.run(
+            [python_exe, "-m", "venv", "--help"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if result.returncode != 0:
+            missing.append("venv")
+    except Exception:
+        missing.append("venv")
+
+    # Check python-is-python3 (is /usr/bin/python available?)
+    if not shutil.which("python") and shutil.which("python3"):
+        missing.append("python-is-python3")
+
+    if not missing:
+        config.set("linux_deps_checked", True)
+        return
+
+    logger.warning(f"Missing Linux packages: {missing}")
+
+    # Detect distro
+    distro = _detect_distro()
+
+    # Build package list and install command
+    if distro == "debian":
+        packages = []
+        if "pip" in missing:
+            packages.append("python3-pip")
+        if "venv" in missing:
+            # Get Python version for versioned package
+            try:
+                r = subprocess.run(
+                    [python_exe, "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"],
+                    capture_output=True, text=True, timeout=5,
+                )
+                py_ver = r.stdout.strip()
+                if py_ver:
+                    packages.append(f"python{py_ver}-venv")
+            except Exception:
+                pass
+            packages.append("python3-venv")
+        if "python-is-python3" in missing:
+            packages.append("python-is-python3")
+        install_cmd = ["apt", "install", "-y"] + packages
+    elif distro == "arch":
+        packages = []
+        if "pip" in missing:
+            packages.append("python-pip")
+        # venv is included in python package on Arch
+        if not packages:
+            config.set("linux_deps_checked", True)
+            return
+        install_cmd = ["pacman", "-S", "--noconfirm"] + packages
+    elif distro == "fedora":
+        packages = []
+        if "pip" in missing:
+            packages.append("python3-pip")
+        # venv is included in python3 on Fedora
+        if not packages:
+            config.set("linux_deps_checked", True)
+            return
+        install_cmd = ["dnf", "install", "-y"] + packages
+    elif distro == "suse":
+        packages = []
+        if "pip" in missing:
+            packages.append("python3-pip")
+        if "venv" in missing:
+            packages.append("python3-venv")
+        if not packages:
+            config.set("linux_deps_checked", True)
+            return
+        install_cmd = ["zypper", "--non-interactive", "install"] + packages
+    else:
+        # Unknown distro — skip auto-install
+        logger.info(f"Unknown distro, skipping auto-install for: {missing}")
+        return
+
+    # Ask user
+    from PySide6.QtWidgets import QMessageBox
+    pkg_list = ", ".join(packages)
+    reply = QMessageBox.question(
+        None,
+        "VenvStudio — Missing Packages",
+        f"VenvStudio needs the following system packages to work properly:\n\n"
+        f"  {pkg_list}\n\n"
+        f"Would you like to install them now?\n"
+        f"(Root/admin password will be required)",
+        QMessageBox.Yes | QMessageBox.No,
+    )
+
+    if reply != QMessageBox.Yes:
+        logger.info("User declined package installation")
+        return
+
+    # Try pkexec (graphical sudo), then sudo
+    sudo_methods = [
+        ["pkexec"] + install_cmd,
+        ["sudo"] + install_cmd,
+    ]
+
+    for cmd in sudo_methods:
+        try:
+            logger.info(f"Running: {' '.join(cmd)}")
+            result = subprocess.run(
+                cmd, capture_output=True, text=True, timeout=120,
+            )
+            if result.returncode == 0:
+                logger.info(f"Successfully installed: {pkg_list}")
+                config.set("linux_deps_checked", True)
+                QMessageBox.information(
+                    None,
+                    "VenvStudio",
+                    f"✅ Packages installed successfully:\n{pkg_list}",
+                )
+                return
+        except FileNotFoundError:
+            continue
+        except subprocess.TimeoutExpired:
+            continue
+
+    logger.error("Failed to install packages")
+    QMessageBox.warning(
+        None,
+        "VenvStudio",
+        f"Could not install packages automatically.\n\n"
+        f"Please install manually:\n"
+        f"  sudo {' '.join(install_cmd)}",
+    )
+
+
+def _detect_distro() -> str:
+    """Detect Linux distro family from /etc/os-release."""
+    import shutil
+    try:
+        with open("/etc/os-release") as f:
+            content = f.read().lower()
+        for line in content.splitlines():
+            if line.startswith("id_like=") or line.startswith("id="):
+                val = line.split("=", 1)[1].strip('"').strip("'")
+                if any(d in val for d in ("debian", "ubuntu")):
+                    return "debian"
+                if any(d in val for d in ("fedora", "rhel", "centos")):
+                    return "fedora"
+                if "arch" in val:
+                    return "arch"
+                if "suse" in val:
+                    return "suse"
+    except (FileNotFoundError, OSError):
+        pass
+    if shutil.which("apt"):
+        return "debian"
+    if shutil.which("dnf"):
+        return "fedora"
+    if shutil.which("pacman"):
+        return "arch"
+    if shutil.which("zypper"):
+        return "suse"
+    return "unknown"
+
+
 def main():
     try:
         from PySide6.QtWidgets import QApplication
@@ -94,6 +278,11 @@ def main():
         app.setFont(font)
 
         window = MainWindow()
+
+        # ── Linux: check pip/venv on first launch ──
+        if sys.platform == "linux":
+            _check_and_install_linux_deps(app, config, logger)
+
         window.show()
 
         sys.exit(app.exec())

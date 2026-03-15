@@ -113,16 +113,30 @@ class EnvCreateDialog(QDialog):
 
         self.python_combo = QComboBox()
         self.python_combo.addItem("System Default", "")
+
+        # Deduplicate symlinks: keep shortest path per real binary
+        import os
+        seen_real = {}
         for version, path in self.pythons:
-            import os
             norm = os.path.normpath(path)
+            try:
+                real = os.path.realpath(path)
+            except OSError:
+                real = norm
+            if real in seen_real:
+                existing_norm = seen_real[real][1]
+                if len(norm) < len(existing_norm):
+                    seen_real[real] = (version, norm)
+            else:
+                seen_real[real] = (version, norm)
+
+        for _real, (version, norm) in seen_real.items():
             self.python_combo.addItem(f"Python {version} ({norm})", norm)
 
         # Also add custom pythons from config
         custom_pythons = self.config.get("custom_pythons", [])
         print(f"[DEBUG] EnvDialog custom_pythons from config: {custom_pythons}")
         for entry in custom_pythons:
-            import os
             raw_path = entry.get("path", "")
             if not raw_path:
                 continue

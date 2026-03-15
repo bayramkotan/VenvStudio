@@ -1,7 +1,6 @@
 """
 VenvStudio - Python Downloader
-Downloads standalone Python builds from astral-sh/python-build-standalone.
-These are the same builds used by uv.
+Downloads standalone Python builds for local use.
 """
 
 import json
@@ -18,7 +17,7 @@ from urllib.error import URLError
 
 from src.utils.platform_utils import get_config_dir, get_platform, subprocess_args
 
-# GitHub API for python-build-standalone releases
+# GitHub API for standalone Python releases
 GITHUB_API = "https://api.github.com/repos/astral-sh/python-build-standalone/releases"
 GITHUB_RELEASES = "https://github.com/astral-sh/python-build-standalone/releases/download"
 
@@ -251,6 +250,25 @@ def download_python(version_info: dict, progress_callback=None) -> Path:
                 z.extractall(str(install_dir))
         else:
             raise RuntimeError(f"Unknown archive format: {filename}")
+
+        # Ensure pip is available in the downloaded Python
+        if progress_callback:
+            progress_callback(f"Setting up pip for Python {version}...")
+
+        exe = get_python_exe(install_dir)
+        if exe and exe.exists():
+            try:
+                subprocess.run(
+                    [str(exe), "-m", "ensurepip", "--upgrade"],
+                    capture_output=True, text=True, timeout=60,
+                )
+                # Also upgrade pip to latest
+                subprocess.run(
+                    [str(exe), "-m", "pip", "install", "--upgrade", "pip"],
+                    capture_output=True, text=True, timeout=60,
+                )
+            except Exception:
+                pass  # ensurepip may not be available in all builds
 
         if progress_callback:
             progress_callback(f"✅ Python {version} installed successfully!")

@@ -93,20 +93,24 @@ def _check_and_install_linux_deps(app, config, logger):
     # Build package list and install command
     if distro == "debian":
         packages = []
+        # Get Python version for versioned packages (e.g. python3.13-venv, python3.13-pip)
+        py_ver = ""
+        try:
+            r = subprocess.run(
+                [python_exe, "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"],
+                capture_output=True, text=True, timeout=5,
+            )
+            py_ver = r.stdout.strip()
+        except Exception:
+            pass
+
         if "pip" in missing:
+            if py_ver:
+                packages.append(f"python{py_ver}-pip")  # e.g. python3.13-pip
             packages.append("python3-pip")
         if "venv" in missing:
-            # Get Python version for versioned package
-            try:
-                r = subprocess.run(
-                    [python_exe, "-c", "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')"],
-                    capture_output=True, text=True, timeout=5,
-                )
-                py_ver = r.stdout.strip()
-                if py_ver:
-                    packages.append(f"python{py_ver}-venv")
-            except Exception:
-                pass
+            if py_ver:
+                packages.append(f"python{py_ver}-venv")  # e.g. python3.13-venv
             packages.append("python3-venv")
         if "python-is-python3" in missing:
             packages.append("python-is-python3")

@@ -223,12 +223,14 @@ class VenvManager:
             pass
 
         if distro == "debian":
-            # Try versioned first (python3.14-venv), fallback to python3-venv
-            # Also install python-is-python3 so /usr/bin/python → python3
+            # Versioned + fallback packages for Debian/Ubuntu/Pardus
+            # e.g. python3.13-venv, python3.13-pip, python3-venv, python3-pip, python-is-python3
             packages = []
             if py_ver:
                 packages.append(f"python{py_ver}-venv")
+                packages.append(f"python{py_ver}-pip")
             packages.append("python3-venv")
+            packages.append("python3-pip")
             packages.append("python-is-python3")
             install_cmd = ["apt", "install", "-y"] + packages
         elif distro == "fedora":

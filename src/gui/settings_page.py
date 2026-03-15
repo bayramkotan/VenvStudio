@@ -3503,8 +3503,7 @@ class PythonDownloadDialog(QDialog):
 
         # Header
         header = QLabel(
-            "Download standalone Python builds from\n"
-            "astral-sh/python-build-standalone (same builds used by uv)"
+            "Download standalone Python builds for local use"
         )
         header.setStyleSheet("color: #a6adc8; font-size: 12px;")
         header.setWordWrap(True)
@@ -6550,8 +6549,7 @@ class PythonDownloadDialog(QDialog):
 
         # Header
         header = QLabel(
-            "Download standalone Python builds from\n"
-            "astral-sh/python-build-standalone (same builds used by uv)"
+            "Download standalone Python builds for local use"
         )
         header.setStyleSheet("color: #a6adc8; font-size: 12px;")
         header.setWordWrap(True)

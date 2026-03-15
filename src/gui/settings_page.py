@@ -2752,6 +2752,7 @@ try {{
 
     def _open_log_folder(self):
         """Open the log directory in file manager."""
+        import os
         import subprocess
         from pathlib import Path
         # Try to get log dir from logger module, fall back to known path
@@ -2772,6 +2773,7 @@ try {{
 
     def _open_config_folder(self):
         """Open the config directory in file manager."""
+        import os
         import subprocess
         config_dir = self.config.config_file_path.parent
         if get_platform() == "windows":
@@ -5798,6 +5800,7 @@ try {{
 
     def _open_log_folder(self):
         """Open the log directory in file manager."""
+        import os
         import subprocess
         from pathlib import Path
         # Try to get log dir from logger module, fall back to known path
@@ -5818,6 +5821,7 @@ try {{
 
     def _open_config_folder(self):
         """Open the config directory in file manager."""
+        import os
         import subprocess
         config_dir = self.config.config_file_path.parent
         if get_platform() == "windows":

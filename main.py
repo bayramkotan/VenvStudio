@@ -232,41 +232,54 @@ def _detect_distro() -> str:
 
 
 def main():
+    logger = None
     try:
         from PySide6.QtWidgets import QApplication
         from PySide6.QtCore import Qt, QtMsgType, qInstallMessageHandler
         from PySide6.QtGui import QFont
 
-        # Suppress noisy QFont::setPointSize warnings (caused by px-based stylesheets)
-        def _qt_message_handler(mode, context, message):
-            if "QFont::setPointSize" in message:
-                return  # suppress
-            if mode == QtMsgType.QtWarningMsg:
-                print(f"[Qt Warning] {message}")
-            elif mode == QtMsgType.QtCriticalMsg:
-                print(f"[Qt Critical] {message}")
-            elif mode == QtMsgType.QtFatalMsg:
-                print(f"[Qt Fatal] {message}")
-
-        qInstallMessageHandler(_qt_message_handler)
-
         from src.gui.main_window import MainWindow
         from src.utils.constants import APP_NAME, APP_VERSION
         from src.core.config_manager import ConfigManager
         from src.utils.i18n import set_language
-        from src.utils.logger import setup_logging
+        from src.utils.logger import setup_logging, get_logger
 
-        # Initialize logging
+        # ── Initialize logging FIRST ──
         logger = setup_logging()
         logger.info(f"Starting {APP_NAME} v{APP_VERSION}")
 
-        # Load language setting before creating UI
+        # ── Qt message handler → route to logger ──
+        qt_log = get_logger("venvstudio.qt")
+
+        def _qt_message_handler(mode, context, message):
+            # Suppress noisy QFont::setPointSize warnings (caused by px-based stylesheets)
+            if "QFont::setPointSize" in message:
+                return
+            # Suppress QWindowsWindow::setGeometry positioning warnings
+            if "QWindowsWindow::setGeometry" in message:
+                qt_log.debug(f"Qt geometry: {message}")
+                return
+
+            if mode == QtMsgType.QtDebugMsg:
+                qt_log.debug(f"Qt: {message}")
+            elif mode == QtMsgType.QtInfoMsg:
+                qt_log.info(f"Qt: {message}")
+            elif mode == QtMsgType.QtWarningMsg:
+                qt_log.warning(f"Qt: {message}")
+            elif mode == QtMsgType.QtCriticalMsg:
+                qt_log.error(f"Qt CRITICAL: {message}")
+            elif mode == QtMsgType.QtFatalMsg:
+                qt_log.critical(f"Qt FATAL: {message}")
+
+        qInstallMessageHandler(_qt_message_handler)
+
+        # ── Load config and language ──
         config = ConfigManager()
         lang = config.get("language", "en")
         set_language(lang)
         logger.info(f"Language: {lang}")
 
-        # High DPI support
+        # ── High DPI support ──
         QApplication.setHighDpiScaleFactorRoundingPolicy(
             Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
         )
@@ -276,37 +289,61 @@ def main():
         app.setApplicationVersion(APP_VERSION)
         app.setOrganizationName("VenvStudio")
 
+        # ── Log screen info after QApplication creation ──
+        for screen in app.screens():
+            geo = screen.geometry()
+            logger.info(
+                f"Screen: {screen.name()} {geo.width()}x{geo.height()} "
+                f"@{screen.devicePixelRatio()}x DPI={screen.logicalDotsPerInch():.0f}"
+            )
+
         # Set default font
         font = QFont("Segoe UI", 10)
         font.setStyleHint(QFont.SansSerif)
         app.setFont(font)
 
+        logger.info("Creating MainWindow...")
         window = MainWindow()
+        logger.info("MainWindow created successfully")
 
         # ── Linux: check pip/venv on first launch ──
         if sys.platform == "linux":
             _check_and_install_linux_deps(app, config, logger)
 
         window.show()
+        logger.info("MainWindow shown — entering event loop")
 
-        sys.exit(app.exec())
+        exit_code = app.exec()
+        logger.info(f"Application exiting with code {exit_code}")
+        sys.exit(exit_code)
 
     except Exception as e:
-        # EXE'de hata olursa göster
-        error_msg = f"VenvStudio Başlatma Hatası:\n\n{type(e).__name__}: {e}\n\n{traceback.format_exc()}"
-        print(error_msg, file=sys.stderr)
+        # ── Startup crash — log + show error ──
+        error_msg = f"VenvStudio Startup Error:\n\n{type(e).__name__}: {e}\n\n{traceback.format_exc()}"
 
-        # Eğer GUI henüz başlamadıysa, basit bir hata penceresi göster
+        if logger:
+            logger.critical(f"STARTUP CRASH:\n{error_msg}")
+        else:
+            print(error_msg, file=sys.stderr)
+
+        # Write crash report even if logger failed
+        try:
+            from src.utils.logger import _write_crash_report, get_log_dir
+            _write_crash_report(get_log_dir(), traceback.format_exc(), context="startup")
+        except Exception:
+            pass
+
+        # Show error dialog
         try:
             from PySide6.QtWidgets import QApplication, QMessageBox
             app = QApplication.instance() or QApplication(sys.argv)
-            QMessageBox.critical(None, "VenvStudio - Hata", error_msg)
+            QMessageBox.critical(None, "VenvStudio — Startup Error", error_msg)
         except Exception:
             pass
 
         # Konsol açıksa kullanıcı okuyabilsin
         if getattr(sys, 'frozen', False):
-            input("\nDevam etmek için Enter'a bas...")
+            input("\nPress Enter to exit...")
         sys.exit(1)
 
 

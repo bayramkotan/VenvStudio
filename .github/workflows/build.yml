@@ -34,7 +34,7 @@ jobs:
           if-no-files-found: warn
 
   build-macos-arm:
-    runs-on: macos-latest  # Apple Silicon (M1/M2)
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -53,7 +53,7 @@ jobs:
           if-no-files-found: warn
 
   build-macos:
-    runs-on: macos-latest  # Apple Silicon — runs on Intel via Rosetta 2
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -176,25 +176,31 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Get categorized changelog
         id: changelog
         run: |
+          set +e
           PREV_TAG=$(git tag --sort=-version:refname | grep -v "${{ github.ref_name }}" | head -n1)
+          set -e
+
           if [ -z "$PREV_TAG" ]; then
+            echo "No previous tag found, using all commits"
             COMMITS=$(git log --pretty=format:"%s" HEAD)
           else
+            echo "Previous tag: $PREV_TAG"
             COMMITS=$(git log --pretty=format:"%s" ${PREV_TAG}..HEAD)
           fi
 
           # Filter out release commits
-          COMMITS=$(echo "$COMMITS" | grep -v "^release:")
+          COMMITS=$(echo "$COMMITS" | grep -v "^release:" || true)
 
           # Categorize commits
           FEATURES=$(echo "$COMMITS" | grep -i "^feat:" | sed 's/^feat:\s*//' | sed 's/^/- /' || true)
           FIXES=$(echo "$COMMITS" | grep -i "^fix:" | sed 's/^fix:\s*//' | sed 's/^/- /' || true)
           IMPROVEMENTS=$(echo "$COMMITS" | grep -iE "^(chore|refactor|build|ci|perf|style|docs):" | sed 's/^[a-zA-Z]*:\s*//' | sed 's/^/- /' || true)
-          OTHERS=$(echo "$COMMITS" | grep -ivE "^(feat|fix|chore|refactor|build|ci|perf|style|docs):" | sed 's/^/- /' || true)
+          OTHERS=$(echo "$COMMITS" | grep -ivE "^(feat|fix|chore|refactor|build|ci|perf|style|docs|release):" | sed 's/^/- /' || true)
 
           # Build changelog body
           BODY=""

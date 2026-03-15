@@ -229,28 +229,106 @@ def open_terminal_at(path: Path, terminal_type: str = "") -> None:
 
         else:  # linux
             activate = path / "bin" / "activate"
-            bash_cmd = f"cd '{path}' && source '{activate}' && exec bash"
+
+            # AppImage bundles override PATH — resolve the real system PATH
+            # so we can find terminal emulators installed on the host.
+            host_path = os.environ.get("PATH", "")
+            # Prepend standard system dirs that AppImage may have removed
+            system_dirs = [
+                "/usr/local/bin", "/usr/bin", "/bin",
+                "/usr/local/sbin", "/usr/sbin", "/sbin",
+                os.path.expanduser("~/.local/bin"),
+            ]
+            for d in reversed(system_dirs):
+                if d not in host_path:
+                    host_path = d + ":" + host_path
+
+            # Find real system bash (not AppImage's bundled one)
+            system_bash = "/bin/bash"
+            for d in ["/usr/bin", "/bin", "/usr/local/bin"]:
+                candidate = os.path.join(d, "bash")
+                if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                    system_bash = candidate
+                    break
+
+            # Use --rcfile trick: bash reads our activation script as rc,
+            # so the terminal stays open with the venv activated.
+            # This is more reliable than "bash -c '... && exec bash'"
+            bash_cmd = f"cd '{path}' && source '{activate}' && exec {system_bash}"
+
+            def _find_terminal(term: str) -> Optional[str]:
+                """Find terminal executable, checking system PATH even inside AppImage."""
+                # First try normal which
+                found = shutil.which(term)
+                if found:
+                    return found
+                # Search system dirs manually (AppImage may hide them)
+                for d in system_dirs:
+                    candidate = os.path.join(d, term)
+                    if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+                        return candidate
+                return None
 
             def _launch_linux_terminal(term: str) -> bool:
                 """Try to launch a specific terminal. Returns True on success."""
-                if not shutil.which(term):
+                term_exe = _find_terminal(term)
+                if not term_exe:
                     return False
+
+                # Clean environment for the child process:
+                # Remove AppImage-specific env vars so the terminal behaves normally
+                clean_env = os.environ.copy()
+                clean_env["PATH"] = host_path
+                for appimage_var in ("APPIMAGE", "APPDIR", "OWD",
+                                     "ARGV0", "APPIMAGE_EXTRACT_AND_RUN"):
+                    clean_env.pop(appimage_var, None)
+                # Remove LD_LIBRARY_PATH/LD_PRELOAD that AppImage may set
+                # (these can break host terminal apps)
+                for ld_var in ("LD_LIBRARY_PATH", "LD_PRELOAD"):
+                    clean_env.pop(ld_var, None)
+
                 try:
                     if term == "gnome-terminal":
-                        subprocess.Popen([term, "--", "bash", "-c", bash_cmd])
+                        subprocess.Popen(
+                            [term_exe, "--", system_bash, "-c", bash_cmd],
+                            env=clean_env
+                        )
                     elif term in ("konsole", "yakuake"):
-                        subprocess.Popen([term, "--noclose", "-e", "bash", "-c", bash_cmd])
+                        subprocess.Popen(
+                            [term_exe, "--noclose", "-e", system_bash, "-c", bash_cmd],
+                            env=clean_env
+                        )
                     elif term in ("xfce4-terminal", "mate-terminal", "lxterminal", "tilix"):
-                        subprocess.Popen([term, "-e", f"bash -c '{bash_cmd}'"])
+                        subprocess.Popen(
+                            [term_exe, "-e", f"{system_bash} -c '{bash_cmd}'"],
+                            env=clean_env
+                        )
                     elif term == "kitty":
-                        subprocess.Popen([term, "bash", "-c", bash_cmd])
+                        subprocess.Popen(
+                            [term_exe, system_bash, "-c", bash_cmd],
+                            env=clean_env
+                        )
                     elif term == "alacritty":
-                        subprocess.Popen([term, "-e", "bash", "-c", bash_cmd])
+                        subprocess.Popen(
+                            [term_exe, "-e", system_bash, "-c", bash_cmd],
+                            env=clean_env
+                        )
                     elif term == "wezterm":
-                        subprocess.Popen([term, "start", "--", "bash", "-c", bash_cmd])
+                        subprocess.Popen(
+                            [term_exe, "start", "--", system_bash, "-c", bash_cmd],
+                            env=clean_env
+                        )
+                    elif term == "foot":
+                        subprocess.Popen(
+                            [term_exe, system_bash, "-c", bash_cmd],
+                            env=clean_env
+                        )
                     else:
                         # xterm, x-terminal-emulator and others
-                        subprocess.Popen([term, "-e", f"bash -c '{bash_cmd}'"])
+                        subprocess.Popen(
+                            [term_exe, "-e", f"{system_bash} -c '{bash_cmd}'"],
+                            env=clean_env
+                        )
                     return True
                 except Exception:
                     return False
@@ -264,7 +342,7 @@ def open_terminal_at(path: Path, terminal_type: str = "") -> None:
             auto_order = [
                 "gnome-terminal", "konsole", "xfce4-terminal",
                 "tilix", "mate-terminal", "alacritty", "kitty",
-                "wezterm", "lxterminal", "xterm", "x-terminal-emulator",
+                "wezterm", "foot", "lxterminal", "xterm", "x-terminal-emulator",
             ]
             for term in auto_order:
                 if _launch_linux_terminal(term):

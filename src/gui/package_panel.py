@@ -140,7 +140,14 @@ class WorkerThread(QThread):
             else:
                 self.finished.emit(success, msg)
         except Exception as e:
-            self.finished.emit(False, str(e))
+            import traceback
+            tb = traceback.format_exc()
+            try:
+                from src.utils.logger import get_logger
+                get_logger("venvstudio.worker").error(f"WorkerThread CRASH:\n{tb}")
+            except Exception:
+                print(f"[WorkerThread ERROR] {tb}")
+            self.finished.emit(False, f"Error: {e}")
 
     def _on_progress(self, message):
         if not self._cancelled:
@@ -2968,6 +2975,17 @@ dependencies:
     def _on_install_finished(self, success: bool, message: str):
         self._set_busy(False)
         self._append_log(f"\n{'✅ Success' if success else '❌ Failed'}: {message[:500]}")
+
+        # Log for debugging (especially EXE/AppImage builds)
+        try:
+            from src.utils.logger import get_logger
+            log = get_logger("venvstudio.install")
+            if success:
+                log.info(f"Install OK: {message[:200]}")
+            else:
+                log.warning(f"Install FAILED: {message[:500]}")
+        except Exception:
+            pass
 
         if success:
             self.status_label.setText("Operation completed successfully")

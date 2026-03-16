@@ -241,13 +241,13 @@ def configure_starship(preset: Optional[str] = None) -> list[str]:
     for cfg in _get_shell_configs():
         name = cfg.name
         if name in (".bashrc", ".bash_profile"):
-            snippet = 'eval "$(starship init bash)"'
+            snippet = 'command -v starship &>/dev/null && eval "$(starship init bash)"'
         elif name == ".zshrc":
-            snippet = 'eval "$(starship init zsh)"'
+            snippet = 'command -v starship &>/dev/null && eval "$(starship init zsh)"'
         elif name == "config.fish":
-            snippet = "starship init fish | source"
+            snippet = "type -q starship; and starship init fish | source"
         elif name.endswith(".ps1"):
-            snippet = 'Invoke-Expression (&starship init powershell)'
+            snippet = 'if (Get-Command starship -ErrorAction SilentlyContinue) { Invoke-Expression (&starship init powershell) }'
         else:
             continue
         _inject_shell_config(cfg, "starship", snippet)
@@ -279,13 +279,13 @@ def configure_omp(theme: str = "jandedobbeleer") -> list[str]:
     for cfg in _get_shell_configs():
         name = cfg.name
         if name in (".bashrc", ".bash_profile"):
-            snippet = f'eval "$({exe} init bash --config {theme_path})"'
+            snippet = f'command -v {exe} &>/dev/null && eval "$({exe} init bash --config {theme_path})"'
         elif name == ".zshrc":
-            snippet = f'eval "$({exe} init zsh --config {theme_path})"'
+            snippet = f'command -v {exe} &>/dev/null && eval "$({exe} init zsh --config {theme_path})"'
         elif name == "config.fish":
-            snippet = f'{exe} init fish --config {theme_path} | source'
+            snippet = f'type -q {exe}; and {exe} init fish --config {theme_path} | source'
         elif name.endswith(".ps1"):
-            snippet = f'oh-my-posh init pwsh --config {theme_path} | Invoke-Expression'
+            snippet = f'if (Get-Command oh-my-posh -ErrorAction SilentlyContinue) {{ oh-my-posh init pwsh --config {theme_path} | Invoke-Expression }}'
         else:
             continue
         _inject_shell_config(cfg, "oh-my-posh", snippet)

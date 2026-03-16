@@ -1721,13 +1721,16 @@ $s.Save()
 
     def _append_log(self, text: str):
         """Append colored HTML lines to output log."""
-        import html as _html
+        def _escape(s):
+            """Simple HTML escape — avoids 'import html' which PyInstaller may exclude."""
+            return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
         for line in text.split("\n"):
             t = line.rstrip()
             if not t:
                 self.output_log.append("")
                 continue
-            escaped = _html.escape(t)
+            escaped = _escape(t)
             tl = t.lower()
             if t.startswith(("✅", "Successfully")) or "successfully installed" in tl:
                 color = "#a6e3a1"

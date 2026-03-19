@@ -1532,6 +1532,8 @@ $s.Save()
         self.catalog_table.setColumnWidth(4, 80)
         self.catalog_table.setAlternatingRowColors(True)
         self.catalog_table.verticalHeader().setVisible(False)
+        self.catalog_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.catalog_table.customContextMenuRequested.connect(self._catalog_table_context_menu)
         layout.addWidget(self.catalog_table)
 
         # Bottom: changes summary + Apply button
@@ -2970,8 +2972,31 @@ dependencies:
 
         menu.exec(self.packages_table.viewport().mapToGlobal(position))
 
+    def _catalog_table_context_menu(self, position):
+        """Right-click context menu for catalog table — same style as Installed."""
+        row = self.catalog_table.rowAt(position.y())
+        if row < 0:
+            return
+
+        pkg_item = self.catalog_table.item(row, 1)
+        desc_item = self.catalog_table.item(row, 2)
+        if not pkg_item:
+            return
+
+        pkg = pkg_item.text().strip()
+        desc_text = desc_item.text().strip() if desc_item else ""
+
+        menu = QMenu(self)
+        menu.addAction(f"ℹ️ Package Info (pip show)", lambda: self._show_pip_info(pkg))
+        menu.addSeparator()
+        menu.addAction(f"📋 Copy: pip install {pkg}", lambda: self._copy_to_clipboard(f"pip install {pkg}"))
+        menu.addAction(f"📋 Copy package name", lambda: self._copy_to_clipboard(pkg))
+        menu.addSeparator()
+        menu.addAction(f"🌐 Open on PyPI", lambda: self._open_pypi(pkg))
+        menu.exec(self.catalog_table.viewport().mapToGlobal(position))
+
     def _show_pip_info(self, pkg_name: str):
-        """Show pip show output in a dialog."""
+        """Show pip show output in a standardized dialog."""
         if not self.pip_manager:
             return
         try:
@@ -2986,11 +3011,15 @@ dependencies:
 
         dialog = QDialog(self)
         dialog.setWindowTitle(f"📦 {pkg_name} — Package Info")
-        dialog.setMinimumSize(480, 320)
+        dialog.setFixedSize(520, 400)
         layout = QVBoxLayout(dialog)
         layout.setSpacing(8)
 
-        # Parse into key-value pairs for nicer display
+        # Scrollable info area — prevents dialog from growing with long descriptions
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+
         info_frame = QFrame()
         info_frame.setStyleSheet(
             "QFrame { background-color: #1e1e2e; border: 1px solid #313244; border-radius: 6px; padding: 4px; }"
@@ -3004,21 +3033,32 @@ dependencies:
                 key, _, val = line.partition(":")
                 key = key.strip()
                 val = val.strip()
+
+                # Truncate very long values (e.g. Requires, Description)
+                display_val = val
+                if len(val) > 200:
+                    display_val = val[:200] + "…"
+
                 row = QHBoxLayout()
                 key_lbl = QLabel(f"{key}:")
                 key_lbl.setFixedWidth(120)
                 key_lbl.setStyleSheet("color: #89b4fa; font-weight: bold; font-size: 12px;")
-                val_lbl = QLabel(val)
+                key_lbl.setAlignment(Qt.AlignTop)
+                val_lbl = QLabel(display_val)
                 val_lbl.setWordWrap(True)
                 val_lbl.setStyleSheet("color: #cdd6f4; font-size: 12px;")
                 val_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
+                if val != display_val:
+                    val_lbl.setToolTip(val)  # Full text on hover
                 row.addWidget(key_lbl)
                 row.addWidget(val_lbl, 1)
                 info_layout.addLayout(row)
                 if key.lower() == "home-page" and val.startswith("http"):
                     pypi_url = val
 
-        layout.addWidget(info_frame)
+        info_layout.addStretch()
+        scroll.setWidget(info_frame)
+        layout.addWidget(scroll)
 
         btn_row = QHBoxLayout()
         if pypi_url:

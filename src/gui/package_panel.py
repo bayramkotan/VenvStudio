@@ -2988,14 +2988,11 @@ dependencies:
             return
 
         pkg = pkg_item.text().strip()
-        desc_text = desc_item.text().strip() if desc_item else ""
         is_installed = pkg.lower() in self.installed_package_names
 
         menu = QMenu(self)
-        if is_installed:
-            menu.addAction(f"ℹ️ Package Info (pip show)", lambda: self._show_pip_info(pkg))
-        else:
-            menu.addAction(f"ℹ️ Package Info", lambda: self._show_catalog_info(pkg, desc_text))
+        menu.addAction(f"ℹ️ Package Info", lambda: self._show_pip_info(pkg))
+        if not is_installed:
             menu.addAction(f"⬇️ Install {pkg}", lambda: self._install_packages([pkg], hint_name=pkg))
         menu.addSeparator()
         menu.addAction(f"📋 Copy: pip install {pkg}", lambda: self._copy_to_clipboard(f"pip install {pkg}"))
@@ -3004,74 +3001,51 @@ dependencies:
         menu.addAction(f"🌐 Open on PyPI", lambda: self._open_pypi(pkg))
         menu.exec(self.catalog_table.viewport().mapToGlobal(position))
 
-    def _show_catalog_info(self, pkg_name: str, desc: str = ""):
-        """Show package info from catalog (when package is not installed)."""
-        dialog = QDialog(self)
-        dialog.setWindowTitle(f"📦 {pkg_name} — Package Info")
-        dialog.setFixedSize(520, 300)
-        layout = QVBoxLayout(dialog)
-        layout.setSpacing(12)
-
-        # Package name header
-        name_lbl = QLabel(f"📦 {pkg_name}")
-        name_lbl.setStyleSheet("font-size: 18px; font-weight: bold; color: #cdd6f4;")
-        layout.addWidget(name_lbl)
-
-        # Description
-        if desc:
-            desc_lbl = QLabel(desc)
-            desc_lbl.setWordWrap(True)
-            desc_lbl.setStyleSheet("color: #a6adc8; font-size: 13px; padding: 4px 0;")
-            layout.addWidget(desc_lbl)
-
-        # Not installed notice
-        notice = QLabel("⚠️ This package is not installed in the selected environment.")
-        notice.setStyleSheet("color: #f9e2af; font-size: 12px; padding: 8px 0;")
-        layout.addWidget(notice)
-
-        # Install command hint
-        cmd_lbl = QLabel(f"💡 Install command:  pip install {pkg_name}")
-        cmd_lbl.setStyleSheet(
-            "color: #a6e3a1; font-family: Consolas, monospace; font-size: 13px; "
-            "background-color: #1e1e2e; border: 1px solid #313244; "
-            "border-radius: 6px; padding: 8px;"
-        )
-        cmd_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        layout.addWidget(cmd_lbl)
-
-        layout.addStretch()
-
-        # Buttons
-        btn_row = QHBoxLayout()
-        install_btn = QPushButton(f"⬇️ Install {pkg_name}")
-        install_btn.setObjectName("success")
-        install_btn.clicked.connect(lambda: (dialog.accept(), self._install_packages([pkg_name], hint_name=pkg_name)))
-        btn_row.addWidget(install_btn)
-        pypi_btn = QPushButton("🌐 PyPI")
-        pypi_btn.setObjectName("secondary")
-        pypi_btn.clicked.connect(lambda: __import__("webbrowser").open(f"https://pypi.org/project/{pkg_name}/"))
-        btn_row.addWidget(pypi_btn)
-        btn_row.addStretch()
-        close_btn = QPushButton("Close")
-        close_btn.clicked.connect(dialog.accept)
-        btn_row.addWidget(close_btn)
-        layout.addLayout(btn_row)
-
-        dialog.exec()
-
     def _show_pip_info(self, pkg_name: str):
-        """Show pip show output in a standardized dialog."""
+        """Show package info — pip show if installed, PyPI API if not."""
         if not self.pip_manager:
             return
+
+        info_text = ""
+        from_pypi = False
+
+        # Try pip show first (installed packages)
         try:
             python_exe = get_python_executable(self.pip_manager.venv_path)
             result = subprocess.run(
                 [str(python_exe), "-m", "pip", "show", pkg_name],
                 **subprocess_args(capture_output=True, text=True, timeout=10)
             )
-            info_text = result.stdout.strip() or result.stderr.strip() or "No info available."
-        except Exception as e:
-            info_text = f"Error: {e}"
+            output = result.stdout.strip()
+            if output and "WARNING" not in output.split("\n")[0]:
+                info_text = output
+        except Exception:
+            pass
+
+        # Not installed — fetch from PyPI JSON API
+        if not info_text:
+            from_pypi = True
+            try:
+                import urllib.request
+                import json as _json
+                url = f"https://pypi.org/pypi/{pkg_name}/json"
+                req = urllib.request.Request(url, headers={"User-Agent": "VenvStudio"})
+                with urllib.request.urlopen(req, timeout=8) as resp:
+                    data = _json.loads(resp.read().decode())
+                info = data.get("info", {})
+                deps = info.get("requires_dist") or []
+                info_text = (
+                    f"Name: {info.get('name', pkg_name)}\n"
+                    f"Version: {info.get('version', '?')}\n"
+                    f"Summary: {info.get('summary', '')}\n"
+                    f"Author: {info.get('author', '') or info.get('author_email', '')}\n"
+                    f"License: {info.get('license', '')}\n"
+                    f"Home-page: {info.get('home_page', '') or info.get('project_url', '')}\n"
+                    f"Requires-Python: {info.get('requires_python', '')}\n"
+                    f"Requires-Dist: {', '.join(deps[:15])}"
+                )
+            except Exception:
+                info_text = f"Name: {pkg_name}\nStatus: Not installed — could not fetch info from PyPI"
 
         dialog = QDialog(self)
         dialog.setWindowTitle(f"📦 {pkg_name} — Package Info")
@@ -3079,7 +3053,13 @@ dependencies:
         layout = QVBoxLayout(dialog)
         layout.setSpacing(8)
 
-        # Scrollable info area — prevents dialog from growing with long descriptions
+        # Source indicator
+        if from_pypi:
+            source_lbl = QLabel("⚠️ Not installed — info fetched from PyPI")
+            source_lbl.setStyleSheet("color: #f9e2af; font-size: 11px; padding: 2px 0;")
+            layout.addWidget(source_lbl)
+
+        # Scrollable info area
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
@@ -3098,7 +3078,6 @@ dependencies:
                 key = key.strip()
                 val = val.strip()
 
-                # Truncate very long values (e.g. Requires, Description)
                 display_val = val
                 if len(val) > 200:
                     display_val = val[:200] + "…"
@@ -3113,7 +3092,7 @@ dependencies:
                 val_lbl.setStyleSheet("color: #cdd6f4; font-size: 12px;")
                 val_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
                 if val != display_val:
-                    val_lbl.setToolTip(val)  # Full text on hover
+                    val_lbl.setToolTip(val)
                 row.addWidget(key_lbl)
                 row.addWidget(val_lbl, 1)
                 info_layout.addLayout(row)
@@ -3125,6 +3104,13 @@ dependencies:
         layout.addWidget(scroll)
 
         btn_row = QHBoxLayout()
+        if from_pypi:
+            install_btn = QPushButton(f"⬇️ Install {pkg_name}")
+            install_btn.setObjectName("success")
+            install_btn.clicked.connect(
+                lambda: (dialog.accept(), self._install_packages([pkg_name], hint_name=pkg_name))
+            )
+            btn_row.addWidget(install_btn)
         if pypi_url:
             home_btn = QPushButton("🌐 Homepage")
             home_btn.setObjectName("secondary")

@@ -341,8 +341,8 @@ def main():
         except Exception:
             pass
 
-        # Konsol açıksa kullanıcı okuyabilsin
-        if getattr(sys, 'frozen', False):
+        # Konsol açıksa kullanıcı okuyabilsin (sadece debug/console build)
+        if getattr(sys, 'frozen', False) and not getattr(sys, 'frozen_windowed', True):
             input("\nPress Enter to exit...")
         sys.exit(1)
 

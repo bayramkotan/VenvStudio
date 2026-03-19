@@ -67,7 +67,8 @@ class EnvCreateDialog(QDialog):
         self.worker = None
 
         self.setWindowTitle("Create New Environment")
-        self.setFixedSize(940, 380)
+        self.setMinimumSize(920, 420)  # min size, not fixed — allows DPI scaling
+        self.resize(960, 460)
         self.setModal(True)
         self._setup_ui()
 
@@ -96,6 +97,8 @@ class EnvCreateDialog(QDialog):
         form_group = QGroupBox("Environment Settings")
         form_layout = QFormLayout()
         form_layout.setSpacing(10)
+        form_layout.setLabelAlignment(Qt.AlignLeft)
+        form_layout.setFieldGrowthPolicy(QFormLayout.ExpandingFieldsGrow)
 
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("e.g., my-project, data-science, web-api")
@@ -103,12 +106,15 @@ class EnvCreateDialog(QDialog):
         form_layout.addRow("Name:", self.name_input)
 
         loc_layout = QHBoxLayout()
+        loc_layout.setSpacing(8)
         self.location_label = QLabel(str(self.config.get_venv_base_dir()))
         self.location_label.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        self.location_label.setMinimumWidth(120)
         loc_layout.addWidget(self.location_label, 1)
         change_btn = QPushButton("Browse")
         change_btn.setObjectName("secondary")
         change_btn.setFixedHeight(28)
+        change_btn.setFixedWidth(80)
         change_btn.setToolTip("Browse for a different folder")
         change_btn.setFocusPolicy(Qt.NoFocus)
         change_btn.setDefault(False)
@@ -118,6 +124,7 @@ class EnvCreateDialog(QDialog):
         form_layout.addRow("Location:", loc_layout)
 
         self.python_combo = QComboBox()
+        self.python_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self.python_combo.addItem("System Default", "")
 
         import os
@@ -268,7 +275,6 @@ class EnvCreateDialog(QDialog):
 
         python_path = self.python_combo.currentData() or None
 
-        # Update right panel only — dialog size never changes
         self.progress_bar.setVisible(True)
         self.create_btn.setEnabled(False)
         self.create_btn.setText("Creating...")

@@ -8,7 +8,7 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QComboBox, QCheckBox, QPushButton, QFileDialog, QMessageBox,
-    QGroupBox, QFormLayout, QProgressBar,
+    QGroupBox, QFormLayout, QProgressBar, QSizePolicy,
 )
 from PySide6.QtCore import Qt, Signal, QThread
 
@@ -38,7 +38,6 @@ class CreateWorker(QThread):
             callback=self._on_progress,
         )
         if self._cancelled:
-            # Cleanup if cancelled
             import shutil
             venv_path = self.venv_manager.base_dir / self.name
             if venv_path.exists():
@@ -68,28 +67,35 @@ class EnvCreateDialog(QDialog):
         self.worker = None
 
         self.setWindowTitle("Create New Environment")
-        self.setMinimumWidth(520)
+        self.setFixedSize(940, 380)
         self.setModal(True)
         self._setup_ui()
 
     def _setup_ui(self):
-        layout = QVBoxLayout(self)
-        layout.setSpacing(16)
-        layout.setContentsMargins(24, 24, 24, 24)
+        root = QVBoxLayout(self)
+        root.setSpacing(14)
+        root.setContentsMargins(24, 20, 24, 20)
 
         # Title
         title = QLabel("Create New Environment")
         title.setObjectName("header")
-        layout.addWidget(title)
+        root.addWidget(title)
 
         subtitle = QLabel("Set up a fresh Python virtual environment")
         subtitle.setObjectName("subheader")
-        layout.addWidget(subtitle)
+        root.addWidget(subtitle)
 
-        # Form
+        # Horizontal body
+        body = QHBoxLayout()
+        body.setSpacing(16)
+
+        # LEFT: form + options
+        left = QVBoxLayout()
+        left.setSpacing(10)
+
         form_group = QGroupBox("Environment Settings")
         form_layout = QFormLayout()
-        form_layout.setSpacing(12)
+        form_layout.setSpacing(10)
 
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("e.g., my-project, data-science, web-api")
@@ -114,7 +120,6 @@ class EnvCreateDialog(QDialog):
         self.python_combo = QComboBox()
         self.python_combo.addItem("System Default", "")
 
-        # Deduplicate symlinks: keep shortest path per real binary
         import os
         seen_real = {}
         for version, path in self.pythons:
@@ -124,20 +129,16 @@ class EnvCreateDialog(QDialog):
             except OSError:
                 real = norm
             if real in seen_real:
-                existing_norm = seen_real[real][1]
-                if len(norm) < len(existing_norm):
+                if len(norm) < len(seen_real[real][1]):
                     seen_real[real] = (version, norm)
             else:
                 seen_real[real] = (version, norm)
 
-        # Collect all listed paths for deduplication (case-insensitive on Windows)
         listed_paths = set()
-
         for _real, (version, norm) in seen_real.items():
             self.python_combo.addItem(f"Python {version} ({norm})", norm)
             listed_paths.add(os.path.normcase(norm))
 
-        # Also add custom pythons from config
         custom_pythons = self.config.get("custom_pythons", [])
         print(f"[DEBUG] EnvDialog custom_pythons from config: {custom_pythons}")
         for entry in custom_pythons:
@@ -152,9 +153,8 @@ class EnvCreateDialog(QDialog):
                 continue
             listed_paths.add(norm_case)
             self.python_combo.addItem(f"Python {ver} (Custom: {norm})", norm)
-            print(f"[DEBUG] Added custom python to env dialog: {ver} → {norm}")
+            print(f"[DEBUG] Added custom python to env dialog: {ver} -> {norm}")
 
-        # Also add standalone (downloaded) Pythons
         try:
             from src.core.python_downloader import get_installed_pythons
             for py in get_installed_pythons():
@@ -167,59 +167,61 @@ class EnvCreateDialog(QDialog):
                 self.python_combo.addItem(
                     f"Python {ver} (Downloaded: {exe_path})", exe_path
                 )
-                print(f"[DEBUG] Added downloaded python to env dialog: {ver} → {exe_path}")
+                print(f"[DEBUG] Added downloaded python to env dialog: {ver} -> {exe_path}")
         except Exception as e:
             print(f"[DEBUG] Could not load downloaded pythons: {e}")
 
         form_layout.addRow("Python:", self.python_combo)
-
         form_group.setLayout(form_layout)
-        layout.addWidget(form_group)
+        left.addWidget(form_group)
 
-        # Options
         options_group = QGroupBox("Options")
         options_layout = QVBoxLayout()
-
         self.upgrade_pip_cb = QCheckBox("Upgrade pip after creation")
         self.upgrade_pip_cb.setChecked(True)
         options_layout.addWidget(self.upgrade_pip_cb)
-
         self.system_packages_cb = QCheckBox("Include system site-packages")
         self.system_packages_cb.setChecked(False)
         options_layout.addWidget(self.system_packages_cb)
-
         options_group.setLayout(options_layout)
-        layout.addWidget(options_group)
+        left.addWidget(options_group)
+        left.addStretch()
 
-        # Progress area (hidden initially)
-        self.progress_frame = QGroupBox("Progress")
-        progress_layout = QVBoxLayout()
+        body.addLayout(left, stretch=4)
 
-        self.status_label = QLabel("")
-        self.status_label.setStyleSheet("color: #a6adc8; font-size: 12px;")
-        progress_layout.addWidget(self.status_label)
+        # RIGHT: terminal (always visible, never causes resize)
+        right_group = QGroupBox("Progress")
+        right_inner = QVBoxLayout()
+        right_inner.setSpacing(8)
+
+        self.status_label = QLabel("Ready.")
+        self.status_label.setStyleSheet("color: #585b70; font-size: 12px;")
+        right_inner.addWidget(self.status_label)
 
         self.progress_bar = QProgressBar()
-        self.progress_bar.setRange(0, 0)  # indeterminate
-        progress_layout.addWidget(self.progress_bar)
+        self.progress_bar.setRange(0, 0)
+        self.progress_bar.setVisible(False)
+        right_inner.addWidget(self.progress_bar)
 
-        # Command hint (shows equivalent terminal commands)
-        self.cmd_label = QLabel("")
+        self.cmd_label = QLabel(
+            "💡 Equivalent terminal commands\nwill appear here when creation starts."
+        )
         self.cmd_label.setStyleSheet(
             "background-color: #1e1e2e; border: 1px solid #45475a; "
-            "border-radius: 6px; padding: 8px; color: #a6e3a1; "
-            "font-family: Consolas, monospace; font-size: 11px;"
+            "border-radius: 6px; padding: 14px; color: #585b70; "
+            "font-family: Consolas, monospace; font-size: 14px;"
         )
         self.cmd_label.setWordWrap(True)
         self.cmd_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.cmd_label.setVisible(False)
-        progress_layout.addWidget(self.cmd_label)
+        self.cmd_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
+        self.cmd_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        right_inner.addWidget(self.cmd_label, stretch=1)
 
-        self.progress_frame.setLayout(progress_layout)
-        self.progress_frame.setVisible(False)
-        layout.addWidget(self.progress_frame)
+        right_group.setLayout(right_inner)
+        right_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        body.addWidget(right_group, stretch=5)
 
-        layout.addStretch()
+        root.addLayout(body, stretch=1)
 
         # Buttons
         btn_layout = QHBoxLayout()
@@ -236,7 +238,7 @@ class EnvCreateDialog(QDialog):
         self.create_btn.clicked.connect(self._create)
         btn_layout.addWidget(self.create_btn)
 
-        layout.addLayout(btn_layout)
+        root.addLayout(btn_layout)
 
     def _change_location(self):
         directory = QFileDialog.getExistingDirectory(
@@ -266,39 +268,39 @@ class EnvCreateDialog(QDialog):
 
         python_path = self.python_combo.currentData() or None
 
-        # Show progress, disable form
-        self.progress_frame.setVisible(True)
+        # Update right panel only — dialog size never changes
+        self.progress_bar.setVisible(True)
         self.create_btn.setEnabled(False)
         self.create_btn.setText("Creating...")
         self.name_input.setEnabled(False)
         self.python_combo.setEnabled(False)
-        self.status_label.setText("⏳ Initializing environment...")
-        self.cancel_btn.setText("⛔ Cancel")
+        self.status_label.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        self.status_label.setText("Initializing environment...")
+        self.cancel_btn.setText("Cancel")
         self.cancel_btn.setObjectName("danger")
-        self.cancel_btn.setStyleSheet("")  # force style refresh
+        self.cancel_btn.setStyleSheet("")
 
-        # Show educational command hints - platform specific
         py_exe = python_path or "python"
         location = self.location_label.text()
         import os
         venv_path = os.path.join(location, name)
 
         from src.utils.platform_utils import get_platform
-        cmds = [f"💡 Equivalent terminal commands:"]
+        cmds = ["💡  Equivalent terminal commands:", ""]
         cmds.append(f"$ {py_exe} -m venv {venv_path}")
-
         if get_platform() == "windows":
             cmds.append(f"$ {venv_path}\\Scripts\\Activate.ps1")
-        elif get_platform() == "macos":
-            cmds.append(f"$ source {venv_path}/bin/activate")
         else:
             cmds.append(f"$ source {venv_path}/bin/activate")
+        cmds.append("$ pip install --upgrade pip")
 
-        cmds.append(f"$ pip install --upgrade pip")
+        self.cmd_label.setStyleSheet(
+            "background-color: #1e1e2e; border: 1px solid #45475a; "
+            "border-radius: 6px; padding: 14px; color: #a6e3a1; "
+            "font-family: Consolas, monospace; font-size: 14px;"
+        )
         self.cmd_label.setText("\n".join(cmds))
-        self.cmd_label.setVisible(True)
 
-        # Start worker
         self.worker = CreateWorker(
             self.venv_manager, name, python_path,
             with_pip=True,

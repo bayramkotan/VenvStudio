@@ -1604,7 +1604,15 @@ $s.Save()
 
             copy_btn = QPushButton(f"📋 {tr('copy_command')}")
             copy_btn.setObjectName("secondary")
-            copy_btn.setToolTip("Copy the equivalent pip install command to clipboard")
+            pip_cmd = "pip install " + " ".join(packages)
+            copy_btn.setToolTip(
+                f"<p style='font-size:14px; font-weight:bold; color:#a6e3a1;'>"
+                f"💡 Equivalent terminal command:</p>"
+                f"<p style='font-size:16px; font-family:Consolas,monospace; color:#cdd6f4; "
+                f"background-color:#1e1e2e; padding:8px; border-radius:4px;'>"
+                f"{pip_cmd}</p>"
+                f"<p style='font-size:11px; color:#6c7086;'>Click to copy to clipboard</p>"
+            )
             copy_btn.clicked.connect(
                 lambda checked, pkgs=packages: self._copy_preset_command(pkgs)
             )

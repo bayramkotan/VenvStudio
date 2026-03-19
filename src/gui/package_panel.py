@@ -655,14 +655,19 @@ class PackagePanel(QWidget):
         layout = QVBoxLayout(card)
         layout.setSpacing(8)
 
+        # Educational: Build tooltip from LAUNCHER_TOOLTIPS
+        tooltip_text = LAUNCHER_TOOLTIPS.get(app_def.get("icon_key", ""), app_def["desc"])
+
         # Icon + Name
         header = QHBoxLayout()
         icon_label = QLabel(app_def["icon"])
         icon_label.setFont(QFont("Segoe UI", 28))
+        icon_label.setToolTip(tooltip_text)
         header.addWidget(icon_label)
 
         name_label = QLabel(app_def["name"])
         name_label.setFont(QFont("Segoe UI", 14, QFont.Bold))
+        name_label.setToolTip(tooltip_text)
         header.addWidget(name_label, 1)
         layout.addLayout(header)
 
@@ -670,12 +675,11 @@ class PackagePanel(QWidget):
         desc = QLabel(app_def["desc"])
         desc.setWordWrap(True)
         desc.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        desc.setToolTip(tooltip_text)
         layout.addWidget(desc)
 
-        # Educational: Set detailed tooltip from LAUNCHER_TOOLTIPS
-        tooltip_text = LAUNCHER_TOOLTIPS.get(app_def.get("icon_key", ""), "")
-        if tooltip_text:
-            card.setToolTip(tooltip_text)
+        # Set card-level tooltip too
+        card.setToolTip(tooltip_text)
 
         # Status label
         status = QLabel("")
@@ -685,7 +689,7 @@ class PackagePanel(QWidget):
 
         layout.addStretch()
 
-        # Buttons row 1: Launch
+        # Buttons row 1: Launch + Copy Command
         btn_layout = QHBoxLayout()
 
         launch_btn = QPushButton(f"▶ {tr('launch_app').format(app=app_def['name'])}"
@@ -701,6 +705,33 @@ class PackagePanel(QWidget):
             script_btn.setToolTip("Select a .py file to run with this framework")
             script_btn.clicked.connect(lambda checked, a=app_def: self._launch_script(a))
             btn_layout.addWidget(script_btn)
+
+        # Educational: Copy Command button — shows pip install + run commands
+        copy_cmd_btn = QPushButton("📋 Commands")
+        copy_cmd_btn.setObjectName("secondary")
+
+        # Build install + run commands
+        pkg_name = app_def["package"]
+        install_cmd = f"pip install {pkg_name}"
+        run_parts = app_def.get("command", [])
+        if run_parts:
+            run_cmd = "python " + " ".join(run_parts)
+        else:
+            run_cmd = f"python -m {pkg_name}"
+
+        copy_cmd_btn.setToolTip(
+            f"<p style='font-size:13px; font-weight:bold; color:#a6e3a1;'>"
+            f"💡 Terminal commands for {app_def['name']}:</p>"
+            f"<p style='font-size:15px; font-family:Consolas,monospace; color:#cdd6f4; "
+            f"background-color:#1e1e2e; padding:6px; border-radius:4px;'>"
+            f"1️⃣ {install_cmd}<br>"
+            f"2️⃣ {run_cmd}</p>"
+            f"<p style='font-size:11px; color:#6c7086;'>Click to copy both commands</p>"
+        )
+        copy_cmd_btn.clicked.connect(
+            lambda checked, ic=install_cmd, rc=run_cmd, nm=app_def["name"]: self._copy_launcher_commands(ic, rc, nm)
+        )
+        btn_layout.addWidget(copy_cmd_btn)
 
         layout.addLayout(btn_layout)
 
@@ -3147,6 +3178,13 @@ dependencies:
         clipboard = QApplication.clipboard()
         clipboard.setText(cmd)
         self.status_label.setText(f"📋 {tr('command_copied')}")
+
+    def _copy_launcher_commands(self, install_cmd: str, run_cmd: str, app_name: str):
+        """Copy both install and run commands to clipboard."""
+        from PySide6.QtWidgets import QApplication
+        full_cmd = f"{install_cmd}\n{run_cmd}"
+        QApplication.clipboard().setText(full_cmd)
+        self.status_label.setText(f"📋 Copied install + run commands for {app_name}")
 
     def _uninstall_preset(self, packages: list, preset_name: str):
         """Uninstall all packages in a preset with confirmation."""

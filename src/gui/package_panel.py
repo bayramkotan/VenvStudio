@@ -706,9 +706,11 @@ class PackagePanel(QWidget):
             script_btn.clicked.connect(lambda checked, a=app_def: self._launch_script(a))
             btn_layout.addWidget(script_btn)
 
-        # Educational: Copy Command button — shows pip install + run commands
-        copy_cmd_btn = QPushButton("📋 Commands")
+        # Educational: Copy Command button — compact icon, hover shows full commands
+        copy_cmd_btn = QPushButton("📋")
         copy_cmd_btn.setObjectName("secondary")
+        copy_cmd_btn.setFixedWidth(36)
+        copy_cmd_btn.setFixedHeight(32)
 
         # Build install + run commands
         pkg_name = app_def["package"]

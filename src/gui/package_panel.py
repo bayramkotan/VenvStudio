@@ -706,11 +706,15 @@ class PackagePanel(QWidget):
             script_btn.clicked.connect(lambda checked, a=app_def: self._launch_script(a))
             btn_layout.addWidget(script_btn)
 
-        # Educational: Copy Command button — compact icon, hover shows full commands
+        # Educational: Copy Command button — compact, visible icon button
         copy_cmd_btn = QPushButton("📋")
-        copy_cmd_btn.setObjectName("secondary")
-        copy_cmd_btn.setFixedWidth(36)
+        copy_cmd_btn.setFixedWidth(38)
         copy_cmd_btn.setFixedHeight(32)
+        copy_cmd_btn.setStyleSheet(
+            "QPushButton { background-color: #313244; border: 1px solid #45475a; "
+            "border-radius: 6px; font-size: 16px; padding: 0px; }"
+            "QPushButton:hover { background-color: #45475a; border-color: #89b4fa; }"
+        )
 
         # Build install + run commands
         pkg_name = app_def["package"]

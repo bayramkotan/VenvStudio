@@ -2414,10 +2414,36 @@ $s.Save()
             QMessageBox.warning(self, "Warning", "No environment selected.\nPlease select an environment first.")
             return
 
+        # Check Python version — warn if old (some packages may not have pre-built wheels)
+        py_warning = ""
+        if self.pip_manager:
+            try:
+                venv_key = str(self.pip_manager.venv_path)
+                env_py_version = self._launcher_py_version_cache.get(venv_key)
+                if not env_py_version:
+                    python_exe = get_python_executable(self.pip_manager.venv_path)
+                    from src.utils.platform_utils import subprocess_args
+                    result = subprocess.run(
+                        [str(python_exe), "--version"],
+                        **subprocess_args(capture_output=True, text=True, timeout=5)
+                    )
+                    ver_str = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
+                    env_py_version = tuple(int(x) for x in ver_str.split(".")[:2])
+                    self._launcher_py_version_cache[venv_key] = env_py_version
+                if env_py_version and env_py_version < (3, 10):
+                    py_warning = (
+                        f"\n\n⚠️ Warning: This environment uses Python {env_py_version[0]}.{env_py_version[1]}.\n"
+                        f"Some packages (e.g. spacy, torch) may fail to install because\n"
+                        f"pre-built wheels are not available for older Python versions.\n"
+                        f"Consider creating a new environment with Python 3.11+."
+                    )
+            except Exception:
+                pass
+
         # Show ALL package names in confirm dialog
         reply = QMessageBox.question(
             self, "Confirm Installation",
-            f"Install the following {len(packages)} package(s)?\n\n• " + "\n• ".join(packages),
+            f"Install the following {len(packages)} package(s)?\n\n• " + "\n• ".join(packages) + py_warning,
             QMessageBox.Yes | QMessageBox.No,
         )
         if reply != QMessageBox.Yes:

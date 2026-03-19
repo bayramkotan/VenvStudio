@@ -15,7 +15,10 @@ from PySide6.QtCore import Qt, QThread, Signal, QSize, QProcess
 from PySide6.QtGui import QFont, QColor, QIcon
 
 from src.core.pip_manager import PipManager
-from src.utils.constants import PACKAGE_CATALOG, PRESETS, COMMAND_HINTS
+from src.utils.constants import (
+    PACKAGE_CATALOG, PRESETS, COMMAND_HINTS,
+    PRESET_DESCRIPTIONS, LAUNCHER_TOOLTIPS, UI_TOOLTIPS,
+)
 
 # Docs URLs for popular packages
 _PACKAGE_DOCS = {
@@ -333,6 +336,7 @@ class PackagePanel(QWidget):
             "}"
         )
         self.env_selector.addItem(tr("select_environment"), "")
+        self.env_selector.setToolTip(UI_TOOLTIPS.get("env_selector", ""))
         self.env_selector.currentIndexChanged.connect(self._on_env_selector_changed)
         row1.addWidget(self.env_selector)
 
@@ -346,7 +350,7 @@ class PackagePanel(QWidget):
         self._env_bar_terminal_btn = QPushButton("🖥️ Open Terminal")
         self._env_bar_terminal_btn.setObjectName("secondary")
         self._env_bar_terminal_btn.setFixedHeight(28)
-        self._env_bar_terminal_btn.setToolTip("Open terminal with this environment activated")
+        self._env_bar_terminal_btn.setToolTip(UI_TOOLTIPS.get("btn_open_terminal", "Open terminal with this environment activated"))
         self._env_bar_terminal_btn.clicked.connect(self._open_terminal_here)
         self._env_bar_terminal_btn.setEnabled(False)  # Disabled until env selected
         row1.addWidget(self._env_bar_terminal_btn)
@@ -415,6 +419,13 @@ class PackagePanel(QWidget):
         self.tabs.addTab(self._create_catalog_tab(), f"🛒 {tr('catalog')}")
         self.tabs.addTab(self._create_presets_tab(), f"⚡ {tr('presets')}")
         self.tabs.addTab(self._create_manual_tab(), f"⌨️ {tr('manual_install')}")
+
+        # Educational: Tab tooltips
+        self.tabs.setTabToolTip(0, UI_TOOLTIPS.get("tab_launch", ""))
+        self.tabs.setTabToolTip(1, UI_TOOLTIPS.get("tab_installed", ""))
+        self.tabs.setTabToolTip(2, UI_TOOLTIPS.get("tab_catalog", ""))
+        self.tabs.setTabToolTip(3, UI_TOOLTIPS.get("tab_presets", ""))
+        self.tabs.setTabToolTip(4, UI_TOOLTIPS.get("tab_manual", ""))
         layout.addWidget(self.tabs)
 
         # Status bar with cancel button
@@ -660,6 +671,11 @@ class PackagePanel(QWidget):
         desc.setWordWrap(True)
         desc.setStyleSheet("color: #a6adc8; font-size: 11px;")
         layout.addWidget(desc)
+
+        # Educational: Set detailed tooltip from LAUNCHER_TOOLTIPS
+        tooltip_text = LAUNCHER_TOOLTIPS.get(app_def.get("icon_key", ""), "")
+        if tooltip_text:
+            card.setToolTip(tooltip_text)
 
         # Status label
         status = QLabel("")
@@ -1552,6 +1568,17 @@ $s.Save()
             header.addWidget(badge)
             card_layout.addLayout(header)
 
+            # Educational: Preset description — explains what this preset is for
+            preset_desc = PRESET_DESCRIPTIONS.get(preset_name, "")
+            if preset_desc:
+                desc_label = QLabel(preset_desc)
+                desc_label.setWordWrap(True)
+                desc_label.setStyleSheet(
+                    "color: #94a3b8; font-size: 11px; font-style: italic; "
+                    "padding: 4px 0px; line-height: 1.3;"
+                )
+                card_layout.addWidget(desc_label)
+
             pkg_text = ", ".join(packages)
             pkg_label = QLabel(pkg_text)
             pkg_label.setWordWrap(True)
@@ -1560,6 +1587,7 @@ $s.Save()
 
             install_btn = QPushButton(f"{tr('install')} ({len(packages)} packages)")
             install_btn.setObjectName("success")
+            install_btn.setToolTip(f"Install all {len(packages)} packages in this preset into the selected environment")
             install_btn.clicked.connect(
                 lambda checked, pkgs=packages, name=preset_name: self._install_packages(pkgs, hint_name=name)
             )
@@ -1568,6 +1596,7 @@ $s.Save()
             uninstall_btn = QPushButton(f"🗑 {tr('uninstall') if tr('uninstall') != 'uninstall' else 'Uninstall'}")
             uninstall_btn.setObjectName("danger")
             uninstall_btn.setVisible(False)
+            uninstall_btn.setToolTip("Remove all packages in this preset from the selected environment")
             uninstall_btn.clicked.connect(
                 lambda checked, pkgs=packages, name=preset_name: self._uninstall_preset(pkgs, name)
             )
@@ -1575,6 +1604,7 @@ $s.Save()
 
             copy_btn = QPushButton(f"📋 {tr('copy_command')}")
             copy_btn.setObjectName("secondary")
+            copy_btn.setToolTip("Copy the equivalent pip install command to clipboard")
             copy_btn.clicked.connect(
                 lambda checked, pkgs=packages: self._copy_preset_command(pkgs)
             )

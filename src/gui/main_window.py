@@ -26,7 +26,7 @@ from src.gui.styles import get_theme
 from src.utils.platform_utils import (
     get_activate_command, open_terminal_at, get_platform,
 )
-from src.utils.constants import APP_NAME, APP_VERSION
+from src.utils.constants import APP_NAME, APP_VERSION, UI_TOOLTIPS
 from src.utils.i18n import tr
 
 
@@ -301,16 +301,19 @@ class MainWindow(QMainWindow):
 
         self.btn_packages = SidebarButton(tr("packages"), "\U0001f4e6")
         self.btn_packages.setChecked(True)
+        self.btn_packages.setToolTip(UI_TOOLTIPS.get("sidebar_packages", ""))
         self.btn_packages.clicked.connect(lambda: self._switch_page(0))
         sidebar_layout.addWidget(self.btn_packages)
         self.nav_buttons.append(self.btn_packages)
 
         self.btn_envs = SidebarButton(tr("environments"), "\U0001f4c1")
+        self.btn_envs.setToolTip(UI_TOOLTIPS.get("sidebar_environments", ""))
         self.btn_envs.clicked.connect(lambda: self._switch_page(1))
         sidebar_layout.addWidget(self.btn_envs)
         self.nav_buttons.append(self.btn_envs)
 
         self.btn_settings = SidebarButton(tr("settings"), "⚙️")
+        self.btn_settings.setToolTip(UI_TOOLTIPS.get("sidebar_settings", ""))
         self.btn_settings.clicked.connect(lambda: self._switch_page(2))
         sidebar_layout.addWidget(self.btn_settings)
         self.nav_buttons.append(self.btn_settings)
@@ -329,6 +332,7 @@ class MainWindow(QMainWindow):
 
         ql_title = QLabel("  ⚡ Quick Launch")
         ql_title.setStyleSheet("color: #6c7086; font-size: 10px; padding: 2px 0;")
+        ql_title.setToolTip(UI_TOOLTIPS.get("ql_section", ""))
         ql_layout.addWidget(ql_title)
 
         # Env selector for quick launch
@@ -394,11 +398,13 @@ class MainWindow(QMainWindow):
         refresh_btn = QPushButton(f"\U0001f504 {tr('refresh')}")
         refresh_btn.setObjectName("secondary")
         refresh_btn.setFixedHeight(40)
+        refresh_btn.setToolTip(UI_TOOLTIPS.get("btn_refresh", ""))
         refresh_btn.clicked.connect(lambda: self._refresh_env_list(force=True))
         self._refresh_btn = refresh_btn
         header_layout.addWidget(refresh_btn)
 
         create_btn = QPushButton(f"  + {tr('new_environment')}  ")
+        create_btn.setToolTip(UI_TOOLTIPS.get("btn_new_env", ""))
         create_btn.clicked.connect(self._create_env)
         create_btn.setFixedHeight(40)
         header_layout.addWidget(create_btn)
@@ -447,30 +453,35 @@ class MainWindow(QMainWindow):
         action_layout = QHBoxLayout()
 
         self.btn_manage_pkgs = QPushButton(f"\U0001f4e6 {tr('manage_packages')}")
+        self.btn_manage_pkgs.setToolTip(UI_TOOLTIPS.get("btn_manage_pkgs", ""))
         self.btn_manage_pkgs.clicked.connect(self._open_package_manager)
         self.btn_manage_pkgs.setEnabled(False)
         action_layout.addWidget(self.btn_manage_pkgs)
 
         self.btn_terminal = QPushButton(f"\U0001f5a5\ufe0f {tr('open_terminal')}")
         self.btn_terminal.setObjectName("secondary")
+        self.btn_terminal.setToolTip(UI_TOOLTIPS.get("btn_terminal", ""))
         self.btn_terminal.clicked.connect(self._open_terminal)
         self.btn_terminal.setEnabled(False)
         action_layout.addWidget(self.btn_terminal)
 
         self.btn_clone = QPushButton(f"\U0001f4cb {tr('clone')}")
         self.btn_clone.setObjectName("secondary")
+        self.btn_clone.setToolTip(UI_TOOLTIPS.get("btn_clone", ""))
         self.btn_clone.clicked.connect(self._clone_env)
         self.btn_clone.setEnabled(False)
         action_layout.addWidget(self.btn_clone)
 
         self.btn_rename = QPushButton(f"✏️ {tr('rename')}")
         self.btn_rename.setObjectName("secondary")
+        self.btn_rename.setToolTip(UI_TOOLTIPS.get("btn_rename", ""))
         self.btn_rename.clicked.connect(self._rename_env)
         self.btn_rename.setEnabled(False)
         action_layout.addWidget(self.btn_rename)
 
         self.btn_export = QPushButton("📤 Export ▾")
         self.btn_export.setObjectName("secondary")
+        self.btn_export.setToolTip(UI_TOOLTIPS.get("btn_export", ""))
         self.btn_export.setEnabled(False)
         export_menu = QMenu(self.btn_export)
         export_menu.addAction("📄 requirements.txt", self._export_requirements)
@@ -485,6 +496,7 @@ class MainWindow(QMainWindow):
 
         self.btn_make_default = QPushButton("⭐ Make Default")
         self.btn_make_default.setObjectName("secondary")
+        self.btn_make_default.setToolTip(UI_TOOLTIPS.get("btn_make_default", ""))
         self.btn_make_default.clicked.connect(self._make_default_env)
         self.btn_make_default.setEnabled(False)
         action_layout.addWidget(self.btn_make_default)
@@ -493,6 +505,7 @@ class MainWindow(QMainWindow):
 
         self.btn_delete = QPushButton(f"\U0001f5d1\ufe0f {tr('delete')}")
         self.btn_delete.setObjectName("danger")
+        self.btn_delete.setToolTip(UI_TOOLTIPS.get("btn_delete", ""))
         self.btn_delete.clicked.connect(self._delete_env)
         self.btn_delete.setEnabled(False)
         action_layout.addWidget(self.btn_delete)

@@ -7,6 +7,290 @@ APP_VERSION = "1.3.61"
 APP_DESCRIPTION = "Lightweight Python Virtual Environment Manager"
 APP_AUTHOR = "VenvStudio Team"
 
+# ─── Educational: Preset Descriptions ────────────────────────────────────────
+# Shown on preset cards to explain what each preset is for and who should use it.
+
+PRESET_DESCRIPTIONS = {
+    "📊 Data Science Starter": (
+        "Essential tools for data analysis and visualization. "
+        "Includes NumPy for numerical computing, Pandas for data manipulation, "
+        "Matplotlib for plotting, Scikit-learn for ML, and Jupyter for interactive notebooks. "
+        "Perfect for beginners starting their data science journey."
+    ),
+    "🌐 Web API (FastAPI)": (
+        "Build modern, high-performance REST APIs. "
+        "FastAPI provides automatic API documentation (Swagger UI), "
+        "Pydantic handles data validation, SQLAlchemy manages databases, "
+        "and Uvicorn serves your application. Great for backend development."
+    ),
+    "🌐 Web App (Django)": (
+        "Full-featured web application framework with batteries included. "
+        "Django provides ORM, admin panel, authentication, and templating out of the box. "
+        "Includes PostgreSQL support and Celery for background tasks."
+    ),
+    "🌐 Web App (Flask)": (
+        "Lightweight and flexible web framework. "
+        "Flask gives you the basics and lets you choose your own tools. "
+        "Includes SQLAlchemy for database, CORS support, and Gunicorn for production serving."
+    ),
+    "🤖 ML Starter": (
+        "Machine learning essentials for building and evaluating models. "
+        "Scikit-learn provides classification, regression, and clustering algorithms. "
+        "XGBoost adds powerful gradient boosting. Jupyter enables interactive experimentation."
+    ),
+    "👁️ Computer Vision": (
+        "Tools for image processing and object detection. "
+        "OpenCV handles image/video operations, Pillow for image manipulation, "
+        "YOLOv8 (Ultralytics) for real-time object detection, "
+        "and PyTorch + TorchVision for deep learning models."
+    ),
+    "🧪 Testing Suite": (
+        "Professional testing tools for Python projects. "
+        "Pytest is the standard testing framework, pytest-cov measures code coverage, "
+        "Factory Boy creates test fixtures, and Faker generates realistic test data."
+    ),
+    "🛠️ Dev Essentials": (
+        "Code quality tools every Python developer should use. "
+        "Black auto-formats your code, Flake8 checks for style issues, "
+        "MyPy catches type errors before runtime, isort organizes imports, "
+        "and pre-commit runs checks automatically on every git commit."
+    ),
+    "🔬 NLP Toolkit": (
+        "Natural Language Processing tools for text analysis. "
+        "Transformers provides pre-trained models (BERT, GPT, etc.), "
+        "NLTK for tokenization and linguistic analysis, "
+        "spaCy for production-ready NLP pipelines. "
+        "⚠️ spaCy requires Python 3.10+ on Windows."
+    ),
+    "🖥️ GUI Development": (
+        "Build desktop applications with Python. "
+        "PySide6 is the official Qt for Python binding — create professional cross-platform GUIs. "
+        "PyInstaller packages your app into a standalone .exe or .app file."
+    ),
+    "📊 Visualization Suite": (
+        "Advanced data visualization libraries. "
+        "Matplotlib for static plots, Seaborn for statistical graphics, "
+        "Plotly for interactive charts, Bokeh for web-based dashboards, "
+        "and Altair for declarative visualizations."
+    ),
+    "🧪 JupyterLab Full": (
+        "Complete JupyterLab setup with interactive widgets. "
+        "JupyterLab is the next-generation notebook interface. "
+        "ipywidgets adds interactive controls (sliders, buttons, dropdowns) to your notebooks."
+    ),
+    "📈 Time Series (Classic)": (
+        "Statistical time series analysis and forecasting. "
+        "Statsmodels for ARIMA/SARIMAX, pmdarima for auto-ARIMA, "
+        "Prophet for trend/seasonality decomposition, "
+        "sktime for unified ML, tsfresh for automatic feature extraction."
+    ),
+    "📈 Time Series (Deep Learning)": (
+        "Neural network-based time series forecasting. "
+        "PyTorch Forecasting for temporal fusion transformers, "
+        "Darts for easy-to-use forecasting models, "
+        "NeuralForecast for state-of-the-art neural models, "
+        "GluonTS for probabilistic forecasting."
+    ),
+    "💰 Financial Analysis": (
+        "Quantitative finance and algorithmic trading tools. "
+        "yfinance downloads market data, QuantLib for derivatives pricing, "
+        "Zipline for backtesting trading strategies, "
+        "PyFolio for portfolio performance analysis."
+    ),
+    "💰 Financial LLM": (
+        "Fine-tune large language models for financial applications. "
+        "Transformers + PEFT for parameter-efficient fine-tuning, "
+        "bitsandbytes for quantization (reduce memory usage), "
+        "Accelerate for distributed training."
+    ),
+}
+
+# ─── Educational: Launcher Tooltips ──────────────────────────────────────────
+# Detailed tooltips for launcher cards — shown on hover.
+# Format: {package_name: "tooltip text"}
+
+LAUNCHER_TOOLTIPS = {
+    "jupyterlab": (
+        "🔬 JupyterLab — Interactive Computing Environment\n\n"
+        "JupyterLab is a web-based IDE for notebooks, code, and data.\n"
+        "You can write Python code in cells, see results instantly,\n"
+        "mix code with visualizations and Markdown text.\n\n"
+        "💡 Perfect for: data exploration, prototyping, teaching\n"
+        "🌐 Opens in your browser at http://localhost:8888"
+    ),
+    "notebook": (
+        "📓 Jupyter Notebook — Classic Notebook Interface\n\n"
+        "The original Jupyter Notebook — simple, document-centric.\n"
+        "Each notebook is a .ipynb file with code cells and outputs.\n\n"
+        "💡 Perfect for: quick experiments, sharing analysis\n"
+        "🌐 Opens in your browser at http://localhost:8888"
+    ),
+    "orange3": (
+        "🍊 Orange Data Mining — Visual Programming\n\n"
+        "Build data analysis workflows by connecting visual blocks.\n"
+        "No coding required! Drag-and-drop widgets for classification,\n"
+        "clustering, visualization, and more.\n\n"
+        "💡 Perfect for: learning ML concepts, quick prototyping\n"
+        "⚠️ Requires PyQt5 (installed automatically)"
+    ),
+    "spyder": (
+        "🕷️ Spyder IDE — Scientific Python IDE\n\n"
+        "A MATLAB-like development environment for Python.\n"
+        "Features variable explorer, integrated plots, debugger,\n"
+        "and IPython console.\n\n"
+        "💡 Perfect for: scientific computing, data analysis"
+    ),
+    "ipython": (
+        "🐍 IPython — Enhanced Python Shell\n\n"
+        "A powerful interactive Python shell with:\n"
+        "• Tab completion and syntax highlighting\n"
+        "• Magic commands (%timeit, %run, %matplotlib)\n"
+        "• Rich history and auto-indentation\n\n"
+        "💡 Perfect for: quick testing, learning Python interactively"
+    ),
+    "streamlit": (
+        "🎈 Streamlit — Data Apps in Minutes\n\n"
+        "Turn Python scripts into interactive web apps.\n"
+        "Just use st.write(), st.slider(), st.plot() etc.\n"
+        "No HTML/CSS/JS knowledge needed!\n\n"
+        "💡 Perfect for: dashboards, data demos, ML model showcases\n"
+        "🌐 Opens at http://localhost:8501"
+    ),
+    "gradio": (
+        "🤗 Gradio — ML Demo Builder\n\n"
+        "Create web interfaces for ML models in 3 lines of code.\n"
+        "Supports text, image, audio, video inputs/outputs.\n"
+        "Share your demo with a public link instantly.\n\n"
+        "💡 Perfect for: ML model demos, AI prototypes\n"
+        "🌐 Opens at http://localhost:7860"
+    ),
+    "dash": (
+        "📊 Dash by Plotly — Analytical Dashboards\n\n"
+        "Build interactive analytical web apps with Python.\n"
+        "Combines Plotly charts with HTML components.\n"
+        "Reactive callbacks update charts automatically.\n\n"
+        "💡 Perfect for: business dashboards, data reporting\n"
+        "🌐 Opens at http://localhost:8050"
+    ),
+    "panel": (
+        "🔲 Panel — HoloViz Dashboard Toolkit\n\n"
+        "Create dashboards and data apps from notebooks or scripts.\n"
+        "Works with Matplotlib, Plotly, Bokeh, and more.\n\n"
+        "💡 Perfect for: scientific dashboards, interactive reports"
+    ),
+    "voila": (
+        "📓 Voilà — Notebooks as Web Apps\n\n"
+        "Turns Jupyter notebooks into standalone web applications.\n"
+        "Hides all code cells — only shows outputs and widgets.\n\n"
+        "💡 Perfect for: sharing analysis with non-technical users"
+    ),
+    "mlflow": (
+        "🧪 MLflow — ML Experiment Tracking\n\n"
+        "Track experiments, compare model metrics, manage models.\n"
+        "Log parameters, metrics, and artifacts for every run.\n"
+        "Built-in model registry for versioning.\n\n"
+        "💡 Perfect for: ML experimentation, model management\n"
+        "🌐 Opens at http://localhost:5000"
+    ),
+    "tensorboard": (
+        "📈 TensorBoard — Training Visualization\n\n"
+        "Visualize training metrics, model graphs, embeddings.\n"
+        "Works with TensorFlow, PyTorch, and other frameworks.\n"
+        "Select a log directory to see training progress.\n\n"
+        "💡 Perfect for: monitoring deep learning training\n"
+        "🌐 Opens at http://localhost:6006"
+    ),
+    "fastapi": (
+        "⚡ FastAPI — Modern Web API Framework\n\n"
+        "Build APIs with automatic documentation (Swagger UI).\n"
+        "Type hints → automatic validation and serialization.\n"
+        "Async support for high-performance applications.\n\n"
+        "💡 Perfect for: REST APIs, microservices, backends\n"
+        "🌐 API docs at http://localhost:8000/docs"
+    ),
+    "datasette": (
+        "🗄️ Datasette — Explore SQLite Databases\n\n"
+        "Instantly publish and explore SQLite databases as a web app.\n"
+        "Browse tables, run SQL queries, export data as JSON/CSV.\n\n"
+        "💡 Perfect for: data exploration, publishing open data\n"
+        "🌐 Opens at http://localhost:8001"
+    ),
+}
+
+# ─── Educational: UI Tooltips ────────────────────────────────────────────────
+# Tooltips for buttons, labels, and UI elements throughout the app.
+
+UI_TOOLTIPS = {
+    # Main Window — Sidebar
+    "sidebar_packages": "📦 Manage packages in your virtual environments.\nInstall, uninstall, and update Python packages.",
+    "sidebar_environments": "📁 View and manage your virtual environments.\nCreate, delete, clone, rename, and export envs.",
+    "sidebar_settings": "⚙️ Configure VenvStudio.\nTheme, language, Python versions, terminal, CLI tools.",
+
+    # Environments Page
+    "btn_new_env": "➕ Create a new virtual environment.\n\n💡 A virtual environment (venv) is an isolated Python installation.\nPackages installed in one venv don't affect others.",
+    "btn_refresh": "🔄 Refresh the environment list.\nRe-scans the base directory for new or changed envs.",
+    "btn_manage_pkgs": "📦 Open the package manager for this environment.\nInstall, uninstall, and update packages.",
+    "btn_terminal": "🖥️ Open a terminal with this environment activated.\n\n💡 The terminal will automatically run the activation command\nso you can use Python and pip directly.",
+    "btn_clone": "📋 Create a copy of this environment.\nA new env is created with the same packages installed.",
+    "btn_rename": "✏️ Rename this environment.\nCreates a new env with the same packages and removes the old one.",
+    "btn_export": "📤 Export this environment's packages.\nChoose from: requirements.txt, Dockerfile, docker-compose.yml,\npyproject.toml, environment.yml, or clipboard.",
+    "btn_delete": "🗑️ Delete this environment permanently.\n⚠️ This cannot be undone!",
+    "btn_make_default": "⭐ Set as default environment.\nThis env will be opened automatically when VenvStudio starts.",
+
+    # Package Panel
+    "env_selector": "🔄 Select which virtual environment to manage.\nPackages shown below belong to the selected env.",
+    "btn_open_terminal": "🖥️ Open a terminal with this env activated.\n\n💡 Equivalent command:\n  source venv/bin/activate  (Linux/Mac)\n  .\\Scripts\\Activate.ps1    (Windows)",
+    "tab_launch": "🚀 Launch installed applications.\nStart Jupyter, Streamlit, Gradio, and other tools\ndirectly from VenvStudio.",
+    "tab_installed": "📦 View all installed packages.\nSelect packages to uninstall or check for updates.",
+    "tab_catalog": "📚 Browse popular Python packages by category.\nClick to install packages you need.",
+    "tab_presets": "⚡ Install pre-configured package sets.\nOne click to install a complete development stack.",
+    "tab_manual": "✏️ Manually install packages by name.\nType package names separated by spaces or newlines.\n\n💡 You can paste from pip install commands — VenvStudio\nwill automatically extract the package names.",
+
+    # Quick Launch
+    "ql_section": "⚡ Quick Launch\nLaunch installed apps directly from the sidebar.\nSelect an environment from the dropdown below.",
+}
+
+# ─── Educational: Concept Explanations ───────────────────────────────────────
+# Short explanations for concepts that appear in the UI.
+
+EDUCATIONAL_HINTS = {
+    "what_is_venv": (
+        "💡 What is a Virtual Environment?\n\n"
+        "A virtual environment (venv) is an isolated Python installation.\n"
+        "Each venv has its own packages — installing NumPy in one venv\n"
+        "doesn't affect other venvs or your system Python.\n\n"
+        "This prevents version conflicts between projects.\n"
+        "For example, Project A needs Django 4.2 and Project B needs Django 5.0\n"
+        "— each can have its own venv with the right version."
+    ),
+    "what_is_pip": (
+        "💡 What is pip?\n\n"
+        "pip is Python's package installer. It downloads and installs\n"
+        "packages from PyPI (Python Package Index) — a repository\n"
+        "of over 500,000 Python packages.\n\n"
+        "Common commands:\n"
+        "  pip install numpy      — install a package\n"
+        "  pip uninstall numpy    — remove a package\n"
+        "  pip list               — show installed packages\n"
+        "  pip freeze             — export package versions"
+    ),
+    "what_is_pypi": (
+        "💡 What is PyPI?\n\n"
+        "PyPI (Python Package Index) is the official repository\n"
+        "for Python packages. When you run 'pip install numpy',\n"
+        "pip downloads it from pypi.org.\n\n"
+        "🌐 Browse packages: https://pypi.org"
+    ),
+    "what_is_requirements": (
+        "💡 What is requirements.txt?\n\n"
+        "A text file listing all packages and their versions.\n"
+        "Used to recreate the same environment on another machine.\n\n"
+        "  pip freeze > requirements.txt   — export\n"
+        "  pip install -r requirements.txt — import\n\n"
+        "This is how teams share their project dependencies."
+    ),
+}
+
 PACKAGE_CATALOG = {
     "🔬 Data Exploration & Transformation": {
         "icon": "🔬",

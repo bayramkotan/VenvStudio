@@ -8,6 +8,7 @@
   - Kök neden 3: Python 3.14 `ensurepip --default-pip` flag'ini kaldırdı → `--without-pip` + manuel ensurepip
 
 - **B42** — Python yükleyici güvenlik kontrolleri
+- **B49** — Windows EXE: ilk açılışta Python kurulu değilse kullanıcıya sor ve python.org installer indirip çalıştır (venv dahil). Linux'taki _check_and_install_linux_deps() benzeri bir _check_and_install_windows_deps() fonksiyonu eklenecek.
 - **B43** — Arch + Python 3.14 Orange3 crash
 - **B44** — Arch'ta IPython çalışmıyor
 - **B47** — 182 satır hardcoded dark renk

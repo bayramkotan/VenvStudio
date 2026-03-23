@@ -83,7 +83,12 @@ class VenvManager:
         if venv_path.exists():
             return False, f"Environment '{name}' already exists at {venv_path}"
 
-        python_exe = python_path or sys.executable
+        if python_path:
+            python_exe = python_path
+        elif _platform.system().lower() == "linux" and os.path.isfile("/usr/bin/python3"):
+            python_exe = "/usr/bin/python3"
+        else:
+            python_exe = sys.executable
         cmd = [python_exe, "-m", "venv"]
 
         if not with_pip:

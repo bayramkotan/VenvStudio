@@ -110,23 +110,42 @@ class VenvManager:
             )
 
             if result.returncode != 0:
-                if venv_path.exists():
-                    shutil.rmtree(venv_path, ignore_errors=True)
-
                 stderr_lower = (result.stderr or "").lower()
-                if ("ensurepip" in stderr_lower
-                        or "no module named venv" in stderr_lower
-                        or "returned non-zero exit" in stderr_lower):
+
+                # ensurepip/default-pip failure — Python 3.14+ removed --default-pip
+                # Retry with --without-pip then install pip manually
+                if with_pip and ("ensurepip" in stderr_lower or "default-pip" in stderr_lower or "returned non-zero exit" in stderr_lower):
+                    if venv_path.exists():
+                        shutil.rmtree(venv_path, ignore_errors=True)
+                    if callback:
+                        callback("Retrying without ensurepip (Python 3.14+ mode)...")
+                    cmd_nopip = [python_exe, "-m", "venv", "--without-pip"]
+                    if system_site_packages:
+                        cmd_nopip.append("--system-site-packages")
+                    cmd_nopip.append(str(venv_path))
+                    retry = _run(cmd_nopip, capture_output=True, text=True, timeout=120)
+                    if retry.returncode != 0:
+                        if venv_path.exists():
+                            shutil.rmtree(venv_path, ignore_errors=True)
+                        return False, f"Failed to create environment:\n{retry.stderr}"
+                    # Install pip manually via ensurepip
+                    python_in_venv = get_python_executable(venv_path)
+                    if callback:
+                        callback("Installing pip manually...")
+                    _run(
+                        [str(python_in_venv), "-m", "ensurepip"],
+                        capture_output=True, text=True, timeout=60,
+                    )
+
+                elif "no module named venv" in stderr_lower:
+                    if venv_path.exists():
+                        shutil.rmtree(venv_path, ignore_errors=True)
                     venv_installed = self._try_install_venv_package(python_exe, callback)
                     if venv_installed:
                         if callback:
-                            callback(f"Retrying environment creation...")
-                        retry = _run(
-                            cmd, capture_output=True, text=True, timeout=120,
-                        )
-                        if retry.returncode == 0:
-                            pass
-                        else:
+                            callback("Retrying environment creation...")
+                        retry = _run(cmd, capture_output=True, text=True, timeout=120)
+                        if retry.returncode != 0:
                             if venv_path.exists():
                                 shutil.rmtree(venv_path, ignore_errors=True)
                             return False, f"Failed to create environment after installing python3-venv:\n{retry.stderr}"
@@ -140,6 +159,8 @@ class VenvManager:
                             f"  openSUSE: sudo zypper install python3-venv"
                         )
                 else:
+                    if venv_path.exists():
+                        shutil.rmtree(venv_path, ignore_errors=True)
                     return False, f"Failed to create environment:\n{result.stderr}"
 
             pip_exe = get_pip_executable(venv_path)

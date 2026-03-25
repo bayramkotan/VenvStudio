@@ -3,7 +3,7 @@ VenvStudio - Constants and Popular Package Catalog
 """
 
 APP_NAME = "VenvStudio"
-APP_VERSION = "1.3.92"
+APP_VERSION = "1.3.93"
 APP_DESCRIPTION = "Lightweight Python Virtual Environment Manager"
 APP_AUTHOR = "VenvStudio Team"
 

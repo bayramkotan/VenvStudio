@@ -158,11 +158,15 @@ class VenvManager:
         elif _platform.system().lower() == "linux":
             python_exe = "/usr/bin/python3" if os.path.isfile("/usr/bin/python3") else "python3"
         elif _platform.system().lower() == "windows":
-            # py launcher Windows default Python'u (* işaretli) kullanır
-            py = shutil.which("py")
-            python_exe = py if py else "python"
+            if getattr(sys, "frozen", False):
+                # PyInstaller EXE — py launcher ile default Python'u bul
+                py = shutil.which("py")
+                python_exe = py if py else "python"
+            else:
+                # pip install — sys.executable güvenli
+                python_exe = sys.executable
         else:
-            python_exe = "python"
+            python_exe = sys.executable
         cmd = [python_exe, "-m", "venv"]
 
         if not with_pip:

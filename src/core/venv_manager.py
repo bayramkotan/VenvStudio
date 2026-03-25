@@ -155,12 +155,8 @@ class VenvManager:
 
         if python_path:
             python_exe = python_path
-        elif _platform.system().lower() == "linux" and os.path.isfile("/usr/bin/python3"):
-            python_exe = "/usr/bin/python3"
-        elif _platform.system().lower() == "windows":
-            from src.utils.platform_utils import find_system_pythons
-            found = find_system_pythons()
-            python_exe = found[0][1] if found else "python"
+        elif _platform.system().lower() == "linux":
+            python_exe = "/usr/bin/python3" if os.path.isfile("/usr/bin/python3") else "python3"
         else:
             python_exe = "python"
         cmd = [python_exe, "-m", "venv"]

@@ -16,12 +16,65 @@ from typing import Optional, List, Tuple
 # Windows'ta subprocess çağrılarında konsol penceresi açılmasını engelle
 CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
+# AppImage variables that cause re-launch when inherited by subprocesses
+_APPIMAGE_VARS = frozenset({
+    "APPIMAGE", "APPDIR", "ARGV0", "OWD",
+    "APPIMAGE_EXTRACT_AND_RUN", "APPIMAGE_STARTUP_NET_WM_PID",
+})
+
+
+def appimage_clean_env() -> dict | None:
+    """
+    If running inside an AppImage, return a cleaned copy of os.environ
+    with AppImage re-launch variables stripped out.
+    Returns None if not inside an AppImage (no overhead).
+    """
+    if not os.environ.get("APPIMAGE"):
+        return None
+    return {k: v for k, v in os.environ.items() if k not in _APPIMAGE_VARS}
+
+
 def subprocess_args(**kwargs):
-    """Add CREATE_NO_WINDOW on Windows to suppress console flashing.
+    """
+    Build kwargs for subprocess.run / subprocess.Popen:
+    - Adds CREATE_NO_WINDOW on Windows to suppress console flashing.
+    - On Linux inside an AppImage, strips AppImage env vars so subprocesses
+      don't accidentally re-launch the AppImage instead of the intended binary.
+    - On Windows inside a PyInstaller EXE, ensures PATH is set so subprocesses
+      can find python.exe and other system tools.
     Use: subprocess.run(cmd, **subprocess_args(capture_output=True, text=True))
     """
     if sys.platform == "win32":
         kwargs.setdefault("creationflags", CREATE_NO_WINDOW)
+        # PyInstaller EXE içinde PATH bazen eksik olabilir — sistem PATH'ini garantile
+        if getattr(sys, "frozen", False) and "env" not in kwargs:
+            env = os.environ.copy()
+            # PATH'e Python kurulum dizinlerini ekle
+            import winreg
+            try:
+                for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+                    for reg_path in (r"SOFTWARE\Python\PythonCore", r"SOFTWARE\WOW6432Node\Python\PythonCore"):
+                        try:
+                            with winreg.OpenKey(hive, reg_path) as key:
+                                i = 0
+                                while True:
+                                    try:
+                                        ver = winreg.EnumKey(key, i); i += 1
+                                        with winreg.OpenKey(key, ver + r"\InstallPath") as ip:
+                                            d = winreg.QueryValue(ip, None).rstrip("\\")
+                                            if d not in env.get("PATH", ""):
+                                                env["PATH"] = d + os.pathsep + d + r"\Scripts" + os.pathsep + env.get("PATH", "")
+                                    except OSError:
+                                        break
+                        except OSError:
+                            continue
+            except Exception:
+                pass
+            kwargs["env"] = env
+    elif sys.platform == "linux":
+        clean = appimage_clean_env()
+        if clean is not None:
+            kwargs.setdefault("env", clean)
     return kwargs
 
 
@@ -90,11 +143,17 @@ def find_system_pythons() -> List[Tuple[str, str]]:
     pythons = []
     seen_paths = set()
 
+    # EXE/AppImage path — subprocess çağrısında bunlar tekrar başlatılmamalı
+    _self_exe = os.path.normcase(os.path.normpath(sys.executable))
+
     def _try_add(exe_path: str):
         if not exe_path or not os.path.isfile(exe_path):
             return
         normalized = os.path.normcase(os.path.normpath(exe_path))
         if "windowsapps" in normalized:
+            return
+        # Kendimizi (EXE/AppImage) listeye ekleme
+        if normalized == _self_exe:
             return
         if normalized in seen_paths:
             return
@@ -111,10 +170,13 @@ def find_system_pythons() -> List[Tuple[str, str]]:
             pass
 
     # 1) PATH'deki python / python3 komutları
-    for candidate in ["python", "python3"]:
-        exe = shutil.which(candidate)
-        if exe:
-            _try_add(exe)
+    # NOT: Windows EXE (PyInstaller frozen) içinde shutil.which("python") EXE'nin
+    # kendisini döndürebilir — bu durumda PATH aramasını atla
+    if not (os.name == "nt" and getattr(sys, "frozen", False)):
+        for candidate in ["python", "python3"]:
+            exe = shutil.which(candidate)
+            if exe:
+                _try_add(exe)
 
     # 2) Windows: Registry + bilinen kurulum dizinleri
     if os.name == "nt":

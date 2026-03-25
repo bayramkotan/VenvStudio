@@ -40,37 +40,10 @@ def subprocess_args(**kwargs):
     - Adds CREATE_NO_WINDOW on Windows to suppress console flashing.
     - On Linux inside an AppImage, strips AppImage env vars so subprocesses
       don't accidentally re-launch the AppImage instead of the intended binary.
-    - On Windows inside a PyInstaller EXE, ensures PATH is set so subprocesses
-      can find python.exe and other system tools.
     Use: subprocess.run(cmd, **subprocess_args(capture_output=True, text=True))
     """
     if sys.platform == "win32":
         kwargs.setdefault("creationflags", CREATE_NO_WINDOW)
-        # PyInstaller EXE içinde PATH bazen eksik olabilir — sistem PATH'ini garantile
-        if getattr(sys, "frozen", False) and "env" not in kwargs:
-            env = os.environ.copy()
-            # PATH'e Python kurulum dizinlerini ekle
-            import winreg
-            try:
-                for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
-                    for reg_path in (r"SOFTWARE\Python\PythonCore", r"SOFTWARE\WOW6432Node\Python\PythonCore"):
-                        try:
-                            with winreg.OpenKey(hive, reg_path) as key:
-                                i = 0
-                                while True:
-                                    try:
-                                        ver = winreg.EnumKey(key, i); i += 1
-                                        with winreg.OpenKey(key, ver + r"\InstallPath") as ip:
-                                            d = winreg.QueryValue(ip, None).rstrip("\\")
-                                            if d not in env.get("PATH", ""):
-                                                env["PATH"] = d + os.pathsep + d + r"\Scripts" + os.pathsep + env.get("PATH", "")
-                                    except OSError:
-                                        break
-                        except OSError:
-                            continue
-            except Exception:
-                pass
-            kwargs["env"] = env
     elif sys.platform == "linux":
         clean = appimage_clean_env()
         if clean is not None:

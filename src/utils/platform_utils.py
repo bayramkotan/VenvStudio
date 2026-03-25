@@ -240,7 +240,12 @@ def find_system_pythons() -> List[Tuple[str, str]]:
             except PermissionError:
                 continue
 
-    pythons.sort(key=lambda x: x[0], reverse=True)
+    def _ver_key(v):
+        try:
+            return tuple(int(x) for x in v[0].split("."))
+        except Exception:
+            return (0,)
+    pythons.sort(key=_ver_key, reverse=True)
     return pythons
 def open_terminal_at(path: Path, terminal_type: str = "") -> None:
     """Open a terminal/console at the given path with the venv activated."""

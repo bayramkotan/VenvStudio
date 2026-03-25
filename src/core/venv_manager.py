@@ -25,9 +25,79 @@ from src.utils.platform_utils import (
 _SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if _platform.system().lower() == "windows" else 0
 
 
+def _find_windows_python() -> str:
+    """
+    Find real Python executable on Windows when running as a PyInstaller EXE.
+    sys.executable points to the EXE binary, not python.exe.
+    Searches: PATH, Windows Registry, known install dirs.
+    Returns empty string if not found.
+    """
+    import shutil
+
+    # 1) PATH'de python / python3
+    for candidate in ("python", "python3"):
+        found = shutil.which(candidate)
+        if found and "windowsapps" not in found.lower():
+            return found
+
+    # 2) Windows Registry
+    try:
+        import winreg
+        for hive in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+            for reg_path in (
+                r"SOFTWARE\Python\PythonCore",
+                r"SOFTWARE\WOW6432Node\Python\PythonCore",
+            ):
+                try:
+                    with winreg.OpenKey(hive, reg_path) as key:
+                        i = 0
+                        best = ""
+                        while True:
+                            try:
+                                ver = winreg.EnumKey(key, i)
+                                i += 1
+                                with winreg.OpenKey(key, ver + r"\InstallPath") as ip:
+                                    install_dir = winreg.QueryValue(ip, None)
+                                    exe = os.path.join(install_dir.rstrip("\\"), "python.exe")
+                                    if os.path.isfile(exe):
+                                        best = exe  # en son versiyonu al
+                            except OSError:
+                                break
+                        if best:
+                            return best
+                except OSError:
+                    continue
+    except ImportError:
+        pass
+
+    # 3) Bilinen kurulum dizinleri
+    for root in (
+        os.environ.get("LOCALAPPDATA", ""),
+        os.environ.get("PROGRAMFILES", r"C:\Program Files"),
+        os.environ.get("PROGRAMFILES(X86)", r"C:\Program Files (x86)"),
+    ):
+        if not root or not os.path.isdir(root):
+            continue
+        try:
+            for entry in os.scandir(root):
+                if entry.is_dir() and entry.name.lower().startswith("python"):
+                    exe = os.path.join(entry.path, "python.exe")
+                    if os.path.isfile(exe):
+                        return exe
+        except PermissionError:
+            continue
+
+    return ""
+
+
+
 def _run(*args, **kwargs):
-    """subprocess.run wrapper — never opens a terminal window on Windows."""
-    kwargs.setdefault("creationflags", _SUBPROCESS_FLAGS)
+    """subprocess.run wrapper — uses subprocess_args for platform safety."""
+    from src.utils.platform_utils import subprocess_args
+    # subprocess_args: Windows CREATE_NO_WINDOW + EXE PATH fix, Linux AppImage env clean
+    merged = subprocess_args()
+    for k, v in merged.items():
+        kwargs.setdefault(k, v)
     return subprocess.run(*args, **kwargs)
 
 
@@ -87,8 +157,12 @@ class VenvManager:
             python_exe = python_path
         elif _platform.system().lower() == "linux" and os.path.isfile("/usr/bin/python3"):
             python_exe = "/usr/bin/python3"
+        elif _platform.system().lower() == "windows":
+            from src.utils.platform_utils import find_system_pythons
+            found = find_system_pythons()
+            python_exe = found[0][1] if found else "python"
         else:
-            python_exe = sys.executable
+            python_exe = "python"
         cmd = [python_exe, "-m", "venv"]
 
         if not with_pip:
@@ -165,15 +239,24 @@ class VenvManager:
 
             pip_exe = get_pip_executable(venv_path)
             python_in_venv = get_python_executable(venv_path)
-            if with_pip and pip_exe.exists():
-                if callback:
-                    callback("Upgrading pip...")
-                _run(
-                    [str(python_in_venv), "-m", "pip", "install", "--upgrade", "pip"],
-                    capture_output=True,
-                    text=True,
-                    timeout=60,
-                )
+            if with_pip:
+                if not pip_exe.exists():
+                    # pip yok — ensurepip ile kur (Python 3.14+ venv pip kurmayabilir)
+                    if callback:
+                        callback("Installing pip (ensurepip)...")
+                    _run(
+                        [str(python_in_venv), "-m", "ensurepip", "--upgrade"],
+                        capture_output=True, text=True, timeout=60,
+                    )
+                # pip varsa upgrade et
+                pip_exe = get_pip_executable(venv_path)  # tekrar kontrol
+                if pip_exe.exists():
+                    if callback:
+                        callback("Upgrading pip...")
+                    _run(
+                        [str(python_in_venv), "-m", "pip", "install", "--upgrade", "pip"],
+                        capture_output=True, text=True, timeout=60,
+                    )
 
             meta = {
                 "created": datetime.now().isoformat(),

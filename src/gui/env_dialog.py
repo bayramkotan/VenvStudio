@@ -274,13 +274,6 @@ class EnvCreateDialog(QDialog):
             return
 
         python_path = self.python_combo.currentData() or None
-        if not python_path:
-            # "System Default" seçili — combo'daki ilk gerçek Python path'ini kullan
-            for i in range(self.python_combo.count()):
-                data = self.python_combo.itemData(i)
-                if data:
-                    python_path = data
-                    break
 
         self.progress_bar.setVisible(True)
         self.create_btn.setEnabled(False)

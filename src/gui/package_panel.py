@@ -3031,8 +3031,13 @@ dependencies:
                 import ssl
                 url = f"https://pypi.org/pypi/{pkg_name}/json"
                 req = urllib.request.Request(url, headers={"User-Agent": "VenvStudio"})
-                ctx = ssl.create_default_context()
-                with urllib.request.urlopen(req, timeout=8, context=ctx) as resp:
+                try:
+                    ctx = ssl.create_default_context()
+                    resp_obj = urllib.request.urlopen(req, timeout=8, context=ctx)
+                except ssl.SSLError:
+                    ctx = ssl._create_unverified_context()
+                    resp_obj = urllib.request.urlopen(req, timeout=8, context=ctx)
+                with resp_obj as resp:
                     data = _json.loads(resp.read().decode())
                 info = data.get("info", {})
                 deps = info.get("requires_dist") or []

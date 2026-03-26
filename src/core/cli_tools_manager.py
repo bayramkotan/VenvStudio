@@ -371,20 +371,28 @@ class CliToolWorker(QThread):
         self._download_and_extract(url, filename, "oh-my-posh")
 
     def _download_and_extract(self, url: str, filename: str, tool_name: str):
-        import urllib.request
+        import urllib.request, ssl
         bin_dir = _get_bin_dir()
         bin_dir.mkdir(parents=True, exist_ok=True)
+        _ctx = ssl.create_default_context()
 
         with tempfile.TemporaryDirectory() as tmp:
             dest = Path(tmp) / filename
             self.progress.emit(f"⬇️ Fetching {url}")
-
-            def _reporthook(count, block, total):
-                if total > 0:
-                    pct = min(100, int(count * block * 100 / total))
-                    self.progress.emit(f"⬇️ Downloading... {pct}%")
-
-            urllib.request.urlretrieve(url, dest, reporthook=_reporthook)
+            req = urllib.request.Request(url, headers={"User-Agent": "VenvStudio"})
+            with urllib.request.urlopen(req, timeout=60, context=_ctx) as resp:
+                total = int(resp.headers.get("Content-Length", 0))
+                downloaded = 0
+                with open(dest, "wb") as f:
+                    while True:
+                        chunk = resp.read(65536)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total > 0:
+                            pct = min(100, int(downloaded * 100 / total))
+                            self.progress.emit(f"⬇️ Downloading... {pct}%")
             self.progress.emit("📦 Extracting...")
 
             if filename.endswith(".zip"):
@@ -486,17 +494,25 @@ class CliToolWorker(QThread):
 
         self.progress.emit(f"⬇️ Downloading {font_name} Nerd Font...")
 
+        import ssl as _ssl
+        _ctx = _ssl.create_default_context()
         with tempfile.TemporaryDirectory() as tmp:
             dest = Path(tmp) / filename
-
-            def _reporthook(count, block, total):
-                if total > 0:
-                    pct = min(100, int(count * block * 100 / total))
-                    self.progress.emit(f"⬇️ Downloading font... {pct}%")
-
-            urllib.request.urlretrieve(url, dest, reporthook=_reporthook)
+            req = urllib.request.Request(url, headers={"User-Agent": "VenvStudio"})
+            with urllib.request.urlopen(req, timeout=60, context=_ctx) as resp:
+                total = int(resp.headers.get("Content-Length", 0))
+                downloaded = 0
+                with open(dest, "wb") as f:
+                    while True:
+                        chunk = resp.read(65536)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total > 0:
+                            pct = min(100, int(downloaded * 100 / total))
+                            self.progress.emit(f"⬇️ Downloading font... {pct}%")
             self.progress.emit("📦 Extracting font...")
-
             with zipfile.ZipFile(dest) as z:
                 z.extractall(tmp)
 

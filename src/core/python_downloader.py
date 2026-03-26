@@ -7,6 +7,7 @@ import json
 import os
 import platform
 import shutil
+import ssl
 import subprocess
 import tarfile
 import zipfile
@@ -16,6 +17,9 @@ from urllib.request import urlopen, Request
 from urllib.error import URLError
 
 from src.utils.platform_utils import get_config_dir, get_platform, subprocess_args
+
+# SSL context — AppImage/EXE'de sertifika sorunlarını önler
+_SSL_CTX = ssl.create_default_context()
 
 # GitHub API for standalone Python releases
 GITHUB_API = "https://api.github.com/repos/astral-sh/python-build-standalone/releases"
@@ -72,7 +76,7 @@ def get_available_versions(progress_callback=None) -> list:
             f"{GITHUB_API}?per_page=5",
             headers={"User-Agent": "VenvStudio"}
         )
-        with urlopen(req, timeout=30) as resp:
+        with urlopen(req, timeout=30, context=_SSL_CTX) as resp:
             releases = json.loads(resp.read().decode())
 
         for release in releases:
@@ -195,7 +199,7 @@ def download_python(version_info: dict, progress_callback=None) -> Path:
 
     try:
         req = Request(url, headers={"User-Agent": "VenvStudio"})
-        with urlopen(req, timeout=300) as resp:
+        with urlopen(req, timeout=300, context=_SSL_CTX) as resp:
             downloaded = 0
             chunk_size = 1024 * 256  # 256KB chunks
             with open(tmp_file, 'wb') as f:

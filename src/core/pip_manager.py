@@ -101,11 +101,11 @@ class PipManager:
     def _run_pip(self, args: List[str], timeout: int = 120) -> subprocess.CompletedProcess:
         """Run a pip/uv command and return the result."""
         from src.utils.platform_utils import subprocess_args
+        import os, sys
 
         # Use uv if selected and available
         if self._backend == "uv" and self._find_uv():
             uv_exe = self._find_uv()
-            # uv pip install/list/uninstall/freeze — same interface
             cmd = [uv_exe, "pip"] + args + ["--python", str(self.python_exe)]
         else:
             cmd = [str(self.python_exe), "-m", "pip"] + args
@@ -125,14 +125,28 @@ class PipManager:
                         "--trusted-host", "files.pythonhosted.org",
                     ])
 
-        return subprocess.run(
-            cmd,
-            **subprocess_args(
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
-        )
+        # AppImage/EXE: SSL sertifika dosyasını sisteme yönlendir
+        sp_kwargs = subprocess_args(capture_output=True, text=True, timeout=timeout)
+        if os.environ.get("APPIMAGE") or getattr(sys, "frozen", False):
+            env = sp_kwargs.get("env") or os.environ.copy()
+            # Sistem SSL sertifikalarını bul
+            for cert_path in (
+                "/etc/ssl/certs/ca-certificates.crt",
+                "/etc/pki/tls/certs/ca-bundle.crt",
+                "/etc/ssl/ca-bundle.pem",
+                "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+            ):
+                if os.path.isfile(cert_path):
+                    env["SSL_CERT_FILE"] = cert_path
+                    env["REQUESTS_CA_BUNDLE"] = cert_path
+                    env.pop("APPIMAGE", None)
+                    env.pop("APPDIR", None)
+                    env.pop("ARGV0", None)
+                    env.pop("OWD", None)
+                    break
+            sp_kwargs["env"] = env
+
+        return subprocess.run(cmd, **sp_kwargs)
 
     def list_packages(self) -> List[PackageInfo]:
         """List all installed packages."""

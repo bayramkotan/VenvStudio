@@ -447,6 +447,8 @@ class MainWindow(QMainWindow):
         )
         self.env_table.doubleClicked.connect(self._on_env_double_click)
         self.env_table.selectionModel().selectionChanged.connect(self._on_env_selected)
+        self.env_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.env_table.customContextMenuRequested.connect(self._show_env_context_menu)
         layout.addWidget(self.env_table)
 
         # Loading indicator (shown during refresh)
@@ -866,6 +868,61 @@ class MainWindow(QMainWindow):
             if item and item.text().strip() == default_env:
                 self.env_table.selectRow(row)
                 break
+
+    def _show_env_context_menu(self, pos):
+        """Show right-click context menu on environment table."""
+        from PySide6.QtWidgets import QMenu
+        from PySide6.QtGui import QAction
+
+        index = self.env_table.indexAt(pos)
+        if not index.isValid():
+            return
+
+        # Satırı seç
+        self.env_table.selectRow(index.row())
+        name = self._get_selected_env_name()
+        if not name:
+            return
+
+        menu = QMenu(self)
+        menu.setStyleSheet("QMenu { font-size: 13px; } QMenu::item { padding: 6px 20px; }")
+
+        a_manage = QAction("📦 Manage Packages", self)
+        a_manage.triggered.connect(self._on_env_double_click)
+        menu.addAction(a_manage)
+
+        menu.addSeparator()
+
+        a_terminal = QAction("🖥️ Open Terminal", self)
+        a_terminal.triggered.connect(self._open_terminal)
+        menu.addAction(a_terminal)
+
+        a_default = QAction("⭐ Make Default", self)
+        a_default.triggered.connect(self._make_default_env)
+        menu.addAction(a_default)
+
+        menu.addSeparator()
+
+        a_clone = QAction("📋 Clone", self)
+        a_clone.triggered.connect(self._clone_env)
+        menu.addAction(a_clone)
+
+        a_rename = QAction("✏️ Rename", self)
+        a_rename.triggered.connect(self._rename_env)
+        menu.addAction(a_rename)
+
+        a_export = QAction("📤 Export", self)
+        a_export.triggered.connect(self._export_requirements)
+        menu.addAction(a_export)
+
+        menu.addSeparator()
+
+        a_delete = QAction("🗑️ Delete", self)
+        a_delete.setObjectName("danger")
+        a_delete.triggered.connect(self._delete_env)
+        menu.addAction(a_delete)
+
+        menu.exec(self.env_table.viewport().mapToGlobal(pos))
 
     def _make_default_env(self):
         name = self._get_selected_env_name()

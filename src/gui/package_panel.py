@@ -3026,6 +3026,7 @@ dependencies:
         if not info_text:
             from_pypi = True
             try:
+<<<<<<< HEAD
                 import socket, ssl, json as _json
                 host = "pypi.org"
                 path = f"/pypi/{pkg_name}/json"
@@ -3049,6 +3050,21 @@ dependencies:
                 raw = b"".join(chunks).decode("utf-8", errors="replace")
                 body = raw.split("\r\n\r\n", 1)[1] if "\r\n\r\n" in raw else raw
                 data = _json.loads(body)
+=======
+                import urllib.request
+                import json as _json
+                import ssl
+                url = f"https://pypi.org/pypi/{pkg_name}/json"
+                req = urllib.request.Request(url, headers={"User-Agent": "VenvStudio"})
+                try:
+                    ctx = ssl.create_default_context()
+                    resp_obj = urllib.request.urlopen(req, timeout=8, context=ctx)
+                except ssl.SSLError:
+                    ctx = ssl._create_unverified_context()
+                    resp_obj = urllib.request.urlopen(req, timeout=8, context=ctx)
+                with resp_obj as resp:
+                    data = _json.loads(resp.read().decode())
+>>>>>>> ed2fb01075ae01dfca51c0e9affdbce10873de59
                 info = data.get("info", {})
                 deps = info.get("requires_dist") or []
                 info_text = (

@@ -88,10 +88,29 @@ class PipManager:
         if self._ssl_available is not None:
             return self._ssl_available
         try:
-            from src.utils.platform_utils import subprocess_args
+            from src.utils.platform_utils import subprocess_args, appimage_clean_env
+            import os, sys
+            kwargs = subprocess_args(capture_output=True, text=True, timeout=5)
+            # AppImage/EXE'de SSL sertifika yolunu ayarla
+            if os.environ.get("APPIMAGE") or getattr(sys, "frozen", False):
+                env = kwargs.get("env") or os.environ.copy()
+                for cp in (
+                    "/etc/ssl/certs/ca-certificates.crt",
+                    "/etc/pki/tls/certs/ca-bundle.crt",
+                    "/etc/ssl/ca-bundle.pem",
+                ):
+                    if os.path.isfile(cp):
+                        env["SSL_CERT_FILE"] = cp
+                        env["REQUESTS_CA_BUNDLE"] = cp
+                        break
+                env.pop("APPIMAGE", None)
+                env.pop("APPDIR", None)
+                env.pop("ARGV0", None)
+                env.pop("OWD", None)
+                kwargs["env"] = env
             result = subprocess.run(
                 [str(self.python_exe), "-c", "import ssl; print('OK')"],
-                **subprocess_args(capture_output=True, text=True, timeout=5)
+                **kwargs
             )
             self._ssl_available = result.returncode == 0 and "OK" in result.stdout
         except Exception:

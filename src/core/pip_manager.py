@@ -129,21 +129,35 @@ class PipManager:
         sp_kwargs = subprocess_args(capture_output=True, text=True, timeout=timeout)
         if os.environ.get("APPIMAGE") or getattr(sys, "frozen", False):
             env = sp_kwargs.get("env") or os.environ.copy()
-            # Sistem SSL sertifikalarını bul
-            for cert_path in (
-                "/etc/ssl/certs/ca-certificates.crt",
-                "/etc/pki/tls/certs/ca-bundle.crt",
-                "/etc/ssl/ca-bundle.pem",
-                "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
-            ):
-                if os.path.isfile(cert_path):
-                    env["SSL_CERT_FILE"] = cert_path
-                    env["REQUESTS_CA_BUNDLE"] = cert_path
-                    env.pop("APPIMAGE", None)
-                    env.pop("APPDIR", None)
-                    env.pop("ARGV0", None)
-                    env.pop("OWD", None)
-                    break
+            cert_path = None
+            # Önce ssl modülünden dene
+            try:
+                import ssl as _ssl
+                paths = _ssl.get_default_verify_paths()
+                if paths.cafile and os.path.isfile(paths.cafile):
+                    cert_path = paths.cafile
+                elif paths.capath and os.path.isdir(paths.capath):
+                    env["SSL_CERT_DIR"] = paths.capath
+            except Exception:
+                pass
+            # Linux sistem sertifika yolları
+            if not cert_path:
+                for cp in (
+                    "/etc/ssl/certs/ca-certificates.crt",
+                    "/etc/pki/tls/certs/ca-bundle.crt",
+                    "/etc/ssl/ca-bundle.pem",
+                    "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+                ):
+                    if os.path.isfile(cp):
+                        cert_path = cp
+                        break
+            if cert_path:
+                env["SSL_CERT_FILE"] = cert_path
+                env["REQUESTS_CA_BUNDLE"] = cert_path
+            env.pop("APPIMAGE", None)
+            env.pop("APPDIR", None)
+            env.pop("ARGV0", None)
+            env.pop("OWD", None)
             sp_kwargs["env"] = env
 
         return subprocess.run(cmd, **sp_kwargs)

@@ -2491,6 +2491,26 @@ $s.Save()
             QMessageBox.warning(self, "Warning", "No environment selected.\nPlease select an environment first.")
             return
 
+        # Kurulu paketleri filtrele — sadece kurulu olmayanları kur
+        try:
+            installed = {p.name.lower() for p in self.pip_manager.list_packages()}
+            import re
+            not_installed = []
+            already_installed = []
+            for pkg in packages:
+                pkg_name = re.split(r'[><=!~;]', pkg)[0].lower().replace("-", "_")
+                pkg_name2 = pkg_name.replace("_", "-")
+                if pkg_name in installed or pkg_name2 in installed:
+                    already_installed.append(pkg)
+                else:
+                    not_installed.append(pkg)
+            if not not_installed:
+                QMessageBox.information(self, "Info", "All packages are already installed.")
+                return
+            packages = not_installed
+        except Exception:
+            pass  # Filtreleme başarısız olursa tüm paketlerle devam et
+
         # Check Python version — warn if old (some packages may not have pre-built wheels)
         py_warning = ""
         if self.pip_manager:

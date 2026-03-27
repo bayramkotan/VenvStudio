@@ -237,12 +237,18 @@ class VenvManager:
             python_in_venv = get_python_executable(venv_path)
             if with_pip:
                 if not pip_exe.exists():
-                    # pip yok — önce ensurepip dene, olmadıysa get-pip.py indir
+                    # pip yok — ensurepip ile kur
                     if callback:
                         callback("Installing pip...")
-                    ensurepip_result = _run(
+                    # ensurepip için sistem env'ini kullan (AppImage env değil)
+                    _ensurepip_env = os.environ.copy()
+                    for _v in ("APPIMAGE", "APPDIR", "ARGV0", "OWD",
+                               "APPIMAGE_EXTRACT_AND_RUN", "LD_LIBRARY_PATH", "LD_PRELOAD"):
+                        _ensurepip_env.pop(_v, None)
+                    ensurepip_result = subprocess.run(
                         [str(python_in_venv), "-m", "ensurepip", "--upgrade"],
                         capture_output=True, text=True, timeout=60,
+                        env=_ensurepip_env,
                     )
                     if ensurepip_result.returncode != 0 or not pip_exe.exists():
                         # ensurepip çalışmadı — get-pip.py ile kur

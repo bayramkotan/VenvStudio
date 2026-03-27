@@ -83,3 +83,19 @@
     - [ ] Silmeden önce kullanıcıya "terminali kapatın" uyarısı ver
     - [ ] `shutil.rmtree` yerine retry mekanizması ekle (birkaç kez dene)
     - [ ] Windows'ta `rmdir /s /q` komutu ile zorla sil
+
+- **B53** — Sistem bağımlılıkları dokümantasyonu ve otomatik kontrol
+  - **README'ye eklenecek sistem gereksinimleri:**
+    - Linux (Debian/Ubuntu/Pardus): `sudo apt install libxcb-cursor0 python3-pip python3-venv`
+    - Linux (Fedora): `sudo dnf install python3-pip`
+    - Linux (Arch): `sudo pacman -S python-pip`
+    - macOS: Homebrew ile Python kurulumu önerilmeli
+    - Windows: Python 3.10+ (python.org'dan, "Add to PATH" seçili)
+  - **AppImage/EXE ilk açılışta otomatik kontrol:**
+    - [ ] Eksik bağımlılıkları tespit et (libxcb-cursor0, python3-pip, python3-venv)
+    - [ ] Kullanıcıya hangi komutu çalıştırması gerektiğini göster
+    - [ ] Mümkünse otomatik kur (pkexec/sudo ile)
+    - [ ] main.py'deki _check_and_install_linux_deps() genişletilecek
+  - **macOS için:**
+    - [ ] Homebrew Python kontrolü
+    - [ ] Xcode Command Line Tools kontrolü

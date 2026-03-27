@@ -129,20 +129,28 @@ class PipManager:
         else:
             cmd = [str(self.python_exe), "-m", "pip"] + args
 
-            # SSL yoksa --trusted-host ekle (only for pip, uv handles this)
+            # SSL yoksa --cert ile sistem sertifikasına yönlendir, yoksa --trusted-host ekle
             if not self._check_ssl():
-                if args and args[0] in ("install", "download", "search"):
-                    cmd.extend([
-                        "--trusted-host", "pypi.org",
-                        "--trusted-host", "pypi.python.org",
-                        "--trusted-host", "files.pythonhosted.org",
-                    ])
-                elif len(args) >= 2 and args[0] == "list" and "--outdated" in args:
-                    cmd.extend([
-                        "--trusted-host", "pypi.org",
-                        "--trusted-host", "pypi.python.org",
-                        "--trusted-host", "files.pythonhosted.org",
-                    ])
+                import os
+                cert_path = None
+                for cp in (
+                    "/etc/ssl/certs/ca-certificates.crt",
+                    "/etc/pki/tls/certs/ca-bundle.crt",
+                    "/etc/ssl/ca-bundle.pem",
+                    "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+                ):
+                    if os.path.isfile(cp):
+                        cert_path = cp
+                        break
+                if args and args[0] in ("install", "download", "search", "list"):
+                    if cert_path:
+                        cmd.extend(["--cert", cert_path])
+                    else:
+                        cmd.extend([
+                            "--trusted-host", "pypi.org",
+                            "--trusted-host", "pypi.python.org",
+                            "--trusted-host", "files.pythonhosted.org",
+                        ])
 
         # AppImage/EXE: SSL sertifika dosyasını sisteme yönlendir
         sp_kwargs = subprocess_args(capture_output=True, text=True, timeout=timeout)
@@ -247,16 +255,31 @@ class PipManager:
 
             output = result.stdout + result.stderr
 
-            # SSL hatası varsa --trusted-host ile tekrar dene
+            # SSL hatası varsa --cert ile tekrar dene
             if result.returncode != 0 and ("SSL" in output or "ssl" in output or "CERTIFICATE" in output):
+                import os
+                cert_path = None
+                for cp in (
+                    "/etc/ssl/certs/ca-certificates.crt",
+                    "/etc/pki/tls/certs/ca-bundle.crt",
+                    "/etc/ssl/ca-bundle.pem",
+                    "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+                ):
+                    if os.path.isfile(cp):
+                        cert_path = cp
+                        break
                 if callback:
-                    callback("SSL error detected, retrying with --trusted-host...")
-                retry_cmd = cmd + [
-                    "--trusted-host", "pypi.org",
-                    "--trusted-host", "pypi.python.org",
-                    "--trusted-host", "files.pythonhosted.org",
-                ]
-                result = self._run_pip(retry_cmd, timeout=300)
+                    callback("SSL error detected, retrying with system certs...")
+                if cert_path:
+                    retry_cmd = ["install"] + list(cmd[cmd.index("install")+1:] if "install" in cmd else []) + ["--cert", cert_path]
+                    result = self._run_pip(retry_cmd, timeout=300)
+                else:
+                    retry_cmd = cmd + [
+                        "--trusted-host", "pypi.org",
+                        "--trusted-host", "pypi.python.org",
+                        "--trusted-host", "files.pythonhosted.org",
+                    ]
+                    result = self._run_pip(retry_cmd, timeout=300)
                 output = result.stdout + result.stderr
 
             if result.returncode == 0:

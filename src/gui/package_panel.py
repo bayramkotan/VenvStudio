@@ -2583,9 +2583,31 @@ $s.Save()
         if not text:
             return
 
+        # Normalize non-ASCII characters → ASCII equivalents
+        # Türkçe ve diğer dillerdeki harfler → İngilizce karşılıkları
+        import unicodedata
+        _char_map = str.maketrans({
+            'ı': 'i', 'İ': 'I', 'ğ': 'g', 'Ğ': 'G',
+            'ş': 's', 'Ş': 'S', 'ç': 'c', 'Ç': 'C',
+            'ö': 'o', 'Ö': 'O', 'ü': 'u', 'Ü': 'U',
+            'â': 'a', 'ê': 'e', 'î': 'i', 'ô': 'o', 'û': 'u',
+            'à': 'a', 'è': 'e', 'ì': 'i', 'ò': 'o', 'ù': 'u',
+            'á': 'a', 'é': 'e', 'í': 'i', 'ó': 'o', 'ú': 'u',
+            'ä': 'a', 'ë': 'e', 'ï': 'i', 'õ': 'o',
+        })
+        text = text.translate(_char_map)
+
+        # Normalize version separators: == = => >=, kurulum => install
+        # "numpy=1.0" veya "numpy =1.0" → "numpy==1.0"
+        import re
+        # Boşluklu versiyon: "numpy == 1.0" → "numpy==1.0"
+        text = re.sub(r'\s*([><=!~]+)\s*', r'\1', text)
+        # Tek = (atama değil paket versiyonu): "numpy=1.0" → "numpy==1.0"
+        text = re.sub(r'(?<![=<>!~])=(?!=)', '==', text)
+
         # Noise words to filter out
         noise = {"pip", "pip3", "python", "python3", "-m", "install", "uninstall",
-                 "--upgrade", "--user", "-U", "-r", "--force-reinstall", "--no-cache-dir",
+                 "--upgrade", "--user", "-u", "-r", "--force-reinstall", "--no-cache-dir",
                  "--break-system-packages", "sudo", "&&", "||", "|", ";",
                  "list", "freeze", "show", "search", "check", "download",
                  "wheel", "hash", "config", "cache", "debug", "index",
@@ -2597,36 +2619,39 @@ $s.Save()
             line = line.strip()
             if not line or line.startswith("#"):
                 continue
-            # Replace commas with spaces so "seaborn, numpy, baby" works
+            # Replace commas, semicolons, pipes with spaces
             line = line.replace(",", " ").replace(";", " ").replace("|", " ")
             for token in line.split():
                 t = token.strip()
-                # Skip empty
                 if not t:
                     continue
+                # Küçük harfe çevir (paket adı kısmını)
+                pkg_and_ver = re.split(r'([><=!~;])', t, maxsplit=1)
+                pkg_name_raw = pkg_and_ver[0].lower()
+                rest = "".join(pkg_and_ver[1:]) if len(pkg_and_ver) > 1 else ""
+                t_normalized = pkg_name_raw + rest
+
                 # Skip noise words
-                if t.lower() in noise:
+                if pkg_name_raw in noise:
                     continue
                 # Skip pure numbers
-                if t.isdigit():
+                if t_normalized.isdigit():
                     continue
-                # Skip flags (--something, -x)
-                if t.startswith("-"):
+                # Skip flags
+                if t_normalized.startswith("-"):
                     continue
-                # Skip tokens that are only special chars (###, **, //, etc)
-                import re
-                if not re.search(r'[a-zA-Z]', t):
+                # Skip tokens with no letters
+                if not re.search(r'[a-zA-Z]', t_normalized):
                     continue
-                # Valid package name: must start with letter/digit, can have -, _, ., ==, >=, etc.
-                # Skip if it looks like garbage (no alphanumeric at all)
-                pkg_name = re.split(r'[><=!~;]', t)[0]
-                if not pkg_name or not re.match(r'^[a-zA-Z0-9]', pkg_name):
+                # Valid package name check
+                pkg_name = re.split(r'[><=!~;]', t_normalized)[0]
+                if not pkg_name or not re.match(r'^[a-z0-9]', pkg_name):
                     continue
-                # Deduplicate (case-insensitive)
-                key = t.lower()
+                # Deduplicate
+                key = pkg_name_raw
                 if key not in seen:
                     seen.add(key)
-                    cleaned.append(t)
+                    cleaned.append(t_normalized)
 
         if not cleaned:
             QMessageBox.information(

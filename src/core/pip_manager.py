@@ -122,35 +122,27 @@ class PipManager:
         from src.utils.platform_utils import subprocess_args
         import os, sys
 
+        # Sistem SSL sertifika dosyasını bul
+        _cert_path = None
+        for _cp in (
+            "/etc/ssl/certs/ca-certificates.crt",
+            "/etc/pki/tls/certs/ca-bundle.crt",
+            "/etc/ssl/ca-bundle.pem",
+            "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+        ):
+            if os.path.isfile(_cp):
+                _cert_path = _cp
+                break
+
         # Use uv if selected and available
         if self._backend == "uv" and self._find_uv():
             uv_exe = self._find_uv()
             cmd = [uv_exe, "pip"] + args + ["--python", str(self.python_exe)]
         else:
             cmd = [str(self.python_exe), "-m", "pip"] + args
-
-            # SSL yoksa --cert ile sistem sertifikasına yönlendir, yoksa --trusted-host ekle
-            if not self._check_ssl():
-                import os
-                cert_path = None
-                for cp in (
-                    "/etc/ssl/certs/ca-certificates.crt",
-                    "/etc/pki/tls/certs/ca-bundle.crt",
-                    "/etc/ssl/ca-bundle.pem",
-                    "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
-                ):
-                    if os.path.isfile(cp):
-                        cert_path = cp
-                        break
-                if args and args[0] in ("install", "download", "search", "list"):
-                    if cert_path:
-                        cmd.extend(["--cert", cert_path])
-                    else:
-                        cmd.extend([
-                            "--trusted-host", "pypi.org",
-                            "--trusted-host", "pypi.python.org",
-                            "--trusted-host", "files.pythonhosted.org",
-                        ])
+            # Her zaman --cert ekle (SSL sertifikası varsa)
+            if _cert_path and args and args[0] in ("install", "download", "list", "search"):
+                cmd.extend(["--cert", _cert_path])
 
         # SSL sertifika dosyasını her zaman ayarla
         sp_kwargs = subprocess_args(capture_output=True, text=True, timeout=timeout)

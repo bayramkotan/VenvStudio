@@ -88,10 +88,29 @@ class PipManager:
         if self._ssl_available is not None:
             return self._ssl_available
         try:
-            from src.utils.platform_utils import subprocess_args
+            from src.utils.platform_utils import subprocess_args, appimage_clean_env
+            import os, sys
+            kwargs = subprocess_args(capture_output=True, text=True, timeout=5)
+            # AppImage/EXE'de SSL sertifika yolunu ayarla
+            if os.environ.get("APPIMAGE") or getattr(sys, "frozen", False):
+                env = kwargs.get("env") or os.environ.copy()
+                for cp in (
+                    "/etc/ssl/certs/ca-certificates.crt",
+                    "/etc/pki/tls/certs/ca-bundle.crt",
+                    "/etc/ssl/ca-bundle.pem",
+                ):
+                    if os.path.isfile(cp):
+                        env["SSL_CERT_FILE"] = cp
+                        env["REQUESTS_CA_BUNDLE"] = cp
+                        break
+                env.pop("APPIMAGE", None)
+                env.pop("APPDIR", None)
+                env.pop("ARGV0", None)
+                env.pop("OWD", None)
+                kwargs["env"] = env
             result = subprocess.run(
                 [str(self.python_exe), "-c", "import ssl; print('OK')"],
-                **subprocess_args(capture_output=True, text=True, timeout=5)
+                **kwargs
             )
             self._ssl_available = result.returncode == 0 and "OK" in result.stdout
         except Exception:
@@ -101,38 +120,55 @@ class PipManager:
     def _run_pip(self, args: List[str], timeout: int = 120) -> subprocess.CompletedProcess:
         """Run a pip/uv command and return the result."""
         from src.utils.platform_utils import subprocess_args
+        import os, sys
+
+        # Sistem SSL sertifika dosyasını bul
+        _cert_path = None
+        for _cp in (
+            "/etc/ssl/certs/ca-certificates.crt",
+            "/etc/pki/tls/certs/ca-bundle.crt",
+            "/etc/ssl/ca-bundle.pem",
+            "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+        ):
+            if os.path.isfile(_cp):
+                _cert_path = _cp
+                break
 
         # Use uv if selected and available
         if self._backend == "uv" and self._find_uv():
             uv_exe = self._find_uv()
-            # uv pip install/list/uninstall/freeze — same interface
             cmd = [uv_exe, "pip"] + args + ["--python", str(self.python_exe)]
         else:
             cmd = [str(self.python_exe), "-m", "pip"] + args
+            # Her zaman --cert ekle (SSL sertifikası varsa)
+            if _cert_path and args and args[0] in ("install", "download", "list", "search"):
+                cmd.extend(["--cert", _cert_path])
 
-            # SSL yoksa --trusted-host ekle (only for pip, uv handles this)
-            if not self._check_ssl():
-                if args and args[0] in ("install", "download", "search"):
-                    cmd.extend([
-                        "--trusted-host", "pypi.org",
-                        "--trusted-host", "pypi.python.org",
-                        "--trusted-host", "files.pythonhosted.org",
-                    ])
-                elif len(args) >= 2 and args[0] == "list" and "--outdated" in args:
-                    cmd.extend([
-                        "--trusted-host", "pypi.org",
-                        "--trusted-host", "pypi.python.org",
-                        "--trusted-host", "files.pythonhosted.org",
-                    ])
+        # SSL sertifika dosyasını her zaman ayarla
+        sp_kwargs = subprocess_args(capture_output=True, text=True, timeout=timeout)
+        import os
+        env = sp_kwargs.get("env") or os.environ.copy()
+        # AppImage kendi kütüphanelerini LD_LIBRARY_PATH'e ekler — pip'i bozar
+        env.pop("LD_LIBRARY_PATH", None)
+        env.pop("LD_PRELOAD", None)
+        env.pop("APPIMAGE", None)
+        env.pop("APPDIR", None)
+        env.pop("ARGV0", None)
+        env.pop("OWD", None)
+        if "SSL_CERT_FILE" not in env:
+            for cp in (
+                "/etc/ssl/certs/ca-certificates.crt",
+                "/etc/pki/tls/certs/ca-bundle.crt",
+                "/etc/ssl/ca-bundle.pem",
+                "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+            ):
+                if os.path.isfile(cp):
+                    env["SSL_CERT_FILE"] = cp
+                    env["REQUESTS_CA_BUNDLE"] = cp
+                    break
+        sp_kwargs["env"] = env
 
-        return subprocess.run(
-            cmd,
-            **subprocess_args(
-                capture_output=True,
-                text=True,
-                timeout=timeout,
-            )
-        )
+        return subprocess.run(cmd, **sp_kwargs)
 
     def list_packages(self) -> List[PackageInfo]:
         """List all installed packages."""
@@ -199,18 +235,6 @@ class PipManager:
             result = self._run_pip(cmd, timeout=300)
 
             output = result.stdout + result.stderr
-
-            # SSL hatası varsa --trusted-host ile tekrar dene
-            if result.returncode != 0 and ("SSL" in output or "ssl" in output or "CERTIFICATE" in output):
-                if callback:
-                    callback("SSL error detected, retrying with --trusted-host...")
-                retry_cmd = cmd + [
-                    "--trusted-host", "pypi.org",
-                    "--trusted-host", "pypi.python.org",
-                    "--trusted-host", "files.pythonhosted.org",
-                ]
-                result = self._run_pip(retry_cmd, timeout=300)
-                output = result.stdout + result.stderr
 
             if result.returncode == 0:
                 return True, output

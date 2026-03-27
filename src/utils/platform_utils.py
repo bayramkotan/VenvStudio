@@ -247,8 +247,16 @@ def open_terminal_at(path: Path, terminal_type: str = "") -> None:
                 else:
                     cmd = f'start cmd /k "cd /d {path} && {activate_bat}"'
             else:
-                # Default: PowerShell
-                if activate_ps1.exists():
+                # Default: Windows Terminal (wt), yoksa PowerShell
+                if shutil.which("wt"):
+                    if activate_ps1.exists():
+                        cmd = (
+                            f'start wt -d "{path}" powershell -NoExit -Command '
+                            f'"& \'{activate_ps1}\'"'
+                        )
+                    else:
+                        cmd = f'start wt -d "{path}" cmd /k "{activate_bat}"'
+                elif activate_ps1.exists():
                     cmd = (
                         f'start powershell -NoExit -Command "'
                         f'Set-Location \'{path}\'; '

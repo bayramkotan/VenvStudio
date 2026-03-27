@@ -157,11 +157,8 @@ class VenvManager:
             python_exe = python_path
         elif _platform.system().lower() == "linux":
             python_exe = "/usr/bin/python3" if os.path.isfile("/usr/bin/python3") else "python3"
-        elif _platform.system().lower() == "windows":
-            py = shutil.which("py")
-            python_exe = py if py else sys.executable
         else:
-            python_exe = sys.executable
+            python_exe = "python"
         cmd = [python_exe, "-m", "venv"]
 
         if not with_pip:
@@ -240,13 +237,63 @@ class VenvManager:
             python_in_venv = get_python_executable(venv_path)
             if with_pip:
                 if not pip_exe.exists():
-                    # pip yok — ensurepip ile kur (Python 3.14+ venv pip kurmayabilir)
+                    # pip yok — ensurepip ile kur
                     if callback:
-                        callback("Installing pip (ensurepip)...")
-                    _run(
+                        callback("Installing pip...")
+                    # ensurepip için sistem env'ini kullan (AppImage env değil)
+                    _ensurepip_env = os.environ.copy()
+                    for _v in ("APPIMAGE", "APPDIR", "ARGV0", "OWD",
+                               "APPIMAGE_EXTRACT_AND_RUN", "LD_LIBRARY_PATH", "LD_PRELOAD"):
+                        _ensurepip_env.pop(_v, None)
+                    ensurepip_result = subprocess.run(
                         [str(python_in_venv), "-m", "ensurepip", "--upgrade"],
                         capture_output=True, text=True, timeout=60,
+                        env=_ensurepip_env,
                     )
+                    if ensurepip_result.returncode != 0 or not pip_exe.exists():
+                        # ensurepip çalışmadı — get-pip.py ile kur
+                        if callback:
+                            callback("Installing pip via get-pip.py...")
+                        try:
+                            import socket, ssl as _ssl, tempfile, os as _os
+                            _ctx = _ssl.create_default_context()
+                            # Sistem SSL sertifikalarını bul
+                            for _cp in (
+                                "/etc/ssl/certs/ca-certificates.crt",
+                                "/etc/pki/tls/certs/ca-bundle.crt",
+                                "/etc/ssl/ca-bundle.pem",
+                            ):
+                                if _os.path.isfile(_cp):
+                                    _ctx.load_verify_locations(_cp)
+                                    break
+                            with socket.create_connection(("bootstrap.pypa.io", 443), timeout=30) as _sock:
+                                with _ctx.wrap_socket(_sock, server_hostname="bootstrap.pypa.io") as _ssock:
+                                    _req = (
+                                        "GET /pip/latest/get-pip.py HTTP/1.1\r\n"
+                                        "Host: bootstrap.pypa.io\r\n"
+                                        "User-Agent: VenvStudio\r\n"
+                                        "Connection: close\r\n\r\n"
+                                    )
+                                    _ssock.sendall(_req.encode())
+                                    _chunks = []
+                                    while True:
+                                        _c = _ssock.recv(8192)
+                                        if not _c:
+                                            break
+                                        _chunks.append(_c)
+                            _raw = b"".join(_chunks)
+                            _body = _raw.split(b"\r\n\r\n", 1)[1] if b"\r\n\r\n" in _raw else _raw
+                            _tmp = tempfile.NamedTemporaryFile(suffix=".py", delete=False)
+                            _tmp.write(_body)
+                            _tmp.close()
+                            _run(
+                                [str(python_in_venv), _tmp.name],
+                                capture_output=True, text=True, timeout=120,
+                            )
+                            _os.unlink(_tmp.name)
+                        except Exception as _e:
+                            print(f"[VenvStudio] get-pip.py failed: {_e}")
+
                 # pip varsa upgrade et
                 pip_exe = get_pip_executable(venv_path)  # tekrar kontrol
                 if pip_exe.exists():

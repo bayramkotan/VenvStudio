@@ -222,7 +222,7 @@ def get_excludes():
         "PySide6.QtSvg", "PySide6.QtSvgWidgets",
         "PySide6.QtCharts", "PySide6.QtDataVisualization",
         "PySide6.QtNetworkAuth",
-        "tkinter", "unittest", "email", "html", "xml",
+        "tkinter", "unittest", "html", "xml",
         "pydoc", "doctest", "ftplib", "imaplib", "smtplib", "xmlrpc",
         "turtle", "turtledemo",
     ]

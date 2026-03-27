@@ -148,6 +148,13 @@ class PipManager:
         sp_kwargs = subprocess_args(capture_output=True, text=True, timeout=timeout)
         import os
         env = sp_kwargs.get("env") or os.environ.copy()
+        # AppImage kendi kütüphanelerini LD_LIBRARY_PATH'e ekler — pip'i bozar
+        env.pop("LD_LIBRARY_PATH", None)
+        env.pop("LD_PRELOAD", None)
+        env.pop("APPIMAGE", None)
+        env.pop("APPDIR", None)
+        env.pop("ARGV0", None)
+        env.pop("OWD", None)
         if "SSL_CERT_FILE" not in env:
             for cp in (
                 "/etc/ssl/certs/ca-certificates.crt",
@@ -159,10 +166,6 @@ class PipManager:
                     env["SSL_CERT_FILE"] = cp
                     env["REQUESTS_CA_BUNDLE"] = cp
                     break
-        env.pop("APPIMAGE", None)
-        env.pop("APPDIR", None)
-        env.pop("ARGV0", None)
-        env.pop("OWD", None)
         sp_kwargs["env"] = env
 
         return subprocess.run(cmd, **sp_kwargs)

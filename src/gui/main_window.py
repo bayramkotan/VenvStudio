@@ -140,7 +140,7 @@ class RenameWorker(QThread):
 
     def run(self):
         success, msg = self.venv_manager.rename_venv(
-            self.old_name, self.new_name, callback=self.progress.emit
+            self.old_name, self.new_name
         )
         self.finished.emit(success, msg)
 
@@ -962,7 +962,7 @@ class MainWindow(QMainWindow):
             return
         new_name, ok = QInputDialog.getText(
             self, "Rename Environment",
-            f"Enter new name for '{name}':\n\n(This will create a new environment with the same packages\nand remove the old one.)",
+            f"Enter new name for '{name}':",
             text=name,
         )
         if not ok or not new_name.strip() or new_name.strip() == name:

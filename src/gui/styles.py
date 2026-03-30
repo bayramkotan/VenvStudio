@@ -463,7 +463,119 @@ _LIGHT_VSCODE = {
     'disabled_bg': '#e8e8e8', 'disabled_fg': '#a0a0a0',
 }
 
-_LIGHT_NORD = {
+_DARK_DRACULA = {
+    'bg': '#282a36', 'fg': '#f8f8f2', 'fg_muted': '#6272a4',
+    'sidebar': '#21222c', 'border': '#44475a',
+    'hover': '#44475a', 'active': '#44475a',
+    'card': '#282a36', 'input_bg': '#44475a',
+    'scrollbar': '#44475a', 'scrollbar_hover': '#6272a4',
+    'accent': '#bd93f9', 'accent_fg': '#282a36',
+    'accent_hover': '#caa9fa', 'accent_press': '#a679f8',
+    'danger': '#ff5555', 'danger_fg': '#f8f8f2', 'danger_hover': '#ff7777',
+    'success': '#50fa7b', 'success_fg': '#282a36', 'success_hover': '#70fa93',
+    'secondary': '#44475a', 'secondary_fg': '#f8f8f2', 'secondary_hover': '#6272a4',
+    'disabled_bg': '#44475a', 'disabled_fg': '#6272a4',
+}
+
+_DARK_TOKYO_NIGHT = {
+    'bg': '#1a1b26', 'fg': '#c0caf5', 'fg_muted': '#565f89',
+    'sidebar': '#16161e', 'border': '#292e42',
+    'hover': '#292e42', 'active': '#364a82',
+    'card': '#1a1b26', 'input_bg': '#292e42',
+    'scrollbar': '#292e42', 'scrollbar_hover': '#364a82',
+    'accent': '#7aa2f7', 'accent_fg': '#1a1b26',
+    'accent_hover': '#90b4f8', 'accent_press': '#6690f6',
+    'danger': '#f7768e', 'danger_fg': '#1a1b26', 'danger_hover': '#f98ba0',
+    'success': '#9ece6a', 'success_fg': '#1a1b26', 'success_hover': '#b0d880',
+    'secondary': '#292e42', 'secondary_fg': '#c0caf5', 'secondary_hover': '#364a82',
+    'disabled_bg': '#292e42', 'disabled_fg': '#565f89',
+}
+
+_DARK_ONE_DARK = {
+    'bg': '#282c34', 'fg': '#abb2bf', 'fg_muted': '#5c6370',
+    'sidebar': '#21252b', 'border': '#3e4451',
+    'hover': '#2c313c', 'active': '#3e4451',
+    'card': '#282c34', 'input_bg': '#3e4451',
+    'scrollbar': '#3e4451', 'scrollbar_hover': '#4b5263',
+    'accent': '#61afef', 'accent_fg': '#282c34',
+    'accent_hover': '#7bbef1', 'accent_press': '#4d9edd',
+    'danger': '#e06c75', 'danger_fg': '#282c34', 'danger_hover': '#e88891',
+    'success': '#98c379', 'success_fg': '#282c34', 'success_hover': '#a8cf8d',
+    'secondary': '#3e4451', 'secondary_fg': '#abb2bf', 'secondary_hover': '#4b5263',
+    'disabled_bg': '#3e4451', 'disabled_fg': '#5c6370',
+}
+
+_DARK_GRUVBOX = {
+    'bg': '#282828', 'fg': '#ebdbb2', 'fg_muted': '#a89984',
+    'sidebar': '#1d2021', 'border': '#3c3836',
+    'hover': '#3c3836', 'active': '#504945',
+    'card': '#282828', 'input_bg': '#3c3836',
+    'scrollbar': '#504945', 'scrollbar_hover': '#665c54',
+    'accent': '#83a598', 'accent_fg': '#282828',
+    'accent_hover': '#9ab5a8', 'accent_press': '#689d8d',
+    'danger': '#fb4934', 'danger_fg': '#282828', 'danger_hover': '#fc6355',
+    'success': '#b8bb26', 'success_fg': '#282828', 'success_hover': '#c8cb48',
+    'secondary': '#504945', 'secondary_fg': '#ebdbb2', 'secondary_hover': '#665c54',
+    'disabled_bg': '#3c3836', 'disabled_fg': '#7c6f64',
+}
+
+_DARK_SOLARIZED = {
+    'bg': '#002b36', 'fg': '#839496', 'fg_muted': '#657b83',
+    'sidebar': '#073642', 'border': '#073642',
+    'hover': '#073642', 'active': '#0d4f63',
+    'card': '#002b36', 'input_bg': '#073642',
+    'scrollbar': '#073642', 'scrollbar_hover': '#0d4f63',
+    'accent': '#268bd2', 'accent_fg': '#fdf6e3',
+    'accent_hover': '#3a9dde', 'accent_press': '#1a79be',
+    'danger': '#dc322f', 'danger_fg': '#fdf6e3', 'danger_hover': '#e84d4a',
+    'success': '#859900', 'success_fg': '#fdf6e3', 'success_hover': '#9ab100',
+    'secondary': '#073642', 'secondary_fg': '#839496', 'secondary_hover': '#0d4f63',
+    'disabled_bg': '#073642', 'disabled_fg': '#586e75',
+}
+
+_DARK_MATERIAL = {
+    'bg': '#212121', 'fg': '#eeffff', 'fg_muted': '#546e7a',
+    'sidebar': '#1a1a1a', 'border': '#2d2d2d',
+    'hover': '#2d2d2d', 'active': '#3d3d3d',
+    'card': '#212121', 'input_bg': '#2d2d2d',
+    'scrollbar': '#3d3d3d', 'scrollbar_hover': '#546e7a',
+    'accent': '#82aaff', 'accent_fg': '#212121',
+    'accent_hover': '#9ab8ff', 'accent_press': '#6a8eee',
+    'danger': '#f07178', 'danger_fg': '#212121', 'danger_hover': '#f48a90',
+    'success': '#c3e88d', 'success_fg': '#212121', 'success_hover': '#cfed9e',
+    'secondary': '#2d2d2d', 'secondary_fg': '#eeffff', 'secondary_hover': '#3d3d3d',
+    'disabled_bg': '#2d2d2d', 'disabled_fg': '#546e7a',
+}
+
+_LIGHT_SOLARIZED = {
+    'bg': '#fdf6e3', 'fg': '#657b83', 'fg_muted': '#93a1a1',
+    'sidebar': '#eee8d5', 'border': '#ddd6bf',
+    'hover': '#e8e2cf', 'active': '#cfc9b8',
+    'card': '#fdf6e3', 'input_bg': '#ffffff',
+    'scrollbar': '#ddd6bf', 'scrollbar_hover': '#ccc5aa',
+    'accent': '#268bd2', 'accent_fg': '#fdf6e3',
+    'accent_hover': '#3a9dde', 'accent_press': '#1a79be',
+    'danger': '#dc322f', 'danger_fg': '#fdf6e3', 'danger_hover': '#e84d4a',
+    'success': '#859900', 'success_fg': '#fdf6e3', 'success_hover': '#9ab100',
+    'secondary': '#ddd6bf', 'secondary_fg': '#657b83', 'secondary_hover': '#ccc5aa',
+    'disabled_bg': '#eee8d5', 'disabled_fg': '#93a1a1',
+}
+
+_DARK_ROSE_PINE = {
+    'bg': '#191724', 'fg': '#e0def4', 'fg_muted': '#6e6a86',
+    'sidebar': '#1f1d2e', 'border': '#26233a',
+    'hover': '#26233a', 'active': '#403d52',
+    'card': '#191724', 'input_bg': '#26233a',
+    'scrollbar': '#403d52', 'scrollbar_hover': '#524f67',
+    'accent': '#c4a7e7', 'accent_fg': '#191724',
+    'accent_hover': '#d2b8eb', 'accent_press': '#b596e3',
+    'danger': '#eb6f92', 'danger_fg': '#191724', 'danger_hover': '#ef87a6',
+    'success': '#9ccfd8', 'success_fg': '#191724', 'success_hover': '#aad8e0',
+    'secondary': '#26233a', 'secondary_fg': '#e0def4', 'secondary_hover': '#403d52',
+    'disabled_bg': '#26233a', 'disabled_fg': '#6e6a86',
+}
+
+
     'bg': '#eceff4', 'fg': '#2e3440', 'fg_muted': '#4c566a',
     'sidebar': '#e5e9f0', 'border': '#d8dee9',
     'hover': '#dde1e9', 'active': '#d2d8e4',
@@ -483,22 +595,41 @@ _LIGHT_NORD = {
 # ═══════════════════════════════════════════════════════════════════════════════
 
 THEMES = {
-    'dark':         _build_theme(_DARK_CATPPUCCIN),
-    'light-latte':  _build_theme(_LIGHT_LATTE),
-    'light-github': _build_theme(_LIGHT_GITHUB),
-    'light-vscode': _build_theme(_LIGHT_VSCODE),
-    'light-nord':   _build_theme(_LIGHT_NORD),
-    # Legacy alias — old "light" maps to Catppuccin Latte
-    'light':        _build_theme(_LIGHT_LATTE),
+    # Dark themes
+    'dark':              _build_theme(_DARK_CATPPUCCIN),
+    'dark-dracula':      _build_theme(_DARK_DRACULA),
+    'dark-tokyo-night':  _build_theme(_DARK_TOKYO_NIGHT),
+    'dark-one-dark':     _build_theme(_DARK_ONE_DARK),
+    'dark-gruvbox':      _build_theme(_DARK_GRUVBOX),
+    'dark-solarized':    _build_theme(_DARK_SOLARIZED),
+    'dark-material':     _build_theme(_DARK_MATERIAL),
+    'dark-rose-pine':    _build_theme(_DARK_ROSE_PINE),
+    # Light themes
+    'light-latte':       _build_theme(_LIGHT_LATTE),
+    'light-github':      _build_theme(_LIGHT_GITHUB),
+    'light-vscode':      _build_theme(_LIGHT_VSCODE),
+    'light-nord':        _build_theme(_LIGHT_NORD),
+    'light-solarized':   _build_theme(_LIGHT_SOLARIZED),
+    # Legacy aliases
+    'light':             _build_theme(_LIGHT_LATTE),
 }
 
-# Theme display names for UI
 THEME_OPTIONS = [
-    ('dark',         '🌙 Dark — Catppuccin Mocha'),
-    ('light-latte',  '☀️ Light — Catppuccin Latte'),
-    ('light-github', '☀️ Light — GitHub'),
-    ('light-vscode', '☀️ Light — VS Code'),
-    ('light-nord',   '❄️ Light — Nord'),
+    # Dark
+    ('dark',             '🌙 Dark — Catppuccin Mocha'),
+    ('dark-dracula',     '🧛 Dark — Dracula'),
+    ('dark-tokyo-night', '🗼 Dark — Tokyo Night'),
+    ('dark-one-dark',    '⚛️ Dark — One Dark'),
+    ('dark-gruvbox',     '🪵 Dark — Gruvbox'),
+    ('dark-solarized',   '🌊 Dark — Solarized'),
+    ('dark-material',    '🎨 Dark — Material'),
+    ('dark-rose-pine',   '🌹 Dark — Rosé Pine'),
+    # Light
+    ('light-latte',      '☀️ Light — Catppuccin Latte'),
+    ('light-github',     '🐙 Light — GitHub'),
+    ('light-vscode',     '💙 Light — VS Code'),
+    ('light-nord',       '❄️ Light — Nord'),
+    ('light-solarized',  '🌞 Light — Solarized'),
 ]
 
 
@@ -512,11 +643,19 @@ def get_colors(name: str = "dark") -> dict:
     Use this in widgets that apply inline styles.
     """
     palettes = {
-        'dark':         _DARK_CATPPUCCIN,
-        'light-latte':  _LIGHT_LATTE,
-        'light-github': _LIGHT_GITHUB,
-        'light-vscode': _LIGHT_VSCODE,
-        'light-nord':   _LIGHT_NORD,
-        'light':        _LIGHT_LATTE,
+        'dark':             _DARK_CATPPUCCIN,
+        'dark-dracula':     _DARK_DRACULA,
+        'dark-tokyo-night': _DARK_TOKYO_NIGHT,
+        'dark-one-dark':    _DARK_ONE_DARK,
+        'dark-gruvbox':     _DARK_GRUVBOX,
+        'dark-solarized':   _DARK_SOLARIZED,
+        'dark-material':    _DARK_MATERIAL,
+        'dark-rose-pine':   _DARK_ROSE_PINE,
+        'light-latte':      _LIGHT_LATTE,
+        'light-github':     _LIGHT_GITHUB,
+        'light-vscode':     _LIGHT_VSCODE,
+        'light-nord':       _LIGHT_NORD,
+        'light-solarized':  _LIGHT_SOLARIZED,
+        'light':            _LIGHT_LATTE,
     }
     return palettes.get(name, _DARK_CATPPUCCIN).copy()

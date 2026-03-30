@@ -961,6 +961,32 @@ class SettingsPage(QWidget):
         if theme:
             self.config.set("theme", theme)
             self.theme_changed.emit(theme)
+            self._refresh_styles()
+            self._refresh_styles()
+
+    def _refresh_styles(self):
+        """Re-apply theme-dependent inline styles after theme change."""
+        try:
+            from PySide6.QtWidgets import QFrame, QTextEdit
+            if hasattr(self, "builtin_cats_table"):
+                self.builtin_cats_table.setStyleSheet(self._table_style(12))
+            if hasattr(self, "custom_categories_list"):
+                self.custom_categories_list.setStyleSheet(self._table_style(13))
+            if hasattr(self, "builtin_presets_table"):
+                self.builtin_presets_table.setStyleSheet(self._table_style(12))
+            if hasattr(self, "custom_presets_table"):
+                self.custom_presets_table.setStyleSheet(self._table_style(13))
+            if hasattr(self, "custom_catalog_table"):
+                self.custom_catalog_table.setStyleSheet(self._table_style(13))
+            if hasattr(self, "cli_log"):
+                self.cli_log.setStyleSheet(self._log_style())
+            # CLI araç kartları — tüm QFrame child'larını güncelle
+            for frame in self.findChildren(QFrame):
+                ss = frame.styleSheet()
+                if ss and ("border-radius: 6px" in ss or "border-radius: 8px" in ss):
+                    frame.setStyleSheet(self._frame_style())
+        except Exception:
+            pass
 
     def _cli_log_append(self, text: str):
         import html as _html

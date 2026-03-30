@@ -347,12 +347,13 @@ class PackagePanel(QWidget):
         )
         row1.addWidget(self.python_version_label)
 
-        self._env_bar_terminal_btn = QPushButton("🖥️ Open Terminal")
+        self._env_bar_terminal_btn = QPushButton("🖥 Open Terminal")
         self._env_bar_terminal_btn.setObjectName("secondary")
         self._env_bar_terminal_btn.setFixedHeight(28)
+        self._env_bar_terminal_btn.setMinimumWidth(110)
         self._env_bar_terminal_btn.setToolTip(UI_TOOLTIPS.get("btn_open_terminal", "Open terminal with this environment activated"))
         self._env_bar_terminal_btn.clicked.connect(self._open_terminal_here)
-        self._env_bar_terminal_btn.setEnabled(False)  # Disabled until env selected
+        self._env_bar_terminal_btn.setEnabled(False)
         row1.addWidget(self._env_bar_terminal_btn)
 
         self.env_pkg_count = QLabel("")
@@ -3167,23 +3168,27 @@ dependencies:
 
         btn_row = QHBoxLayout()
         if from_pypi:
-            install_btn = QPushButton(f"⬇️ Install {pkg_name}")
+            install_btn = QPushButton(f"⬇️ Install")
             install_btn.setObjectName("success")
+            install_btn.setToolTip(f"Install {pkg_name}")
             install_btn.clicked.connect(
                 lambda: (dialog.accept(), self._install_packages([pkg_name], hint_name=pkg_name))
             )
             btn_row.addWidget(install_btn)
         if pypi_url:
-            home_btn = QPushButton("🌐 Homepage")
+            home_btn = QPushButton("🌐 Home")
             home_btn.setObjectName("secondary")
+            home_btn.setToolTip("Open Homepage")
             home_btn.clicked.connect(lambda: __import__("webbrowser").open(pypi_url))
             btn_row.addWidget(home_btn)
         pypi_btn = QPushButton("📦 PyPI")
         pypi_btn.setObjectName("secondary")
+        pypi_btn.setToolTip(f"Open {pkg_name} on PyPI")
         pypi_btn.clicked.connect(lambda: __import__("webbrowser").open(f"https://pypi.org/project/{pkg_name}/"))
         btn_row.addWidget(pypi_btn)
-        copy_btn = QPushButton("📋 Copy All")
+        copy_btn = QPushButton("📋 Copy")
         copy_btn.setObjectName("secondary")
+        copy_btn.setToolTip("Copy all info to clipboard")
         copy_btn.clicked.connect(lambda: self._copy_to_clipboard(info_text))
         btn_row.addWidget(copy_btn)
         btn_row.addStretch()

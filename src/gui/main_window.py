@@ -471,11 +471,12 @@ class MainWindow(QMainWindow):
         self.btn_manage_pkgs.setEnabled(False)
         action_layout.addWidget(self.btn_manage_pkgs)
 
-        self.btn_terminal = QPushButton(f"\U0001f5a5\ufe0f {tr('open_terminal')}")
+        self.btn_terminal = QPushButton(f"🖥 {tr('open_terminal')}")
         self.btn_terminal.setObjectName("secondary")
         self.btn_terminal.setToolTip(UI_TOOLTIPS.get("btn_terminal", ""))
         self.btn_terminal.clicked.connect(self._open_terminal)
         self.btn_terminal.setEnabled(False)
+        self.btn_terminal.setMinimumWidth(120)
         action_layout.addWidget(self.btn_terminal)
 
         self.btn_clone = QPushButton(f"\U0001f4cb {tr('clone')}")

@@ -576,6 +576,7 @@ _DARK_ROSE_PINE = {
 }
 
 
+_LIGHT_NORD = {
     'bg': '#eceff4', 'fg': '#2e3440', 'fg_muted': '#4c566a',
     'sidebar': '#e5e9f0', 'border': '#d8dee9',
     'hover': '#dde1e9', 'active': '#d2d8e4',

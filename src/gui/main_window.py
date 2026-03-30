@@ -393,7 +393,7 @@ class MainWindow(QMainWindow):
 
         self.footer_label = QLabel("  LGPL-3.0 License")
         self.footer_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 10px;")
-        sidebar_layout.addWidget(footer_label)
+        sidebar_layout.addWidget(self.footer_label)
         main_layout.addWidget(sidebar)
 
         # Content Area

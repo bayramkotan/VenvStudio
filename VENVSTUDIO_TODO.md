@@ -56,8 +56,8 @@
 
 - **B41** — ✅ ÇÖZÜLDÜ (v1.3.68–1.4.0): AppImage/EXE subprocess re-launch loop
 - **B42** — Python yükleyici güvenlik kontrolleri
-- **B43** — Arch + Python 3.14 Orange3 crash
-- **B44** — Arch'ta IPython çalışmıyor
+- **B43** — ✅ ÇÖZÜLDÜ: Arch + Python 3.14 Orange3 crash
+- **B44** — ✅ ÇÖZÜLDÜ: Arch'ta IPython çalışmıyor
 - **B47** — 182 satır hardcoded dark renk
 - **B48** — @safe_slot/SafeWorkerMixin henüz yaygınlaştırılmadı
 - **B49** — Windows EXE: ilk açılışta Python kurulu değilse kullanıcıya sor, python.org installer indir

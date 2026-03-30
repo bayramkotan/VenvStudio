@@ -232,3 +232,61 @@
 - [ ] Singularity/Apptainer desteği (HPC)
 - [ ] Container'dan env import
 
+
+---
+
+## 🟡 PYTHON ENVIRONMENT HUB — Yeni Özellikler
+
+### ⚡ F64 — uv Backend Tam Entegrasyonu
+- [ ] uv kurulu değilse Settings'ten otomatik kur
+- [ ] `uv pip install` / `uv pip uninstall` / `uv pip list` desteği (pip_manager.py'de)
+- [ ] `uv venv` ile env oluşturma (venv_manager.py'de)
+- [ ] `uv python install` ile Python sürümü indirme (python_downloader.py ile entegre)
+- [ ] uv seçiliyken hız farkını kullanıcıya göster ("10x faster with uv")
+- [ ] uv lock file desteği (`uv pip compile`)
+
+### 🔍 F65 — Conflict Detection (Çakışma Analizi)
+- [ ] Paket yüklemeden önce `pip install --dry-run --report report.json` ile ön kontrol
+- [ ] Çakışma varsa "Bu paket X ile uyumsuz" uyarısı göster — yükleme öncesi
+- [ ] `pip check` ile mevcut ortamdaki çakışmaları tara
+- [ ] Env listesinde çakışan ortamları kırmızı ile işaretle (⚠️ ikonu)
+- [ ] Çakışma detaylarını görselleştir (hangi paket hangi versiyonu istiyor)
+
+### 🔒 F66 — Reproducibility & Lock Files
+- [ ] `pip freeze --all` ile hash'li lock file üret (`venvstudio.lock`)
+- [ ] `pip install --generate-hashes` ile güvenli kurulum
+- [ ] pip-tools entegrasyonu: `pip-compile` ile alt bağımlılıkları dondur
+- [ ] Export bölümüne "Lock File" seçeneği ekle
+- [ ] Lock file'dan ortam kurma (import) desteği
+- [ ] Lock file ile mevcut ortamı karşılaştır ("drift" tespiti)
+
+### 🐍 F67 — Micromamba / Miniforge Backend
+- [ ] Micromamba binary'sini otomatik indir (~15MB, kurulum gerektirmez)
+- [ ] `micromamba create` ile env oluşturma
+- [ ] `micromamba install` ile conda-forge paketleri
+- [ ] conda ve pip kanallarını aynı ortamda yönet
+- [ ] ffmpeg, graphviz, CUDA gibi sistem bağımlılıklarını micromamba ile kur
+- [ ] Conda channel seçimi (conda-forge, defaults, bioconda...)
+- [ ] `conda env export > environment.yml` desteği
+
+### 🐉 F68 — Pixi Backend
+- [ ] Pixi binary'sini otomatik indir
+- [ ] `pixi.toml` dosyasını görsel tabloya dönüştür
+- [ ] `pixi add` / `pixi remove` ile paket yönetimi
+- [ ] `pixi run` ile task çalıştırma
+- [ ] Pixi lock file (`pixi.lock`) desteği
+- [ ] Çoklu dil desteği: Python + R + Rust aynı projede
+
+### 📊 F69 — Bağımlılık Ağacı Görselleştirme
+- [ ] `pip show` çıktısından bağımlılık ağacı oluştur
+- [ ] Ağaç yapısında interaktif görselleştirme (tıklanabilir node'lar)
+- [ ] "Bu paket kaldırılırsa ne etkilenir?" analizi
+- [ ] Circular dependency tespiti
+- [ ] pipdeptree entegrasyonu
+
+### 🚀 F70 — Task Runner (pixi run benzeri)
+- [ ] Ortam aktive etmeden komut çalıştırma ("Run in env")
+- [ ] Sık kullanılan komutları kaydet (task shortcuts)
+- [ ] `python script.py` → otomatik o env'in python'u ile çalıştır
+- [ ] Jupyter notebook'u direkt o env'de başlat
+

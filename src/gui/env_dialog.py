@@ -125,7 +125,6 @@ class EnvCreateDialog(QDialog):
 
         self.python_combo = QComboBox()
         self.python_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-        self.python_combo.addItem("System Default", "")
 
         import os
         seen_real = {}
@@ -142,9 +141,25 @@ class EnvCreateDialog(QDialog):
                 seen_real[real] = (version, norm)
 
         listed_paths = set()
+        first_version = None
         for _real, (version, norm) in seen_real.items():
-            self.python_combo.addItem(f"Python {version} ({norm})", norm)
+            self.python_combo.addItem(f"Python {version}", norm)
             listed_paths.add(os.path.normcase(norm))
+            if first_version is None:
+                first_version = version
+
+        # System Default — en başa ekle
+        import shutil, sys, subprocess
+        _sys_py = shutil.which("python") or shutil.which("python3") or sys.executable
+        _sys_ver = ""
+        try:
+            r = subprocess.run([_sys_py, "--version"], capture_output=True, text=True, timeout=3)
+            _sys_ver = (r.stdout.strip() or r.stderr.strip()).replace("Python ", "")
+        except Exception:
+            pass
+        _sys_label = f"System Default (Python {_sys_ver})" if _sys_ver else "System Default"
+        self.python_combo.insertItem(0, _sys_label, "")
+        self.python_combo.setCurrentIndex(0)
 
         custom_pythons = self.config.get("custom_pythons", [])
         print(f"[DEBUG] EnvDialog custom_pythons from config: {custom_pythons}")
@@ -159,7 +174,7 @@ class EnvCreateDialog(QDialog):
                 print(f"[DEBUG] Skipped duplicate: {norm}")
                 continue
             listed_paths.add(norm_case)
-            self.python_combo.addItem(f"Python {ver} (Custom: {norm})", norm)
+            self.python_combo.addItem(f"Python {ver} (Custom)", norm)
             print(f"[DEBUG] Added custom python to env dialog: {ver} -> {norm}")
 
         try:
@@ -171,9 +186,7 @@ class EnvCreateDialog(QDialog):
                     continue
                 listed_paths.add(exe_case)
                 ver = py.get("version", "?")
-                self.python_combo.addItem(
-                    f"Python {ver} (Downloaded: {exe_path})", exe_path
-                )
+                self.python_combo.addItem(f"Python {ver} (Downloaded)", exe_path)
                 print(f"[DEBUG] Added downloaded python to env dialog: {ver} -> {exe_path}")
         except Exception as e:
             print(f"[DEBUG] Could not load downloaded pythons: {e}")
@@ -258,19 +271,13 @@ class EnvCreateDialog(QDialog):
 
     def _on_python_changed(self, index):
         """Seçili Python'un tam yolunu göster."""
+        import shutil, sys
         data = self.python_combo.currentData()
         if data:
             self.python_path_label.setText(f"📍 {data}")
         else:
-            import shutil, sys, subprocess
-            # System default — hangi python kullanılacağını bul ve versiyonu göster
             py = shutil.which("python") or shutil.which("python3") or sys.executable
-            try:
-                r = subprocess.run([py, "--version"], capture_output=True, text=True, timeout=3)
-                ver = (r.stdout.strip() or r.stderr.strip()).replace("Python ", "")
-                self.python_path_label.setText(f"📍 Python {ver}  —  {py}")
-            except Exception:
-                self.python_path_label.setText(f"📍 {py}")
+            self.python_path_label.setText(f"📍 {py}")
 
     def _change_location(self):
         directory = QFileDialog.getExistingDirectory(

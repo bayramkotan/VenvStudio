@@ -105,9 +105,70 @@ class SettingsPage(QWidget):
             f"border-radius: 8px; padding: 12px;"
         )
 
+    def _c(self) -> dict:
+        """Return current theme color palette."""
+        from src.gui.styles import get_colors
+        return get_colors(self.config.get("theme", "dark"))
+
+    def _table_style(self, font_size=13):
+        c = self._c()
+        return (
+            f"QTableWidget {{ background-color: {c['card']}; color: {c['fg']}; "
+            f"gridline-color: {c['border']}; font-size: {font_size}px; }}"
+            f"QTableWidget::item:selected {{ background-color: {c['active']}; color: {c['fg']}; }}"
+            f"QTableWidget QLineEdit {{ background-color: {c['input_bg']}; color: {c['fg']}; "
+            f"border: 2px solid {c['accent']}; padding: 2px 4px; font-size: {font_size}px; }}"
+            f"QComboBox {{ background-color: {c['input_bg']}; color: {c['fg']}; "
+            f"border: 1px solid {c['border']}; padding: 3px; font-size: 12px; }}"
+            f"QHeaderView::section {{ background-color: {c['sidebar']}; color: {c['fg_muted']}; "
+            f"border: none; border-bottom: 1px solid {c['border']}; padding: 4px; }}"
+        )
+
+    def _log_style(self):
+        c = self._c()
+        return (
+            f"QTextEdit {{ background: {c['sidebar']}; color: {c['fg']}; "
+            f"border: 1px solid {c['border']}; border-radius: 6px; "
+            f"font-family: 'Cascadia Code', 'JetBrains Mono', monospace; font-size: 12px; }}"
+        )
+
+    def _frame_style(self):
+        c = self._c()
+        return (
+            f"background-color: {c['card']}; border: 1px solid {c['border']}; "
+            f"border-radius: 8px; padding: 12px;"
+        )
+
+    def _refresh_styles(self):
+        """Re-apply theme-dependent inline styles on all tracked widgets."""
+        try:
+            from PySide6.QtWidgets import QFrame
+            tables = [
+                ("builtin_cats_table", 12),
+                ("custom_categories_list", 13),
+                ("builtin_presets_table", 12),
+                ("custom_presets_table", 13),
+                ("custom_catalog_table", 13),
+                ("custom_terminals_table", 13),
+            ]
+            for attr, size in tables:
+                w = getattr(self, attr, None)
+                if w:
+                    w.setStyleSheet(self._table_style(size))
+            if hasattr(self, "cli_log"):
+                self.cli_log.setStyleSheet(self._log_style())
+            # Tüm QFrame child'larını güncelle (CLI kartları)
+            for frame in self.findChildren(QFrame):
+                ss = frame.styleSheet()
+                if ss and "border-radius" in ss and "border" in ss:
+                    frame.setStyleSheet(self._frame_style())
+        except Exception:
+            pass
+
     def __init__(self, config_manager, parent=None):
         super().__init__(parent)
         self.config = config_manager
+        self._theme_frames = []  # CLI/pip card frame attribute names
         self._setup_ui()
         self._load_current_settings()
 
@@ -515,6 +576,7 @@ class SettingsPage(QWidget):
 
         # Built-in categories (hidden by default, editable)
         self.builtin_cats_table = QTableWidget()
+        self.builtin_cats_table.setStyleSheet(self._table_style(12))
         self.builtin_cats_table.setColumnCount(3)
         self.builtin_cats_table.setHorizontalHeaderLabels(["Icon", "Category Name", "Packages"])
         self.builtin_cats_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
@@ -526,6 +588,7 @@ class SettingsPage(QWidget):
         self.builtin_cats_table.verticalHeader().setVisible(False)
         self.builtin_cats_table.verticalHeader().setDefaultSectionSize(26)
         self.builtin_cats_table.setVisible(False)
+        self.builtin_cats_table.setStyleSheet(self._table_style(12))
         self.builtin_cats_table.setStyleSheet(self._table_style(12))
         # Populate built-in
         from src.utils.constants import PACKAGE_CATALOG
@@ -547,6 +610,7 @@ class SettingsPage(QWidget):
         cat_mgr_layout.addWidget(cat_mgr_info)
 
         self.custom_categories_list = QTableWidget()
+        self.custom_categories_list.setStyleSheet(self._table_style(13))
         self.custom_categories_list.setColumnCount(2)
         self.custom_categories_list.setHorizontalHeaderLabels(["Icon", "Category Name"])
         self.custom_categories_list.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
@@ -656,6 +720,7 @@ class SettingsPage(QWidget):
         catalog_layout.addWidget(catalog_info)
 
         self.custom_catalog_table = QTableWidget()
+        self.custom_catalog_table.setStyleSheet(self._table_style(13))
         self.custom_catalog_table.setColumnCount(3)
         self.custom_catalog_table.setHorizontalHeaderLabels(["Package Name", "Description", "Category"])
         self.custom_catalog_table.setStyleSheet(self._table_style(13))
@@ -769,6 +834,7 @@ class SettingsPage(QWidget):
 
         # Output log for CLI tools
         self.cli_log = QTextEdit()
+        self.cli_log.setStyleSheet(self._log_style())
         self.cli_log.setReadOnly(True)
         self.cli_log.setMaximumHeight(100)
         self.cli_log.setStyleSheet(self._log_style())
@@ -962,31 +1028,6 @@ class SettingsPage(QWidget):
             self.config.set("theme", theme)
             self.theme_changed.emit(theme)
             self._refresh_styles()
-            self._refresh_styles()
-
-    def _refresh_styles(self):
-        """Re-apply theme-dependent inline styles after theme change."""
-        try:
-            from PySide6.QtWidgets import QFrame, QTextEdit
-            if hasattr(self, "builtin_cats_table"):
-                self.builtin_cats_table.setStyleSheet(self._table_style(12))
-            if hasattr(self, "custom_categories_list"):
-                self.custom_categories_list.setStyleSheet(self._table_style(13))
-            if hasattr(self, "builtin_presets_table"):
-                self.builtin_presets_table.setStyleSheet(self._table_style(12))
-            if hasattr(self, "custom_presets_table"):
-                self.custom_presets_table.setStyleSheet(self._table_style(13))
-            if hasattr(self, "custom_catalog_table"):
-                self.custom_catalog_table.setStyleSheet(self._table_style(13))
-            if hasattr(self, "cli_log"):
-                self.cli_log.setStyleSheet(self._log_style())
-            # CLI araç kartları — tüm QFrame child'larını güncelle
-            for frame in self.findChildren(QFrame):
-                ss = frame.styleSheet()
-                if ss and ("border-radius: 6px" in ss or "border-radius: 8px" in ss):
-                    frame.setStyleSheet(self._frame_style())
-        except Exception:
-            pass
 
     def _cli_log_append(self, text: str):
         import html as _html
@@ -1012,6 +1053,7 @@ class SettingsPage(QWidget):
         """Create a card widget for binary CLI tools (starship, oh-my-posh)."""
         from src.core.cli_tools_manager import is_tool_installed, get_tool_version
         card = QFrame()
+        card.setStyleSheet(self._frame_style())
         card.setStyleSheet(
             self._frame_style()
         )
@@ -1126,6 +1168,7 @@ class SettingsPage(QWidget):
         """Create a card widget for pip-based tools (rich, textual, prompt_toolkit)."""
         from src.core.cli_tools_manager import is_tool_installed, get_tool_version
         card = QFrame()
+        card.setStyleSheet(self._frame_style())
         card.setStyleSheet(
             self._frame_style()
         )
@@ -1211,13 +1254,13 @@ class SettingsPage(QWidget):
         dlg.setWindowTitle("📝 Starship Config Editor — starship.toml")
         dlg.resize(700, 500)
         dlg.setStyleSheet(
-            "QDialog { background: #1e1e2e; }"
-            "QPlainTextEdit { background: #181825; color: #cdd6f4; border: 1px solid #313244; "
+            f"QDialog {{ background: {self._c()['bg']}; }}"
+            f"QPlainTextEdit {{ background: {self._c()['sidebar']}; color: {self._c()['fg']}; border: 1px solid {self._c()['border']}; "
             "border-radius: 4px; font-family: 'Consolas', 'JetBrains Mono', monospace; font-size: 12px; }"
             "QPushButton { padding: 6px 16px; border-radius: 4px; font-size: 12px; }"
-            "QPushButton#save { background: #a6e3a1; color: #1e1e2e; font-weight: bold; }"
+            f"QPushButton#save {{ background: {self._c()['success']}; color: {self._c()['accent_fg']}; font-weight: bold; }}"
             "QPushButton#save:hover { background: #94d89d; }"
-            "QPushButton#secondary { background: #313244; color: #cdd6f4; }"
+            f"QPushButton#secondary {{ background: {self._c()['secondary']}; color: {self._c()['fg']}; }}"
             "QPushButton#secondary:hover { background: #45475a; }"
             "QLabel { color: #6c7086; font-size: 11px; }"
         )
@@ -2708,7 +2751,7 @@ try {{
         """Create a category dropdown for catalog table."""
         combo = QComboBox()
         combo.setStyleSheet(
-            "background-color: #313244; color: #cdd6f4; border: 1px solid #585b70; "
+            f"background-color: {self._c()['input_bg']}; color: {self._c()['fg']}; border: 1px solid {self._c()['border']}; "
             "padding: 3px; font-size: 12px;"
         )
         categories = self._get_all_categories()
@@ -3553,7 +3596,7 @@ class PythonDownloadDialog(QDialog):
         self.version_list.setStyleSheet(
             "QListWidget { font-size: 13px; }"
             "QListWidget::item { padding: 6px; }"
-            "QListWidget::item:selected { background-color: #89b4fa; color: #1e1e2e; }"
+            f"QListWidget::item:selected {{ background-color: {self._c()['accent']}; color: {self._c()['accent_fg']}; }}"
         )
         layout.addWidget(self.version_list)
 
@@ -4035,6 +4078,7 @@ echo "OK"
         if theme:
             self.config.set("theme", theme)
             self.theme_changed.emit(theme)
+            self._refresh_styles()
 
     def _cli_log_append(self, text: str):
         import html as _html
@@ -4060,6 +4104,7 @@ echo "OK"
         """Create a card widget for binary CLI tools (starship, oh-my-posh)."""
         from src.core.cli_tools_manager import is_tool_installed, get_tool_version
         card = QFrame()
+        card.setStyleSheet(self._frame_style())
         card.setStyleSheet(
             self._frame_style()
         )
@@ -4174,6 +4219,7 @@ echo "OK"
         """Create a card widget for pip-based tools (rich, textual, prompt_toolkit)."""
         from src.core.cli_tools_manager import is_tool_installed, get_tool_version
         card = QFrame()
+        card.setStyleSheet(self._frame_style())
         card.setStyleSheet(
             self._frame_style()
         )
@@ -4259,13 +4305,13 @@ echo "OK"
         dlg.setWindowTitle("📝 Starship Config Editor — starship.toml")
         dlg.resize(700, 500)
         dlg.setStyleSheet(
-            "QDialog { background: #1e1e2e; }"
-            "QPlainTextEdit { background: #181825; color: #cdd6f4; border: 1px solid #313244; "
+            f"QDialog {{ background: {self._c()['bg']}; }}"
+            f"QPlainTextEdit {{ background: {self._c()['sidebar']}; color: {self._c()['fg']}; border: 1px solid {self._c()['border']}; "
             "border-radius: 4px; font-family: 'Consolas', 'JetBrains Mono', monospace; font-size: 12px; }"
             "QPushButton { padding: 6px 16px; border-radius: 4px; font-size: 12px; }"
-            "QPushButton#save { background: #a6e3a1; color: #1e1e2e; font-weight: bold; }"
+            f"QPushButton#save {{ background: {self._c()['success']}; color: {self._c()['accent_fg']}; font-weight: bold; }}"
             "QPushButton#save:hover { background: #94d89d; }"
-            "QPushButton#secondary { background: #313244; color: #cdd6f4; }"
+            f"QPushButton#secondary {{ background: {self._c()['secondary']}; color: {self._c()['fg']}; }}"
             "QPushButton#secondary:hover { background: #45475a; }"
             "QLabel { color: #6c7086; font-size: 11px; }"
         )
@@ -5756,7 +5802,7 @@ try {{
         """Create a category dropdown for catalog table."""
         combo = QComboBox()
         combo.setStyleSheet(
-            "background-color: #313244; color: #cdd6f4; border: 1px solid #585b70; "
+            f"background-color: {self._c()['input_bg']}; color: {self._c()['fg']}; border: 1px solid {self._c()['border']}; "
             "padding: 3px; font-size: 12px;"
         )
         categories = self._get_all_categories()
@@ -6601,7 +6647,7 @@ class PythonDownloadDialog(QDialog):
         self.version_list.setStyleSheet(
             "QListWidget { font-size: 13px; }"
             "QListWidget::item { padding: 6px; }"
-            "QListWidget::item:selected { background-color: #89b4fa; color: #1e1e2e; }"
+            f"QListWidget::item:selected {{ background-color: {self._c()['accent']}; color: {self._c()['accent_fg']}; }}"
         )
         layout.addWidget(self.version_list)
 

@@ -358,25 +358,25 @@ class MainWindow(QMainWindow):
         ql_layout.setContentsMargins(4, 8, 4, 4)
         ql_layout.setSpacing(4)
 
-        ql_sep = QFrame()
-        ql_sep.setFrameShape(QFrame.HLine)
-        ql_sep.setStyleSheet(f"background-color: {self._c()['border']}; max-height: 1px;")
-        ql_layout.addWidget(ql_sep)
+        self.ql_sep = QFrame()
+        self.ql_sep.setFrameShape(QFrame.HLine)
+        self.ql_sep.setStyleSheet(f"background-color: {self._c()['border']}; max-height: 1px;")
+        ql_layout.addWidget(self.ql_sep)
 
-        ql_title = QLabel("  ⚡ Quick Launch")
-        ql_title.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 10px; padding: 2px 0;")
-        ql_title.setToolTip(UI_TOOLTIPS.get("ql_section", ""))
-        ql_layout.addWidget(ql_title)
+        self.ql_title = QLabel("  ⚡ Quick Launch")
+        self.ql_title.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 10px; padding: 2px 0;")
+        self.ql_title.setToolTip(UI_TOOLTIPS.get("ql_section", ""))
+        ql_layout.addWidget(self.ql_title)
 
         # Env selector for quick launch
         self.ql_env_selector = QComboBox()
         self.ql_env_selector.setFixedHeight(28)
         self.ql_env_selector.setStyleSheet(
-            "QComboBox { font-size: 12px; padding: 2px 8px; "
-            "background-color: #1e1e2e; color: #cdd6f4; "
-            "border: 1px solid #45475a; border-radius: 4px; }"
-            "QComboBox QAbstractItemView { background-color: #1e1e2e; color: #cdd6f4; "
-            "selection-background-color: #89b4fa; selection-color: #1e1e2e; }"
+            f"QComboBox {{ font-size: 12px; padding: 2px 8px; "
+            f"background-color: {self._c()['input_bg']}; color: {self._c()['fg']}; "
+            f"border: 1px solid {self._c()['border']}; border-radius: 4px; }}"
+            f"QComboBox QAbstractItemView {{ background-color: {self._c()['card']}; color: {self._c()['fg']}; "
+            f"selection-background-color: {self._c()['accent']}; selection-color: {self._c()['accent_fg']}; }}"
         )
         self.ql_env_selector.currentIndexChanged.connect(self._on_ql_env_changed)
         ql_layout.addWidget(self.ql_env_selector)
@@ -391,8 +391,8 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(self.quick_launch_frame)
         sidebar_layout.addStretch()
 
-        footer_label = QLabel("  LGPL-3.0 License")
-        footer_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 10px;")
+        self.footer_label = QLabel("  LGPL-3.0 License")
+        self.footer_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 10px;")
         sidebar_layout.addWidget(footer_label)
         main_layout.addWidget(sidebar)
 
@@ -1407,11 +1407,42 @@ class MainWindow(QMainWindow):
             self.setStyleSheet(get_theme(theme))
             if hasattr(self, "package_panel"):
                 self.package_panel.apply_theme(theme)
+            self._refresh_sidebar_styles()
         except RuntimeError:
             # Widget may be in an unstable state during screen transition
             pass
         finally:
             self._applying_theme = False
+
+    def _refresh_sidebar_styles(self):
+        """Re-apply inline styles on sidebar widgets that don't inherit QSS."""
+        try:
+            c = self._c()
+            if hasattr(self, "ql_sep"):
+                self.ql_sep.setStyleSheet(f"background-color: {c['border']}; max-height: 1px;")
+            if hasattr(self, "ql_title"):
+                self.ql_title.setStyleSheet(f"color: {c['fg_muted']}; font-size: 10px; padding: 2px 0;")
+            if hasattr(self, "ql_env_selector"):
+                self.ql_env_selector.setStyleSheet(
+                    f"background-color: {c['input_bg']}; color: {c['fg']}; "
+                    f"border: 1px solid {c['border']}; border-radius: 6px; padding: 4px 8px; "
+                    f"QComboBox QAbstractItemView {{ background-color: {c['card']}; color: {c['fg']}; "
+                    f"selection-background-color: {c['accent']}; selection-color: {c['accent_fg']}; }}"
+                )
+            if hasattr(self, "ql_buttons_widget"):
+                for btn in self.ql_buttons_widget.findChildren(__import__("PySide6.QtWidgets", fromlist=["QPushButton"]).QPushButton):
+                    btn.setStyleSheet(
+                        f"QPushButton {{ text-align: left; padding: 6px 10px; border-radius: 6px; "
+                        f"background-color: {c['sidebar']}; color: {c['fg']}; "
+                        f"border: 1px solid {c['border']}; }}"
+                        f"QPushButton:hover {{ background-color: {c['hover']}; border-color: {c['accent']}; }}"
+                    )
+            if hasattr(self, "version_label"):
+                self.version_label.setStyleSheet(f"color: {c['fg_muted']}; font-size: 11px;")
+            if hasattr(self, "footer_label"):
+                self.footer_label.setStyleSheet(f"color: {c['fg_muted']}; font-size: 10px;")
+        except Exception:
+            pass
 
     def _connect_screen_changed(self):
         """Connect to windowHandle().screenChanged so theme is re-applied

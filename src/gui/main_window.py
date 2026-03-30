@@ -224,6 +224,11 @@ class MainWindow(QMainWindow):
             import webbrowser
             webbrowser.open(result["release_url"])
 
+    def _c(self) -> dict:
+        """Return current theme color palette."""
+        from src.gui.styles import get_colors
+        return get_colors(self.config.get("theme", "dark"))
+
     def _setup_window(self):
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
         width = self.config.get("window_width", 1100)
@@ -321,7 +326,7 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(logo_label)
 
         version_label = QLabel(f"      v{APP_VERSION}")
-        version_label.setStyleSheet("color: #6c7086; font-size: 11px;")
+        version_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         sidebar_layout.addWidget(version_label)
         sidebar_layout.addSpacing(20)
 
@@ -355,11 +360,11 @@ class MainWindow(QMainWindow):
 
         ql_sep = QFrame()
         ql_sep.setFrameShape(QFrame.HLine)
-        ql_sep.setStyleSheet("background-color: #313244; max-height: 1px;")
+        ql_sep.setStyleSheet(f"background-color: {self._c()['border']}; max-height: 1px;")
         ql_layout.addWidget(ql_sep)
 
         ql_title = QLabel("  ⚡ Quick Launch")
-        ql_title.setStyleSheet("color: #6c7086; font-size: 10px; padding: 2px 0;")
+        ql_title.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 10px; padding: 2px 0;")
         ql_title.setToolTip(UI_TOOLTIPS.get("ql_section", ""))
         ql_layout.addWidget(ql_title)
 
@@ -387,7 +392,7 @@ class MainWindow(QMainWindow):
         sidebar_layout.addStretch()
 
         footer_label = QLabel("  LGPL-3.0 License")
-        footer_label.setStyleSheet("color: #585b70; font-size: 10px;")
+        footer_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 10px;")
         sidebar_layout.addWidget(footer_label)
         main_layout.addWidget(sidebar)
 
@@ -473,7 +478,7 @@ class MainWindow(QMainWindow):
         self.loading_label.setAlignment(Qt.AlignCenter)
         self.loading_label.setFixedHeight(40)
         self.loading_label.setStyleSheet(
-            "color: #1e1e2e; font-size: 13px; font-weight: bold; padding: 8px; "
+            f"color: {self._c()['fg']}; font-size: 13px; font-weight: bold; padding: 8px; "
             "background-color: #f9e2af; "
             "border-radius: 6px;"
         )
@@ -704,7 +709,7 @@ class MainWindow(QMainWindow):
             self.ql_buttons_layout.addWidget(btn)
         if not has_any:
             lbl = QLabel("  No apps installed")
-            lbl.setStyleSheet("color: #45475a; font-size: 11px; padding: 4px;")
+            lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px; padding: 4px;")
             self.ql_buttons_layout.addWidget(lbl)
 
     def _refresh_env_list(self, force: bool = False):

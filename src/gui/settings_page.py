@@ -98,6 +98,13 @@ class SettingsPage(QWidget):
         c = self._c()
         return f"QFrame {{ background: {c['card']}; border: 1px solid {c['border']}; border-radius: 6px; padding: 8px; }}"
 
+    def _card_style(self):
+        c = self._c()
+        return (
+            f"background-color: {c['card']}; border: 1px solid {c['border']}; "
+            f"border-radius: 8px; padding: 12px;"
+        )
+
     def __init__(self, config_manager, parent=None):
         super().__init__(parent)
         self.config = config_manager
@@ -172,7 +179,7 @@ class SettingsPage(QWidget):
 
         # UI Scale info
         scale_label = QLabel("UI scaling follows your system display settings.")
-        scale_label.setStyleSheet("color: #6c7086; font-size: 11px;")
+        scale_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         appearance_layout.addRow("", scale_label)
 
         appearance_group.setLayout(appearance_layout)
@@ -198,7 +205,7 @@ class SettingsPage(QWidget):
         lang_layout.addRow(f"{tr('interface_language')}", lang_row)
 
         lang_note = QLabel(tr("language_note"))
-        lang_note.setStyleSheet("color: #6c7086; font-size: 11px;")
+        lang_note.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         lang_layout.addRow("", lang_note)
 
         lang_group.setLayout(lang_layout)
@@ -211,7 +218,7 @@ class SettingsPage(QWidget):
 
         python_info = QLabel(tr("python_info"))
         python_info.setWordWrap(True)
-        python_info.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        python_info.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
         python_layout.addWidget(python_info)
 
         # Python versions table
@@ -324,7 +331,7 @@ class SettingsPage(QWidget):
         paths_layout.addRow("Environment Directory:", venv_dir_layout)
 
         path_info = QLabel("All new virtual environments will be created in this directory.")
-        path_info.setStyleSheet("color: #6c7086; font-size: 11px;")
+        path_info.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         paths_layout.addRow("", path_info)
 
         paths_group.setLayout(paths_layout)
@@ -353,7 +360,7 @@ class SettingsPage(QWidget):
             "uv is 10-100x faster than pip.\n"
             "If uv is not installed, VenvStudio will auto-install it."
         )
-        uv_note.setStyleSheet("color: #6c7086; font-size: 11px;")
+        uv_note.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         uv_note.setWordWrap(True)
         pkg_mgr_layout.addRow("", uv_note)
 
@@ -431,7 +438,7 @@ class SettingsPage(QWidget):
 
         info_lbl = QLabel("Add custom terminal commands. Use {path} for env path and {activate} for activate script.")
         info_lbl.setWordWrap(True)
-        info_lbl.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        info_lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
         custom_term_layout.addWidget(info_lbl)
 
         # Table
@@ -472,7 +479,7 @@ class SettingsPage(QWidget):
 
         vscode_info = QLabel("Set the selected environment's Python as VS Code interpreter.")
         vscode_info.setWordWrap(True)
-        vscode_info.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        vscode_info.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
         vscode_layout.addWidget(vscode_info)
 
         vscode_btn_layout = QHBoxLayout()
@@ -519,11 +526,7 @@ class SettingsPage(QWidget):
         self.builtin_cats_table.verticalHeader().setVisible(False)
         self.builtin_cats_table.verticalHeader().setDefaultSectionSize(26)
         self.builtin_cats_table.setVisible(False)
-        self.builtin_cats_table.setStyleSheet("""
-            QTableWidget { background-color: #1e1e2e; color: #cdd6f4; gridline-color: #313244; font-size: 12px; }
-            QTableWidget::item { color: #cdd6f4; }
-            QTableWidget QLineEdit { background-color: #313244; color: #f5e0dc; border: 2px solid #89b4fa; padding: 2px; font-size: 12px; }
-        """)
+        self.builtin_cats_table.setStyleSheet(self._table_style(12))
         # Populate built-in
         from src.utils.constants import PACKAGE_CATALOG
         self.builtin_cats_table.setRowCount(len(PACKAGE_CATALOG))
@@ -540,7 +543,7 @@ class SettingsPage(QWidget):
 
         cat_mgr_info = QLabel("Add your own categories below. These appear in the Catalog dropdown.")
         cat_mgr_info.setWordWrap(True)
-        cat_mgr_info.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        cat_mgr_info.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
         cat_mgr_layout.addWidget(cat_mgr_info)
 
         self.custom_categories_list = QTableWidget()
@@ -554,12 +557,7 @@ class SettingsPage(QWidget):
         self.custom_categories_list.setSelectionMode(QTableWidget.SingleSelection)
         self.custom_categories_list.verticalHeader().setVisible(False)
         self.custom_categories_list.verticalHeader().setDefaultSectionSize(28)
-        self.custom_categories_list.setStyleSheet("""
-            QTableWidget { background-color: #1e1e2e; color: #cdd6f4; gridline-color: #313244; font-size: 13px; }
-            QTableWidget::item { color: #cdd6f4; padding: 4px; }
-            QTableWidget::item:selected { background-color: #45475a; color: #cdd6f4; }
-            QTableWidget QLineEdit { background-color: #313244; color: #f5e0dc; border: 2px solid #89b4fa; padding: 2px 4px; font-size: 13px; }
-        """)
+        self.custom_categories_list.setStyleSheet(self._table_style(13))
         cat_mgr_layout.addWidget(self.custom_categories_list)
 
         cat_mgr_btns = QHBoxLayout()
@@ -585,7 +583,7 @@ class SettingsPage(QWidget):
 
         preset_info = QLabel("Add, edit or remove package presets. Built-in presets are shown read-only. Custom presets appear in the Packages → Presets tab.")
         preset_info.setWordWrap(True)
-        preset_info.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        preset_info.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
         preset_layout.addWidget(preset_info)
 
         # Built-in presets (read-only)
@@ -603,10 +601,7 @@ class SettingsPage(QWidget):
         self.builtin_presets_table.verticalHeader().setDefaultSectionSize(26)
         self.builtin_presets_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.builtin_presets_table.setVisible(False)
-        self.builtin_presets_table.setStyleSheet("""
-            QTableWidget { background-color: #1e1e2e; color: #cdd6f4; gridline-color: #313244; font-size: 12px; }
-            QTableWidget::item { color: #cdd6f4; padding: 4px; }
-        """)
+        self.builtin_presets_table.setStyleSheet(self._table_style(12))
         from src.utils.constants import PRESETS
         self.builtin_presets_table.setRowCount(len(PRESETS))
         for i, (name, pkgs) in enumerate(PRESETS.items()):
@@ -616,7 +611,7 @@ class SettingsPage(QWidget):
 
         # Custom presets table
         custom_preset_lbl = QLabel("Custom Presets:")
-        custom_preset_lbl.setStyleSheet("color: #cdd6f4; font-size: 12px; font-weight: bold;")
+        custom_preset_lbl.setStyleSheet(f"color: {self._c()['fg']}; font-size: 12px; font-weight: bold;")
         preset_layout.addWidget(custom_preset_lbl)
 
         self.custom_presets_table = QTableWidget(0, 2)
@@ -628,12 +623,7 @@ class SettingsPage(QWidget):
         self.custom_presets_table.setSelectionMode(QTableWidget.SingleSelection)
         self.custom_presets_table.verticalHeader().setVisible(False)
         self.custom_presets_table.verticalHeader().setDefaultSectionSize(28)
-        self.custom_presets_table.setStyleSheet("""
-            QTableWidget { background-color: #1e1e2e; color: #cdd6f4; gridline-color: #313244; font-size: 13px; }
-            QTableWidget::item { color: #cdd6f4; padding: 4px; }
-            QTableWidget::item:selected { background-color: #45475a; color: #cdd6f4; }
-            QTableWidget QLineEdit { background-color: #313244; color: #f5e0dc; border: 2px solid #89b4fa; padding: 2px 4px; font-size: 13px; }
-        """)
+        self.custom_presets_table.setStyleSheet(self._table_style(13))
         preset_layout.addWidget(self.custom_presets_table)
 
         preset_btn_row = QHBoxLayout()
@@ -662,19 +652,13 @@ class SettingsPage(QWidget):
 
         catalog_info = QLabel("Add custom packages. Category column uses a dropdown from built-in + custom categories.")
         catalog_info.setWordWrap(True)
-        catalog_info.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        catalog_info.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
         catalog_layout.addWidget(catalog_info)
 
         self.custom_catalog_table = QTableWidget()
         self.custom_catalog_table.setColumnCount(3)
         self.custom_catalog_table.setHorizontalHeaderLabels(["Package Name", "Description", "Category"])
-        self.custom_catalog_table.setStyleSheet("""
-            QTableWidget { background-color: #1e1e2e; color: #cdd6f4; gridline-color: #313244; font-size: 13px; }
-            QTableWidget::item { color: #cdd6f4; padding: 4px; font-size: 13px; }
-            QTableWidget::item:selected { background-color: #45475a; color: #cdd6f4; }
-            QTableWidget QLineEdit { background-color: #313244; color: #f5e0dc; border: 2px solid #89b4fa; padding: 4px 6px; font-size: 13px; min-height: 24px; }
-            QComboBox { background-color: #313244; color: #cdd6f4; border: 1px solid #585b70; padding: 3px; font-size: 12px; }
-        """)
+        self.custom_catalog_table.setStyleSheet(self._table_style(13))
         self.custom_catalog_table.verticalHeader().setDefaultSectionSize(34)
         self.custom_catalog_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.custom_catalog_table.setSelectionMode(QTableWidget.SingleSelection)
@@ -780,18 +764,14 @@ class SettingsPage(QWidget):
             "Starship & Oh My Posh require a Nerd Font for proper rendering."
         )
         cli_desc.setWordWrap(True)
-        cli_desc.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        cli_desc.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
         cli_layout.addWidget(cli_desc)
 
         # Output log for CLI tools
         self.cli_log = QTextEdit()
         self.cli_log.setReadOnly(True)
         self.cli_log.setMaximumHeight(100)
-        self.cli_log.setStyleSheet(
-            "QTextEdit { background: #11111b; color: #cdd6f4; "
-            "font-family: Consolas, monospace; font-size: 11px; "
-            "border: 1px solid #313244; border-radius: 4px; padding: 4px; }"
-        )
+        self.cli_log.setStyleSheet(self._log_style())
         self.cli_log.setPlaceholderText("Installation output will appear here...")
         cli_layout.addWidget(self.cli_log)
 
@@ -1007,7 +987,7 @@ class SettingsPage(QWidget):
         from src.core.cli_tools_manager import is_tool_installed, get_tool_version
         card = QFrame()
         card.setStyleSheet(
-            "QFrame { background: #1e1e2e; border: 1px solid #313244; border-radius: 6px; padding: 8px; }"
+            self._frame_style()
         )
         layout = QVBoxLayout(card)
         layout.setSpacing(6)
@@ -1121,7 +1101,7 @@ class SettingsPage(QWidget):
         from src.core.cli_tools_manager import is_tool_installed, get_tool_version
         card = QFrame()
         card.setStyleSheet(
-            "QFrame { background: #1e1e2e; border: 1px solid #313244; border-radius: 6px; padding: 8px; }"
+            self._frame_style()
         )
         layout = QVBoxLayout(card)
         layout.setSpacing(6)
@@ -3104,7 +3084,7 @@ try {{
     def _check_for_updates(self):
         """Check PyPI for new version."""
         self.update_status_label.setText("🔍 Checking...")
-        self.update_status_label.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        self.update_status_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
 
         # Run in background thread
         self._update_worker = _UpdateCheckWorker(parent=self)
@@ -3538,7 +3518,7 @@ class PythonDownloadDialog(QDialog):
         header = QLabel(
             "Download standalone Python builds for local use"
         )
-        header.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        header.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
         header.setWordWrap(True)
         layout.addWidget(header)
 
@@ -3564,7 +3544,7 @@ class PythonDownloadDialog(QDialog):
         # Install location
         from src.core.python_downloader import get_pythons_dir
         loc_label = QLabel(f"📂 Install location: {get_pythons_dir()}")
-        loc_label.setStyleSheet("color: #6c7086; font-size: 11px;")
+        loc_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         loc_label.setWordWrap(True)
         layout.addWidget(loc_label)
 
@@ -4055,7 +4035,7 @@ echo "OK"
         from src.core.cli_tools_manager import is_tool_installed, get_tool_version
         card = QFrame()
         card.setStyleSheet(
-            "QFrame { background: #1e1e2e; border: 1px solid #313244; border-radius: 6px; padding: 8px; }"
+            self._frame_style()
         )
         layout = QVBoxLayout(card)
         layout.setSpacing(6)
@@ -4169,7 +4149,7 @@ echo "OK"
         from src.core.cli_tools_manager import is_tool_installed, get_tool_version
         card = QFrame()
         card.setStyleSheet(
-            "QFrame { background: #1e1e2e; border: 1px solid #313244; border-radius: 6px; padding: 8px; }"
+            self._frame_style()
         )
         layout = QVBoxLayout(card)
         layout.setSpacing(6)
@@ -6152,7 +6132,7 @@ try {{
     def _check_for_updates(self):
         """Check PyPI for new version."""
         self.update_status_label.setText("🔍 Checking...")
-        self.update_status_label.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        self.update_status_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
 
         # Run in background thread
         self._update_worker = _UpdateCheckWorker(parent=self)
@@ -6586,7 +6566,7 @@ class PythonDownloadDialog(QDialog):
         header = QLabel(
             "Download standalone Python builds for local use"
         )
-        header.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        header.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
         header.setWordWrap(True)
         layout.addWidget(header)
 
@@ -6612,7 +6592,7 @@ class PythonDownloadDialog(QDialog):
         # Install location
         from src.core.python_downloader import get_pythons_dir
         loc_label = QLabel(f"📂 Install location: {get_pythons_dir()}")
-        loc_label.setStyleSheet("color: #6c7086; font-size: 11px;")
+        loc_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         loc_label.setWordWrap(True)
         layout.addWidget(loc_label)
 

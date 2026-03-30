@@ -106,3 +106,25 @@
 | — | v1.4.15 | --cert ile sistem SSL |
 | — | v1.4.12 | email fix |
 | Temalar | v1.4.24 | 13 tema (8 dark + 5 light) |
+
+---
+
+## 🔴 YENİ BUGLAR (v1.4.24 sonrası)
+
+- **B55** — Open Terminal veya env geçişi yapınca Quick Launch teması bozuluyor
+  - Sidebar inline style'ları reset oluyor
+  - `_refresh_sidebar_styles()` bu durumlarda çağrılmıyor
+
+- **B56** — Settings > Python Versions altında System Default Python görünmüyor
+  - Kullanıcı hangi system python'un kurulu olduğunu göremez
+  - System Default'u da listeye ekle (versiyon + path)
+
+## 🟡 YENİ PLANLI
+
+- **F71** — Env sağ tık Export alt menüleri
+  - requirements.txt
+  - requirements-frozen.txt (hash'li)
+  - environment.yml (conda formatı)
+  - Dockerfile
+  - pyproject.toml
+  - JSON

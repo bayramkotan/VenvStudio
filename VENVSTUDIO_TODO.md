@@ -151,3 +151,84 @@
   - **macOS için:**
     - [ ] Homebrew Python kontrolü
     - [ ] Xcode Command Line Tools kontrolü
+
+---
+
+## 🟡 YENİ PLANLI MADDELER (v1.4.21 sonrası)
+
+### 🐛 B54 — UI/UX Düzeltmeleri
+- [ ] Environment dialog'da "System Default" Python'un versiyon ve yolu gösterilmiyor — dropdown altında seçili Python'un tam yolu gösterilmeli
+- [ ] Catalog/Installed "Package Info" dialog butonları taşıyor — "Install xyz..." ve "Copy A..." kısaltılıyor, buton genişlikleri düzeltilmeli
+- [ ] "Open Terminal" butonu metni sığmıyor (Packages ve Environments'ta) — font veya buton boyutu ayarlanmalı
+- [ ] "Open Terminal" butonundaki "P" harfinin kuyruğu görünmüyor — font sorunu (Noto Color Emoji veya sistem fontu)
+
+### 🎨 F55 — Detaylı Tema Settings
+- [ ] Renk paleti özelleştirme (accent, background, text, border...)
+- [ ] Font seçimi ve boyutu
+- [ ] Kompakt / Normal / Geniş layout seçeneği
+- [ ] Hazır temalar: Catppuccin, Dracula, Nord, Tokyo Night, Solarized...
+- [ ] Tema önizleme canlı
+- [ ] Tema import/export (.json)
+
+### 📦 F56 — Ek Package Manager Desteği
+- [ ] pixi — conda-compatible, fast
+- [ ] conda — Anaconda/Miniconda
+- [ ] micromamba / miniforge
+- [ ] Her package manager için Settings'te ayrı konfigürasyon
+- [ ] package_panel.py'de backend seçimi genişletilecek
+
+### 🛠️ F57 — ffmpeg ve Graphviz Entegrasyonu
+- [ ] CLI Tools Manager'a ffmpeg ekle (indirme + PATH'e ekleme)
+- [ ] CLI Tools Manager'a Graphviz ekle
+- [ ] Python binding'leri: `imageio-ffmpeg`, `graphviz` PyPI paketi
+- [ ] Kurulum sonrası test: `ffmpeg -version`, `dot -V`
+
+### 📊 F58 — Launch: R / RStudio Entegrasyonu
+- [ ] R kurulum kontrolü (`r --version`)
+- [ ] RStudio kurulum kontrolü
+- [ ] Launch kısmına R Console ve RStudio eklenmesi
+- [ ] rpy2 Python paketi ile R entegrasyonu
+- [ ] CRAN paket yükleme desteği (opsiyonel)
+
+### 💻 F59 — IDE Entegrasyonları Genişletme
+- [ ] PyCharm (Community + Professional) — proje olarak aç
+- [ ] Cursor IDE
+- [ ] Zed
+- [ ] Neovim / vim
+- [ ] antigravity (easter egg 🐍)
+- [ ] Her IDE için "Open in X" butonu env üzerinde
+
+### 🖥️ F60 — TUI Kompakt Mod
+- [ ] Settings'te TUI araçları bölümü dropdown ile değiştirilsin
+- [ ] Sadece TUI kısmı kompakt — diğer settings normal kalacak
+- [ ] Dropdown: Starship, Oh My Posh, Fig, Atuin, zoxide...
+
+### 📚 F61 — Catalog Genişletme
+- [ ] Time Series (Transformers): tsfm, lag-llama, moirai, chronos
+- [ ] Financial Libraries: quantlib, backtrader, freqtrade, vectorbt
+- [ ] Graph/Network: networkx, igraph, pyvis, torch-geometric
+- [ ] Audio/Speech: librosa, pyaudio, speechbrain, whisper
+- [ ] Geospatial: geopandas, folium, shapely, rasterio
+- [ ] Quantum Computing: qiskit, pennylane, cirq
+- [ ] Bioinformatics: biopython, scanpy, anndata
+- [ ] Robotics: ROS2 bindings, pybullet, gymnasium
+- [ ] Web Scraping: scrapy, playwright, mechanize
+- [ ] PDF/Document: pdfplumber, pymupdf, docling
+
+### 🌐 F62 — SSH / Uzaktan Yönetim
+- [ ] SSH bağlantı yöneticisi (host, port, user, key)
+- [ ] Uzak makineye bağlanıp VenvStudio işlemleri yapabilme
+- [ ] Uzak env listesi, paket yönetimi, preset kurulumu
+- [ ] Paramiko / asyncssh backend
+- [ ] Bağlantı profilleri kaydetme
+- [ ] Windows/Linux/macOS/BSD desteği
+
+### 🐳 F63 — Export / Docker / Container Geliştirme
+- [ ] Gemini önerisi doğrultusunda export formatları genişletme
+- [ ] Podman desteği (Docker alternatifi)
+- [ ] docker-compose.yml export
+- [ ] Container image build (docker build)
+- [ ] Dev container (.devcontainer/devcontainer.json) export
+- [ ] Singularity/Apptainer desteği (HPC)
+- [ ] Container'dan env import
+

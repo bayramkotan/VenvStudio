@@ -183,7 +183,8 @@ class EnvCreateDialog(QDialog):
         # Seçili Python'un tam yolunu göster
         self.python_path_label = QLabel("")
         self.python_path_label.setStyleSheet("color: #a6adc8; font-size: 11px;")
-        self.python_path_label.setWordWrap(True)
+        self.python_path_label.setWordWrap(False)
+        self.python_path_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         form_layout.addRow("", self.python_path_label)
         self.python_combo.currentIndexChanged.connect(self._on_python_changed)
         self._on_python_changed(0)  # İlk seçimi göster
@@ -261,10 +262,15 @@ class EnvCreateDialog(QDialog):
         if data:
             self.python_path_label.setText(f"📍 {data}")
         else:
-            import shutil, sys
-            # System default — hangi python kullanılacağını göster
+            import shutil, sys, subprocess
+            # System default — hangi python kullanılacağını bul ve versiyonu göster
             py = shutil.which("python") or shutil.which("python3") or sys.executable
-            self.python_path_label.setText(f"📍 {py} (system default)")
+            try:
+                r = subprocess.run([py, "--version"], capture_output=True, text=True, timeout=3)
+                ver = (r.stdout.strip() or r.stderr.strip()).replace("Python ", "")
+                self.python_path_label.setText(f"📍 Python {ver}  —  {py}")
+            except Exception:
+                self.python_path_label.setText(f"📍 {py}")
 
     def _change_location(self):
         directory = QFileDialog.getExistingDirectory(

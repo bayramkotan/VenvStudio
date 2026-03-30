@@ -127,8 +127,8 @@ class DeleteWorker(QThread):
         self.finished.emit(success, msg)
 
 
-class RenameWorker(QThread):
-    """Worker thread for renaming environments (clone+delete) with progress."""
+class RenameOnlyWorker(QThread):
+    """Worker thread for fast rename — folder rename only."""
     progress = Signal(str)
     finished = Signal(bool, str)
 
@@ -139,8 +139,25 @@ class RenameWorker(QThread):
         self.new_name = new_name
 
     def run(self):
-        success, msg = self.venv_manager.rename_venv(
-            self.old_name, self.new_name
+        self.progress.emit(f"Renaming '{self.old_name}' → '{self.new_name}'...")
+        success, msg = self.venv_manager.rename_venv(self.old_name, self.new_name)
+        self.finished.emit(success, msg)
+
+
+class RenameFullWorker(QThread):
+    """Worker thread for full rename — clone + delete with same packages."""
+    progress = Signal(str)
+    finished = Signal(bool, str)
+
+    def __init__(self, venv_manager, old_name, new_name):
+        super().__init__()
+        self.venv_manager = venv_manager
+        self.old_name = old_name
+        self.new_name = new_name
+
+    def run(self):
+        success, msg = self.venv_manager.rename_full_venv(
+            self.old_name, self.new_name, callback=self.progress.emit
         )
         self.finished.emit(success, msg)
 
@@ -486,12 +503,19 @@ class MainWindow(QMainWindow):
         self.btn_clone.setEnabled(False)
         action_layout.addWidget(self.btn_clone)
 
-        self.btn_rename = QPushButton(f"✏️ {tr('rename')}")
+        self.btn_rename = QPushButton("✏️ Rename (Name)")
         self.btn_rename.setObjectName("secondary")
-        self.btn_rename.setToolTip(UI_TOOLTIPS.get("btn_rename", ""))
-        self.btn_rename.clicked.connect(self._rename_env)
+        self.btn_rename.setToolTip("Rename folder only — fast, but pip/python paths may break on Windows")
+        self.btn_rename.clicked.connect(self._rename_env_only)
         self.btn_rename.setEnabled(False)
         action_layout.addWidget(self.btn_rename)
+
+        self.btn_rename_full = QPushButton("🔄 Rename (Full)")
+        self.btn_rename_full.setObjectName("secondary")
+        self.btn_rename_full.setToolTip("Clone with new name + delete old — slow but safe, all packages reinstalled")
+        self.btn_rename_full.clicked.connect(self._rename_env_full)
+        self.btn_rename_full.setEnabled(False)
+        action_layout.addWidget(self.btn_rename_full)
 
         self.btn_export = QPushButton("📤 Export ▾")
         self.btn_export.setObjectName("secondary")
@@ -831,6 +855,8 @@ class MainWindow(QMainWindow):
         self.btn_terminal.setEnabled(has_selection)
         self.btn_clone.setEnabled(has_selection)
         self.btn_rename.setEnabled(has_selection)
+        if hasattr(self, "btn_rename_full"):
+            self.btn_rename_full.setEnabled(has_selection)
         self.btn_delete.setEnabled(has_selection)
         self.btn_export.setEnabled(has_selection)
         if hasattr(self, "btn_make_default"):
@@ -908,9 +934,13 @@ class MainWindow(QMainWindow):
         a_clone.triggered.connect(self._clone_env)
         menu.addAction(a_clone)
 
-        a_rename = QAction("✏️ Rename", self)
-        a_rename.triggered.connect(self._rename_env)
+        a_rename = QAction("✏️ Rename (Name Only)", self)
+        a_rename.triggered.connect(self._rename_env_only)
         menu.addAction(a_rename)
+
+        a_rename_full = QAction("🔄 Rename (Full)", self)
+        a_rename_full.triggered.connect(self._rename_env_full)
+        menu.addAction(a_rename_full)
 
         a_export = QAction("📤 Export", self)
         a_export.triggered.connect(self._export_requirements)
@@ -957,38 +987,82 @@ class MainWindow(QMainWindow):
         dialog.env_created.connect(lambda name: self._refresh_env_list())
         dialog.exec()
 
-    def _rename_env(self):
-        name = self._get_selected_env_name()
-        if not name:
-            return
+    def _get_new_name_for_rename(self, name):
+        """Yeni isim giriş dialog'u — ortak kullanım."""
         new_name, ok = QInputDialog.getText(
             self, "Rename Environment",
             f"Enter new name for '{name}':",
             text=name,
         )
         if not ok or not new_name.strip() or new_name.strip() == name:
-            return
-
+            return None
         new_name = new_name.strip()
         invalid_chars = set(' /\\:*?"<>|')
         if any(c in invalid_chars for c in new_name):
             QMessageBox.warning(self, "Warning", "Name contains invalid characters.")
+            return None
+        return new_name
+
+    def _rename_env_only(self):
+        """Rename (Name Only) — sadece klasör rename, hızlı."""
+        name = self._get_selected_env_name()
+        if not name:
+            return
+        new_name = self._get_new_name_for_rename(name)
+        if not new_name:
             return
 
         self.rename_progress = QProgressDialog(
-            f"Renaming '{name}' → '{new_name}'...", "Cancel", 0, 0, self
+            f"Renaming '{name}' → '{new_name}'...", None, 0, 0, self
         )
         self.rename_progress.setWindowTitle("Renaming Environment")
         self.rename_progress.setMinimumWidth(400)
         self.rename_progress.setWindowModality(Qt.WindowModal)
         self.rename_progress.show()
 
-        self._rename_worker = RenameWorker(self.venv_manager, name, new_name)
+        self._rename_worker = RenameOnlyWorker(self.venv_manager, name, new_name)
         self._rename_worker.progress.connect(
             lambda msg: self.rename_progress.setLabelText(f"⏳ {msg}")
         )
         self._rename_worker.finished.connect(self._on_rename_finished)
         self._rename_worker.start()
+
+    def _rename_env_full(self):
+        """Rename (Full) — clone + delete, tüm paketler yeniden kurulur."""
+        name = self._get_selected_env_name()
+        if not name:
+            return
+        new_name = self._get_new_name_for_rename(name)
+        if not new_name:
+            return
+
+        reply = QMessageBox.question(
+            self, "Rename (Full)",
+            f"This will create '{new_name}' with all packages from '{name}', then delete '{name}'.\n\n"
+            f"This may take a while. Continue?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        self.rename_progress = QProgressDialog(
+            f"Renaming '{name}' → '{new_name}'...", "Cancel", 0, 0, self
+        )
+        self.rename_progress.setWindowTitle("Renaming Environment (Full)")
+        self.rename_progress.setMinimumWidth(400)
+        self.rename_progress.setWindowModality(Qt.WindowModal)
+        self.rename_progress.show()
+
+        self._rename_worker = RenameFullWorker(self.venv_manager, name, new_name)
+        self._rename_worker.progress.connect(
+            lambda msg: self.rename_progress.setLabelText(f"⏳ {msg}")
+        )
+        self._rename_worker.finished.connect(self._on_rename_finished)
+        self._rename_worker.start()
+
+    # Eski fonksiyon — geriye dönük uyumluluk
+    def _rename_env(self):
+        self._rename_env_only()
 
     def _on_rename_finished(self, success, message):
         self.rename_progress.close()

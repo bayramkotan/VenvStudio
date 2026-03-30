@@ -704,3 +704,25 @@ class VenvManager:
             return True, f"Environment '{old_name}' renamed to '{new_name}'"
         except Exception as e:
             return False, f"Error renaming environment: {str(e)}"
+
+    def rename_full_venv(self, old_name: str, new_name: str, callback=None) -> tuple[bool, str]:
+        """
+        Full rename: clone old env to new name, then delete old.
+        Slower but safe — all packages reinstalled, paths correct.
+        """
+        if callback:
+            callback(f"Cloning '{old_name}' → '{new_name}'...")
+        success, msg = self.clone_venv(old_name, new_name, callback=callback)
+        if not success:
+            return False, f"Failed to create '{new_name}': {msg}"
+
+        if callback:
+            callback(f"Deleting old environment '{old_name}'...")
+        old_path = self.base_dir / old_name
+        try:
+            shutil.rmtree(old_path)
+        except Exception as e:
+            return False, f"'{new_name}' created but could not delete '{old_name}': {e}"
+
+        return True, f"Environment '{old_name}' fully renamed to '{new_name}'"
+

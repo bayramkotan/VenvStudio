@@ -782,7 +782,7 @@ class SettingsPage(QWidget):
 
         from src.core.cli_tools_manager import NERD_FONTS
         self.nerd_font_cb = QCheckBox("Font:")
-        self.nerd_font_cb.setStyleSheet("font-size: 11px; color: #cdd6f4;")
+        self.nerd_font_cb.setStyleSheet(f"font-size: 11px; color: {self._c()['fg']};")
         font_inner.addWidget(self.nerd_font_cb)
 
         self.nerd_font_combo = QComboBox()
@@ -995,13 +995,13 @@ class SettingsPage(QWidget):
         # Title + status
         header = QHBoxLayout()
         title_lbl = QLabel(title)
-        title_lbl.setStyleSheet("font-weight: bold; font-size: 13px; color: #cdd6f4;")
+        title_lbl.setStyleSheet(f"font-weight: bold; font-size: 13px; color: {self._c()['fg']};")
         header.addWidget(title_lbl)
 
         installed = is_tool_installed(tool_id)
         version = get_tool_version(tool_id) or ""
         status_lbl = QLabel(f"\u2705 {version}" if installed else "\u274c Not installed")
-        status_lbl.setStyleSheet(f"color: {'#a6e3a1' if installed else '#f38ba8'}; font-size: 11px;")
+        status_lbl.setStyleSheet(f"color: {self._c()['success'] if installed else self._c()['danger']}; font-size: 11px;")
         status_lbl.setObjectName(f"status_{tool_id.replace('-','_')}")
         header.addWidget(status_lbl)
         header.addStretch()
@@ -1018,7 +1018,7 @@ class SettingsPage(QWidget):
 
         cb_key = f"cb_preset_{tool_id.replace('-','_')}"
         preset_cb = QCheckBox(preset_label)
-        preset_cb.setStyleSheet("font-size: 11px; color: #cdd6f4;")
+        preset_cb.setStyleSheet(f"font-size: 11px; color: {self._c()['fg']};")
         preset_cb.setObjectName(cb_key)
         controls.addWidget(preset_cb)
 
@@ -1108,13 +1108,13 @@ class SettingsPage(QWidget):
 
         header = QHBoxLayout()
         title_lbl = QLabel(title)
-        title_lbl.setStyleSheet("font-weight: bold; font-size: 13px; color: #cdd6f4;")
+        title_lbl.setStyleSheet(f"font-weight: bold; font-size: 13px; color: {self._c()['fg']};")
         header.addWidget(title_lbl)
 
         installed = is_tool_installed(tool_id)
         version = get_tool_version(tool_id) or ""
         status_lbl = QLabel(f"✅ {version}" if installed else "❌ Not installed")
-        status_lbl.setStyleSheet(f"color: {'#a6e3a1' if installed else '#f38ba8'}; font-size: 11px;")
+        status_lbl.setStyleSheet(f"color: {self._c()['success'] if installed else self._c()['danger']}; font-size: 11px;")
         header.addWidget(status_lbl)
         header.addStretch()
 
@@ -1185,13 +1185,13 @@ class SettingsPage(QWidget):
         dlg.setWindowTitle("📝 Starship Config Editor — starship.toml")
         dlg.resize(700, 500)
         dlg.setStyleSheet(
-            "QDialog { background: #1e1e2e; }"
-            "QPlainTextEdit { background: #181825; color: #cdd6f4; border: 1px solid #313244; "
+            f"QDialog {{ background: {self._c()['bg']}; }}"
+            f"QPlainTextEdit {{ background: {self._c()['sidebar']}; color: {self._c()['fg']}; border: 1px solid {self._c()['border']}; "
             "border-radius: 4px; font-family: 'Consolas', 'JetBrains Mono', monospace; font-size: 12px; }"
             "QPushButton { padding: 6px 16px; border-radius: 4px; font-size: 12px; }"
-            "QPushButton#save { background: #a6e3a1; color: #1e1e2e; font-weight: bold; }"
+            f"QPushButton#save {{ background: {self._c()['success']}; color: {self._c()['accent_fg']}; font-weight: bold; }}"
             "QPushButton#save:hover { background: #94d89d; }"
-            "QPushButton#secondary { background: #313244; color: #cdd6f4; }"
+            f"QPushButton#secondary {{ background: {self._c()['secondary']}; color: {self._c()['fg']}; }}"
             "QPushButton#secondary:hover { background: #45475a; }"
             "QLabel { color: #6c7086; font-size: 11px; }"
         )
@@ -1278,7 +1278,7 @@ class SettingsPage(QWidget):
         installed = is_tool_installed(tool_id)
         version = get_tool_version(tool_id) or ""
         status_lbl.setText(f"✅ {version}" if installed else "❌ Not installed")
-        status_lbl.setStyleSheet(f"color: {'#a6e3a1' if installed else '#f38ba8'}; font-size: 11px;")
+        status_lbl.setStyleSheet(f"color: {self._c()['success'] if installed else self._c()['danger']}; font-size: 11px;")
         btn.setEnabled(True)
         btn.setText("🔄 Reinstall" if installed else "⬇️ Install")
 
@@ -2682,7 +2682,7 @@ try {{
         """Create a category dropdown for catalog table."""
         combo = QComboBox()
         combo.setStyleSheet(
-            "background-color: #313244; color: #cdd6f4; border: 1px solid #585b70; "
+            f"background-color: {self._c()['input_bg']}; color: {self._c()['fg']}; border: 1px solid {self._c()['border']}; "
             "padding: 3px; font-size: 12px;"
         )
         categories = self._get_all_categories()
@@ -3527,7 +3527,7 @@ class PythonDownloadDialog(QDialog):
         self.version_list.setStyleSheet(
             "QListWidget { font-size: 13px; }"
             "QListWidget::item { padding: 6px; }"
-            "QListWidget::item:selected { background-color: #89b4fa; color: #1e1e2e; }"
+            f"QListWidget::item:selected {{ background-color: {self._c()['accent']}; color: {self._c()['accent_fg']}; }}"
         )
         layout.addWidget(self.version_list)
 
@@ -4043,13 +4043,13 @@ echo "OK"
         # Title + status
         header = QHBoxLayout()
         title_lbl = QLabel(title)
-        title_lbl.setStyleSheet("font-weight: bold; font-size: 13px; color: #cdd6f4;")
+        title_lbl.setStyleSheet(f"font-weight: bold; font-size: 13px; color: {self._c()['fg']};")
         header.addWidget(title_lbl)
 
         installed = is_tool_installed(tool_id)
         version = get_tool_version(tool_id) or ""
         status_lbl = QLabel(f"\u2705 {version}" if installed else "\u274c Not installed")
-        status_lbl.setStyleSheet(f"color: {'#a6e3a1' if installed else '#f38ba8'}; font-size: 11px;")
+        status_lbl.setStyleSheet(f"color: {self._c()['success'] if installed else self._c()['danger']}; font-size: 11px;")
         status_lbl.setObjectName(f"status_{tool_id.replace('-','_')}")
         header.addWidget(status_lbl)
         header.addStretch()
@@ -4066,7 +4066,7 @@ echo "OK"
 
         cb_key = f"cb_preset_{tool_id.replace('-','_')}"
         preset_cb = QCheckBox(preset_label)
-        preset_cb.setStyleSheet("font-size: 11px; color: #cdd6f4;")
+        preset_cb.setStyleSheet(f"font-size: 11px; color: {self._c()['fg']};")
         preset_cb.setObjectName(cb_key)
         controls.addWidget(preset_cb)
 
@@ -4156,13 +4156,13 @@ echo "OK"
 
         header = QHBoxLayout()
         title_lbl = QLabel(title)
-        title_lbl.setStyleSheet("font-weight: bold; font-size: 13px; color: #cdd6f4;")
+        title_lbl.setStyleSheet(f"font-weight: bold; font-size: 13px; color: {self._c()['fg']};")
         header.addWidget(title_lbl)
 
         installed = is_tool_installed(tool_id)
         version = get_tool_version(tool_id) or ""
         status_lbl = QLabel(f"✅ {version}" if installed else "❌ Not installed")
-        status_lbl.setStyleSheet(f"color: {'#a6e3a1' if installed else '#f38ba8'}; font-size: 11px;")
+        status_lbl.setStyleSheet(f"color: {self._c()['success'] if installed else self._c()['danger']}; font-size: 11px;")
         header.addWidget(status_lbl)
         header.addStretch()
 
@@ -4233,13 +4233,13 @@ echo "OK"
         dlg.setWindowTitle("📝 Starship Config Editor — starship.toml")
         dlg.resize(700, 500)
         dlg.setStyleSheet(
-            "QDialog { background: #1e1e2e; }"
-            "QPlainTextEdit { background: #181825; color: #cdd6f4; border: 1px solid #313244; "
+            f"QDialog {{ background: {self._c()['bg']}; }}"
+            f"QPlainTextEdit {{ background: {self._c()['sidebar']}; color: {self._c()['fg']}; border: 1px solid {self._c()['border']}; "
             "border-radius: 4px; font-family: 'Consolas', 'JetBrains Mono', monospace; font-size: 12px; }"
             "QPushButton { padding: 6px 16px; border-radius: 4px; font-size: 12px; }"
-            "QPushButton#save { background: #a6e3a1; color: #1e1e2e; font-weight: bold; }"
+            f"QPushButton#save {{ background: {self._c()['success']}; color: {self._c()['accent_fg']}; font-weight: bold; }}"
             "QPushButton#save:hover { background: #94d89d; }"
-            "QPushButton#secondary { background: #313244; color: #cdd6f4; }"
+            f"QPushButton#secondary {{ background: {self._c()['secondary']}; color: {self._c()['fg']}; }}"
             "QPushButton#secondary:hover { background: #45475a; }"
             "QLabel { color: #6c7086; font-size: 11px; }"
         )
@@ -4326,7 +4326,7 @@ echo "OK"
         installed = is_tool_installed(tool_id)
         version = get_tool_version(tool_id) or ""
         status_lbl.setText(f"✅ {version}" if installed else "❌ Not installed")
-        status_lbl.setStyleSheet(f"color: {'#a6e3a1' if installed else '#f38ba8'}; font-size: 11px;")
+        status_lbl.setStyleSheet(f"color: {self._c()['success'] if installed else self._c()['danger']}; font-size: 11px;")
         btn.setEnabled(True)
         btn.setText("🔄 Reinstall" if installed else "⬇️ Install")
 
@@ -5730,7 +5730,7 @@ try {{
         """Create a category dropdown for catalog table."""
         combo = QComboBox()
         combo.setStyleSheet(
-            "background-color: #313244; color: #cdd6f4; border: 1px solid #585b70; "
+            f"background-color: {self._c()['input_bg']}; color: {self._c()['fg']}; border: 1px solid {self._c()['border']}; "
             "padding: 3px; font-size: 12px;"
         )
         categories = self._get_all_categories()
@@ -6575,7 +6575,7 @@ class PythonDownloadDialog(QDialog):
         self.version_list.setStyleSheet(
             "QListWidget { font-size: 13px; }"
             "QListWidget::item { padding: 6px; }"
-            "QListWidget::item:selected { background-color: #89b4fa; color: #1e1e2e; }"
+            f"QListWidget::item:selected {{ background-color: {self._c()['accent']}; color: {self._c()['accent_fg']}; }}"
         )
         layout.addWidget(self.version_list)
 

@@ -175,7 +175,7 @@ class CommandHintDialog(QDialog):
 
         cmd_frame = QFrame()
         cmd_frame.setStyleSheet(
-            "background-color: #1e1e2e; border: 1px solid #45475a; "
+            "background-color: " + self._c()['sidebar'] + "; border: 1px solid " + self._c()['border'] + "; "
             "border-radius: 8px; padding: 12px;"
         )
         cmd_layout = QVBoxLayout(cmd_frame)
@@ -299,7 +299,7 @@ class PackagePanel(QWidget):
         self.env_bar = QFrame()
         self.env_bar.setFixedHeight(72)
         self.env_bar.setStyleSheet(
-            "QFrame { background-color: #181825; "
+            "QFrame { background-color: " + self._c()['sidebar'] + "; "
             "border-bottom: 2px solid #313244; }"
         )
         env_bar_outer = QVBoxLayout(self.env_bar)
@@ -821,7 +821,7 @@ class PackagePanel(QWidget):
                 status.setText(f"⚠️ Requires {py_range}")
                 status.setStyleSheet("color: #f9e2af; font-size: 11px;")
                 card._launch_btn.setEnabled(False)
-                card._launch_btn.setStyleSheet("background-color: #45475a; color: #6c7086;")
+                card._launch_btn.setStyleSheet(f"background-color: {self._c()['disabled_bg']}; color: {self._c()['disabled_fg']};")
                 card._uninstall_btn.setVisible(False)
                 card._shortcut_btn.setVisible(False)
             elif is_installed:
@@ -1779,7 +1779,7 @@ $s.Save()
         self.output_log.setMaximumHeight(200)
         self.output_log.setPlaceholderText("Installation output will appear here...")
         self.output_log.setStyleSheet(
-            "QTextEdit { background-color: #11111b; color: #cdd6f4; "
+            "QTextEdit { background-color: " + self._c()['card'] + "; color: " + self._c()['fg'] + "; "
             "font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; "
             "border: 1px solid #313244; border-radius: 4px; padding: 4px; }"
         )
@@ -1912,6 +1912,13 @@ $s.Save()
         except Exception as e:
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "Error", f"Could not open terminal:\n{e}")
+
+    def _c(self) -> dict:
+        """Return current theme color palette."""
+        from src.gui.styles import get_colors
+        from src.core.config_manager import ConfigManager
+        theme = ConfigManager().get("theme", "dark")
+        return get_colors(theme)
 
     def set_venv(self, venv_path: Path):
         backend = "pip"

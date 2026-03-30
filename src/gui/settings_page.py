@@ -106,6 +106,37 @@ class SettingsPage(QWidget):
         theme_row.addWidget(self.theme_cb)
         self.theme_combo = NoScrollComboBox()
         from src.gui.styles import THEME_OPTIONS
+
+    def _c(self) -> dict:
+        from src.gui.styles import get_colors
+        return get_colors(self.config.get("theme", "dark"))
+
+    def _table_style(self, font_size=13):
+        c = self._c()
+        return (
+            f"QTableWidget {{ background-color: {c['card']}; color: {c['fg']}; "
+            f"gridline-color: {c['border']}; font-size: {font_size}px; }}"
+            f"QTableWidget::item:selected {{ background-color: {c['active']}; color: {c['fg']}; }}"
+            f"QTableWidget QLineEdit {{ background-color: {c['input_bg']}; color: {c['fg']}; "
+            f"border: 2px solid {c['accent']}; padding: 2px 4px; font-size: {font_size}px; }}"
+            f"QComboBox {{ background-color: {c['input_bg']}; color: {c['fg']}; "
+            f"border: 1px solid {c['border']}; padding: 3px; font-size: 12px; }}"
+            f"QHeaderView::section {{ background-color: {c['sidebar']}; color: {c['fg_muted']}; "
+            f"border: none; border-bottom: 1px solid {c['border']}; padding: 4px; }}"
+        )
+
+    def _log_style(self):
+        c = self._c()
+        return (
+            f"QTextEdit {{ background: {c['sidebar']}; color: {c['fg']}; "
+            f"border: 1px solid {c['border']}; border-radius: 6px; "
+            f"font-family: 'Cascadia Code', 'JetBrains Mono', monospace; font-size: 12px; }}"
+        )
+
+    def _frame_style(self):
+        c = self._c()
+        return f"QFrame {{ background: {c['card']}; border: 1px solid {c['border']}; border-radius: 6px; padding: 8px; }}"
+
         for theme_id, theme_label in THEME_OPTIONS:
             self.theme_combo.addItem(theme_label, theme_id)
         self.theme_combo.setEnabled(False)
@@ -976,7 +1007,7 @@ class SettingsPage(QWidget):
         from src.core.cli_tools_manager import is_tool_installed, get_tool_version
         card = QFrame()
         card.setStyleSheet(
-            "QFrame { background: #1e1e2e; border: 1px solid #313244; border-radius: 6px; padding: 8px; }"
+            self._frame_style()
         )
         layout = QVBoxLayout(card)
         layout.setSpacing(6)
@@ -1090,7 +1121,7 @@ class SettingsPage(QWidget):
         from src.core.cli_tools_manager import is_tool_installed, get_tool_version
         card = QFrame()
         card.setStyleSheet(
-            "QFrame { background: #1e1e2e; border: 1px solid #313244; border-radius: 6px; padding: 8px; }"
+            self._frame_style()
         )
         layout = QVBoxLayout(card)
         layout.setSpacing(6)
@@ -4024,7 +4055,7 @@ echo "OK"
         from src.core.cli_tools_manager import is_tool_installed, get_tool_version
         card = QFrame()
         card.setStyleSheet(
-            "QFrame { background: #1e1e2e; border: 1px solid #313244; border-radius: 6px; padding: 8px; }"
+            self._frame_style()
         )
         layout = QVBoxLayout(card)
         layout.setSpacing(6)
@@ -4138,7 +4169,7 @@ echo "OK"
         from src.core.cli_tools_manager import is_tool_installed, get_tool_version
         card = QFrame()
         card.setStyleSheet(
-            "QFrame { background: #1e1e2e; border: 1px solid #313244; border-radius: 6px; padding: 8px; }"
+            self._frame_style()
         )
         layout = QVBoxLayout(card)
         layout.setSpacing(6)

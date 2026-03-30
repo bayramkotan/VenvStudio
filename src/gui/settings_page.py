@@ -872,7 +872,7 @@ class SettingsPage(QWidget):
         launch_layout.addRow("Jupyter Working Dir:", jupyter_dir_row)
 
         self.jupyter_custom_path_label = QLabel("")
-        self.jupyter_custom_path_label.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        self.jupyter_custom_path_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         self.jupyter_custom_path_label.setVisible(False)
         launch_layout.addRow("", self.jupyter_custom_path_label)
 
@@ -1008,7 +1008,7 @@ class SettingsPage(QWidget):
         layout.addLayout(header)
 
         desc_lbl = QLabel(desc)
-        desc_lbl.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        desc_lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         desc_lbl.setWordWrap(True)
         layout.addWidget(desc_lbl)
 
@@ -1038,7 +1038,7 @@ class SettingsPage(QWidget):
         desc_hint = None
         if preset_descriptions:
             desc_hint = QLabel("")
-            desc_hint.setStyleSheet("color: #6c7086; font-size: 10px; font-style: italic;")
+            desc_hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 10px; font-style: italic;")
             desc_hint.setFixedHeight(16)
 
             def _update_preset_hint(idx, _dh=desc_hint, _c=combo, _pd=preset_descriptions):
@@ -1135,7 +1135,7 @@ class SettingsPage(QWidget):
         layout.addLayout(header)
 
         desc_lbl = QLabel(desc)
-        desc_lbl.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        desc_lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         layout.addWidget(desc_lbl)
         return card
 
@@ -1185,13 +1185,13 @@ class SettingsPage(QWidget):
         dlg.setWindowTitle("📝 Starship Config Editor — starship.toml")
         dlg.resize(700, 500)
         dlg.setStyleSheet(
-            f"QDialog {{ background: {self._c()['bg']}; }}"
-            f"QPlainTextEdit {{ background: {self._c()['sidebar']}; color: {self._c()['fg']}; border: 1px solid {self._c()['border']}; "
+            "QDialog { background: #1e1e2e; }"
+            "QPlainTextEdit { background: #181825; color: #cdd6f4; border: 1px solid #313244; "
             "border-radius: 4px; font-family: 'Consolas', 'JetBrains Mono', monospace; font-size: 12px; }"
             "QPushButton { padding: 6px 16px; border-radius: 4px; font-size: 12px; }"
-            f"QPushButton#save {{ background: {self._c()['success']}; color: {self._c()['accent_fg']}; font-weight: bold; }}"
+            "QPushButton#save { background: #a6e3a1; color: #1e1e2e; font-weight: bold; }"
             "QPushButton#save:hover { background: #94d89d; }"
-            f"QPushButton#secondary {{ background: {self._c()['secondary']}; color: {self._c()['fg']}; }}"
+            "QPushButton#secondary { background: #313244; color: #cdd6f4; }"
             "QPushButton#secondary:hover { background: #45475a; }"
             "QLabel { color: #6c7086; font-size: 11px; }"
         )
@@ -1574,7 +1574,7 @@ class SettingsPage(QWidget):
         cmd_edit.setPlaceholderText('e.g. wt -d "{path}" cmd /k "{activate}"')
 
         hint = QLabel("Variables: {path} = env path, {activate} = activate script")
-        hint.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
 
         layout.addRow("Name:", name_edit)
         layout.addRow("Command:", cmd_edit)
@@ -1617,7 +1617,7 @@ class SettingsPage(QWidget):
         name_edit = QLineEdit(old_name)
         cmd_edit = QLineEdit(old_cmd)
         hint = QLabel("Variables: {path} = env path, {activate} = activate script")
-        hint.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         layout.addRow("Name:", name_edit)
         layout.addRow("Command:", cmd_edit)
         layout.addRow(hint)
@@ -2573,7 +2573,7 @@ try {{
         pkgs_edit.setPlaceholderText("e.g. numpy, pandas, matplotlib, scikit-learn")
 
         hint = QLabel("Separate package names with commas.")
-        hint.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         layout.addRow("Preset Name:", name_edit)
         layout.addRow("Packages:", pkgs_edit)
         layout.addRow(hint)
@@ -2611,7 +2611,7 @@ try {{
         name_edit = QLineEdit(old_name)
         pkgs_edit = QLineEdit(old_pkgs)
         hint = QLabel("Separate package names with commas.")
-        hint.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         layout.addRow("Preset Name:", name_edit)
         layout.addRow("Packages:", pkgs_edit)
         layout.addRow(hint)
@@ -2682,7 +2682,7 @@ try {{
         """Create a category dropdown for catalog table."""
         combo = QComboBox()
         combo.setStyleSheet(
-            f"background-color: {self._c()['input_bg']}; color: {self._c()['fg']}; border: 1px solid {self._c()['border']}; "
+            "background-color: #313244; color: #cdd6f4; border: 1px solid #585b70; "
             "padding: 3px; font-size: 12px;"
         )
         categories = self._get_all_categories()
@@ -3095,14 +3095,14 @@ try {{
         """Handle update check result."""
         if result.get("error"):
             self.update_status_label.setText(f"⚠️ {result['error']}")
-            self.update_status_label.setStyleSheet("color: #f9e2af; font-size: 12px;")
+            self.update_status_label.setStyleSheet(f"color: {self._c()['accent']}; font-size: 12px;")
             return
 
         if result["update_available"]:
             self.update_status_label.setText(
                 f"🆕 New version available: v{result['latest_version']} (current: v{result['current_version']})"
             )
-            self.update_status_label.setStyleSheet("color: #a6e3a1; font-size: 12px;")
+            self.update_status_label.setStyleSheet(f"color: {self._c()['success']}; font-size: 12px;")
 
             reply = QMessageBox.question(
                 self, "🆕 Update Available",
@@ -3120,7 +3120,7 @@ try {{
             self.update_status_label.setText(
                 f"✅ You're up to date! (v{result['current_version']})"
             )
-            self.update_status_label.setStyleSheet("color: #a6e3a1; font-size: 12px;")
+            self.update_status_label.setStyleSheet(f"color: {self._c()['success']}; font-size: 12px;")
 
     def _export_settings(self):
         """Export settings to a JSON file."""
@@ -3527,13 +3527,13 @@ class PythonDownloadDialog(QDialog):
         self.version_list.setStyleSheet(
             "QListWidget { font-size: 13px; }"
             "QListWidget::item { padding: 6px; }"
-            f"QListWidget::item:selected {{ background-color: {self._c()['accent']}; color: {self._c()['accent_fg']}; }}"
+            "QListWidget::item:selected { background-color: #89b4fa; color: #1e1e2e; }"
         )
         layout.addWidget(self.version_list)
 
         # Progress
         self.progress_label = QLabel("Fetching available versions...")
-        self.progress_label.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        self.progress_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         layout.addWidget(self.progress_label)
 
         self.progress_bar = QProgressBar()
@@ -3953,7 +3953,7 @@ echo "OK"
         launch_layout.addRow("Jupyter Working Dir:", jupyter_dir_row)
 
         self.jupyter_custom_path_label = QLabel("")
-        self.jupyter_custom_path_label.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        self.jupyter_custom_path_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         self.jupyter_custom_path_label.setVisible(False)
         launch_layout.addRow("", self.jupyter_custom_path_label)
 
@@ -4056,7 +4056,7 @@ echo "OK"
         layout.addLayout(header)
 
         desc_lbl = QLabel(desc)
-        desc_lbl.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        desc_lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         desc_lbl.setWordWrap(True)
         layout.addWidget(desc_lbl)
 
@@ -4086,7 +4086,7 @@ echo "OK"
         desc_hint = None
         if preset_descriptions:
             desc_hint = QLabel("")
-            desc_hint.setStyleSheet("color: #6c7086; font-size: 10px; font-style: italic;")
+            desc_hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 10px; font-style: italic;")
             desc_hint.setFixedHeight(16)
 
             def _update_preset_hint(idx, _dh=desc_hint, _c=combo, _pd=preset_descriptions):
@@ -4183,7 +4183,7 @@ echo "OK"
         layout.addLayout(header)
 
         desc_lbl = QLabel(desc)
-        desc_lbl.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        desc_lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         layout.addWidget(desc_lbl)
         return card
 
@@ -4233,13 +4233,13 @@ echo "OK"
         dlg.setWindowTitle("📝 Starship Config Editor — starship.toml")
         dlg.resize(700, 500)
         dlg.setStyleSheet(
-            f"QDialog {{ background: {self._c()['bg']}; }}"
-            f"QPlainTextEdit {{ background: {self._c()['sidebar']}; color: {self._c()['fg']}; border: 1px solid {self._c()['border']}; "
+            "QDialog { background: #1e1e2e; }"
+            "QPlainTextEdit { background: #181825; color: #cdd6f4; border: 1px solid #313244; "
             "border-radius: 4px; font-family: 'Consolas', 'JetBrains Mono', monospace; font-size: 12px; }"
             "QPushButton { padding: 6px 16px; border-radius: 4px; font-size: 12px; }"
-            f"QPushButton#save {{ background: {self._c()['success']}; color: {self._c()['accent_fg']}; font-weight: bold; }}"
+            "QPushButton#save { background: #a6e3a1; color: #1e1e2e; font-weight: bold; }"
             "QPushButton#save:hover { background: #94d89d; }"
-            f"QPushButton#secondary {{ background: {self._c()['secondary']}; color: {self._c()['fg']}; }}"
+            "QPushButton#secondary { background: #313244; color: #cdd6f4; }"
             "QPushButton#secondary:hover { background: #45475a; }"
             "QLabel { color: #6c7086; font-size: 11px; }"
         )
@@ -4622,7 +4622,7 @@ echo "OK"
         cmd_edit.setPlaceholderText('e.g. wt -d "{path}" cmd /k "{activate}"')
 
         hint = QLabel("Variables: {path} = env path, {activate} = activate script")
-        hint.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
 
         layout.addRow("Name:", name_edit)
         layout.addRow("Command:", cmd_edit)
@@ -4665,7 +4665,7 @@ echo "OK"
         name_edit = QLineEdit(old_name)
         cmd_edit = QLineEdit(old_cmd)
         hint = QLabel("Variables: {path} = env path, {activate} = activate script")
-        hint.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         layout.addRow("Name:", name_edit)
         layout.addRow("Command:", cmd_edit)
         layout.addRow(hint)
@@ -5621,7 +5621,7 @@ try {{
         pkgs_edit.setPlaceholderText("e.g. numpy, pandas, matplotlib, scikit-learn")
 
         hint = QLabel("Separate package names with commas.")
-        hint.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         layout.addRow("Preset Name:", name_edit)
         layout.addRow("Packages:", pkgs_edit)
         layout.addRow(hint)
@@ -5659,7 +5659,7 @@ try {{
         name_edit = QLineEdit(old_name)
         pkgs_edit = QLineEdit(old_pkgs)
         hint = QLabel("Separate package names with commas.")
-        hint.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         layout.addRow("Preset Name:", name_edit)
         layout.addRow("Packages:", pkgs_edit)
         layout.addRow(hint)
@@ -5730,7 +5730,7 @@ try {{
         """Create a category dropdown for catalog table."""
         combo = QComboBox()
         combo.setStyleSheet(
-            f"background-color: {self._c()['input_bg']}; color: {self._c()['fg']}; border: 1px solid {self._c()['border']}; "
+            "background-color: #313244; color: #cdd6f4; border: 1px solid #585b70; "
             "padding: 3px; font-size: 12px;"
         )
         categories = self._get_all_categories()
@@ -6143,14 +6143,14 @@ try {{
         """Handle update check result."""
         if result.get("error"):
             self.update_status_label.setText(f"⚠️ {result['error']}")
-            self.update_status_label.setStyleSheet("color: #f9e2af; font-size: 12px;")
+            self.update_status_label.setStyleSheet(f"color: {self._c()['accent']}; font-size: 12px;")
             return
 
         if result["update_available"]:
             self.update_status_label.setText(
                 f"🆕 New version available: v{result['latest_version']} (current: v{result['current_version']})"
             )
-            self.update_status_label.setStyleSheet("color: #a6e3a1; font-size: 12px;")
+            self.update_status_label.setStyleSheet(f"color: {self._c()['success']}; font-size: 12px;")
 
             reply = QMessageBox.question(
                 self, "🆕 Update Available",
@@ -6168,7 +6168,7 @@ try {{
             self.update_status_label.setText(
                 f"✅ You're up to date! (v{result['current_version']})"
             )
-            self.update_status_label.setStyleSheet("color: #a6e3a1; font-size: 12px;")
+            self.update_status_label.setStyleSheet(f"color: {self._c()['success']}; font-size: 12px;")
 
     def _export_settings(self):
         """Export settings to a JSON file."""
@@ -6575,13 +6575,13 @@ class PythonDownloadDialog(QDialog):
         self.version_list.setStyleSheet(
             "QListWidget { font-size: 13px; }"
             "QListWidget::item { padding: 6px; }"
-            f"QListWidget::item:selected {{ background-color: {self._c()['accent']}; color: {self._c()['accent_fg']}; }}"
+            "QListWidget::item:selected { background-color: #89b4fa; color: #1e1e2e; }"
         )
         layout.addWidget(self.version_list)
 
         # Progress
         self.progress_label = QLabel("Fetching available versions...")
-        self.progress_label.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        self.progress_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         layout.addWidget(self.progress_label)
 
         self.progress_bar = QProgressBar()

@@ -96,53 +96,18 @@ class SettingsPage(QWidget):
 
     def _frame_style(self):
         c = self._c()
-        return f"QFrame {{ background: {c['card']}; border: 1px solid {c['border']}; border-radius: 6px; padding: 8px; }}"
-
-    def _card_style(self):
-        c = self._c()
         return (
-            f"background-color: {c['card']}; border: 1px solid {c['border']}; "
-            f"border-radius: 8px; padding: 12px;"
-        )
-
-    def _c(self) -> dict:
-        """Return current theme color palette."""
-        from src.gui.styles import get_colors
-        return get_colors(self.config.get("theme", "dark"))
-
-    def _table_style(self, font_size=13):
-        c = self._c()
-        return (
-            f"QTableWidget {{ background-color: {c['card']}; color: {c['fg']}; "
-            f"gridline-color: {c['border']}; font-size: {font_size}px; }}"
-            f"QTableWidget::item:selected {{ background-color: {c['active']}; color: {c['fg']}; }}"
-            f"QTableWidget QLineEdit {{ background-color: {c['input_bg']}; color: {c['fg']}; "
-            f"border: 2px solid {c['accent']}; padding: 2px 4px; font-size: {font_size}px; }}"
-            f"QComboBox {{ background-color: {c['input_bg']}; color: {c['fg']}; "
-            f"border: 1px solid {c['border']}; padding: 3px; font-size: 12px; }}"
-            f"QHeaderView::section {{ background-color: {c['sidebar']}; color: {c['fg_muted']}; "
-            f"border: none; border-bottom: 1px solid {c['border']}; padding: 4px; }}"
-        )
-
-    def _log_style(self):
-        c = self._c()
-        return (
-            f"QTextEdit {{ background: {c['sidebar']}; color: {c['fg']}; "
-            f"border: 1px solid {c['border']}; border-radius: 6px; "
-            f"font-family: 'Cascadia Code', 'JetBrains Mono', monospace; font-size: 12px; }}"
-        )
-
-    def _frame_style(self):
-        c = self._c()
-        return (
-            f"background-color: {c['card']}; border: 1px solid {c['border']}; "
-            f"border-radius: 8px; padding: 12px;"
+            f"QFrame {{ background: {c['card']}; border: 1px solid {c['border']}; "
+            f"border-radius: 8px; padding: 12px; }}"
         )
 
     def _refresh_styles(self):
         """Re-apply theme-dependent inline styles on all tracked widgets."""
         try:
-            from PySide6.QtWidgets import QFrame
+            from PySide6.QtWidgets import QFrame, QLabel, QCheckBox
+            c = self._c()
+
+            # 1) Tablolar
             tables = [
                 ("builtin_cats_table", 12),
                 ("custom_categories_list", 13),
@@ -155,10 +120,37 @@ class SettingsPage(QWidget):
                 w = getattr(self, attr, None)
                 if w:
                     w.setStyleSheet(self._table_style(size))
+
+            # 2) CLI log alanı
             if hasattr(self, "cli_log"):
                 self.cli_log.setStyleSheet(self._log_style())
-            # Tüm QFrame child'larını güncelle (CLI kartları)
+
+            # 3) Kayıtlı CLI/pip kartları (_theme_frames)
+            for frame in self._theme_frames:
+                try:
+                    frame.setStyleSheet(self._frame_style())
+                    # Kart içindeki label'ları güncelle
+                    for lbl in frame.findChildren(QLabel):
+                        ss = lbl.styleSheet()
+                        if "font-weight: bold" in ss:
+                            lbl.setStyleSheet(f"font-weight: bold; font-size: 13px; color: {c['fg']};")
+                        elif "font-size: 11px" in ss and "color:" in ss:
+                            # status veya desc label — rengi koru ama fg_muted güncelle
+                            if c['success'] in ss or c['danger'] in ss or "✅" in lbl.text() or "❌" in lbl.text():
+                                pass  # status label, rengi değişmesin
+                            else:
+                                lbl.setStyleSheet(f"color: {c['fg_muted']}; font-size: 11px;")
+                    # Kart içindeki checkbox'ları güncelle
+                    for cb in frame.findChildren(QCheckBox):
+                        cb.setStyleSheet(f"font-size: 11px; color: {c['fg']};")
+                except RuntimeError:
+                    pass  # widget deleted
+
+            # 4) Fallback: objectName'siz QFrame'ler (eski kartlar)
             for frame in self.findChildren(QFrame):
+                obj = frame.objectName()
+                if obj and (obj.startswith("cli_card_") or obj.startswith("pip_card_")):
+                    continue  # zaten yukarıda güncellendi
                 ss = frame.styleSheet()
                 if ss and "border-radius" in ss and "border" in ss:
                     frame.setStyleSheet(self._frame_style())
@@ -290,7 +282,7 @@ class SettingsPage(QWidget):
         self.python_table.setColumnWidth(0, 100)
         self.python_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
         self.python_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
-        self.python_table.setColumnWidth(2, 70)
+        self.python_table.setColumnWidth(2, 130)
         self.python_table.setAlternatingRowColors(True)
         self.python_table.verticalHeader().setVisible(False)
         self.python_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -303,6 +295,12 @@ class SettingsPage(QWidget):
 
         # Python action buttons
         py_btn_layout = QHBoxLayout()
+
+        download_py_btn = QPushButton("⬇️ Download Python")
+        download_py_btn.setObjectName("secondary")
+        download_py_btn.setToolTip("Download standalone Python from python-build-standalone")
+        download_py_btn.clicked.connect(self._download_python)
+        py_btn_layout.addWidget(download_py_btn)
 
         scan_btn = QPushButton(f"🔍 {tr('scan_system')}")
         scan_btn.setObjectName("secondary")
@@ -331,17 +329,11 @@ class SettingsPage(QWidget):
         set_system_btn.clicked.connect(lambda: self._set_python_default("system"))
         py_btn_layout.addWidget(set_system_btn)
 
-        verify_pip_btn = QPushButton("🔍 Verify pip")
-        verify_pip_btn.setObjectName("secondary")
-        verify_pip_btn.setToolTip("Check if pip is installed and working for selected Python")
-        verify_pip_btn.clicked.connect(self._verify_pip)
-        py_btn_layout.addWidget(verify_pip_btn)
-
-        download_py_btn = QPushButton("⬇️ Download Python")
-        download_py_btn.setObjectName("secondary")
-        download_py_btn.setToolTip("Download standalone Python from python-build-standalone")
-        download_py_btn.clicked.connect(self._download_python)
-        py_btn_layout.addWidget(download_py_btn)
+        verify_btn = QPushButton("🔍 Verify pip & venv")
+        verify_btn.setObjectName("secondary")
+        verify_btn.setToolTip("Check if pip and venv are installed and working for selected Python")
+        verify_btn.clicked.connect(self._verify_pip_venv)
+        py_btn_layout.addWidget(verify_btn)
 
         py_btn_layout.addStretch()
         python_layout.addLayout(py_btn_layout)
@@ -979,13 +971,20 @@ class SettingsPage(QWidget):
         layout.addWidget(about_group)
 
 
+        scroll.setWidget(container)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        # ── SAVE / RESET BUTTONS ──
+        # Main layout
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
+        # ── SAVE / RESET BUTTONS (scroll dışında, üstte sabit) ──
         btn_layout = QHBoxLayout()
+        btn_layout.setContentsMargins(12, 6, 12, 6)
 
         save_btn = QPushButton(f"  💾 {tr('save_settings')}  ")
         save_btn.setObjectName("success")
-        save_btn.setFixedHeight(40)
+        save_btn.setFixedHeight(36)
         save_btn.clicked.connect(self._save_settings)
         btn_layout.addWidget(save_btn)
 
@@ -996,14 +995,14 @@ class SettingsPage(QWidget):
         reset_all_btn.clicked.connect(self._reset_all)
         btn_layout.addWidget(reset_all_btn)
 
-        layout.addLayout(btn_layout)
+        main_layout.addLayout(btn_layout)
 
-        scroll.setWidget(container)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # Separator
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setStyleSheet(f"background-color: {self._c()['border']}; max-height: 1px;")
+        main_layout.addWidget(sep)
 
-        # Main layout
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addWidget(scroll)
 
     # ── CLI/TUI Tools helpers ─────────────────────────────────────────────────
@@ -1031,21 +1030,22 @@ class SettingsPage(QWidget):
 
     def _cli_log_append(self, text: str):
         import html as _html
+        c = self._c()
         for line in text.split("\n"):
             t = line.strip()
             if not t:
                 continue
             escaped = _html.escape(t)
             if t.startswith("✅"):
-                color = "#a6e3a1"
+                color = c['success']
             elif t.startswith("❌"):
-                color = "#f38ba8"
+                color = c['danger']
             elif t.startswith("⬇️") or t.startswith("📦"):
-                color = "#89b4fa"
+                color = c['accent']
             elif t.startswith("⚠️"):
-                color = "#f9e2af"
+                color = c.get('warning', '#f9e2af')
             else:
-                color = "#cdd6f4"
+                color = c['fg']
             self.cli_log.append(f'<span style="color:{color};">{escaped}</span>')
 
     def _make_cli_card(self, tool_id, title, desc, preset_label, presets, preset_key,
@@ -1053,10 +1053,9 @@ class SettingsPage(QWidget):
         """Create a card widget for binary CLI tools (starship, oh-my-posh)."""
         from src.core.cli_tools_manager import is_tool_installed, get_tool_version
         card = QFrame()
+        card.setObjectName(f"cli_card_{tool_id.replace('-','_')}")
         card.setStyleSheet(self._frame_style())
-        card.setStyleSheet(
-            self._frame_style()
-        )
+        self._theme_frames.append(card)
         layout = QVBoxLayout(card)
         layout.setSpacing(6)
 
@@ -1168,10 +1167,9 @@ class SettingsPage(QWidget):
         """Create a card widget for pip-based tools (rich, textual, prompt_toolkit)."""
         from src.core.cli_tools_manager import is_tool_installed, get_tool_version
         card = QFrame()
+        card.setObjectName(f"pip_card_{tool_id.replace('-','_')}")
         card.setStyleSheet(self._frame_style())
-        card.setStyleSheet(
-            self._frame_style()
-        )
+        self._theme_frames.append(card)
         layout = QVBoxLayout(card)
         layout.setSpacing(6)
 
@@ -1370,10 +1368,10 @@ class SettingsPage(QWidget):
         )
         self._cli_worker.start()
 
-    def _verify_pip(self):
-        """Check pip for selected Python, offer to fix if missing."""
+    def _verify_pip_venv(self):
+        """Check pip and venv for selected Python, offer to fix if missing."""
         import os, subprocess
-        from src.utils.platform_utils import subprocess_args as sp_args
+        from src.utils.platform_utils import subprocess_args as sp_args, get_platform
 
         rows = self.python_table.selectionModel().selectedRows()
         if not rows:
@@ -1383,11 +1381,13 @@ class SettingsPage(QWidget):
         row = rows[0].row()
         version = self.python_table.item(row, 0).text()
         python_path = self.python_table.item(row, 1).text()
-        scripts_dir = os.path.join(os.path.dirname(python_path), "Scripts")
-        pip_exe = os.path.join(scripts_dir, "pip.exe")
+        is_windows = get_platform() == "windows"
+        scripts_dir = os.path.join(os.path.dirname(python_path), "Scripts" if is_windows else "bin")
+        pip_exe = os.path.join(scripts_dir, "pip.exe" if is_windows else "pip")
 
         pip_exists = os.path.isfile(pip_exe)
 
+        # ── pip check ──
         pip_version_str = ""
         pip_runnable = False
         try:
@@ -1401,19 +1401,33 @@ class SettingsPage(QWidget):
         except Exception:
             pass
 
+        # ── venv check ──
+        venv_available = False
+        try:
+            result = subprocess.run(
+                [python_path, "-c", "import venv; print(venv.__name__)"],
+                **sp_args(capture_output=True, text=True, timeout=10)
+            )
+            if result.returncode == 0 and "venv" in result.stdout:
+                venv_available = True
+        except Exception:
+            pass
+
         current_path = os.environ.get("PATH", "")
         scripts_in_path = scripts_dir.lower() in current_path.lower()
 
-        ok = "OK" if pip_exists else "NOT FOUND"
-        ok2 = "Yes" if pip_runnable else "No"
-        ok3 = "Yes" if scripts_in_path else "Not in current session (open new terminal)"
+        pip_ok = "✅ OK" if pip_exists else "❌ NOT FOUND"
+        pip_mod = "✅ Yes" if pip_runnable else "❌ No"
+        venv_ok = "✅ Available" if venv_available else "❌ Not available"
+        path_ok = "✅ Yes" if scripts_in_path else "⚠️ Not in current session"
 
         msg = (
-            "Python: " + version + "\n"
-            "Path:   " + python_path + "\n\n"
-            "pip.exe on disk:   " + ok + "\n"
-            "pip module works:  " + ok2 + "\n"
-            "Scripts in PATH:   " + ok3
+            f"Python: {version}\n"
+            f"Path:   {python_path}\n\n"
+            f"pip on disk:       {pip_ok}\n"
+            f"pip module works:  {pip_mod}\n"
+            f"venv module:       {venv_ok}\n"
+            f"Scripts in PATH:   {path_ok}"
         )
         if pip_runnable and pip_version_str:
             msg += "\n\n" + pip_version_str
@@ -1421,20 +1435,54 @@ class SettingsPage(QWidget):
         issues = []
         if not pip_runnable:
             issues.append("pip module is not working.")
+        if not venv_available:
+            if is_windows:
+                issues.append("venv module not available — try reinstalling Python with 'pip' option enabled.")
+            else:
+                issues.append("venv module not available — install python3-venv:\n"
+                              "    Debian/Ubuntu: sudo apt install python3-venv\n"
+                              "    Arch: included in python package")
         if not scripts_in_path:
-            issues.append("Scripts folder not in current PATH - open a new terminal after Set Default.")
+            issues.append("Scripts folder not in current PATH — open a new terminal after Set Default.")
 
         if issues:
             msg += "\n\nIssues found:\n" + "\n".join("  * " + i for i in issues)
+            fix_actions = []
             if not pip_runnable:
-                msg += "\n\nWould you like to reinstall pip now?"
-                reply = QMessageBox.question(self, "pip Status", msg, QMessageBox.Yes | QMessageBox.No)
+                fix_actions.append("reinstall pip")
+            if not venv_available and not is_windows:
+                fix_actions.append("install python3-venv (requires sudo)")
+
+            if fix_actions:
+                msg += "\n\nWould you like to fix now? (" + ", ".join(fix_actions) + ")"
+                reply = QMessageBox.question(self, "pip & venv Status", msg, QMessageBox.Yes | QMessageBox.No)
                 if reply == QMessageBox.Yes:
-                    self._fix_pip(python_path, version)
+                    if not pip_runnable:
+                        self._fix_pip(python_path, version)
+                    if not venv_available and not is_windows:
+                        self._fix_venv()
             else:
-                QMessageBox.warning(self, "pip Status", msg)
+                QMessageBox.warning(self, "pip & venv Status", msg)
         else:
-            QMessageBox.information(self, "pip OK", msg)
+            QMessageBox.information(self, "✅ pip & venv OK", msg)
+
+    def _fix_venv(self):
+        """Attempt to install python3-venv on Linux."""
+        import subprocess, shutil
+        if shutil.which("apt"):
+            cmd = "sudo apt install -y python3-venv"
+        elif shutil.which("pacman"):
+            QMessageBox.information(self, "venv", "On Arch, venv is included in the python package.\nTry: sudo pacman -S python")
+            return
+        elif shutil.which("dnf"):
+            cmd = "sudo dnf install -y python3-venv"
+        else:
+            QMessageBox.information(self, "venv", "Please install python3-venv using your package manager.")
+            return
+        try:
+            subprocess.Popen(["sh", "-c", f"x-terminal-emulator -e '{cmd}' || xterm -e '{cmd}'"])
+        except Exception as e:
+            QMessageBox.warning(self, "venv Install", f"Could not start terminal:\n{e}\n\nRun manually: {cmd}")
 
     def _fix_pip(self, python_path, version):
         """Reinstall pip for the given Python executable."""
@@ -2004,6 +2052,28 @@ class SettingsPage(QWidget):
         # All pythons from system scan — deduplicate symlinks
         system_pythons = find_system_pythons()
         listed_paths = set()
+        c = self._c()
+
+        # ── System Default Python'u tabloya garanti olarak ilk satıra ekle ──
+        if default_norm and os.path.isfile(default_norm):
+            try:
+                import subprocess as _sp
+                result = _sp.run(
+                    [default_norm, "--version"],
+                    capture_output=True, text=True, timeout=5
+                )
+                sys_version = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
+            except Exception:
+                sys_version = "?"
+            row = self.python_table.rowCount()
+            self.python_table.insertRow(row)
+            self.python_table.setItem(row, 0, QTableWidgetItem(sys_version))
+            self.python_table.setItem(row, 1, QTableWidgetItem(os.path.normpath(default_norm)))
+            source_item = QTableWidgetItem("System Default")
+            source_item.setForeground(QColor(c['success']))
+            self.python_table.setItem(row, 2, source_item)
+            self.default_python_combo.addItem(f"Python {sys_version} (System Default)", os.path.normpath(default_norm))
+            listed_paths.add(default_norm)
 
         # Resolve symlinks: group by real binary, keep shortest path
         seen_real = {}  # realpath -> (version, norm_path)
@@ -2035,12 +2105,21 @@ class SettingsPage(QWidget):
             self.python_table.setItem(row, 0, QTableWidgetItem(version))
             self.python_table.setItem(row, 1, QTableWidgetItem(norm_path))
 
-            if norm_case == default_norm:
-                source_item = QTableWidgetItem("System")
-                source_item.setForeground(__import__('PySide6.QtGui', fromlist=['QColor']).QColor("#a6e3a1"))
+            # User Install vs Custom ayrımı: kullanıcı klasörü altındaysa User Install
+            import os as _os
+            _home = _os.path.expanduser("~").lower()
+            _localappdata = _os.environ.get("LOCALAPPDATA", "").lower()
+            _appdata = _os.environ.get("APPDATA", "").lower()
+            _norm_lower = norm_path.lower()
+            if (_home and _norm_lower.startswith(_home)) or \
+               (_localappdata and _norm_lower.startswith(_localappdata)) or \
+               (_appdata and _norm_lower.startswith(_appdata)) or \
+               "/.local/" in _norm_lower or "/.pyenv/" in _norm_lower:
+                source_item = QTableWidgetItem("User Install")
+                source_item.setForeground(QColor(c['accent']))
             else:
                 source_item = QTableWidgetItem("Custom")
-                source_item.setForeground(Qt.cyan)
+                source_item.setForeground(QColor(c['fg_muted']))
 
             self.python_table.setItem(row, 2, source_item)
             self.default_python_combo.addItem(f"Python {version}", norm_path)
@@ -2060,7 +2139,7 @@ class SettingsPage(QWidget):
             self.python_table.setItem(row, 0, QTableWidgetItem(entry.get("version", "?")))
             self.python_table.setItem(row, 1, QTableWidgetItem(norm_path))
             source_item = QTableWidgetItem("Custom")
-            source_item.setForeground(Qt.cyan)
+            source_item.setForeground(QColor(c['accent']))
             self.python_table.setItem(row, 2, source_item)
             self.default_python_combo.addItem(
                 f"Python {entry.get('version', '?')} (Custom)", norm_path
@@ -2082,7 +2161,7 @@ class SettingsPage(QWidget):
                 self.python_table.setItem(row, 0, QTableWidgetItem(py["version"]))
                 self.python_table.setItem(row, 1, QTableWidgetItem(exe_path))
                 source_item = QTableWidgetItem("Downloaded")
-                source_item.setForeground(QColor("#a6e3a1"))
+                source_item.setForeground(QColor(c['success']))
                 self.python_table.setItem(row, 2, source_item)
                 self.default_python_combo.addItem(
                     f"Python {py['version']} (Downloaded)", exe_path
@@ -3572,6 +3651,14 @@ class _FetchWorker(QThread):
 class PythonDownloadDialog(QDialog):
     """Dialog for downloading standalone Python builds."""
 
+    def _c(self) -> dict:
+        """Return current theme color palette."""
+        from src.gui.styles import get_colors
+        p = self.parent()
+        if p and hasattr(p, "config"):
+            return get_colors(p.config.get("theme", "dark"))
+        return get_colors("dark")
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("⬇️ Download Python")
@@ -3610,9 +3697,18 @@ class PythonDownloadDialog(QDialog):
         self.progress_bar.setFixedHeight(6)
         layout.addWidget(self.progress_bar)
 
-        # Install location
+        # Install locations
+        import os as _os
         from src.core.python_downloader import get_pythons_dir
-        loc_label = QLabel(f"📂 Install location: {get_pythons_dir()}")
+        user_dir = get_pythons_dir()
+        if _os.name == "nt":
+            system_dir = _os.path.join(_os.environ.get("PROGRAMFILES", r"C:\Program Files"), "Python")
+        else:
+            system_dir = "/usr/local/bin"
+        loc_label = QLabel(
+            f"🖥️ System location: {system_dir}\n"
+            f"👤 User location: {user_dir}"
+        )
         loc_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         loc_label.setWordWrap(True)
         layout.addWidget(loc_label)
@@ -3681,7 +3777,7 @@ class PythonDownloadDialog(QDialog):
             item = QListWidgetItem(text)
             item.setData(Qt.UserRole, v)
             if is_installed:
-                item.setForeground(QColor("#a6e3a1"))
+                item.setForeground(QColor(self._c()['success']))
             self.version_list.addItem(item)
 
         self.progress_label.setText(f"Found {len(versions)} available versions.")
@@ -4030,13 +4126,20 @@ echo "OK"
         layout.addWidget(launch_group)
 
 
+        scroll.setWidget(container)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        # ── SAVE / RESET BUTTONS ──
+        # Main layout
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+
+        # ── SAVE / RESET BUTTONS (scroll dışında, üstte sabit) ──
         btn_layout = QHBoxLayout()
+        btn_layout.setContentsMargins(12, 6, 12, 6)
 
         save_btn = QPushButton(f"  💾 {tr('save_settings')}  ")
         save_btn.setObjectName("success")
-        save_btn.setFixedHeight(40)
+        save_btn.setFixedHeight(36)
         save_btn.clicked.connect(self._save_settings)
         btn_layout.addWidget(save_btn)
 
@@ -4047,14 +4150,14 @@ echo "OK"
         reset_all_btn.clicked.connect(self._reset_all)
         btn_layout.addWidget(reset_all_btn)
 
-        layout.addLayout(btn_layout)
+        main_layout.addLayout(btn_layout)
 
-        scroll.setWidget(container)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        # Separator
+        sep = QFrame()
+        sep.setFrameShape(QFrame.HLine)
+        sep.setStyleSheet(f"background-color: {self._c()['border']}; max-height: 1px;")
+        main_layout.addWidget(sep)
 
-        # Main layout
-        main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.addWidget(scroll)
 
     # ── CLI/TUI Tools helpers ─────────────────────────────────────────────────
@@ -4082,21 +4185,22 @@ echo "OK"
 
     def _cli_log_append(self, text: str):
         import html as _html
+        c = self._c()
         for line in text.split("\n"):
             t = line.strip()
             if not t:
                 continue
             escaped = _html.escape(t)
             if t.startswith("✅"):
-                color = "#a6e3a1"
+                color = c['success']
             elif t.startswith("❌"):
-                color = "#f38ba8"
+                color = c['danger']
             elif t.startswith("⬇️") or t.startswith("📦"):
-                color = "#89b4fa"
+                color = c['accent']
             elif t.startswith("⚠️"):
-                color = "#f9e2af"
+                color = c.get('warning', '#f9e2af')
             else:
-                color = "#cdd6f4"
+                color = c['fg']
             self.cli_log.append(f'<span style="color:{color};">{escaped}</span>')
 
     def _make_cli_card(self, tool_id, title, desc, preset_label, presets, preset_key,
@@ -4104,10 +4208,9 @@ echo "OK"
         """Create a card widget for binary CLI tools (starship, oh-my-posh)."""
         from src.core.cli_tools_manager import is_tool_installed, get_tool_version
         card = QFrame()
+        card.setObjectName(f"cli_card_{tool_id.replace('-','_')}")
         card.setStyleSheet(self._frame_style())
-        card.setStyleSheet(
-            self._frame_style()
-        )
+        self._theme_frames.append(card)
         layout = QVBoxLayout(card)
         layout.setSpacing(6)
 
@@ -4219,10 +4322,9 @@ echo "OK"
         """Create a card widget for pip-based tools (rich, textual, prompt_toolkit)."""
         from src.core.cli_tools_manager import is_tool_installed, get_tool_version
         card = QFrame()
+        card.setObjectName(f"pip_card_{tool_id.replace('-','_')}")
         card.setStyleSheet(self._frame_style())
-        card.setStyleSheet(
-            self._frame_style()
-        )
+        self._theme_frames.append(card)
         layout = QVBoxLayout(card)
         layout.setSpacing(6)
 
@@ -4421,10 +4523,10 @@ echo "OK"
         )
         self._cli_worker.start()
 
-    def _verify_pip(self):
-        """Check pip for selected Python, offer to fix if missing."""
+    def _verify_pip_venv(self):
+        """Check pip and venv for selected Python, offer to fix if missing."""
         import os, subprocess
-        from src.utils.platform_utils import subprocess_args as sp_args
+        from src.utils.platform_utils import subprocess_args as sp_args, get_platform
 
         rows = self.python_table.selectionModel().selectedRows()
         if not rows:
@@ -4434,11 +4536,13 @@ echo "OK"
         row = rows[0].row()
         version = self.python_table.item(row, 0).text()
         python_path = self.python_table.item(row, 1).text()
-        scripts_dir = os.path.join(os.path.dirname(python_path), "Scripts")
-        pip_exe = os.path.join(scripts_dir, "pip.exe")
+        is_windows = get_platform() == "windows"
+        scripts_dir = os.path.join(os.path.dirname(python_path), "Scripts" if is_windows else "bin")
+        pip_exe = os.path.join(scripts_dir, "pip.exe" if is_windows else "pip")
 
         pip_exists = os.path.isfile(pip_exe)
 
+        # ── pip check ──
         pip_version_str = ""
         pip_runnable = False
         try:
@@ -4452,19 +4556,33 @@ echo "OK"
         except Exception:
             pass
 
+        # ── venv check ──
+        venv_available = False
+        try:
+            result = subprocess.run(
+                [python_path, "-c", "import venv; print(venv.__name__)"],
+                **sp_args(capture_output=True, text=True, timeout=10)
+            )
+            if result.returncode == 0 and "venv" in result.stdout:
+                venv_available = True
+        except Exception:
+            pass
+
         current_path = os.environ.get("PATH", "")
         scripts_in_path = scripts_dir.lower() in current_path.lower()
 
-        ok = "OK" if pip_exists else "NOT FOUND"
-        ok2 = "Yes" if pip_runnable else "No"
-        ok3 = "Yes" if scripts_in_path else "Not in current session (open new terminal)"
+        pip_ok = "✅ OK" if pip_exists else "❌ NOT FOUND"
+        pip_mod = "✅ Yes" if pip_runnable else "❌ No"
+        venv_ok = "✅ Available" if venv_available else "❌ Not available"
+        path_ok = "✅ Yes" if scripts_in_path else "⚠️ Not in current session"
 
         msg = (
-            "Python: " + version + "\n"
-            "Path:   " + python_path + "\n\n"
-            "pip.exe on disk:   " + ok + "\n"
-            "pip module works:  " + ok2 + "\n"
-            "Scripts in PATH:   " + ok3
+            f"Python: {version}\n"
+            f"Path:   {python_path}\n\n"
+            f"pip on disk:       {pip_ok}\n"
+            f"pip module works:  {pip_mod}\n"
+            f"venv module:       {venv_ok}\n"
+            f"Scripts in PATH:   {path_ok}"
         )
         if pip_runnable and pip_version_str:
             msg += "\n\n" + pip_version_str
@@ -4472,20 +4590,54 @@ echo "OK"
         issues = []
         if not pip_runnable:
             issues.append("pip module is not working.")
+        if not venv_available:
+            if is_windows:
+                issues.append("venv module not available — try reinstalling Python with 'pip' option enabled.")
+            else:
+                issues.append("venv module not available — install python3-venv:\n"
+                              "    Debian/Ubuntu: sudo apt install python3-venv\n"
+                              "    Arch: included in python package")
         if not scripts_in_path:
-            issues.append("Scripts folder not in current PATH - open a new terminal after Set Default.")
+            issues.append("Scripts folder not in current PATH — open a new terminal after Set Default.")
 
         if issues:
             msg += "\n\nIssues found:\n" + "\n".join("  * " + i for i in issues)
+            fix_actions = []
             if not pip_runnable:
-                msg += "\n\nWould you like to reinstall pip now?"
-                reply = QMessageBox.question(self, "pip Status", msg, QMessageBox.Yes | QMessageBox.No)
+                fix_actions.append("reinstall pip")
+            if not venv_available and not is_windows:
+                fix_actions.append("install python3-venv (requires sudo)")
+
+            if fix_actions:
+                msg += "\n\nWould you like to fix now? (" + ", ".join(fix_actions) + ")"
+                reply = QMessageBox.question(self, "pip & venv Status", msg, QMessageBox.Yes | QMessageBox.No)
                 if reply == QMessageBox.Yes:
-                    self._fix_pip(python_path, version)
+                    if not pip_runnable:
+                        self._fix_pip(python_path, version)
+                    if not venv_available and not is_windows:
+                        self._fix_venv()
             else:
-                QMessageBox.warning(self, "pip Status", msg)
+                QMessageBox.warning(self, "pip & venv Status", msg)
         else:
-            QMessageBox.information(self, "pip OK", msg)
+            QMessageBox.information(self, "✅ pip & venv OK", msg)
+
+    def _fix_venv(self):
+        """Attempt to install python3-venv on Linux."""
+        import subprocess, shutil
+        if shutil.which("apt"):
+            cmd = "sudo apt install -y python3-venv"
+        elif shutil.which("pacman"):
+            QMessageBox.information(self, "venv", "On Arch, venv is included in the python package.\nTry: sudo pacman -S python")
+            return
+        elif shutil.which("dnf"):
+            cmd = "sudo dnf install -y python3-venv"
+        else:
+            QMessageBox.information(self, "venv", "Please install python3-venv using your package manager.")
+            return
+        try:
+            subprocess.Popen(["sh", "-c", f"x-terminal-emulator -e '{cmd}' || xterm -e '{cmd}'"])
+        except Exception as e:
+            QMessageBox.warning(self, "venv Install", f"Could not start terminal:\n{e}\n\nRun manually: {cmd}")
 
     def _fix_pip(self, python_path, version):
         """Reinstall pip for the given Python executable."""
@@ -5055,6 +5207,28 @@ echo "OK"
         # All pythons from system scan — deduplicate symlinks
         system_pythons = find_system_pythons()
         listed_paths = set()
+        c = self._c()
+
+        # ── System Default Python'u tabloya garanti olarak ilk satıra ekle ──
+        if default_norm and os.path.isfile(default_norm):
+            try:
+                import subprocess as _sp
+                result = _sp.run(
+                    [default_norm, "--version"],
+                    capture_output=True, text=True, timeout=5
+                )
+                sys_version = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
+            except Exception:
+                sys_version = "?"
+            row = self.python_table.rowCount()
+            self.python_table.insertRow(row)
+            self.python_table.setItem(row, 0, QTableWidgetItem(sys_version))
+            self.python_table.setItem(row, 1, QTableWidgetItem(os.path.normpath(default_norm)))
+            source_item = QTableWidgetItem("System Default")
+            source_item.setForeground(QColor(c['success']))
+            self.python_table.setItem(row, 2, source_item)
+            self.default_python_combo.addItem(f"Python {sys_version} (System Default)", os.path.normpath(default_norm))
+            listed_paths.add(default_norm)
 
         # Resolve symlinks: group by real binary, keep shortest path
         seen_real = {}  # realpath -> (version, norm_path)
@@ -5086,12 +5260,21 @@ echo "OK"
             self.python_table.setItem(row, 0, QTableWidgetItem(version))
             self.python_table.setItem(row, 1, QTableWidgetItem(norm_path))
 
-            if norm_case == default_norm:
-                source_item = QTableWidgetItem("System")
-                source_item.setForeground(__import__('PySide6.QtGui', fromlist=['QColor']).QColor("#a6e3a1"))
+            # User Install vs Custom ayrımı: kullanıcı klasörü altındaysa User Install
+            import os as _os
+            _home = _os.path.expanduser("~").lower()
+            _localappdata = _os.environ.get("LOCALAPPDATA", "").lower()
+            _appdata = _os.environ.get("APPDATA", "").lower()
+            _norm_lower = norm_path.lower()
+            if (_home and _norm_lower.startswith(_home)) or \
+               (_localappdata and _norm_lower.startswith(_localappdata)) or \
+               (_appdata and _norm_lower.startswith(_appdata)) or \
+               "/.local/" in _norm_lower or "/.pyenv/" in _norm_lower:
+                source_item = QTableWidgetItem("User Install")
+                source_item.setForeground(QColor(c['accent']))
             else:
                 source_item = QTableWidgetItem("Custom")
-                source_item.setForeground(Qt.cyan)
+                source_item.setForeground(QColor(c['fg_muted']))
 
             self.python_table.setItem(row, 2, source_item)
             self.default_python_combo.addItem(f"Python {version}", norm_path)
@@ -5111,7 +5294,7 @@ echo "OK"
             self.python_table.setItem(row, 0, QTableWidgetItem(entry.get("version", "?")))
             self.python_table.setItem(row, 1, QTableWidgetItem(norm_path))
             source_item = QTableWidgetItem("Custom")
-            source_item.setForeground(Qt.cyan)
+            source_item.setForeground(QColor(c['accent']))
             self.python_table.setItem(row, 2, source_item)
             self.default_python_combo.addItem(
                 f"Python {entry.get('version', '?')} (Custom)", norm_path
@@ -5133,7 +5316,7 @@ echo "OK"
                 self.python_table.setItem(row, 0, QTableWidgetItem(py["version"]))
                 self.python_table.setItem(row, 1, QTableWidgetItem(exe_path))
                 source_item = QTableWidgetItem("Downloaded")
-                source_item.setForeground(QColor("#a6e3a1"))
+                source_item.setForeground(QColor(c['success']))
                 self.python_table.setItem(row, 2, source_item)
                 self.default_python_combo.addItem(
                     f"Python {py['version']} (Downloaded)", exe_path
@@ -6623,6 +6806,14 @@ class _FetchWorker(QThread):
 class PythonDownloadDialog(QDialog):
     """Dialog for downloading standalone Python builds."""
 
+    def _c(self) -> dict:
+        """Return current theme color palette."""
+        from src.gui.styles import get_colors
+        p = self.parent()
+        if p and hasattr(p, "config"):
+            return get_colors(p.config.get("theme", "dark"))
+        return get_colors("dark")
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("⬇️ Download Python")
@@ -6661,9 +6852,18 @@ class PythonDownloadDialog(QDialog):
         self.progress_bar.setFixedHeight(6)
         layout.addWidget(self.progress_bar)
 
-        # Install location
+        # Install locations
+        import os as _os
         from src.core.python_downloader import get_pythons_dir
-        loc_label = QLabel(f"📂 Install location: {get_pythons_dir()}")
+        user_dir = get_pythons_dir()
+        if _os.name == "nt":
+            system_dir = _os.path.join(_os.environ.get("PROGRAMFILES", r"C:\Program Files"), "Python")
+        else:
+            system_dir = "/usr/local/bin"
+        loc_label = QLabel(
+            f"🖥️ System location: {system_dir}\n"
+            f"👤 User location: {user_dir}"
+        )
         loc_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
         loc_label.setWordWrap(True)
         layout.addWidget(loc_label)
@@ -6732,7 +6932,7 @@ class PythonDownloadDialog(QDialog):
             item = QListWidgetItem(text)
             item.setData(Qt.UserRole, v)
             if is_installed:
-                item.setForeground(QColor("#a6e3a1"))
+                item.setForeground(QColor(self._c()['success']))
             self.version_list.addItem(item)
 
         self.progress_label.setText(f"Found {len(versions)} available versions.")

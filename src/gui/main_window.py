@@ -691,6 +691,7 @@ class MainWindow(QMainWindow):
             item = self.ql_buttons_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
+        c = self._c()
         app_defs = getattr(self.package_panel, "app_definitions", [])
         has_any = False
         for app in app_defs:
@@ -700,10 +701,10 @@ class MainWindow(QMainWindow):
             btn = QPushButton(f"{app['icon']} {app['name']}")
             btn.setFixedHeight(30)
             btn.setStyleSheet(
-                "QPushButton { font-size: 12px; text-align: left; padding: 2px 8px; "
-                "background-color: #1e1e2e; color: #cdd6f4; "
-                "border: 1px solid #313244; border-radius: 4px; }"
-                "QPushButton:hover { background-color: #313244; border-color: #89b4fa; }"
+                f"QPushButton {{ font-size: 12px; text-align: left; padding: 2px 8px; "
+                f"background-color: {c['sidebar']}; color: {c['fg']}; "
+                f"border: 1px solid {c['border']}; border-radius: 4px; }}"
+                f"QPushButton:hover {{ background-color: {c['hover']}; border-color: {c['accent']}; }}"
             )
             btn.clicked.connect(lambda checked, a=app: self.package_panel._launch_app(a))
             self.ql_buttons_layout.addWidget(btn)
@@ -1407,6 +1408,8 @@ class MainWindow(QMainWindow):
             self.setStyleSheet(get_theme(theme))
             if hasattr(self, "package_panel"):
                 self.package_panel.apply_theme(theme)
+            if hasattr(self, "settings_page"):
+                self.settings_page._refresh_styles()
             self._refresh_sidebar_styles()
         except RuntimeError:
             # Widget may be in an unstable state during screen transition

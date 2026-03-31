@@ -11,8 +11,32 @@ Themes:
 """
 
 
-def _build_theme(c: dict) -> str:
-    """Build a complete QSS stylesheet from a color palette dict."""
+def _build_theme(c: dict, font_family: str = "", font_size: int = 13,
+                 primary_family: str = "", primary_size: int = 22,
+                 tertiary_family: str = "", tertiary_size: int = 11) -> str:
+    """Build a complete QSS stylesheet from a color palette dict.
+    3-level font system: primary (headers), secondary (base), tertiary (small).
+    """
+    _fallback = '"Segoe UI", "SF Pro Display", "Ubuntu", sans-serif'
+
+    def _resolve_font(family):
+        if not family:
+            return _fallback
+        if '"' not in family:
+            return f'"{family}", {_fallback}'
+        return family
+
+    font_family = _resolve_font(font_family)          # secondary = base
+    primary_family = _resolve_font(primary_family)     # headers
+    tertiary_family = _resolve_font(tertiary_family)   # small text
+
+    # Font sizes
+    fs_header = primary_size                              # 22px default
+    fs_subheader = max(primary_size - 8, font_size + 1)   # 14px default
+    fs_base = font_size                                   # 13px default
+    fs_small = max(tertiary_size, 8)                      # 11px default
+    fs_tiny = max(tertiary_size, 8)                        # 11px default
+
     return f"""
 /* ── Base ── */
 QMainWindow, QDialog {{
@@ -23,8 +47,8 @@ QMainWindow, QDialog {{
 QWidget {{
     background-color: {c['bg']};
     color: {c['fg']};
-    font-family: "Segoe UI", "SF Pro Display", "Ubuntu", sans-serif;
-    font-size: 13px;
+    font-family: {font_family};
+    font-size: {font_size}px;
 }}
 
 /* ── Sidebar ── */
@@ -40,7 +64,7 @@ QWidget {{
     border-radius: 8px;
     padding: 10px 16px;
     text-align: left;
-    font-size: 13px;
+    font-size: {font_size}px;
 }}
 
 #sidebar QPushButton:hover {{
@@ -55,14 +79,16 @@ QWidget {{
 
 /* ── Headers ── */
 QLabel#header {{
-    font-size: 22px;
+    font-family: {primary_family};
+    font-size: {fs_header}px;
     font-weight: bold;
     color: {c['fg']};
     padding: 8px 0;
 }}
 
 QLabel#subheader {{
-    font-size: 14px;
+    font-family: {primary_family};
+    font-size: {fs_subheader}px;
     color: {c['fg_muted']};
     padding: 4px 0;
 }}
@@ -75,7 +101,7 @@ QPushButton {{
     border-radius: 8px;
     padding: 8px 20px;
     font-weight: bold;
-    font-size: 13px;
+    font-size: {font_size}px;
 }}
 
 QPushButton:hover {{
@@ -125,7 +151,7 @@ QLineEdit, QComboBox {{
     border: 2px solid {c['border']};
     border-radius: 8px;
     padding: 8px 12px;
-    font-size: 13px;
+    font-size: {font_size}px;
     selection-background-color: {c['accent']};
     selection-color: {c['accent_fg']};
 }}
@@ -308,8 +334,9 @@ QSpinBox {{
     color: {c['fg']};
     border: 2px solid {c['border']};
     border-radius: 8px;
-    padding: 6px 10px;
-    font-size: 13px;
+    padding: 8px 12px;
+    min-height: 18px;
+    font-size: {font_size}px;
 }}
 
 QSpinBox:focus {{
@@ -340,7 +367,7 @@ QTextEdit, QPlainTextEdit {{
     border-radius: 8px;
     padding: 8px;
     font-family: "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
-    font-size: 12px;
+    font-size: {fs_small}px;
 }}
 
 /* ── Menu ── */
@@ -592,27 +619,24 @@ _LIGHT_NORD = {
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Pre-build themes (done once at import time)
+# Color palette registry (themes built on demand with font params)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-THEMES = {
-    # Dark themes
-    'dark':              _build_theme(_DARK_CATPPUCCIN),
-    'dark-dracula':      _build_theme(_DARK_DRACULA),
-    'dark-tokyo-night':  _build_theme(_DARK_TOKYO_NIGHT),
-    'dark-one-dark':     _build_theme(_DARK_ONE_DARK),
-    'dark-gruvbox':      _build_theme(_DARK_GRUVBOX),
-    'dark-solarized':    _build_theme(_DARK_SOLARIZED),
-    'dark-material':     _build_theme(_DARK_MATERIAL),
-    'dark-rose-pine':    _build_theme(_DARK_ROSE_PINE),
-    # Light themes
-    'light-latte':       _build_theme(_LIGHT_LATTE),
-    'light-github':      _build_theme(_LIGHT_GITHUB),
-    'light-vscode':      _build_theme(_LIGHT_VSCODE),
-    'light-nord':        _build_theme(_LIGHT_NORD),
-    'light-solarized':   _build_theme(_LIGHT_SOLARIZED),
-    # Legacy aliases
-    'light':             _build_theme(_LIGHT_LATTE),
+_PALETTES = {
+    'dark':              _DARK_CATPPUCCIN,
+    'dark-dracula':      _DARK_DRACULA,
+    'dark-tokyo-night':  _DARK_TOKYO_NIGHT,
+    'dark-one-dark':     _DARK_ONE_DARK,
+    'dark-gruvbox':      _DARK_GRUVBOX,
+    'dark-solarized':    _DARK_SOLARIZED,
+    'dark-material':     _DARK_MATERIAL,
+    'dark-rose-pine':    _DARK_ROSE_PINE,
+    'light-latte':       _LIGHT_LATTE,
+    'light-github':      _LIGHT_GITHUB,
+    'light-vscode':      _LIGHT_VSCODE,
+    'light-nord':        _LIGHT_NORD,
+    'light-solarized':   _LIGHT_SOLARIZED,
+    'light':             _LIGHT_LATTE,
 }
 
 THEME_OPTIONS = [
@@ -634,14 +658,21 @@ THEME_OPTIONS = [
 ]
 
 
-def get_theme(name: str = "dark") -> str:
-    """Return stylesheet for the given theme name."""
-    return THEMES.get(name, THEMES['dark'])
+def get_theme(name: str = "dark", font_family: str = "", font_size: int = 13,
+              primary_family: str = "", primary_size: int = 22,
+              tertiary_family: str = "", tertiary_size: int = 11) -> str:
+    """Return stylesheet for the given theme name with 3-level font settings."""
+    palette = _PALETTES.get(name, _PALETTES['dark'])
+    return _build_theme(palette, font_family=font_family, font_size=font_size,
+                        primary_family=primary_family, primary_size=primary_size,
+                        tertiary_family=tertiary_family, tertiary_size=tertiary_size)
 
 
-def get_colors(name: str = "dark") -> dict:
+def get_colors(name: str = "dark", font_size: int = 13,
+               primary_size: int = 22, tertiary_size: int = 11) -> dict:
     """Return the color palette dict for the given theme name.
     Use this in widgets that apply inline styles.
+    Includes font size hierarchy values.
     """
     palettes = {
         'dark':             _DARK_CATPPUCCIN,
@@ -659,4 +690,10 @@ def get_colors(name: str = "dark") -> dict:
         'light-solarized':  _LIGHT_SOLARIZED,
         'light':            _LIGHT_LATTE,
     }
-    return palettes.get(name, _DARK_CATPPUCCIN).copy()
+    result = palettes.get(name, _DARK_CATPPUCCIN).copy()
+    result['fs_header'] = primary_size
+    result['fs_subheader'] = max(primary_size - 8, font_size + 1)
+    result['fs_base'] = font_size
+    result['fs_small'] = max(tertiary_size, 8)
+    result['fs_tiny'] = max(tertiary_size, 8)
+    return result

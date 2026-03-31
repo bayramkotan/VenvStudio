@@ -68,9 +68,14 @@ class SettingsPage(QWidget):
     settings_saved = Signal()
 
     def _c(self) -> dict:
-        """Return current theme color palette."""
+        """Return current theme color palette with font hierarchy."""
         from src.gui.styles import get_colors
-        return get_colors(self.config.get("theme", "dark"))
+        return get_colors(
+            self.config.get("theme", "dark"),
+            self.config.get("font_secondary_size", 13) or self.config.get("font_size", 13),
+            self.config.get("font_primary_size", 22),
+            self.config.get("font_tertiary_size", 11),
+        )
 
     def _table_style(self, font_size=13):
         c = self._c()
@@ -81,7 +86,7 @@ class SettingsPage(QWidget):
             f"QTableWidget QLineEdit {{ background-color: {c['input_bg']}; color: {c['fg']}; "
             f"border: 2px solid {c['accent']}; padding: 2px 4px; font-size: {font_size}px; }}"
             f"QComboBox {{ background-color: {c['input_bg']}; color: {c['fg']}; "
-            f"border: 1px solid {c['border']}; padding: 3px; font-size: 12px; }}"
+            f"border: 1px solid {c['border']}; padding: 3px; font-size: {self._c()['fs_small']}px; }}"
             f"QHeaderView::section {{ background-color: {c['sidebar']}; color: {c['fg_muted']}; "
             f"border: none; border-bottom: 1px solid {c['border']}; padding: 4px; }}"
         )
@@ -91,7 +96,7 @@ class SettingsPage(QWidget):
         return (
             f"QTextEdit {{ background: {c['sidebar']}; color: {c['fg']}; "
             f"border: 1px solid {c['border']}; border-radius: 6px; "
-            f"font-family: 'Cascadia Code', 'JetBrains Mono', monospace; font-size: 12px; }}"
+            f"font-family: 'Cascadia Code', 'JetBrains Mono', monospace; font-size: {self._c()['fs_small']}px; }}"
         )
 
     def _frame_style(self):
@@ -133,16 +138,16 @@ class SettingsPage(QWidget):
                     for lbl in frame.findChildren(QLabel):
                         ss = lbl.styleSheet()
                         if "font-weight: bold" in ss:
-                            lbl.setStyleSheet(f"font-weight: bold; font-size: 13px; color: {c['fg']};")
-                        elif "font-size: 11px" in ss and "color:" in ss:
+                            lbl.setStyleSheet(f"font-weight: bold; font-size: {c['fs_base']}px; color: {c['fg']};")
+                        elif "font-size:" in ss and "color:" in ss:
                             # status veya desc label — rengi koru ama fg_muted güncelle
                             if c['success'] in ss or c['danger'] in ss or "✅" in lbl.text() or "❌" in lbl.text():
                                 pass  # status label, rengi değişmesin
                             else:
-                                lbl.setStyleSheet(f"color: {c['fg_muted']}; font-size: 11px;")
+                                lbl.setStyleSheet(f"color: {c['fg_muted']}; font-size: {c['fs_tiny']}px;")
                     # Kart içindeki checkbox'ları güncelle
                     for cb in frame.findChildren(QCheckBox):
-                        cb.setStyleSheet(f"font-size: 11px; color: {c['fg']};")
+                        cb.setStyleSheet(f"font-size: {self._c()['fs_tiny']}px; color: {c['fg']};")
                 except RuntimeError:
                     pass  # widget deleted
 
@@ -204,35 +209,60 @@ class SettingsPage(QWidget):
         theme_row.addWidget(self.theme_combo, 1)
         appearance_layout.addRow(f"{tr('theme')}", theme_row)
 
-        # Font family — protected by checkbox
-        font_row = QHBoxLayout()
-        self.font_cb = QCheckBox()
-        self.font_cb.setChecked(False)
-        self.font_cb.toggled.connect(lambda on: self.font_combo.setEnabled(on))
-        font_row.addWidget(self.font_cb)
-        self.font_combo = QFontComboBox()
-        self.font_combo.setEnabled(False)
-        self.font_combo.setFocusPolicy(Qt.StrongFocus)
-        font_row.addWidget(self.font_combo, 1)
-        appearance_layout.addRow(f"{tr('font')}", font_row)
+        # ── 3-Level Font System ──
+        font_levels = [
+            ("primary", "🔤 Headings", "Page titles, section headers, group labels", 22),
+            ("secondary", "🔡 UI & Menus", "Buttons, menus, tables, inputs, normal text", 13),
+            ("tertiary", "🔹 Details", "Info labels, hints, status text, tooltips", 11),
+        ]
+        for level_id, label, hint, default_size in font_levels:
+            row = QHBoxLayout()
+            row.setSpacing(6)
 
-        # Font size — protected by checkbox
-        size_row = QHBoxLayout()
-        self.font_size_cb = QCheckBox()
-        self.font_size_cb.setChecked(False)
-        self.font_size_cb.toggled.connect(lambda on: self.font_size_spin.setEnabled(on))
-        size_row.addWidget(self.font_size_cb)
-        self.font_size_spin = QSpinBox()
-        self.font_size_spin.setRange(8, 24)
-        self.font_size_spin.setValue(13)
-        self.font_size_spin.setSuffix(" px")
-        self.font_size_spin.setEnabled(False)
-        size_row.addWidget(self.font_size_spin, 1)
-        appearance_layout.addRow(f"{tr('font_size')}", size_row)
+            cb = QCheckBox()
+            cb.setChecked(False)
+            row.addWidget(cb)
+
+            font_combo = QFontComboBox()
+            font_combo.setEnabled(False)
+            font_combo.setFocusPolicy(Qt.StrongFocus)
+            cb.toggled.connect(font_combo.setEnabled)
+            row.addWidget(font_combo, 1)
+
+            size_spin = QSpinBox()
+            size_spin.setRange(8, 48)
+            size_spin.setValue(default_size)
+            size_spin.setSuffix(" px")
+            size_spin.setEnabled(False)
+            size_spin.setMinimumWidth(80)
+            cb.toggled.connect(size_spin.setEnabled)
+            row.addWidget(size_spin)
+
+            hint_lbl = QLabel(hint)
+            hint_lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px; font-style: italic;")
+            hint_lbl.setMinimumWidth(200)
+            row.addWidget(hint_lbl)
+
+            # Store references
+            setattr(self, f"font_{level_id}_cb", cb)
+            setattr(self, f"font_{level_id}_combo", font_combo)
+            setattr(self, f"font_{level_id}_size", size_spin)
+
+            appearance_layout.addRow(label, row)
+
+        # Reset Fonts button
+        reset_font_row = QHBoxLayout()
+        reset_font_btn = QPushButton("↩️ Reset Fonts to Default")
+        reset_font_btn.setObjectName("secondary")
+        reset_font_btn.setToolTip("Reset all font settings to system defaults")
+        reset_font_btn.clicked.connect(self._reset_fonts)
+        reset_font_row.addWidget(reset_font_btn)
+        reset_font_row.addStretch()
+        appearance_layout.addRow("", reset_font_row)
 
         # UI Scale info
         scale_label = QLabel("UI scaling follows your system display settings.")
-        scale_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        scale_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         appearance_layout.addRow("", scale_label)
 
         appearance_group.setLayout(appearance_layout)
@@ -258,7 +288,7 @@ class SettingsPage(QWidget):
         lang_layout.addRow(f"{tr('interface_language')}", lang_row)
 
         lang_note = QLabel(tr("language_note"))
-        lang_note.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        lang_note.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         lang_layout.addRow("", lang_note)
 
         lang_group.setLayout(lang_layout)
@@ -271,7 +301,7 @@ class SettingsPage(QWidget):
 
         python_info = QLabel(tr("python_info"))
         python_info.setWordWrap(True)
-        python_info.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
+        python_info.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px;")
         python_layout.addWidget(python_info)
 
         # Python versions table
@@ -384,7 +414,7 @@ class SettingsPage(QWidget):
         paths_layout.addRow("Environment Directory:", venv_dir_layout)
 
         path_info = QLabel("All new virtual environments will be created in this directory.")
-        path_info.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        path_info.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         paths_layout.addRow("", path_info)
 
         paths_group.setLayout(paths_layout)
@@ -413,7 +443,7 @@ class SettingsPage(QWidget):
             "uv is 10-100x faster than pip.\n"
             "If uv is not installed, VenvStudio will auto-install it."
         )
-        uv_note.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        uv_note.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         uv_note.setWordWrap(True)
         pkg_mgr_layout.addRow("", uv_note)
 
@@ -491,7 +521,7 @@ class SettingsPage(QWidget):
 
         info_lbl = QLabel("Add custom terminal commands. Use {path} for env path and {activate} for activate script.")
         info_lbl.setWordWrap(True)
-        info_lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
+        info_lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px;")
         custom_term_layout.addWidget(info_lbl)
 
         # Table
@@ -532,7 +562,7 @@ class SettingsPage(QWidget):
 
         vscode_info = QLabel("Set the selected environment's Python as VS Code interpreter.")
         vscode_info.setWordWrap(True)
-        vscode_info.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
+        vscode_info.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px;")
         vscode_layout.addWidget(vscode_info)
 
         vscode_btn_layout = QHBoxLayout()
@@ -598,7 +628,7 @@ class SettingsPage(QWidget):
 
         cat_mgr_info = QLabel("Add your own categories below. These appear in the Catalog dropdown.")
         cat_mgr_info.setWordWrap(True)
-        cat_mgr_info.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
+        cat_mgr_info.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px;")
         cat_mgr_layout.addWidget(cat_mgr_info)
 
         self.custom_categories_list = QTableWidget()
@@ -639,7 +669,7 @@ class SettingsPage(QWidget):
 
         preset_info = QLabel("Add, edit or remove package presets. Built-in presets are shown read-only. Custom presets appear in the Packages → Presets tab.")
         preset_info.setWordWrap(True)
-        preset_info.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
+        preset_info.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px;")
         preset_layout.addWidget(preset_info)
 
         # Built-in presets (read-only)
@@ -667,7 +697,7 @@ class SettingsPage(QWidget):
 
         # Custom presets table
         custom_preset_lbl = QLabel("Custom Presets:")
-        custom_preset_lbl.setStyleSheet(f"color: {self._c()['fg']}; font-size: 12px; font-weight: bold;")
+        custom_preset_lbl.setStyleSheet(f"color: {self._c()['fg']}; font-size: {self._c()['fs_small']}px; font-weight: bold;")
         preset_layout.addWidget(custom_preset_lbl)
 
         self.custom_presets_table = QTableWidget(0, 2)
@@ -708,7 +738,7 @@ class SettingsPage(QWidget):
 
         catalog_info = QLabel("Add custom packages. Category column uses a dropdown from built-in + custom categories.")
         catalog_info.setWordWrap(True)
-        catalog_info.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
+        catalog_info.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px;")
         catalog_layout.addWidget(catalog_info)
 
         self.custom_catalog_table = QTableWidget()
@@ -821,7 +851,7 @@ class SettingsPage(QWidget):
             "Starship & Oh My Posh require a Nerd Font for proper rendering."
         )
         cli_desc.setWordWrap(True)
-        cli_desc.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
+        cli_desc.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px;")
         cli_layout.addWidget(cli_desc)
 
         # Output log for CLI tools
@@ -840,7 +870,7 @@ class SettingsPage(QWidget):
 
         from src.core.cli_tools_manager import NERD_FONTS
         self.nerd_font_cb = QCheckBox("Font:")
-        self.nerd_font_cb.setStyleSheet(f"font-size: 11px; color: {self._c()['fg']};")
+        self.nerd_font_cb.setStyleSheet(f"font-size: {self._c()['fs_tiny']}px; color: {self._c()['fg']};")
         font_inner.addWidget(self.nerd_font_cb)
 
         self.nerd_font_combo = QComboBox()
@@ -930,7 +960,7 @@ class SettingsPage(QWidget):
         launch_layout.addRow("Jupyter Working Dir:", jupyter_dir_row)
 
         self.jupyter_custom_path_label = QLabel("")
-        self.jupyter_custom_path_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        self.jupyter_custom_path_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         self.jupyter_custom_path_label.setVisible(False)
         launch_layout.addRow("", self.jupyter_custom_path_label)
 
@@ -958,7 +988,7 @@ class SettingsPage(QWidget):
 
         update_row = QHBoxLayout()
         self.update_status_label = QLabel("")
-        self.update_status_label.setStyleSheet("font-size: 12px;")
+        self.update_status_label.setStyleSheet(f"font-size: {self._c()['fs_small']}px;")
         update_row.addWidget(self.update_status_label, 1)
 
         check_update_btn = QPushButton("🔄 Check for Updates")
@@ -1006,6 +1036,25 @@ class SettingsPage(QWidget):
         main_layout.addWidget(scroll)
 
     # ── CLI/TUI Tools helpers ─────────────────────────────────────────────────
+
+    def _reset_fonts(self):
+        """Reset all font settings to system defaults."""
+        _defaults = {"primary": 22, "secondary": 13, "tertiary": 11}
+        for level_id, def_size in _defaults.items():
+            cb = getattr(self, f"font_{level_id}_cb")
+            combo = getattr(self, f"font_{level_id}_combo")
+            spin = getattr(self, f"font_{level_id}_size")
+            cb.setChecked(False)
+            combo.setEnabled(False)
+            combo.setCurrentFont(QFont("Segoe UI"))
+            spin.setEnabled(False)
+            spin.setValue(def_size)
+            self.config.set(f"font_{level_id}_family", "")
+            self.config.set(f"font_{level_id}_size", def_size)
+        self.config.set("font_family", "")
+        self.config.set("font_size", 13)
+        self.font_changed.emit("Segoe UI", 13)
+
 
 
     def _on_theme_cb_toggled(self, on):
@@ -1062,20 +1111,20 @@ class SettingsPage(QWidget):
         # Title + status
         header = QHBoxLayout()
         title_lbl = QLabel(title)
-        title_lbl.setStyleSheet(f"font-weight: bold; font-size: 13px; color: {self._c()['fg']};")
+        title_lbl.setStyleSheet(f"font-weight: bold; font-size: {self._c()['fs_base']}px; color: {self._c()['fg']};")
         header.addWidget(title_lbl)
 
         installed = is_tool_installed(tool_id)
         version = get_tool_version(tool_id) or ""
         status_lbl = QLabel(f"\u2705 {version}" if installed else "\u274c Not installed")
-        status_lbl.setStyleSheet(f"color: {self._c()['success'] if installed else self._c()['danger']}; font-size: 11px;")
+        status_lbl.setStyleSheet(f"color: {self._c()['success'] if installed else self._c()['danger']}; font-size: {self._c()['fs_tiny']}px;")
         status_lbl.setObjectName(f"status_{tool_id.replace('-','_')}")
         header.addWidget(status_lbl)
         header.addStretch()
         layout.addLayout(header)
 
         desc_lbl = QLabel(desc)
-        desc_lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        desc_lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         desc_lbl.setWordWrap(True)
         layout.addWidget(desc_lbl)
 
@@ -1085,7 +1134,7 @@ class SettingsPage(QWidget):
 
         cb_key = f"cb_preset_{tool_id.replace('-','_')}"
         preset_cb = QCheckBox(preset_label)
-        preset_cb.setStyleSheet(f"font-size: 11px; color: {self._c()['fg']};")
+        preset_cb.setStyleSheet(f"font-size: {self._c()['fs_tiny']}px; color: {self._c()['fg']};")
         preset_cb.setObjectName(cb_key)
         controls.addWidget(preset_cb)
 
@@ -1105,7 +1154,7 @@ class SettingsPage(QWidget):
         desc_hint = None
         if preset_descriptions:
             desc_hint = QLabel("")
-            desc_hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 10px; font-style: italic;")
+            desc_hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px; font-style: italic;")
             desc_hint.setFixedHeight(16)
 
             def _update_preset_hint(idx, _dh=desc_hint, _c=combo, _pd=preset_descriptions):
@@ -1122,14 +1171,14 @@ class SettingsPage(QWidget):
 
         install_btn = QPushButton("\u2b07\ufe0f Install" if not installed else "\U0001f504 Reinstall")
         install_btn.setObjectName("secondary")
-        install_btn.setFixedHeight(26)
+        install_btn
         install_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_install(t, sb, sl))
         controls.addWidget(install_btn)
 
         if installed:
             cfg_btn = QPushButton("\u2699\ufe0f Configure Shell")
             cfg_btn.setObjectName("secondary")
-            cfg_btn.setFixedHeight(26)
+            cfg_btn
             cfg_btn.clicked.connect(lambda _, t=tool_id, c=combo, pk=preset_key: self._cli_configure(t, c, pk))
             controls.addWidget(cfg_btn)
 
@@ -1137,21 +1186,21 @@ class SettingsPage(QWidget):
             if tool_id == "starship":
                 edit_btn = QPushButton("\U0001f4dd Edit Config")
                 edit_btn.setObjectName("secondary")
-                edit_btn.setFixedHeight(26)
+                edit_btn
                 edit_btn.setToolTip("Open starship.toml inline editor")
                 edit_btn.clicked.connect(self._open_starship_editor)
                 controls.addWidget(edit_btn)
 
                 test_btn = QPushButton("\u25b6\ufe0f Test")
                 test_btn.setObjectName("secondary")
-                test_btn.setFixedHeight(26)
+                test_btn
                 test_btn.setToolTip("Open a terminal to test your Starship prompt")
                 test_btn.clicked.connect(self._test_starship_in_terminal)
                 controls.addWidget(test_btn)
 
             uninst_btn = QPushButton("\U0001f5d1\ufe0f Uninstall")
             uninst_btn.setObjectName("danger")
-            uninst_btn.setFixedHeight(26)
+            uninst_btn
             uninst_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_uninstall(t, sb, sl))
             controls.addWidget(uninst_btn)
 
@@ -1175,34 +1224,34 @@ class SettingsPage(QWidget):
 
         header = QHBoxLayout()
         title_lbl = QLabel(title)
-        title_lbl.setStyleSheet(f"font-weight: bold; font-size: 13px; color: {self._c()['fg']};")
+        title_lbl.setStyleSheet(f"font-weight: bold; font-size: {self._c()['fs_base']}px; color: {self._c()['fg']};")
         header.addWidget(title_lbl)
 
         installed = is_tool_installed(tool_id)
         version = get_tool_version(tool_id) or ""
         status_lbl = QLabel(f"✅ {version}" if installed else "❌ Not installed")
-        status_lbl.setStyleSheet(f"color: {self._c()['success'] if installed else self._c()['danger']}; font-size: 11px;")
+        status_lbl.setStyleSheet(f"color: {self._c()['success'] if installed else self._c()['danger']}; font-size: {self._c()['fs_tiny']}px;")
         header.addWidget(status_lbl)
         header.addStretch()
 
         install_btn = QPushButton("⬇️ Install" if not installed else "🔄 Reinstall")
         install_btn.setObjectName("secondary")
-        install_btn.setFixedHeight(26)
+        install_btn
         install_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_install(t, sb, sl))
         header.addWidget(install_btn)
 
         if installed:
             uninst_btn = QPushButton("🗑️")
             uninst_btn.setObjectName("danger")
-            uninst_btn.setFixedHeight(26)
-            uninst_btn.setFixedWidth(32)
+            uninst_btn
+            uninst_btn.setMinimumWidth(32)
             uninst_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_uninstall(t, sb, sl))
             header.addWidget(uninst_btn)
 
         layout.addLayout(header)
 
         desc_lbl = QLabel(desc)
-        desc_lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        desc_lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         layout.addWidget(desc_lbl)
         return card
 
@@ -1254,13 +1303,13 @@ class SettingsPage(QWidget):
         dlg.setStyleSheet(
             f"QDialog {{ background: {self._c()['bg']}; }}"
             f"QPlainTextEdit {{ background: {self._c()['sidebar']}; color: {self._c()['fg']}; border: 1px solid {self._c()['border']}; "
-            "border-radius: 4px; font-family: 'Consolas', 'JetBrains Mono', monospace; font-size: 12px; }"
-            "QPushButton { padding: 6px 16px; border-radius: 4px; font-size: 12px; }"
+            f"border-radius: 4px; font-family: 'Consolas', 'JetBrains Mono', monospace; font-size: {self._c()['fs_small']}px; }}"
+            f"QPushButton {{ padding: 6px 16px; border-radius: 4px; font-size: {self._c()['fs_small']}px; }}"
             f"QPushButton#save {{ background: {self._c()['success']}; color: {self._c()['accent_fg']}; font-weight: bold; }}"
             "QPushButton#save:hover { background: #94d89d; }"
             f"QPushButton#secondary {{ background: {self._c()['secondary']}; color: {self._c()['fg']}; }}"
             "QPushButton#secondary:hover { background: #45475a; }"
-            "QLabel { color: #6c7086; font-size: 11px; }"
+            f"QLabel {{ color: #6c7086; font-size: {self._c()['fs_tiny']}px; }}"
         )
 
         layout = QVBoxLayout(dlg)
@@ -1345,7 +1394,7 @@ class SettingsPage(QWidget):
         installed = is_tool_installed(tool_id)
         version = get_tool_version(tool_id) or ""
         status_lbl.setText(f"✅ {version}" if installed else "❌ Not installed")
-        status_lbl.setStyleSheet(f"color: {self._c()['success'] if installed else self._c()['danger']}; font-size: 11px;")
+        status_lbl.setStyleSheet(f"color: {self._c()['success'] if installed else self._c()['danger']}; font-size: {self._c()['fs_tiny']}px;")
         btn.setEnabled(True)
         btn.setText("🔄 Reinstall" if installed else "⬇️ Install")
 
@@ -1691,7 +1740,7 @@ class SettingsPage(QWidget):
         cmd_edit.setPlaceholderText('e.g. wt -d "{path}" cmd /k "{activate}"')
 
         hint = QLabel("Variables: {path} = env path, {activate} = activate script")
-        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
 
         layout.addRow("Name:", name_edit)
         layout.addRow("Command:", cmd_edit)
@@ -1734,7 +1783,7 @@ class SettingsPage(QWidget):
         name_edit = QLineEdit(old_name)
         cmd_edit = QLineEdit(old_cmd)
         hint = QLabel("Variables: {path} = env path, {activate} = activate script")
-        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         layout.addRow("Name:", name_edit)
         layout.addRow("Command:", cmd_edit)
         layout.addRow(hint)
@@ -1884,30 +1933,35 @@ class SettingsPage(QWidget):
             self.theme_cb.setChecked(False)
             self.theme_combo.setEnabled(False)
 
-        # Font — ALWAYS start unticked, only tick if config has explicit non-default
-        font_family = self.config.get("font_family", "")
-        # Clear old default values from config
-        default_fonts = ("", "Segoe UI", "Yu Gothic UI", "MS Shell Dlg 2", "Arial", "Tahoma")
-        if not font_family or font_family in default_fonts:
-            self.font_cb.setChecked(False)
-            self.font_combo.setEnabled(False)
-            self.config.set("font_family", "")
-        else:
-            self.font_cb.setChecked(True)
-            self.font_combo.setEnabled(True)
-            self.font_combo.setCurrentFont(QFont(font_family))
-
-        font_size = self.config.get("font_size", 13)
-        default_sizes = (0, 12, 13, 14)
-        if not font_size or font_size in default_sizes:
-            self.font_size_cb.setChecked(False)
-            self.font_size_spin.setEnabled(False)
-            self.font_size_spin.setValue(13)
-            self.config.set("font_size", 13)
-        else:
-            self.font_size_cb.setChecked(True)
-            self.font_size_spin.setEnabled(True)
-            self.font_size_spin.setValue(font_size)
+        # Font — 3-level system load
+        _font_defaults = {
+            "primary":   ("Segoe UI", 22),
+            "secondary": ("Segoe UI", 13),
+            "tertiary":  ("Segoe UI", 11),
+        }
+        _sys_fonts = ("", "Segoe UI", "Yu Gothic UI", "MS Shell Dlg 2", "Arial", "Tahoma")
+        for level_id, (def_family, def_size) in _font_defaults.items():
+            cb = getattr(self, f"font_{level_id}_cb")
+            combo = getattr(self, f"font_{level_id}_combo")
+            spin = getattr(self, f"font_{level_id}_size")
+            saved_family = self.config.get(f"font_{level_id}_family", "")
+            saved_size = self.config.get(f"font_{level_id}_size", def_size)
+            if saved_family and saved_family not in _sys_fonts:
+                cb.setChecked(True)
+                combo.setEnabled(True)
+                combo.setCurrentFont(QFont(saved_family))
+                spin.setEnabled(True)
+                spin.setValue(saved_size)
+            elif saved_size != def_size and saved_size > 0:
+                cb.setChecked(True)
+                combo.setEnabled(True)
+                spin.setEnabled(True)
+                spin.setValue(saved_size)
+            else:
+                cb.setChecked(False)
+                combo.setEnabled(False)
+                spin.setEnabled(False)
+                spin.setValue(def_size)
 
         # Language
         lang = self.config.get("language", "en")
@@ -2721,7 +2775,7 @@ try {{
         pkgs_edit.setPlaceholderText("e.g. numpy, pandas, matplotlib, scikit-learn")
 
         hint = QLabel("Separate package names with commas.")
-        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         layout.addRow("Preset Name:", name_edit)
         layout.addRow("Packages:", pkgs_edit)
         layout.addRow(hint)
@@ -2759,7 +2813,7 @@ try {{
         name_edit = QLineEdit(old_name)
         pkgs_edit = QLineEdit(old_pkgs)
         hint = QLabel("Separate package names with commas.")
-        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         layout.addRow("Preset Name:", name_edit)
         layout.addRow("Packages:", pkgs_edit)
         layout.addRow(hint)
@@ -2831,7 +2885,7 @@ try {{
         combo = QComboBox()
         combo.setStyleSheet(
             f"background-color: {self._c()['input_bg']}; color: {self._c()['fg']}; border: 1px solid {self._c()['border']}; "
-            "padding: 3px; font-size: 12px;"
+            f"padding: 3px; font-size: {self._c()['fs_small']}px;"
         )
         categories = self._get_all_categories()
         for cat in categories:
@@ -3232,7 +3286,7 @@ try {{
     def _check_for_updates(self):
         """Check PyPI for new version."""
         self.update_status_label.setText("🔍 Checking...")
-        self.update_status_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
+        self.update_status_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px;")
 
         # Run in background thread
         self._update_worker = _UpdateCheckWorker(parent=self)
@@ -3243,14 +3297,14 @@ try {{
         """Handle update check result."""
         if result.get("error"):
             self.update_status_label.setText(f"⚠️ {result['error']}")
-            self.update_status_label.setStyleSheet(f"color: {self._c()['accent']}; font-size: 12px;")
+            self.update_status_label.setStyleSheet(f"color: {self._c()['accent']}; font-size: {self._c()['fs_small']}px;")
             return
 
         if result["update_available"]:
             self.update_status_label.setText(
                 f"🆕 New version available: v{result['latest_version']} (current: v{result['current_version']})"
             )
-            self.update_status_label.setStyleSheet(f"color: {self._c()['success']}; font-size: 12px;")
+            self.update_status_label.setStyleSheet(f"color: {self._c()['success']}; font-size: {self._c()['fs_small']}px;")
 
             reply = QMessageBox.question(
                 self, "🆕 Update Available",
@@ -3268,7 +3322,7 @@ try {{
             self.update_status_label.setText(
                 f"✅ You're up to date! (v{result['current_version']})"
             )
-            self.update_status_label.setStyleSheet(f"color: {self._c()['success']}; font-size: 12px;")
+            self.update_status_label.setStyleSheet(f"color: {self._c()['success']}; font-size: {self._c()['fs_small']}px;")
 
     def _export_settings(self):
         """Export settings to a JSON file."""
@@ -3494,21 +3548,28 @@ try {{
         if new_theme != old_theme:
             self.theme_changed.emit(new_theme)
 
-        # Font
-        if self.font_cb.isChecked():
-            font_family = self.font_combo.currentFont().family()
-            self.config.set("font_family", font_family)
-        else:
-            font_family = "Segoe UI"
-            self.config.set("font_family", "")  # empty = default
+        # Font — 3-level system
+        _defaults = {
+            "primary":   ("Segoe UI", 22),
+            "secondary": ("Segoe UI", 13),
+            "tertiary":  ("Segoe UI", 11),
+        }
+        for level_id, (def_family, def_size) in _defaults.items():
+            cb = getattr(self, f"font_{level_id}_cb")
+            combo = getattr(self, f"font_{level_id}_combo")
+            spin = getattr(self, f"font_{level_id}_size")
+            if cb.isChecked():
+                self.config.set(f"font_{level_id}_family", combo.currentFont().family())
+                self.config.set(f"font_{level_id}_size", spin.value())
+            else:
+                self.config.set(f"font_{level_id}_family", "")
+                self.config.set(f"font_{level_id}_size", def_size)
 
-        if self.font_size_cb.isChecked():
-            font_size = self.font_size_spin.value()
-            self.config.set("font_size", font_size)
-        else:
-            font_size = 13
-            self.config.set("font_size", 13)  # 13 = default
-
+        # Backward compat
+        self.config.set("font_family", self.config.get("font_secondary_family", ""))
+        self.config.set("font_size", self.config.get("font_secondary_size", 13))
+        font_family = self.config.get("font_secondary_family", "") or "Segoe UI"
+        font_size = self.config.get("font_secondary_size", 13)
         self.font_changed.emit(font_family, font_size)
 
         # Language
@@ -3674,22 +3735,22 @@ class PythonDownloadDialog(QDialog):
         header = QLabel(
             "Download standalone Python builds for local use"
         )
-        header.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
+        header.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px;")
         header.setWordWrap(True)
         layout.addWidget(header)
 
         # Version list
         self.version_list = QListWidget()
         self.version_list.setStyleSheet(
-            "QListWidget { font-size: 13px; }"
-            "QListWidget::item { padding: 6px; }"
+            f"QListWidget {{ font-size: {self._c()['fs_base']}px; }}"
+            f"QListWidget::item {{ padding: 6px; }}"
             f"QListWidget::item:selected {{ background-color: {self._c()['accent']}; color: {self._c()['accent_fg']}; }}"
         )
         layout.addWidget(self.version_list)
 
         # Progress
         self.progress_label = QLabel("Fetching available versions...")
-        self.progress_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        self.progress_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         layout.addWidget(self.progress_label)
 
         self.progress_bar = QProgressBar()
@@ -3709,7 +3770,7 @@ class PythonDownloadDialog(QDialog):
             f"🖥️ System location: {system_dir}\n"
             f"👤 User location: {user_dir}"
         )
-        loc_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        loc_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         loc_label.setWordWrap(True)
         layout.addWidget(loc_label)
 
@@ -4118,7 +4179,7 @@ echo "OK"
         launch_layout.addRow("Jupyter Working Dir:", jupyter_dir_row)
 
         self.jupyter_custom_path_label = QLabel("")
-        self.jupyter_custom_path_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        self.jupyter_custom_path_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         self.jupyter_custom_path_label.setVisible(False)
         launch_layout.addRow("", self.jupyter_custom_path_label)
 
@@ -4217,20 +4278,20 @@ echo "OK"
         # Title + status
         header = QHBoxLayout()
         title_lbl = QLabel(title)
-        title_lbl.setStyleSheet(f"font-weight: bold; font-size: 13px; color: {self._c()['fg']};")
+        title_lbl.setStyleSheet(f"font-weight: bold; font-size: {self._c()['fs_base']}px; color: {self._c()['fg']};")
         header.addWidget(title_lbl)
 
         installed = is_tool_installed(tool_id)
         version = get_tool_version(tool_id) or ""
         status_lbl = QLabel(f"\u2705 {version}" if installed else "\u274c Not installed")
-        status_lbl.setStyleSheet(f"color: {self._c()['success'] if installed else self._c()['danger']}; font-size: 11px;")
+        status_lbl.setStyleSheet(f"color: {self._c()['success'] if installed else self._c()['danger']}; font-size: {self._c()['fs_tiny']}px;")
         status_lbl.setObjectName(f"status_{tool_id.replace('-','_')}")
         header.addWidget(status_lbl)
         header.addStretch()
         layout.addLayout(header)
 
         desc_lbl = QLabel(desc)
-        desc_lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        desc_lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         desc_lbl.setWordWrap(True)
         layout.addWidget(desc_lbl)
 
@@ -4240,7 +4301,7 @@ echo "OK"
 
         cb_key = f"cb_preset_{tool_id.replace('-','_')}"
         preset_cb = QCheckBox(preset_label)
-        preset_cb.setStyleSheet(f"font-size: 11px; color: {self._c()['fg']};")
+        preset_cb.setStyleSheet(f"font-size: {self._c()['fs_tiny']}px; color: {self._c()['fg']};")
         preset_cb.setObjectName(cb_key)
         controls.addWidget(preset_cb)
 
@@ -4260,7 +4321,7 @@ echo "OK"
         desc_hint = None
         if preset_descriptions:
             desc_hint = QLabel("")
-            desc_hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 10px; font-style: italic;")
+            desc_hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px; font-style: italic;")
             desc_hint.setFixedHeight(16)
 
             def _update_preset_hint(idx, _dh=desc_hint, _c=combo, _pd=preset_descriptions):
@@ -4277,14 +4338,14 @@ echo "OK"
 
         install_btn = QPushButton("\u2b07\ufe0f Install" if not installed else "\U0001f504 Reinstall")
         install_btn.setObjectName("secondary")
-        install_btn.setFixedHeight(26)
+        install_btn
         install_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_install(t, sb, sl))
         controls.addWidget(install_btn)
 
         if installed:
             cfg_btn = QPushButton("\u2699\ufe0f Configure Shell")
             cfg_btn.setObjectName("secondary")
-            cfg_btn.setFixedHeight(26)
+            cfg_btn
             cfg_btn.clicked.connect(lambda _, t=tool_id, c=combo, pk=preset_key: self._cli_configure(t, c, pk))
             controls.addWidget(cfg_btn)
 
@@ -4292,21 +4353,21 @@ echo "OK"
             if tool_id == "starship":
                 edit_btn = QPushButton("\U0001f4dd Edit Config")
                 edit_btn.setObjectName("secondary")
-                edit_btn.setFixedHeight(26)
+                edit_btn
                 edit_btn.setToolTip("Open starship.toml inline editor")
                 edit_btn.clicked.connect(self._open_starship_editor)
                 controls.addWidget(edit_btn)
 
                 test_btn = QPushButton("\u25b6\ufe0f Test")
                 test_btn.setObjectName("secondary")
-                test_btn.setFixedHeight(26)
+                test_btn
                 test_btn.setToolTip("Open a terminal to test your Starship prompt")
                 test_btn.clicked.connect(self._test_starship_in_terminal)
                 controls.addWidget(test_btn)
 
             uninst_btn = QPushButton("\U0001f5d1\ufe0f Uninstall")
             uninst_btn.setObjectName("danger")
-            uninst_btn.setFixedHeight(26)
+            uninst_btn
             uninst_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_uninstall(t, sb, sl))
             controls.addWidget(uninst_btn)
 
@@ -4330,34 +4391,34 @@ echo "OK"
 
         header = QHBoxLayout()
         title_lbl = QLabel(title)
-        title_lbl.setStyleSheet(f"font-weight: bold; font-size: 13px; color: {self._c()['fg']};")
+        title_lbl.setStyleSheet(f"font-weight: bold; font-size: {self._c()['fs_base']}px; color: {self._c()['fg']};")
         header.addWidget(title_lbl)
 
         installed = is_tool_installed(tool_id)
         version = get_tool_version(tool_id) or ""
         status_lbl = QLabel(f"✅ {version}" if installed else "❌ Not installed")
-        status_lbl.setStyleSheet(f"color: {self._c()['success'] if installed else self._c()['danger']}; font-size: 11px;")
+        status_lbl.setStyleSheet(f"color: {self._c()['success'] if installed else self._c()['danger']}; font-size: {self._c()['fs_tiny']}px;")
         header.addWidget(status_lbl)
         header.addStretch()
 
         install_btn = QPushButton("⬇️ Install" if not installed else "🔄 Reinstall")
         install_btn.setObjectName("secondary")
-        install_btn.setFixedHeight(26)
+        install_btn
         install_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_install(t, sb, sl))
         header.addWidget(install_btn)
 
         if installed:
             uninst_btn = QPushButton("🗑️")
             uninst_btn.setObjectName("danger")
-            uninst_btn.setFixedHeight(26)
-            uninst_btn.setFixedWidth(32)
+            uninst_btn
+            uninst_btn.setMinimumWidth(32)
             uninst_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_uninstall(t, sb, sl))
             header.addWidget(uninst_btn)
 
         layout.addLayout(header)
 
         desc_lbl = QLabel(desc)
-        desc_lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        desc_lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         layout.addWidget(desc_lbl)
         return card
 
@@ -4409,13 +4470,13 @@ echo "OK"
         dlg.setStyleSheet(
             f"QDialog {{ background: {self._c()['bg']}; }}"
             f"QPlainTextEdit {{ background: {self._c()['sidebar']}; color: {self._c()['fg']}; border: 1px solid {self._c()['border']}; "
-            "border-radius: 4px; font-family: 'Consolas', 'JetBrains Mono', monospace; font-size: 12px; }"
-            "QPushButton { padding: 6px 16px; border-radius: 4px; font-size: 12px; }"
+            f"border-radius: 4px; font-family: 'Consolas', 'JetBrains Mono', monospace; font-size: {self._c()['fs_small']}px; }}"
+            f"QPushButton {{ padding: 6px 16px; border-radius: 4px; font-size: {self._c()['fs_small']}px; }}"
             f"QPushButton#save {{ background: {self._c()['success']}; color: {self._c()['accent_fg']}; font-weight: bold; }}"
             "QPushButton#save:hover { background: #94d89d; }"
             f"QPushButton#secondary {{ background: {self._c()['secondary']}; color: {self._c()['fg']}; }}"
             "QPushButton#secondary:hover { background: #45475a; }"
-            "QLabel { color: #6c7086; font-size: 11px; }"
+            f"QLabel {{ color: #6c7086; font-size: {self._c()['fs_tiny']}px; }}"
         )
 
         layout = QVBoxLayout(dlg)
@@ -4500,7 +4561,7 @@ echo "OK"
         installed = is_tool_installed(tool_id)
         version = get_tool_version(tool_id) or ""
         status_lbl.setText(f"✅ {version}" if installed else "❌ Not installed")
-        status_lbl.setStyleSheet(f"color: {self._c()['success'] if installed else self._c()['danger']}; font-size: 11px;")
+        status_lbl.setStyleSheet(f"color: {self._c()['success'] if installed else self._c()['danger']}; font-size: {self._c()['fs_tiny']}px;")
         btn.setEnabled(True)
         btn.setText("🔄 Reinstall" if installed else "⬇️ Install")
 
@@ -4846,7 +4907,7 @@ echo "OK"
         cmd_edit.setPlaceholderText('e.g. wt -d "{path}" cmd /k "{activate}"')
 
         hint = QLabel("Variables: {path} = env path, {activate} = activate script")
-        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
 
         layout.addRow("Name:", name_edit)
         layout.addRow("Command:", cmd_edit)
@@ -4889,7 +4950,7 @@ echo "OK"
         name_edit = QLineEdit(old_name)
         cmd_edit = QLineEdit(old_cmd)
         hint = QLabel("Variables: {path} = env path, {activate} = activate script")
-        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         layout.addRow("Name:", name_edit)
         layout.addRow("Command:", cmd_edit)
         layout.addRow(hint)
@@ -5039,30 +5100,35 @@ echo "OK"
             self.theme_cb.setChecked(False)
             self.theme_combo.setEnabled(False)
 
-        # Font — ALWAYS start unticked, only tick if config has explicit non-default
-        font_family = self.config.get("font_family", "")
-        # Clear old default values from config
-        default_fonts = ("", "Segoe UI", "Yu Gothic UI", "MS Shell Dlg 2", "Arial", "Tahoma")
-        if not font_family or font_family in default_fonts:
-            self.font_cb.setChecked(False)
-            self.font_combo.setEnabled(False)
-            self.config.set("font_family", "")
-        else:
-            self.font_cb.setChecked(True)
-            self.font_combo.setEnabled(True)
-            self.font_combo.setCurrentFont(QFont(font_family))
-
-        font_size = self.config.get("font_size", 13)
-        default_sizes = (0, 12, 13, 14)
-        if not font_size or font_size in default_sizes:
-            self.font_size_cb.setChecked(False)
-            self.font_size_spin.setEnabled(False)
-            self.font_size_spin.setValue(13)
-            self.config.set("font_size", 13)
-        else:
-            self.font_size_cb.setChecked(True)
-            self.font_size_spin.setEnabled(True)
-            self.font_size_spin.setValue(font_size)
+        # Font — 3-level system load
+        _font_defaults = {
+            "primary":   ("Segoe UI", 22),
+            "secondary": ("Segoe UI", 13),
+            "tertiary":  ("Segoe UI", 11),
+        }
+        _sys_fonts = ("", "Segoe UI", "Yu Gothic UI", "MS Shell Dlg 2", "Arial", "Tahoma")
+        for level_id, (def_family, def_size) in _font_defaults.items():
+            cb = getattr(self, f"font_{level_id}_cb")
+            combo = getattr(self, f"font_{level_id}_combo")
+            spin = getattr(self, f"font_{level_id}_size")
+            saved_family = self.config.get(f"font_{level_id}_family", "")
+            saved_size = self.config.get(f"font_{level_id}_size", def_size)
+            if saved_family and saved_family not in _sys_fonts:
+                cb.setChecked(True)
+                combo.setEnabled(True)
+                combo.setCurrentFont(QFont(saved_family))
+                spin.setEnabled(True)
+                spin.setValue(saved_size)
+            elif saved_size != def_size and saved_size > 0:
+                cb.setChecked(True)
+                combo.setEnabled(True)
+                spin.setEnabled(True)
+                spin.setValue(saved_size)
+            else:
+                cb.setChecked(False)
+                combo.setEnabled(False)
+                spin.setEnabled(False)
+                spin.setValue(def_size)
 
         # Language
         lang = self.config.get("language", "en")
@@ -5876,7 +5942,7 @@ try {{
         pkgs_edit.setPlaceholderText("e.g. numpy, pandas, matplotlib, scikit-learn")
 
         hint = QLabel("Separate package names with commas.")
-        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         layout.addRow("Preset Name:", name_edit)
         layout.addRow("Packages:", pkgs_edit)
         layout.addRow(hint)
@@ -5914,7 +5980,7 @@ try {{
         name_edit = QLineEdit(old_name)
         pkgs_edit = QLineEdit(old_pkgs)
         hint = QLabel("Separate package names with commas.")
-        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        hint.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         layout.addRow("Preset Name:", name_edit)
         layout.addRow("Packages:", pkgs_edit)
         layout.addRow(hint)
@@ -5986,7 +6052,7 @@ try {{
         combo = QComboBox()
         combo.setStyleSheet(
             f"background-color: {self._c()['input_bg']}; color: {self._c()['fg']}; border: 1px solid {self._c()['border']}; "
-            "padding: 3px; font-size: 12px;"
+            f"padding: 3px; font-size: {self._c()['fs_small']}px;"
         )
         categories = self._get_all_categories()
         for cat in categories:
@@ -6387,7 +6453,7 @@ try {{
     def _check_for_updates(self):
         """Check PyPI for new version."""
         self.update_status_label.setText("🔍 Checking...")
-        self.update_status_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
+        self.update_status_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px;")
 
         # Run in background thread
         self._update_worker = _UpdateCheckWorker(parent=self)
@@ -6398,14 +6464,14 @@ try {{
         """Handle update check result."""
         if result.get("error"):
             self.update_status_label.setText(f"⚠️ {result['error']}")
-            self.update_status_label.setStyleSheet(f"color: {self._c()['accent']}; font-size: 12px;")
+            self.update_status_label.setStyleSheet(f"color: {self._c()['accent']}; font-size: {self._c()['fs_small']}px;")
             return
 
         if result["update_available"]:
             self.update_status_label.setText(
                 f"🆕 New version available: v{result['latest_version']} (current: v{result['current_version']})"
             )
-            self.update_status_label.setStyleSheet(f"color: {self._c()['success']}; font-size: 12px;")
+            self.update_status_label.setStyleSheet(f"color: {self._c()['success']}; font-size: {self._c()['fs_small']}px;")
 
             reply = QMessageBox.question(
                 self, "🆕 Update Available",
@@ -6423,7 +6489,7 @@ try {{
             self.update_status_label.setText(
                 f"✅ You're up to date! (v{result['current_version']})"
             )
-            self.update_status_label.setStyleSheet(f"color: {self._c()['success']}; font-size: 12px;")
+            self.update_status_label.setStyleSheet(f"color: {self._c()['success']}; font-size: {self._c()['fs_small']}px;")
 
     def _export_settings(self):
         """Export settings to a JSON file."""
@@ -6649,21 +6715,28 @@ try {{
         if new_theme != old_theme:
             self.theme_changed.emit(new_theme)
 
-        # Font
-        if self.font_cb.isChecked():
-            font_family = self.font_combo.currentFont().family()
-            self.config.set("font_family", font_family)
-        else:
-            font_family = "Segoe UI"
-            self.config.set("font_family", "")  # empty = default
+        # Font — 3-level system
+        _defaults = {
+            "primary":   ("Segoe UI", 22),
+            "secondary": ("Segoe UI", 13),
+            "tertiary":  ("Segoe UI", 11),
+        }
+        for level_id, (def_family, def_size) in _defaults.items():
+            cb = getattr(self, f"font_{level_id}_cb")
+            combo = getattr(self, f"font_{level_id}_combo")
+            spin = getattr(self, f"font_{level_id}_size")
+            if cb.isChecked():
+                self.config.set(f"font_{level_id}_family", combo.currentFont().family())
+                self.config.set(f"font_{level_id}_size", spin.value())
+            else:
+                self.config.set(f"font_{level_id}_family", "")
+                self.config.set(f"font_{level_id}_size", def_size)
 
-        if self.font_size_cb.isChecked():
-            font_size = self.font_size_spin.value()
-            self.config.set("font_size", font_size)
-        else:
-            font_size = 13
-            self.config.set("font_size", 13)  # 13 = default
-
+        # Backward compat
+        self.config.set("font_family", self.config.get("font_secondary_family", ""))
+        self.config.set("font_size", self.config.get("font_secondary_size", 13))
+        font_family = self.config.get("font_secondary_family", "") or "Segoe UI"
+        font_size = self.config.get("font_secondary_size", 13)
         self.font_changed.emit(font_family, font_size)
 
         # Language
@@ -6829,22 +6902,22 @@ class PythonDownloadDialog(QDialog):
         header = QLabel(
             "Download standalone Python builds for local use"
         )
-        header.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 12px;")
+        header.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px;")
         header.setWordWrap(True)
         layout.addWidget(header)
 
         # Version list
         self.version_list = QListWidget()
         self.version_list.setStyleSheet(
-            "QListWidget { font-size: 13px; }"
-            "QListWidget::item { padding: 6px; }"
+            f"QListWidget {{ font-size: {self._c()['fs_base']}px; }}"
+            f"QListWidget::item {{ padding: 6px; }}"
             f"QListWidget::item:selected {{ background-color: {self._c()['accent']}; color: {self._c()['accent_fg']}; }}"
         )
         layout.addWidget(self.version_list)
 
         # Progress
         self.progress_label = QLabel("Fetching available versions...")
-        self.progress_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        self.progress_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         layout.addWidget(self.progress_label)
 
         self.progress_bar = QProgressBar()
@@ -6864,7 +6937,7 @@ class PythonDownloadDialog(QDialog):
             f"🖥️ System location: {system_dir}\n"
             f"👤 User location: {user_dir}"
         )
-        loc_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        loc_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         loc_label.setWordWrap(True)
         layout.addWidget(loc_label)
 

@@ -225,9 +225,14 @@ class MainWindow(QMainWindow):
             webbrowser.open(result["release_url"])
 
     def _c(self) -> dict:
-        """Return current theme color palette."""
+        """Return current theme color palette with font hierarchy."""
         from src.gui.styles import get_colors
-        return get_colors(self.config.get("theme", "dark"))
+        return get_colors(
+            self.config.get("theme", "dark"),
+            self.config.get("font_secondary_size", 13) or self.config.get("font_size", 13),
+            self.config.get("font_primary_size", 22),
+            self.config.get("font_tertiary_size", 11),
+        )
 
     def _setup_window(self):
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
@@ -326,7 +331,7 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(logo_label)
 
         version_label = QLabel(f"      v{APP_VERSION}")
-        version_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px;")
+        version_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         sidebar_layout.addWidget(version_label)
         sidebar_layout.addSpacing(20)
 
@@ -364,7 +369,7 @@ class MainWindow(QMainWindow):
         ql_layout.addWidget(self.ql_sep)
 
         self.ql_title = QLabel("  ⚡ Quick Launch")
-        self.ql_title.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 10px; padding: 2px 0;")
+        self.ql_title.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px; padding: 2px 0;")
         self.ql_title.setToolTip(UI_TOOLTIPS.get("ql_section", ""))
         ql_layout.addWidget(self.ql_title)
 
@@ -372,7 +377,7 @@ class MainWindow(QMainWindow):
         self.ql_env_selector = QComboBox()
         self.ql_env_selector.setFixedHeight(28)
         self.ql_env_selector.setStyleSheet(
-            f"QComboBox {{ font-size: 12px; padding: 2px 8px; "
+            f"QComboBox {{ font-size: {self._c()['fs_small']}px; padding: 2px 8px; "
             f"background-color: {self._c()['input_bg']}; color: {self._c()['fg']}; "
             f"border: 1px solid {self._c()['border']}; border-radius: 4px; }}"
             f"QComboBox QAbstractItemView {{ background-color: {self._c()['card']}; color: {self._c()['fg']}; "
@@ -392,7 +397,7 @@ class MainWindow(QMainWindow):
         sidebar_layout.addStretch()
 
         self.footer_label = QLabel("  LGPL-3.0 License")
-        self.footer_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 10px;")
+        self.footer_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         sidebar_layout.addWidget(self.footer_label)
         main_layout.addWidget(sidebar)
 
@@ -463,9 +468,9 @@ class MainWindow(QMainWindow):
         self.env_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.env_table.verticalHeader().setDefaultSectionSize(38)
         self.env_table.setStyleSheet(
-            "QTableWidget { font-size: 14px; }"
-            "QTableWidget::item { padding: 4px 8px; }"
-            "QHeaderView::section { font-size: 13px; font-weight: bold; padding: 6px; }"
+            f"QTableWidget {{ font-size: {self._c()['fs_subheader']}px; }}"
+            f"QTableWidget::item {{ padding: 4px 8px; }}"
+            f"QHeaderView::section {{ font-size: {self._c()['fs_base']}px; font-weight: bold; padding: 6px; }}"
         )
         self.env_table.doubleClicked.connect(self._on_env_double_click)
         self.env_table.selectionModel().selectionChanged.connect(self._on_env_selected)
@@ -478,7 +483,7 @@ class MainWindow(QMainWindow):
         self.loading_label.setAlignment(Qt.AlignCenter)
         self.loading_label.setFixedHeight(40)
         self.loading_label.setStyleSheet(
-            f"color: {self._c()['fg']}; font-size: 13px; font-weight: bold; padding: 8px; "
+            f"color: {self._c()['fg']}; font-size: {self._c()['fs_base']}px; font-weight: bold; padding: 8px; "
             "background-color: #f9e2af; "
             "border-radius: 6px;"
         )
@@ -701,7 +706,7 @@ class MainWindow(QMainWindow):
             btn = QPushButton(f"{app['icon']} {app['name']}")
             btn.setFixedHeight(30)
             btn.setStyleSheet(
-                f"QPushButton {{ font-size: 12px; text-align: left; padding: 2px 8px; "
+                f"QPushButton {{ font-size: {self._c()['fs_small']}px; text-align: left; padding: 2px 8px; "
                 f"background-color: {c['sidebar']}; color: {c['fg']}; "
                 f"border: 1px solid {c['border']}; border-radius: 4px; }}"
                 f"QPushButton:hover {{ background-color: {c['hover']}; border-color: {c['accent']}; }}"
@@ -710,7 +715,7 @@ class MainWindow(QMainWindow):
             self.ql_buttons_layout.addWidget(btn)
         if not has_any:
             lbl = QLabel("  No apps installed")
-            lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: 11px; padding: 4px;")
+            lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px; padding: 4px;")
             self.ql_buttons_layout.addWidget(lbl)
 
     def _refresh_env_list(self, force: bool = False):
@@ -918,7 +923,7 @@ class MainWindow(QMainWindow):
             return
 
         menu = QMenu(self)
-        menu.setStyleSheet("QMenu { font-size: 13px; } QMenu::item { padding: 6px 20px; }")
+        menu.setStyleSheet(f"QMenu {{ font-size: {self._c()['fs_base']}px; }} QMenu::item {{ padding: 6px 20px; }}")
 
         a_manage = QAction("📦 Manage Packages", self)
         a_manage.triggered.connect(self._on_env_double_click)
@@ -1405,7 +1410,17 @@ class MainWindow(QMainWindow):
         self._applying_theme = True
         try:
             theme = self.config.get("theme", "dark")
-            self.setStyleSheet(get_theme(theme))
+            font_family = self.config.get("font_secondary_family", "") or self.config.get("font_family", "")
+            font_size = self.config.get("font_secondary_size", 13) or self.config.get("font_size", 13)
+            primary_family = self.config.get("font_primary_family", "")
+            primary_size = self.config.get("font_primary_size", 22)
+            tertiary_family = self.config.get("font_tertiary_family", "")
+            tertiary_size = self.config.get("font_tertiary_size", 11)
+            self.setStyleSheet(get_theme(
+                theme, font_family=font_family, font_size=font_size,
+                primary_family=primary_family, primary_size=primary_size,
+                tertiary_family=tertiary_family, tertiary_size=tertiary_size
+            ))
             if hasattr(self, "package_panel"):
                 self.package_panel.apply_theme(theme)
             if hasattr(self, "settings_page"):
@@ -1424,7 +1439,7 @@ class MainWindow(QMainWindow):
             if hasattr(self, "ql_sep"):
                 self.ql_sep.setStyleSheet(f"background-color: {c['border']}; max-height: 1px;")
             if hasattr(self, "ql_title"):
-                self.ql_title.setStyleSheet(f"color: {c['fg_muted']}; font-size: 10px; padding: 2px 0;")
+                self.ql_title.setStyleSheet(f"color: {c['fg_muted']}; font-size: {self._c()['fs_tiny']}px; padding: 2px 0;")
             if hasattr(self, "ql_env_selector"):
                 self.ql_env_selector.setStyleSheet(
                     f"background-color: {c['input_bg']}; color: {c['fg']}; "
@@ -1441,9 +1456,9 @@ class MainWindow(QMainWindow):
                         f"QPushButton:hover {{ background-color: {c['hover']}; border-color: {c['accent']}; }}"
                     )
             if hasattr(self, "version_label"):
-                self.version_label.setStyleSheet(f"color: {c['fg_muted']}; font-size: 11px;")
+                self.version_label.setStyleSheet(f"color: {c['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
             if hasattr(self, "footer_label"):
-                self.footer_label.setStyleSheet(f"color: {c['fg_muted']}; font-size: 10px;")
+                self.footer_label.setStyleSheet(f"color: {c['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         except Exception:
             pass
 
@@ -1470,12 +1485,8 @@ class MainWindow(QMainWindow):
         self._apply_theme()
 
     def _on_font_changed(self, family, size):
-        """Handle font change from settings page."""
-        from PySide6.QtWidgets import QApplication
-        if not family or size <= 0:
-            return
-        font = QFont(family, max(8, size))
-        QApplication.instance().setFont(font)
+        """Handle font change from settings page — rebuild stylesheet with new font."""
+        self._apply_theme()
 
     def _check_linux_venv_module(self):
         """On Linux, check if python3-venv is installed. If not, offer to install it."""

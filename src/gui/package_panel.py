@@ -170,7 +170,7 @@ class CommandHintDialog(QDialog):
         layout = QVBoxLayout(self)
 
         info = QLabel("Equivalent terminal command:")
-        info.setStyleSheet("font-size: 12px; color: #a6adc8;")
+        info.setStyleSheet(f"font-size: {self._c()['fs_small']}px; color: {self._c()['fg_muted']};")
         layout.addWidget(info)
 
         cmd_frame = QFrame()
@@ -179,14 +179,14 @@ class CommandHintDialog(QDialog):
             "border-radius: 8px; padding: 12px;"
         )
         cmd_layout = QVBoxLayout(cmd_frame)
-        cmd_label = QLabel(f"<code style='font-size:14px; color:#a6e3a1;'>{command}</code>")
+        cmd_label = QLabel(f"<code style='font-size:{self._c()['fs_subheader']}px; color:{self._c()['success']};'>{command}</code>")
         cmd_label.setTextFormat(Qt.RichText)
         cmd_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         cmd_layout.addWidget(cmd_label)
         layout.addWidget(cmd_frame)
 
         tip = QLabel("💡 You can copy this command and run it in any terminal.")
-        tip.setStyleSheet("font-size: 11px; color: #6c7086;")
+        tip.setStyleSheet(f"font-size: {self._c()['fs_tiny']}px; color: {self._c()['fg_muted']};")
         layout.addWidget(tip)
 
         btn_layout = QHBoxLayout()
@@ -273,10 +273,10 @@ class PackagePanel(QWidget):
             )
         if hasattr(self, "env_pkg_count"):
             self.env_pkg_count.setStyleSheet(
-                f"color: {c['muted']}; font-size: 12px; font-weight: bold;"
+                f"color: {c['muted']}; font-size: {self._c()['fs_small']}px; font-weight: bold;"
             )
-        info_style = f"color: {c['info']}; font-size: 11px;"
-        sep_style  = f"color: {c['sep']}; font-size: 11px;"
+        info_style = f"color: {c['info']}; font-size: {self._c()['fs_tiny']}px;"
+        sep_style  = f"color: {c['sep']}; font-size: {self._c()['fs_tiny']}px;"
         for attr in ("env_path_label", "env_disk_label", "env_backend_label", "env_last_used_label"):
             if hasattr(self, attr):
                 getattr(self, attr).setStyleSheet(info_style)
@@ -284,11 +284,11 @@ class PackagePanel(QWidget):
             if hasattr(self, attr):
                 getattr(self, attr).setStyleSheet(sep_style)
         if hasattr(self, "status_label"):
-            self.status_label.setStyleSheet(f"color: {c['muted']}; font-size: 12px;")
+            self.status_label.setStyleSheet(f"color: {c['muted']}; font-size: {self._c()['fs_small']}px;")
         if hasattr(self, "pkg_count_label"):
             self.pkg_count_label.setStyleSheet(f"color: {c['muted']};")
         if hasattr(self, "_legend_label"):
-            self._legend_label.setStyleSheet(f"color: {c['muted']}; font-size: 11px;")
+            self._legend_label.setStyleSheet(f"color: {c['muted']}; font-size: {self._c()['fs_tiny']}px;")
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
@@ -311,7 +311,7 @@ class PackagePanel(QWidget):
         row1.setSpacing(8)
 
         env_lbl = QLabel(f"🐍 {tr('environment')}")
-        env_lbl.setStyleSheet("font-weight: bold; font-size: 13px;")
+        env_lbl.setStyleSheet(f"font-weight: bold; font-size: {self._c()['fs_base']}px;")
         row1.addWidget(env_lbl)
 
         self.env_selector = QComboBox()
@@ -368,8 +368,8 @@ class PackagePanel(QWidget):
         row2 = QHBoxLayout()
         row2.setSpacing(16)
 
-        info_style = "color: #6c7086; font-size: 11px;"
-        separator_style = "color: #45475a; font-size: 11px;"
+        info_style = f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;"
+        separator_style = f"color: {self._c()['border']}; font-size: {self._c()['fs_tiny']}px;"
 
         self.env_path_label = QLabel("")
         self.env_path_label.setStyleSheet(info_style)
@@ -436,7 +436,7 @@ class PackagePanel(QWidget):
         status_layout.setContentsMargins(12, 4, 12, 4)
 
         self.status_label = QLabel("Select an environment to manage packages")
-        self.status_label.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        self.status_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px;")
         status_layout.addWidget(self.status_label, 1)
 
         self.cancel_btn = QPushButton("⛔ Cancel")
@@ -472,7 +472,7 @@ class PackagePanel(QWidget):
             "If an app is not installed, you can install it with one click."
         )
         info.setWordWrap(True)
-        info.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        info.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px;")
         layout.addWidget(info)
 
         # App cards grid
@@ -675,7 +675,7 @@ class PackagePanel(QWidget):
         # Description
         desc = QLabel(app_def["desc"])
         desc.setWordWrap(True)
-        desc.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        desc.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         desc.setToolTip(tooltip_text)
         layout.addWidget(desc)
 
@@ -685,7 +685,7 @@ class PackagePanel(QWidget):
         # Status label
         status = QLabel("")
         status.setObjectName(f"status_{app_def['name']}")
-        status.setStyleSheet("font-size: 11px;")
+        status.setStyleSheet(f"font-size: {self._c()['fs_tiny']}px;")
         layout.addWidget(status)
 
         layout.addStretch()
@@ -819,21 +819,21 @@ class PackagePanel(QWidget):
                 elif min_py:
                     py_range = f"Python ≥{min_py}"
                 status.setText(f"⚠️ Requires {py_range}")
-                status.setStyleSheet("color: #f9e2af; font-size: 11px;")
+                status.setStyleSheet(f"color: {self._c().get('warning', '#f9e2af')}; font-size: {self._c()['fs_tiny']}px;")
                 card._launch_btn.setEnabled(False)
                 card._launch_btn.setStyleSheet(f"background-color: {self._c()['disabled_bg']}; color: {self._c()['disabled_fg']};")
                 card._uninstall_btn.setVisible(False)
                 card._shortcut_btn.setVisible(False)
             elif is_installed:
                 status.setText("✅ Installed")
-                status.setStyleSheet("color: #a6e3a1; font-size: 11px;")
+                status.setStyleSheet(f"color: {self._c()['success']}; font-size: {self._c()['fs_tiny']}px;")
                 card._launch_btn.setEnabled(True)
                 card._launch_btn.setStyleSheet("")
                 card._uninstall_btn.setVisible(True)
                 card._shortcut_btn.setVisible(True)
             else:
                 status.setText(f"❌ Not installed — click Launch to install first")
-                status.setStyleSheet("color: #f38ba8; font-size: 11px;")
+                status.setStyleSheet(f"color: {self._c()['danger']}; font-size: {self._c()['fs_tiny']}px;")
                 card._launch_btn.setEnabled(True)  # Will prompt install
                 card._launch_btn.setStyleSheet("")
                 card._uninstall_btn.setVisible(False)
@@ -1521,7 +1521,7 @@ $s.Save()
         layout.addLayout(cat_layout)
 
         legend = QLabel("☑ installed  |  Check→install  Uncheck→remove")
-        legend.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        legend.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         self._legend_label = legend
         layout.addWidget(legend)
 
@@ -1546,7 +1546,7 @@ $s.Save()
         bottom_layout.addStretch()
 
         self.changes_label = QLabel("")
-        self.changes_label.setStyleSheet("color: #f9e2af; font-size: 12px;")
+        self.changes_label.setStyleSheet(f"color: {self._c().get('warning', '#f9e2af')}; font-size: {self._c()['fs_small']}px;")
         bottom_layout.addWidget(self.changes_label)
 
         self.apply_btn = QPushButton("  ✅ Apply Changes  ")
@@ -1604,7 +1604,7 @@ $s.Save()
             header.addWidget(name_label, 1)
 
             badge = QLabel("")
-            badge.setStyleSheet("color: #a6e3a1; font-size: 11px; font-weight: bold;")
+            badge.setStyleSheet(f"color: {self._c()['success']}; font-size: {self._c()['fs_tiny']}px; font-weight: bold;")
             header.addWidget(badge)
             card_layout.addLayout(header)
 
@@ -1614,7 +1614,7 @@ $s.Save()
                 desc_label = QLabel(preset_desc)
                 desc_label.setWordWrap(True)
                 desc_label.setStyleSheet(
-                    "color: #94a3b8; font-size: 11px; font-style: italic; "
+                    f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px; font-style: italic; "
                     "padding: 4px 0px; line-height: 1.3;"
                 )
                 card_layout.addWidget(desc_label)
@@ -1622,7 +1622,7 @@ $s.Save()
             pkg_text = ", ".join(packages)
             pkg_label = QLabel(pkg_text)
             pkg_label.setWordWrap(True)
-            pkg_label.setStyleSheet("color: #a6adc8; font-size: 12px;")
+            pkg_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px;")
             card_layout.addWidget(pkg_label)
 
             install_btn = QPushButton(f"{tr('install')} ({len(packages)} packages)")
@@ -1708,7 +1708,7 @@ $s.Save()
 
             if installed_count == len(packages):
                 badge.setText("✅ Installed")
-                badge.setStyleSheet("color: #a6e3a1; font-size: 12px; font-weight: bold;")
+                badge.setStyleSheet(f"color: {self._c()['success']}; font-size: {self._c()['fs_small']}px; font-weight: bold;")
                 install_btn.setText(f"✅ {tr('installed') if tr('installed') != 'installed' else 'Installed'}")
                 install_btn.setEnabled(False)
                 install_btn.setStyleSheet("background-color: #313244; color: #a6e3a1; font-weight: bold;")
@@ -1716,7 +1716,7 @@ $s.Save()
                     uninstall_btn.setVisible(True)
             elif installed_count > 0:
                 badge.setText(f"⚡ {installed_count}/{len(packages)}")
-                badge.setStyleSheet("color: #f9e2af; font-size: 12px; font-weight: bold;")
+                badge.setStyleSheet(f"color: {self._c().get('warning', '#f9e2af')}; font-size: {self._c()['fs_small']}px; font-weight: bold;")
                 remaining = len(packages) - installed_count
                 install_btn.setText(f"{tr('install')} ({remaining} remaining)")
                 install_btn.setEnabled(True)
@@ -1779,9 +1779,9 @@ $s.Save()
         self.output_log.setMaximumHeight(200)
         self.output_log.setPlaceholderText("Installation output will appear here...")
         self.output_log.setStyleSheet(
-            "QTextEdit { background-color: " + self._c()['card'] + "; color: " + self._c()['fg'] + "; "
-            "font-family: 'Consolas', 'Courier New', monospace; font-size: 12px; "
-            "border: 1px solid #313244; border-radius: 4px; padding: 4px; }"
+            f"QTextEdit {{ background-color: {self._c()['card']}; color: {self._c()['fg']}; "
+            f"font-family: 'Consolas', 'Courier New', monospace; font-size: {self._c()['fs_small']}px; "
+            f"border: 1px solid {self._c()['border']}; border-radius: 4px; padding: 4px; }}"
         )
         layout.addWidget(self.output_log)
 
@@ -1914,11 +1914,15 @@ $s.Save()
             QMessageBox.warning(self, "Error", f"Could not open terminal:\n{e}")
 
     def _c(self) -> dict:
-        """Return current theme color palette."""
+        """Return current theme color palette with font hierarchy."""
         from src.gui.styles import get_colors
         from src.core.config_manager import ConfigManager
-        theme = ConfigManager().get("theme", "dark")
-        return get_colors(theme)
+        cfg = ConfigManager()
+        theme = cfg.get("theme", "dark")
+        font_size = cfg.get("font_secondary_size", 13) or cfg.get("font_size", 13)
+        primary_size = cfg.get("font_primary_size", 22)
+        tertiary_size = cfg.get("font_tertiary_size", 11)
+        return get_colors(theme, font_size, primary_size, tertiary_size)
 
     def set_venv(self, venv_path: Path):
         backend = "pip"
@@ -2366,7 +2370,7 @@ $s.Save()
                 pypi_btn = QPushButton("PyPI")
                 pypi_btn.setFixedSize(34, 20)
                 pypi_btn.setStyleSheet(
-                    "QPushButton { font-size: 10px; padding: 0; background: #313244; "
+                    f"QPushButton {{ font-size: {self._c()['fs_tiny']}px; padding: 0; background: {self._c()['secondary']}; "
                     "color: #89b4fa; border: 1px solid #45475a; border-radius: 3px; }"
                     "QPushButton:hover { background: #45475a; }"
                 )
@@ -2377,7 +2381,7 @@ $s.Save()
                     docs_btn = QPushButton("Docs")
                     docs_btn.setFixedSize(34, 20)
                     docs_btn.setStyleSheet(
-                        "QPushButton { font-size: 10px; padding: 0; background: #313244; "
+                        f"QPushButton {{ font-size: {self._c()['fs_tiny']}px; padding: 0; background: {self._c()['secondary']}; "
                         "color: #a6e3a1; border: 1px solid #45475a; border-radius: 3px; }"
                         "QPushButton:hover { background: #45475a; }"
                     )
@@ -3126,7 +3130,7 @@ dependencies:
         # Source indicator
         if from_pypi:
             source_lbl = QLabel("⚠️ Not installed — info fetched from PyPI")
-            source_lbl.setStyleSheet("color: #f9e2af; font-size: 11px; padding: 2px 0;")
+            source_lbl.setStyleSheet(f"color: {self._c().get('warning', '#f9e2af')}; font-size: {self._c()['fs_tiny']}px; padding: 2px 0;")
             layout.addWidget(source_lbl)
 
         # Scrollable info area
@@ -3155,11 +3159,11 @@ dependencies:
                 row = QHBoxLayout()
                 key_lbl = QLabel(f"{key}:")
                 key_lbl.setFixedWidth(120)
-                key_lbl.setStyleSheet("color: #89b4fa; font-weight: bold; font-size: 12px;")
+                key_lbl.setStyleSheet(f"color: {self._c()['accent']}; font-weight: bold; font-size: {self._c()['fs_small']}px;")
                 key_lbl.setAlignment(Qt.AlignTop)
                 val_lbl = QLabel(display_val)
                 val_lbl.setWordWrap(True)
-                val_lbl.setStyleSheet("color: #cdd6f4; font-size: 12px;")
+                val_lbl.setStyleSheet(f"color: {self._c()['fg']}; font-size: {self._c()['fs_small']}px;")
                 val_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
                 if val != display_val:
                     val_lbl.setToolTip(val)

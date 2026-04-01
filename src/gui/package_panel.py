@@ -639,6 +639,8 @@ class PackagePanel(QWidget):
                 "icon_key": "r_console",
                 "package": "__system__",
                 "system_app": True,
+                "conda_packages": ["r-base"],
+                "conda_channels": ["conda-forge"],
                 "system_commands": {
                     "windows": ["R.exe", "--no-save"],
                     "linux":   ["R", "--no-save"],
@@ -662,6 +664,8 @@ class PackagePanel(QWidget):
                 "icon_key": "rstudio",
                 "package": "__system__",
                 "system_app": True,
+                "conda_packages": ["rstudio"],
+                "conda_channels": ["conda-forge"],
                 "system_commands": {
                     "windows": ["rstudio.exe"],
                     "linux":   ["rstudio"],
@@ -702,6 +706,8 @@ class PackagePanel(QWidget):
                 "icon_key": "dbeaver",
                 "package": "__system__",
                 "system_app": True,
+                "conda_packages": ["dbeaver-ce"],
+                "conda_channels": ["conda-forge"],
                 "system_commands": {
                     "windows": ["dbeaver.exe"],
                     "linux":   ["dbeaver"],
@@ -736,6 +742,8 @@ class PackagePanel(QWidget):
                 "icon_key": "jamovi",
                 "package": "__system__",
                 "system_app": True,
+                "conda_packages": ["jamovi"],
+                "conda_channels": ["conda-forge"],
                 "system_commands": {
                     "windows": ["jamovi.exe"],
                     "linux":   ["jamovi"],
@@ -749,6 +757,8 @@ class PackagePanel(QWidget):
                 "icon_key": "jasp",
                 "package": "__system__",
                 "system_app": True,
+                "conda_packages": ["jasp"],
+                "conda_channels": ["conda-forge"],
                 "system_commands": {
                     "windows": ["JASP.exe"],
                     "linux":   ["JASP"],
@@ -932,6 +942,43 @@ class PackagePanel(QWidget):
 
             # System apps: detect via installer's get_exe_path (more thorough than shutil.which)
             if is_system_app:
+                # ── Conda env: check conda packages ──────────────────────
+                _env_type = getattr(self, "_current_env_type", "venv")
+                _env_path = (self.pip_manager.venv_path
+                             if self.pip_manager else None)
+                if _env_type == "conda" and _env_path:
+                    from src.core.micromamba_installer import list_conda_packages
+                    _conda_pkgs = app_def.get("conda_packages", [])
+                    if _conda_pkgs:
+                        _installed = {p.get("name", "").lower()
+                                      for p in list_conda_packages(_env_path)}
+                        _found = _conda_pkgs[0].lower() in _installed
+                        status = card._status_label
+                        card._launch_btn.setEnabled(True)
+                        card._launch_btn.setStyleSheet("")
+                        card._uninstall_btn.setVisible(False)
+                        card._shortcut_btn.setVisible(False)
+                        if _found:
+                            status.setText("✅ Installed (conda-forge)")
+                            status.setStyleSheet(
+                                f"color: {self._c()['success']};"
+                                f" font-size: {self._c()['fs_tiny']}px;")
+                        else:
+                            status.setText("❌ Not installed — click Launch to install")
+                            status.setStyleSheet(
+                                f"color: {self._c()['danger']};"
+                                f" font-size: {self._c()['fs_tiny']}px;")
+                        continue
+                    else:
+                        status = card._status_label
+                        status.setText("⚠️ Not available for conda")
+                        status.setStyleSheet(
+                            f"color: {self._c().get('warning','#f9e2af')};"
+                            f" font-size: {self._c()['fs_tiny']}px;")
+                        card._launch_btn.setEnabled(False)
+                        continue
+                # ─────────────────────────────────────────────────────────
+
                 from src.core.system_tools_installer import get_installer as _get_installer
                 _icon_key = app_def.get("icon_key", "")
                 _installer = _get_installer(_icon_key)
@@ -1064,9 +1111,8 @@ class PackagePanel(QWidget):
     def _launch_system_app(self, app_def: dict):
         """
         Detect and launch a system-level application.
-        Checks: (1) portable install in current env, (2) system PATH.
-        If not found anywhere, offers silent install — portable into env if
-        env is a system-tools env, otherwise system-wide.
+        Checks: (1) conda install if in conda env, (2) portable install, (3) system PATH.
+        Offers appropriate install if not found.
         """
         import shutil as _shutil
         from src.utils.platform_utils import get_platform
@@ -1077,13 +1123,103 @@ class PackagePanel(QWidget):
         icon_key = app_def.get("icon_key", "")
         installer = get_installer(icon_key)
 
-        # Determine current env path (None if not a system-tools env)
+        # Detect env type
         env_path = None
+        env_type = getattr(self, "_current_env_type", "venv")
         if self.pip_manager:
             vp = self.pip_manager.venv_path
             marker = vp / ".venvstudio_env"
             if marker.exists():
                 env_path = vp
+
+        # ── Conda env: use micromamba to install ─────────────────────────
+        if env_type == "conda" and env_path:
+            conda_pkgs = app_def.get("conda_packages", [])
+            conda_channels = app_def.get("conda_channels", ["conda-forge"])
+
+            if not conda_pkgs:
+                QMessageBox.information(
+                    self, name,
+                    f"{name} is not available as a conda package.\n"
+                    f"Try switching to a Python or Tool Environment."
+                )
+                return
+
+            # Check if already installed via conda
+            from src.core.micromamba_installer import (
+                list_conda_packages, install_conda_packages,
+                get_micromamba_exe, download_micromamba,
+            )
+            installed_pkgs = {p.get("name", "").lower()
+                              for p in list_conda_packages(env_path)}
+            primary_pkg = conda_pkgs[0].lower()
+
+            if primary_pkg not in installed_pkgs:
+                reply = QMessageBox.question(
+                    self, f"Install {name}?",
+                    f"{name} is not installed in this conda environment.\n\n"
+                    f"Install via conda-forge:\n"
+                    f"  {', '.join(conda_pkgs)}\n\n"
+                    f"Install now?",
+                    QMessageBox.Yes | QMessageBox.No,
+                )
+                if reply != QMessageBox.Yes:
+                    return
+
+                self._set_busy(True)
+                self.status_label.setText(f"Installing {name} via conda-forge...")
+
+                _env_path = env_path
+                _pkgs = conda_pkgs
+                _channels = conda_channels
+
+                def _do_conda_install(callback=None):
+                    if not get_micromamba_exe():
+                        if callback:
+                            callback("Downloading micromamba...")
+                        download_micromamba(progress_cb=callback)
+                    ok = install_conda_packages(
+                        _env_path, _pkgs,
+                        channels=_channels,
+                        progress_cb=callback,
+                    )
+                    return (ok,
+                            f"{name} installed!" if ok
+                            else f"{name} conda install failed")
+
+                self.current_worker = WorkerThread(_do_conda_install)
+                self.current_worker.progress.connect(self._on_progress)
+                self.current_worker.finished.connect(
+                    lambda ok, msg, a=app_def:
+                        self._on_system_install_finished(ok, msg, a)
+                )
+                self.current_worker.start()
+                return
+
+            # Already installed — find exe in conda env and launch
+            conda_bin = env_path / ("Scripts" if plat == "windows" else "bin")
+            exe_candidates = [name, name.lower(), name + ".exe",
+                              name.upper(), name.upper() + ".exe"]
+            exe_path = None
+            for candidate in exe_candidates:
+                p = conda_bin / candidate
+                if p.exists():
+                    exe_path = str(p)
+                    break
+            if not exe_path:
+                exe_path = _shutil.which(name) or _shutil.which(name.lower())
+
+            if exe_path:
+                self._launch_exe(exe_path, app_def)
+            else:
+                QMessageBox.information(
+                    self, name,
+                    f"{name} is installed but executable not found.\n"
+                    f"Try launching from terminal:\n"
+                    f"  {conda_bin / name.lower()}"
+                )
+            return
+        # ─────────────────────────────────────────────────────────────────
 
         # 1. Check portable install in env
         exe_path = None
@@ -1156,12 +1292,18 @@ class PackagePanel(QWidget):
             self.current_worker.start()
             return
 
-        # 5. Found — build launch command
+        # 5. Found — launch
+        self._launch_exe(exe_path, app_def)
+
+    def _launch_exe(self, exe_path: str, app_def: dict):
+        """Launch an executable with proper detach/console flags."""
+        from src.utils.platform_utils import get_platform
+        plat = get_platform()
+        name = app_def["name"]
         sys_cmds = app_def.get("system_commands", {})
         cmd_parts = sys_cmds.get(plat) or sys_cmds.get("linux", [exe_path])
         cmd = [exe_path] + list(cmd_parts[1:])
         work_dir = os.path.expanduser("~")
-
         try:
             show_console = app_def.get("needs_console", False)
             if plat == "windows":
@@ -1177,16 +1319,13 @@ class PackagePanel(QWidget):
                 subprocess.Popen(cmd, cwd=work_dir,
                                  stdout=subprocess.DEVNULL,
                                  stderr=subprocess.DEVNULL)
-
             self.status_label.setText(f"✅ {name} launched")
-
             url = app_def.get("open_browser")
             if url:
                 from PySide6.QtCore import QTimer
                 import webbrowser
                 delay = app_def.get("browser_delay", 2)
                 QTimer.singleShot(delay * 1000, lambda: webbrowser.open(url))
-
         except Exception as e:
             QMessageBox.critical(self, f"{name} — Launch Error", str(e))
 
@@ -2301,6 +2440,18 @@ $s.Save()
             pass
         self.pip_manager = PipManager(venv_path, backend=backend)
         self._current_venv_path = venv_path
+
+        # Detect env type from marker
+        self._current_env_type = "venv"  # default
+        marker = venv_path / ".venvstudio_env"
+        if marker.exists():
+            try:
+                import json as _json
+                with open(marker) as f:
+                    _m = _json.load(f)
+                self._current_env_type = _m.get("type", "system_tools")
+            except Exception:
+                self._current_env_type = "system_tools"
         if hasattr(self, "_env_bar_terminal_btn"):
             self._env_bar_terminal_btn.setEnabled(True)
         # Select in dropdown

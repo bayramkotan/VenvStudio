@@ -1432,9 +1432,7 @@ class SettingsPage(QWidget):
         python_path = self.python_table.item(row, 1).text()
         is_windows = get_platform() == "windows"
         scripts_dir = os.path.join(os.path.dirname(python_path), "Scripts" if is_windows else "bin")
-        pip_exe = os.path.join(scripts_dir, "pip.exe" if is_windows else "pip")
 
-        pip_exists = os.path.isfile(pip_exe)
 
         # ── pip check ──
         pip_version_str = ""
@@ -1465,25 +1463,23 @@ class SettingsPage(QWidget):
         current_path = os.environ.get("PATH", "")
         scripts_in_path = scripts_dir.lower() in current_path.lower()
 
-        pip_ok = "✅ OK" if pip_exists else "❌ NOT FOUND"
-        pip_mod = "✅ Yes" if pip_runnable else "❌ No"
-        venv_ok = "✅ Available" if venv_available else "❌ Not available"
-        path_ok = "✅ Yes" if scripts_in_path else "⚠️ Not in current session"
+        pip_status = "✅ Working" if pip_runnable else "❌ Not working"
+        venv_status = "✅ Available" if venv_available else "❌ Not available"
+        path_status = "✅ Yes" if scripts_in_path else "⚠️ Not in current session"
 
         msg = (
             f"Python: {version}\n"
             f"Path:   {python_path}\n\n"
-            f"pip on disk:       {pip_ok}\n"
-            f"pip module works:  {pip_mod}\n"
-            f"venv module:       {venv_ok}\n"
-            f"Scripts in PATH:   {path_ok}"
+            f"pip:              {pip_status}\n"
+            f"venv:            {venv_status}\n"
+            f"Scripts in PATH: {path_status}"
         )
         if pip_runnable and pip_version_str:
             msg += "\n\n" + pip_version_str
 
         issues = []
         if not pip_runnable:
-            issues.append("pip module is not working.")
+            issues.append("pip is not working — python -m pip failed.")
         if not venv_available:
             if is_windows:
                 issues.append("venv module not available — try reinstalling Python with 'pip' option enabled.")
@@ -2612,7 +2608,6 @@ try {{
 
             if success:
                 # Verify pip.exe actually exists in Scripts dir
-                pip_exe = os.path.join(scripts_dir, "pip.exe")
                 pip_status = ""
                 if not os.path.isfile(pip_exe):
                     pip_status = (
@@ -4599,9 +4594,7 @@ echo "OK"
         python_path = self.python_table.item(row, 1).text()
         is_windows = get_platform() == "windows"
         scripts_dir = os.path.join(os.path.dirname(python_path), "Scripts" if is_windows else "bin")
-        pip_exe = os.path.join(scripts_dir, "pip.exe" if is_windows else "pip")
 
-        pip_exists = os.path.isfile(pip_exe)
 
         # ── pip check ──
         pip_version_str = ""
@@ -4632,25 +4625,23 @@ echo "OK"
         current_path = os.environ.get("PATH", "")
         scripts_in_path = scripts_dir.lower() in current_path.lower()
 
-        pip_ok = "✅ OK" if pip_exists else "❌ NOT FOUND"
-        pip_mod = "✅ Yes" if pip_runnable else "❌ No"
-        venv_ok = "✅ Available" if venv_available else "❌ Not available"
-        path_ok = "✅ Yes" if scripts_in_path else "⚠️ Not in current session"
+        pip_status = "✅ Working" if pip_runnable else "❌ Not working"
+        venv_status = "✅ Available" if venv_available else "❌ Not available"
+        path_status = "✅ Yes" if scripts_in_path else "⚠️ Not in current session"
 
         msg = (
             f"Python: {version}\n"
             f"Path:   {python_path}\n\n"
-            f"pip on disk:       {pip_ok}\n"
-            f"pip module works:  {pip_mod}\n"
-            f"venv module:       {venv_ok}\n"
-            f"Scripts in PATH:   {path_ok}"
+            f"pip:              {pip_status}\n"
+            f"venv:            {venv_status}\n"
+            f"Scripts in PATH: {path_status}"
         )
         if pip_runnable and pip_version_str:
             msg += "\n\n" + pip_version_str
 
         issues = []
         if not pip_runnable:
-            issues.append("pip module is not working.")
+            issues.append("pip is not working — python -m pip failed.")
         if not venv_available:
             if is_windows:
                 issues.append("venv module not available — try reinstalling Python with 'pip' option enabled.")
@@ -5779,7 +5770,6 @@ try {{
 
             if success:
                 # Verify pip.exe actually exists in Scripts dir
-                pip_exe = os.path.join(scripts_dir, "pip.exe")
                 pip_status = ""
                 if not os.path.isfile(pip_exe):
                     pip_status = (

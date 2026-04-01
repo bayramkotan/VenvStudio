@@ -533,10 +533,14 @@ class MainWindow(QMainWindow):
         self.btn_export.setEnabled(False)
         export_menu = QMenu(self.btn_export)
         export_menu.addAction("📄 requirements.txt", self._export_requirements)
+        export_menu.addAction("📄 requirements-frozen.txt", self._export_frozen)
+        export_menu.addSeparator()
+        export_menu.addAction("🐍 environment.yml (Conda)", self._export_conda_yml)
+        export_menu.addAction("📦 pyproject.toml", self._export_pyproject)
+        export_menu.addAction("📊 JSON", self._export_json)
+        export_menu.addSeparator()
         export_menu.addAction("🐳 Dockerfile", self._export_dockerfile)
         export_menu.addAction("🐳 docker-compose.yml", self._export_docker_compose)
-        export_menu.addAction("📦 pyproject.toml", self._export_pyproject)
-        export_menu.addAction("🐍 environment.yml (Conda)", self._export_conda_yml)
         export_menu.addSeparator()
         export_menu.addAction("📋 Copy to Clipboard", self._export_clipboard)
         self.btn_export.setMenu(export_menu)
@@ -913,7 +917,21 @@ class MainWindow(QMainWindow):
         from PySide6.QtGui import QAction
 
         index = self.env_table.indexAt(pos)
+
+        menu = QMenu(self)
+        menu.setStyleSheet(f"QMenu {{ font-size: {self._c()['fs_base']}px; }} QMenu::item {{ padding: 6px 20px; }}")
+
         if not index.isValid():
+            # Boş alana sağ tık — genel işlemler
+            a_new = QAction("➕ New Environment", self)
+            a_new.triggered.connect(self._create_env)
+            menu.addAction(a_new)
+
+            a_refresh = QAction("🔄 Refresh", self)
+            a_refresh.triggered.connect(lambda: self._refresh_env_list(force=True))
+            menu.addAction(a_refresh)
+
+            menu.exec(self.env_table.viewport().mapToGlobal(pos))
             return
 
         # Satırı seç
@@ -921,9 +939,6 @@ class MainWindow(QMainWindow):
         name = self._get_selected_env_name()
         if not name:
             return
-
-        menu = QMenu(self)
-        menu.setStyleSheet(f"QMenu {{ font-size: {self._c()['fs_base']}px; }} QMenu::item {{ padding: 6px 20px; }}")
 
         a_manage = QAction("📦 Manage Packages", self)
         a_manage.triggered.connect(self._on_env_double_click)
@@ -953,9 +968,18 @@ class MainWindow(QMainWindow):
         a_rename_full.triggered.connect(self._rename_env_full)
         menu.addAction(a_rename_full)
 
-        a_export = QAction("📤 Export", self)
-        a_export.triggered.connect(self._export_requirements)
-        menu.addAction(a_export)
+        export_sub = menu.addMenu("📤 Export")
+        export_sub.addAction("📄 requirements.txt", self._export_requirements)
+        export_sub.addAction("📄 requirements-frozen.txt", self._export_frozen)
+        export_sub.addSeparator()
+        export_sub.addAction("🐍 environment.yml (Conda)", self._export_conda_yml)
+        export_sub.addAction("📦 pyproject.toml", self._export_pyproject)
+        export_sub.addAction("📊 JSON", self._export_json)
+        export_sub.addSeparator()
+        export_sub.addAction("🐳 Dockerfile", self._export_dockerfile)
+        export_sub.addAction("🐳 docker-compose.yml", self._export_docker_compose)
+        export_sub.addSeparator()
+        export_sub.addAction("📋 Copy to Clipboard", self._export_clipboard)
 
         menu.addSeparator()
 
@@ -1375,6 +1399,77 @@ class MainWindow(QMainWindow):
         count = len(freeze.strip().splitlines())
         self.statusBar().showMessage(f"📋 {count} packages copied to clipboard!")
         QMessageBox.information(self, "✅ Copied", f"{count} packages copied to clipboard.")
+
+    def _export_frozen(self):
+        """Export requirements with hashes (pip freeze --all style)."""
+        name = self._get_selected_env_name()
+        if not name:
+            return
+        venv_path = self.venv_manager.base_dir / name
+        import subprocess, os
+        from src.utils.platform_utils import subprocess_args
+        if os.name == "nt":
+            pip_exe = venv_path / "Scripts" / "pip.exe"
+        else:
+            pip_exe = venv_path / "bin" / "pip"
+        if not pip_exe.exists():
+            QMessageBox.warning(self, "Error", "pip not found in this environment.")
+            return
+        try:
+            result = subprocess.run(
+                [str(pip_exe), "freeze", "--all"],
+                **subprocess_args(capture_output=True, text=True, timeout=30)
+            )
+            freeze = result.stdout.strip()
+        except Exception as e:
+            QMessageBox.critical(self, "Error", str(e))
+            return
+        if not freeze:
+            QMessageBox.information(self, "Info", "No packages installed.")
+            return
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, "Export Frozen Requirements", "requirements-frozen.txt", "Text Files (*.txt)"
+        )
+        if filepath:
+            try:
+                with open(filepath, "w", encoding="utf-8") as f:
+                    f.write(freeze + "\n")
+                QMessageBox.information(self, "✅ Success", f"Exported {len(freeze.splitlines())} packages to:\n{filepath}")
+            except IOError as e:
+                QMessageBox.critical(self, "Error", str(e))
+
+    def _export_json(self):
+        """Export environment info as JSON."""
+        import json
+        name = self._get_selected_env_name()
+        if not name:
+            return
+        freeze, py_ver = self._get_env_freeze_and_version()
+        if not freeze:
+            return
+        packages = []
+        for line in freeze.strip().splitlines():
+            if "==" in line:
+                pkg, ver = line.split("==", 1)
+                packages.append({"name": pkg.strip(), "version": ver.strip()})
+            else:
+                packages.append({"name": line.strip(), "version": ""})
+        data = {
+            "environment": name,
+            "python_version": py_ver,
+            "package_count": len(packages),
+            "packages": packages,
+        }
+        filepath, _ = QFileDialog.getSaveFileName(
+            self, "Export JSON", f"{name}.json", "JSON Files (*.json)"
+        )
+        if filepath:
+            try:
+                with open(filepath, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+                QMessageBox.information(self, "✅ Success", f"Exported to:\n{filepath}")
+            except IOError as e:
+                QMessageBox.critical(self, "Error", str(e))
 
     def _open_package_manager(self):
         name = self._get_selected_env_name()

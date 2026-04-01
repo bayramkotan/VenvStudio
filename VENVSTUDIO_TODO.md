@@ -30,10 +30,7 @@
 ## 🔴 KRİTİK BUGLAR
 
 - **B42** — Python yükleyici güvenlik kontrolleri (en sona alındı)
-- **B47** — ⚠️ DEVAM EDİYOR: Light mod'da siyah tablolar/log/kartlar
-  - Settings tabloları (Custom Categories, Preset Manager, Custom Catalog)
-  - CLI/TUI log alanı ve araç kartları
-  - `_refresh_styles()` tema değişince çalışmıyor — sonraki chat'te çözülecek
+- **B47** — ✅ TAMAMLANDI (v1.4.25): Light mod tema düzeltmeleri
 - **B48** — @safe_slot/SafeWorkerMixin yaygınlaştırılmadı
 - **B49** — Windows EXE: Python kurulu değilse kullanıcıya sor
 - **B51** — Windows Only Name Rename sonrası pip bozuluyor
@@ -106,18 +103,25 @@
 | — | v1.4.15 | --cert ile sistem SSL |
 | — | v1.4.12 | email fix |
 | Temalar | v1.4.24 | 13 tema (8 dark + 5 light) |
+| B47 | v1.4.25 | Light mod tema: tablolar, log, kartlar, _refresh_styles, hardcoded renkler |
+| B55 | v1.4.25 | Quick Launch sidebar tema bozulması düzeltildi |
+| B56 | v1.4.25 | System Default Python gösterimi, Source etiketleri, Download dialog |
+| — | v1.4.25 | Verify pip & venv, Download Python sola, sticky Save/Reset |
+| — | v1.4.26 | 3-level font sistemi (Headings/UI&Menus/Details), font hiyerarşisi, Reset Fonts |
+| — | v1.4.26 | Buton setFixedHeight kaldırıldı, package_panel hardcoded renkler tema-aware |
 
 ---
 
 ## 🔴 YENİ BUGLAR (v1.4.24 sonrası)
 
-- **B55** — Open Terminal veya env geçişi yapınca Quick Launch teması bozuluyor
-  - Sidebar inline style'ları reset oluyor
-  - `_refresh_sidebar_styles()` bu durumlarda çağrılmıyor
+- **B55** — ✅ TAMAMLANDI (v1.4.25): Quick Launch sidebar tema düzeltmesi
 
-- **B56** — Settings > Python Versions altında System Default Python görünmüyor
-  - Kullanıcı hangi system python'un kurulu olduğunu göremez
-  - System Default'u da listeye ekle (versiyon + path)
+- **B56** — ✅ TAMAMLANDI (v1.4.25): System Default Python görünümü düzeltildi
+
+- **B57** — Package Info penceresi buton yazı taşması
+  - Install/Uninstall butonları yazı sığmıyor (ör. "Install syr...", "Copy A....")
+  - Open Terminal butonunda (Packages + Environments) yazı boyu sığmamış
+  - Open Terminal'deki P harfinin kuyruğu kesilmiş (font/padding sorunu)
 
 ## 🟡 YENİ PLANLI
 
@@ -128,3 +132,14 @@
   - Dockerfile
   - pyproject.toml
   - JSON
+
+- **F72** — Environments boş alana sağ tık menüsü
+  - "New Environment" seçeneği
+  - "Refresh" seçeneği
+
+- **F73** — UI/UX Genel İyileştirme
+  - Font büyütünce layout bozulmaları (buton taşmaları, kart genişlikleri)
+  - Tüm sayfaların farklı font boyutlarında test edilmesi
+  - Responsive layout — pencere boyutuna göre uyum
+  - Buton yazılarının kesilmemesi (elide yerine wrap veya minimum genişlik)
+  - Genel görsel tutarlılık kontrolü (spacing, padding, alignment)

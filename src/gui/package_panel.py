@@ -349,7 +349,6 @@ class PackagePanel(QWidget):
 
         self._env_bar_terminal_btn = QPushButton("🖥 Open Terminal")
         self._env_bar_terminal_btn.setObjectName("secondary")
-        self._env_bar_terminal_btn.setFixedHeight(28)
         self._env_bar_terminal_btn.setMinimumWidth(110)
         self._env_bar_terminal_btn.setToolTip(UI_TOOLTIPS.get("btn_open_terminal", "Open terminal with this environment activated"))
         self._env_bar_terminal_btn.clicked.connect(self._open_terminal_here)
@@ -357,7 +356,7 @@ class PackagePanel(QWidget):
         row1.addWidget(self._env_bar_terminal_btn)
 
         self.env_pkg_count = QLabel("")
-        self.env_pkg_count.setStyleSheet("color: #a6adc8; font-size: 15px; font-weight: bold; padding-left: 12px;")
+        self.env_pkg_count.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_subheader']}px; font-weight: bold; padding-left: 12px;")
         row1.addWidget(self.env_pkg_count)
 
         row1.addStretch()
@@ -3123,7 +3122,8 @@ dependencies:
 
         dialog = QDialog(self)
         dialog.setWindowTitle(f"📦 {pkg_name} — Package Info")
-        dialog.setFixedSize(520, 400)
+        dialog.setMinimumSize(520, 400)
+        dialog.resize(600, 450)
         layout = QVBoxLayout(dialog)
         layout.setSpacing(8)
 
@@ -3140,7 +3140,7 @@ dependencies:
 
         info_frame = QFrame()
         info_frame.setStyleSheet(
-            "QFrame { background-color: #1e1e2e; border: 1px solid #313244; border-radius: 6px; padding: 4px; }"
+            f"QFrame {{ background-color: {self._c()['card']}; border: 1px solid {self._c()['border']}; border-radius: 6px; padding: 4px; }}"
         )
         info_layout = QVBoxLayout(info_frame)
         info_layout.setSpacing(4)

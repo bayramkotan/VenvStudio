@@ -446,7 +446,7 @@ class VenvManager:
         for item in sorted(self.base_dir.iterdir()):
             if not item.is_dir():
                 continue
-            # ── System tools env (empty folder with marker) ──────────────
+            # ── Marker-based env (system_tools or conda) ──────────────────
             marker = item / ".venvstudio_env"
             if marker.exists():
                 try:
@@ -454,12 +454,26 @@ class VenvManager:
                         marker_data = json.load(f)
                 except Exception:
                     marker_data = {}
+                env_type = marker_data.get("type", "system_tools")
                 info = VenvInfo(name=item.name, path=item, is_valid=True)
-                info.python_version = f"🗂 {marker_data.get('type', 'system_tools')}"
-                info.package_count = 0
+                if env_type == "conda":
+                    pyver = marker_data.get("python_version", "")
+                    info.python_version = (
+                        f"🦎 conda py{pyver}" if pyver else "🦎 conda"
+                    )
+                    # Count conda packages
+                    try:
+                        from src.core.micromamba_installer import list_conda_packages
+                        info.package_count = len(list_conda_packages(item))
+                    except Exception:
+                        info.package_count = 0
+                else:
+                    info.python_version = "🗂 system_tools"
+                    info.package_count = 0
                 info.size = get_venv_size(item)
                 try:
-                    info.created = datetime.fromtimestamp(item.stat().st_ctime).isoformat()
+                    info.created = datetime.fromtimestamp(
+                        item.stat().st_ctime).isoformat()
                 except OSError:
                     pass
                 venvs.append(info)
@@ -552,14 +566,27 @@ class VenvManager:
             return venvs
         for item in sorted(self.base_dir.iterdir()):
             if item.is_dir():
-                # System tools env shortcut
+                # Marker-based env (system_tools or conda)
                 marker = item / ".venvstudio_env"
                 if marker.exists():
+                    try:
+                        with open(marker) as f:
+                            marker_data = json.load(f)
+                    except Exception:
+                        marker_data = {}
+                    env_type = marker_data.get("type", "system_tools")
                     info = VenvInfo(name=item.name, path=item, is_valid=True)
-                    info.python_version = "🗂 system_tools"
+                    if env_type == "conda":
+                        pyver = marker_data.get("python_version", "")
+                        info.python_version = (
+                            f"🦎 conda py{pyver}" if pyver else "🦎 conda"
+                        )
+                    else:
+                        info.python_version = "🗂 system_tools"
                     info.size = get_venv_size(item)
                     try:
-                        info.created = datetime.fromtimestamp(item.stat().st_ctime).isoformat()
+                        info.created = datetime.fromtimestamp(
+                            item.stat().st_ctime).isoformat()
                     except OSError:
                         pass
                     venvs.append(info)

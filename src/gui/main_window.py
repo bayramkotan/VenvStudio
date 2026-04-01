@@ -784,9 +784,13 @@ class MainWindow(QMainWindow):
         for i, env in enumerate(envs):
             name_item = QTableWidgetItem(f"  {env.name}")
             is_system_tools = str(env.python_version).startswith("🗂")
+            is_conda_env    = str(env.python_version).startswith("🦎")
             if is_system_tools:
                 name_item.setForeground(QColor(self._c().get("accent", "#89b4fa")))
                 name_item.setToolTip("System tools environment — install R, RStudio, Ollama, DBeaver etc. from Launch tab")
+            elif is_conda_env:
+                name_item.setForeground(QColor("#a6e3a1"))  # green
+                name_item.setToolTip("Conda environment (micromamba) — install any conda-forge package from Launch tab")
             elif not env.is_valid:
                 name_item.setForeground(Qt.red)
                 name_item.setToolTip("Invalid environment (Python not found)")

@@ -127,14 +127,51 @@ class EnvCreateDialog(QDialog):
         from PySide6.QtWidgets import QComboBox as _QCB
         self.env_type_combo = _QCB()
         self.env_type_combo.addItem("🐍 Python Virtual Environment", "venv")
+        self.env_type_combo.addItem("🦎 Conda Environment (micromamba)", "conda")
         self.env_type_combo.addItem("🛠 Tool Environment", "empty")
         self.env_type_combo.setToolTip(
             "Python venv: isolated Python environment with pip\n"
-            "Empty folder: plain directory for installing system tools\n"
-            "           (R, RStudio, Ollama, DBeaver, Quarto, JASP, jamovi…)"
+            "Conda Environment: micromamba-powered — install R, RStudio,\n"
+            "           jamovi, JASP, DBeaver and any conda-forge package\n"
+            "Tool Environment: plain directory for portable system tools"
         )
         self.env_type_combo.currentIndexChanged.connect(self._on_env_type_changed)
         form_layout.addRow("Type:", self.env_type_combo)
+
+        # ── Conda options row (hidden by default) ─────────────────────────
+        from PySide6.QtWidgets import QWidget as _QW2
+        self.conda_row_widget = _QW2()
+        _conda_layout = QVBoxLayout(self.conda_row_widget)
+        _conda_layout.setContentsMargins(0, 0, 0, 4)
+        _conda_layout.setSpacing(4)
+
+        # Python version for conda env
+        _conda_py_row = QHBoxLayout()
+        _conda_py_label = QLabel("Python:")
+        _conda_py_label.setMinimumWidth(80)
+        _conda_py_row.addWidget(_conda_py_label)
+        self.conda_python_combo = _QCB()
+        self.conda_python_combo.addItem("No Python (tools only)", "")
+        for pyver in ("3.13", "3.12", "3.11", "3.10", "3.9"):
+            self.conda_python_combo.addItem(f"Python {pyver}", pyver)
+        self.conda_python_combo.setCurrentIndex(1)  # default 3.13
+        _conda_py_row.addWidget(self.conda_python_combo, 1)
+        _conda_layout.addLayout(_conda_py_row)
+
+        # Conda channels info
+        _conda_note = QLabel(
+            "📦 Uses conda-forge channel — installs R, RStudio, jamovi,\n"
+            "JASP, DBeaver and 25,000+ scientific packages.\n"
+            "micromamba (~10 MB) will be downloaded automatically."
+        )
+        _conda_note.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        _conda_note.setWordWrap(True)
+        _conda_layout.addWidget(_conda_note)
+
+        self.conda_row_label = QLabel("Conda:")
+        self.conda_row_widget.setVisible(False)
+        self.conda_row_label.setVisible(False)
+        form_layout.addRow(self.conda_row_label, self.conda_row_widget)
         # ─────────────────────────────────────────────────────────────────
 
         self.python_combo = QComboBox()
@@ -296,28 +333,45 @@ class EnvCreateDialog(QDialog):
         root.addLayout(btn_layout)
 
     def _on_env_type_changed(self, index):
-        """Show/hide Python row and Options based on env type."""
-        is_venv = self.env_type_combo.currentData() == "venv"
+        """Show/hide rows based on env type: venv / conda / empty."""
+        env_type = self.env_type_combo.currentData()
+        is_venv  = env_type == "venv"
+        is_conda = env_type == "conda"
+        is_empty = env_type == "empty"
 
-        # python_label_widget is a QLabel widget (not string) in QFormLayout
-        # — setVisible works reliably on both label and field
+        # Python row (venv only)
         if hasattr(self, "python_label_widget"):
             self.python_label_widget.setVisible(is_venv)
         if hasattr(self, "python_combo"):
             self.python_combo.setVisible(is_venv)
         if hasattr(self, "python_path_label"):
             self.python_path_label.setVisible(is_venv)
-        # Also hide the field widget (parent of combo)
         if hasattr(self, "python_combo") and self.python_combo.parent():
             self.python_combo.parent().setVisible(is_venv)
 
+        # Conda row
+        if hasattr(self, "conda_row_widget"):
+            self.conda_row_widget.setVisible(is_conda)
+        if hasattr(self, "conda_row_label"):
+            self.conda_row_label.setVisible(is_conda)
+
+        # Options (venv only)
         if hasattr(self, "options_group"):
             self.options_group.setVisible(is_venv)
 
+        # Progress text
         if is_venv:
             self.cmd_label.setText(
                 "💡  Equivalent terminal commands:\n"
                 "will appear here when creation starts."
+            )
+        elif is_conda:
+            self.cmd_label.setText(
+                "🦎  A Conda Environment will be created\n"
+                "    using micromamba + conda-forge.\n\n"
+                "You can install R, RStudio, jamovi, JASP,\n"
+                "DBeaver and 25,000+ packages from the\n"
+                "Launch tab after creation."
             )
         else:
             self.cmd_label.setText(
@@ -365,6 +419,75 @@ class EnvCreateDialog(QDialog):
 
         # ── Empty folder env ──────────────────────────────────────────────
         env_type = self.env_type_combo.currentData() if hasattr(self, "env_type_combo") else "venv"
+
+        # ── Conda env ─────────────────────────────────────────────────────
+        if env_type == "conda":
+            import os
+            location = self.location_label.text()
+            env_path = Path(os.path.join(location, name))
+            python_version = self.conda_python_combo.currentData() \
+                if hasattr(self, "conda_python_combo") else "3.12"
+
+            self.progress_bar.setVisible(True)
+            self.create_btn.setEnabled(False)
+            self.create_btn.setText("Creating...")
+            self.name_input.setEnabled(False)
+            self.env_type_combo.setEnabled(False)
+            self.status_label.setText("Preparing micromamba...")
+
+            def _do_conda_create(callback=None):
+                from src.core.micromamba_installer import (
+                    get_micromamba_exe, download_micromamba,
+                    create_conda_env, write_conda_marker,
+                )
+                import datetime, json
+                # Step 1: ensure micromamba available
+                if not get_micromamba_exe():
+                    if callback:
+                        callback("Downloading micromamba...")
+                    download_micromamba(progress_cb=callback)
+
+                if not get_micromamba_exe():
+                    return False, "Could not download micromamba"
+
+                # Step 2: create env
+                ok = create_conda_env(
+                    env_path=env_path,
+                    python_version=python_version,
+                    progress_cb=callback,
+                )
+                if not ok:
+                    return False, "conda env creation failed"
+
+                # Step 3: write marker
+                write_conda_marker(env_path, python_version=python_version)
+
+                return True, f"Conda environment '{name}' created!"
+
+            def _on_conda_done(success, message):
+                self.progress_bar.setVisible(False)
+                self.create_btn.setEnabled(True)
+                self.create_btn.setText("Create Environment")
+                self.name_input.setEnabled(True)
+                self.env_type_combo.setEnabled(True)
+                if success:
+                    self.status_label.setText(f"✅ {message}")
+                    self.env_created.emit(name)
+                    from PySide6.QtCore import QTimer
+                    QTimer.singleShot(800, self.accept)
+                else:
+                    self.status_label.setText(f"❌ {message}")
+                    QMessageBox.critical(self, "Error", message)
+
+            from src.gui.package_panel import WorkerThread
+            self.worker = WorkerThread(_do_conda_create)
+            self.worker.progress.connect(
+                lambda msg: self.cmd_label.setText(msg))
+            self.worker.finished.connect(_on_conda_done)
+            self.worker.start()
+            return
+        # ─────────────────────────────────────────────────────────────────
+
         if env_type == "empty":
             import os
             location = self.location_label.text()

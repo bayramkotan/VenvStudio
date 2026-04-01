@@ -1163,6 +1163,40 @@ class PackagePanel(QWidget):
         """After installing an app package, refresh and launch."""
         self._set_busy(False)
         if success:
+            # ── Orange3 AppImage post-install verification ──────────────────
+            # On AppImage, PyQt5/.so links can be broken even when pip reports
+            # success. Verify with a clean-env import test before launching.
+            if app_def.get("package") == "orange3" and self.pip_manager:
+                import os, sys
+                from src.utils.platform_utils import subprocess_args, get_platform
+                if os.environ.get("APPIMAGE") or getattr(sys, "frozen", False):
+                    python_exe = get_python_executable(self.pip_manager.venv_path)
+                    sp_kw = subprocess_args(capture_output=True, text=True, timeout=20)
+                    # subprocess_args already strips LD_LIBRARY_PATH etc on AppImage
+                    try:
+                        verify = subprocess.run(
+                            [str(python_exe), "-c",
+                             "import PyQt5; import Orange; print('OK')"],
+                            **sp_kw
+                        )
+                        if verify.returncode != 0 or "OK" not in verify.stdout:
+                            err = verify.stderr.strip() or verify.stdout.strip()
+                            QMessageBox.warning(
+                                self, "Orange3 — Import Check Failed",
+                                "Orange3 was installed but could not be imported.\n\n"
+                                "This usually means a library conflict with the AppImage "
+                                "environment.\n\n"
+                                f"Details:\n{err[:600]}\n\n"
+                                "Workaround: install VenvStudio via pip instead of AppImage, "
+                                "or run Orange3 directly from its own conda environment."
+                            )
+                            self.status_label.setText("⚠️ Orange3 installed but import failed — see warning")
+                            self._invalidate_pkg_cache()
+                            self._async_refresh_packages(force=True)
+                            return
+                    except Exception:
+                        pass  # verification failed silently — proceed optimistically
+            # ────────────────────────────────────────────────────────────────
             self.status_label.setText(f"✅ {app_def['package']} installed. Launching...")
             # Must wait for package list to refresh before launching,
             # otherwise installed_package_names won't contain the new package

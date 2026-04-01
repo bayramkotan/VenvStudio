@@ -18,8 +18,19 @@ CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
 # AppImage variables that cause re-launch when inherited by subprocesses
 _APPIMAGE_VARS = frozenset({
+    # AppImage re-launch / identity vars
     "APPIMAGE", "APPDIR", "ARGV0", "OWD",
     "APPIMAGE_EXTRACT_AND_RUN", "APPIMAGE_STARTUP_NET_WM_PID",
+    # Library path vars AppImage injects — these break PyQt5/PyQtWebEngine
+    # installed inside a venv because the linker finds AppImage's .so first
+    "LD_LIBRARY_PATH", "LD_PRELOAD",
+    # Python path vars AppImage may set — would shadow venv's site-packages
+    "PYTHONPATH", "PYTHONHOME",
+    # GLib/GDK module dirs AppImage sets — can conflict with PyQt5's platform plugins
+    "GDK_PIXBUF_MODULEDIR", "GDK_PIXBUF_MODULE_FILE",
+    "GIO_MODULE_DIR", "GIO_EXTRA_MODULES",
+    "GSETTINGS_SCHEMA_DIR",
+    "XDG_DATA_DIRS",   # AppImage prepends its own share/ — can confuse Qt theme lookup
 })
 
 

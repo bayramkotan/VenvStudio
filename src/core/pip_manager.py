@@ -147,14 +147,29 @@ class PipManager:
         # SSL sertifika dosyasını her zaman ayarla
         sp_kwargs = subprocess_args(capture_output=True, text=True, timeout=timeout)
         import os
-        env = sp_kwargs.get("env") or os.environ.copy()
-        # AppImage kendi kütüphanelerini LD_LIBRARY_PATH'e ekler — pip'i bozar
-        env.pop("LD_LIBRARY_PATH", None)
-        env.pop("LD_PRELOAD", None)
-        env.pop("APPIMAGE", None)
-        env.pop("APPDIR", None)
-        env.pop("ARGV0", None)
-        env.pop("OWD", None)
+        # subprocess_args already provides a clean env on AppImage (Linux).
+        # If it didn't set one (Windows / non-AppImage Linux), copy os.environ.
+        # Use explicit None check so we don't discard a valid clean env dict.
+        env = sp_kwargs["env"] if "env" in sp_kwargs else os.environ.copy()
+        # Belt-and-suspenders: always strip these on Linux regardless of AppImage detection.
+        # They can leak from parent shells and break PyQt5 / PyQtWebEngine in venvs.
+        if sys.platform == "linux":
+            for _var in (
+                "LD_LIBRARY_PATH", "LD_PRELOAD",
+                "PYTHONPATH", "PYTHONHOME",
+                "APPIMAGE", "APPDIR", "ARGV0", "OWD",
+                "APPIMAGE_EXTRACT_AND_RUN",
+                "GDK_PIXBUF_MODULEDIR", "GDK_PIXBUF_MODULE_FILE",
+                "GIO_MODULE_DIR", "GIO_EXTRA_MODULES",
+                "GSETTINGS_SCHEMA_DIR",
+            ):
+                env.pop(_var, None)
+        else:
+            # Windows: only strip the handful that can appear cross-platform
+            env.pop("APPIMAGE", None)
+            env.pop("APPDIR", None)
+            env.pop("ARGV0", None)
+            env.pop("OWD", None)
         if "SSL_CERT_FILE" not in env:
             for cp in (
                 "/etc/ssl/certs/ca-certificates.crt",

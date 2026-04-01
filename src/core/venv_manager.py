@@ -570,7 +570,7 @@ class VenvManager:
             "needs_refresh": 0,
         }
         self._save_all_cache(all_cache)
-        print(f"[Cache] Written: {self._cache_key(venv_path)} -> {python_version}, {package_count} pkgs, {size}")
+        print(f"[Cache] Written: {venv_path} -> {python_version}, {package_count} pkgs, {size}")
         print(f"[Cache] File: {self._get_cache_file()}")
 
     def invalidate_cache(self, venv_path: Path) -> None:

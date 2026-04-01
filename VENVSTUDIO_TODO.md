@@ -9,14 +9,15 @@
 - [ ] Kod Blokları: ML, DL, Transformers, HuggingFace, Colab, NLP, CV, TS, Finance
 - [ ] Basitleştirilmiş kavramlar: venv, pip, PyPI, requirements.txt
 - [ ] Launch App kullanım rehberi: ne işe yarar, başlangıç kodu, dokümantasyon linkleri
+- [ ] **F74 ile bağlantı:** Her uygulamanın üstünde eğitimsel linkler (YouTube, resmi site, docs)
 - [ ] Kod bloklarını kopyalama / env'e script olarak çalıştırma
 
 ### ⚙️ F53 — SETTINGS DETAYLANDIRMA
-- [ ] 11 dilin tamamı aktif (şu an sadece EN/TR)
-- [ ] Her ayarın yanında ℹ️ açıklama icon'u
+- [x] 11 dilin tamamı aktif — FR/PT/ZH/KO tamamlandı (v1.4.27+)
+- [x] Her ayarın yanında ℹ️ açıklama icon'u — tamamlandı (v1.4.27+)
+- [x] Her bölüm için "Sıfırla" butonu — tamamlandı (v1.4.27+)
 - [ ] TUI/CLI araçları çok detaylı — kurulum sonrası rehber, tema önizleme
-- [ ] Settings kategorileri netleştirme (6900+ satır karmaşık)
-- [ ] Her bölüm için "Sıfırla" butonu
+- [ ] Settings kategorileri netleştirme (6900+ satır karmaşık) — duplike yapı refactor
 
 ### 🖥️ F54 — DETAYLI CLI KOMUT SETİ
 - [ ] `venvstudio create/delete/list/activate/clone/rename/export`
@@ -24,6 +25,14 @@
 - [ ] `venvstudio launch <n> <app>`
 - [ ] TUI modu: `venvstudio tui` (Rich/Textual)
 - [ ] Bash/Fish/Zsh completion
+
+### 🔗 F74 — LAUNCH'TA EĞİTİMSEL LİNKLER
+- [ ] Her uygulama kartının üstüne tutorial linkleri satırı ekle
+- [ ] Linkler: YouTube kanalı, resmi website, resmi docs, GitHub
+- [ ] Tıklanabilir ikon butonlar (▶ YouTube, 🌐 Site, 📖 Docs, 🐙 GitHub)
+- [ ] Linkler `constants.py`'deki uygulama tanımlarına `"links": {}` key'i olarak eklenecek
+- [ ] Her uygulamaya özel — boş olanlar gösterilmez
+- **Örnek:** Jupyter: YouTube=sentdex, Site=jupyter.org, Docs=jupyter-notebook.readthedocs.io
 
 ---
 
@@ -41,6 +50,20 @@
   - Debian/Ubuntu: `sudo apt install libxcb-cursor0 python3-pip python3-venv`
   - Arch: `sudo pacman -S python-pip`
   - AppImage ilk açılışta otomatik kontrol
+- **B58** — Windows EXE'de Settings > Python Versions "Custom" gösteriyor
+  - `pip install venvstudio` ile kurulumda System Default Python "Custom" görünüyor
+  - Kaynak: `_source_label()` veya `_populate_python_table()` içinde EXE kontrolü eksik
+  - Çözüm: `getattr(sys, "frozen", False)` kontrolü + pip kurulumunda Source="System" zorla
+- **B59** — AppImage'da Orange3 çalışmıyor (pip kurulumunda çalışıyor)
+  - Neden: AppImage'ın `LD_LIBRARY_PATH` / `APPDIR` kütüphaneleri PyQt5 kurulumunu bozuyor
+  - `pip_manager.py`'de `LD_LIBRARY_PATH` temizleniyor ama kurulum sırasında PyQt5 `.so` linkleri yanlış konuma yapılıyor olabilir
+  - Çözüm adayı: Orange3 kurulumu öncesi `PYTHONPATH`, `LD_LIBRARY_PATH`, `APPIMAGE` env'lerini sıfırla; kurulum sonrası venv içi kütüphane yollarını doğrula
+  - Test: AppImage'dan Orange3 kur → `python -c "import Orange"` çalışıyor mu?
+- **B60** — Windows'ta cache loglarında path separator yanlış
+  - `[Cache] Written: C:/venv/ml -> ...` — ters slash olmalıydı (`C:\venv\ml`)
+  - Kaynak: `venv_manager.py` → `_cache_key()`: `str(venv_path.resolve()).replace("\\", "/")` — JSON key için normalize ederken log'a da bu normalize edilmiş key yazılıyor
+  - Çözüm: log satırında `str(venv_path)` (orijinal) kullan, `_cache_key()` return değerini değil
+  - Etkilenen satır: `venv_manager.py:573` — `print(f"[Cache] Written: {self._cache_key(venv_path)} -> ...")`
 
 ---
 
@@ -109,33 +132,83 @@
 | — | v1.4.25 | Verify pip & venv, Download Python sola, sticky Save/Reset |
 | — | v1.4.26 | 3-level font sistemi (Headings/UI&Menus/Details), font hiyerarşisi, Reset Fonts |
 | — | v1.4.26 | Buton setFixedHeight kaldırıldı, package_panel hardcoded renkler tema-aware |
+| B57 | v1.4.27 | Package Info dialog setMinimumSize, hardcoded renkler, Open Terminal P harfi |
+| F71 | v1.4.27 | Export alt menüleri: requirements-frozen.txt + JSON, sağ tık submenu |
+| F72 | v1.4.27 | Environments boş alana sağ tık → New Environment + Refresh |
+| F53 i18n | v1.4.27 | FR/PT/ZH/KO tamamlandı (126/126 key) |
+| F53 ℹ️ | v1.4.27+ | Her section'a ℹ️ ikonu + Appearance/Language/General Sıfırla butonları |
+| B58 | v1.4.27+ | Python Sources label düzeltildi: System/User Install/Custom doğru ayrımı |
+| B60 | v1.4.27+ | Cache log path separator: Windows'ta artık ters slash ile gösteriliyor |
+| B59 | v1.4.27+ | AppImage Orange3: _APPIMAGE_VARS genişletildi, pip env temizliği güçlendirildi, post-install import doğrulaması eklendi |
 
 ---
 
-## 🔴 YENİ BUGLAR (v1.4.24 sonrası)
+## 🔴 YENİ BUGLAR
 
-- **B55** — ✅ TAMAMLANDI (v1.4.25): Quick Launch sidebar tema düzeltmesi
+- **B62** — 🔴 Uygulama rastgele çöküyor (kritik stabilite sorunu)
+  - **Tetikleyiciler:** açılışta, tab/kısım geçişlerinde, environment değiştirirken, sağ tıkta, pencere tam dolmadan taşınırken
+  - **Kök neden adayları:**
+    - Thread-unsafe UI güncellemeleri: worker thread'den doğrudan widget erişimi (Qt'da sadece main thread widget'a dokunabilir)
+    - Sinyal/slot yarış koşulu: `@safe_slot` / `SafeWorkerMixin` henüz yaygınlaştırılmadı (B48 ile bağlantılı)
+    - Sağ tık context menu: `QMenu.exec()` sırasında alttaki widget yenilenirse segfault
+    - Pencere taşıma: `paintEvent` / `resizeEvent` sırasında veri henüz hazır değilse NoneType hatası
+    - Açılışta: `_load_current_settings` veya ilk env scan tamamlanmadan UI'a yazma
+  - **Çözüm planı:**
+    - [ ] Tüm worker callback'lerini `QMetaObject.invokeMethod(..., Qt.QueuedConnection)` veya `Signal` üzerinden main thread'e taşı
+    - [ ] B48: `@safe_slot` / `SafeWorkerMixin` tüm dosyalara yaygınlaştır
+    - [ ] Sağ tık menüsünü `QTimer.singleShot(0, ...)` ile defer et
+    - [ ] Açılış sırasını guarantee et: env scan → UI populate → pencere göster
+    - [ ] Detaylı log sistemi ekle (bkz. F75)
+  - **Öncelik:** 🔴 Kritik — kullanıcı deneyimini en çok etkileyen sorun
 
-- **B56** — ✅ TAMAMLANDI (v1.4.25): System Default Python görünümü düzeltildi
-
-- **B57** — Package Info penceresi buton yazı taşması
-  - Install/Uninstall butonları yazı sığmıyor (ör. "Install syr...", "Copy A....")
-  - Open Terminal butonunda (Packages + Environments) yazı boyu sığmamış
-  - Open Terminal'deki P harfinin kuyruğu kesilmiş (font/padding sorunu)
+- **B63** — Linux'ta textbox (QLineEdit / QTextEdit) alanları çok dar
+  - Boylamsal (dikey) olarak çok kısa görünüyor
+  - Neden: Linux'ta varsayılan QLineEdit minimum height Windows'tan düşük; font metrics farklı
+  - Çözüm: `setMinimumHeight()` veya QSS ile `min-height` değeri tüm input'lara uygulanmalı
+  - Etkilenen: tüm `QLineEdit`, `QTextEdit`, `QSpinBox`, `QComboBox` içeren paneller
+  - Çözüm adayı: `styles.py`'deki global QSS'e Linux için `min-height: 28px` ekle
 
 ## 🟡 YENİ PLANLI
 
-- **F71** — Env sağ tık Export alt menüleri
-  - requirements.txt
-  - requirements-frozen.txt (hash'li)
-  - environment.yml (conda formatı)
-  - Dockerfile
-  - pyproject.toml
-  - JSON
+- **F75** — Detaylı Log Sistemi
+  - Tüm önemli olayları (env yükleme, paket kurulumu, tab geçişi, sağ tık, crash) dosyaya yaz
+  - Log dosyası: `~/.local/share/venvstudio/venvstudio.log` (Linux) / `%APPDATA%\VenvStudio\venvstudio.log` (Windows)
+  - Log seviyeleri: DEBUG / INFO / WARNING / ERROR / CRITICAL
+  - Rotating log: max 5MB × 3 dosya (logging.handlers.RotatingFileHandler)
+  - Settings > Diagnostics'te "📄 Open Log File" butonu
+  - Crash anında stack trace otomatik log'a yazılsın (sys.excepthook override)
+  - B62'yi teşhis etmek için zorunlu altyapı
 
-- **F72** — Environments boş alana sağ tık menüsü
-  - "New Environment" seçeneği
-  - "Refresh" seçeneği
+- **B57** — ✅ TAMAMLANDI (v1.4.27): Package Info penceresi buton yazı taşması
+
+- **B58** — ✅ TAMAMLANDI: Windows EXE/pip kurulumunda Python Sources yanlış etiketleniyor
+  - Düzeltme: `settings_page.py` — PROGRAMFILES/WINDIR/usr/opt → "System", home/APPDATA → "User Install", geri kalan → "Custom". EXE modunda `sys.executable` eşleşmesi de "System" sayılıyor.
+
+- **B59** — ✅ TAMAMLANDI: AppImage'da Orange3 çalışmıyor
+  - `platform_utils.py` — `_APPIMAGE_VARS`'a `LD_LIBRARY_PATH`, `LD_PRELOAD`, `PYTHONPATH`, `PYTHONHOME`, GDK/GIO/XDG path'leri eklendi
+  - `pip_manager.py` — `_run_pip` env temizliği güçlendirildi: `sp_kwargs.get("env") or ...` yerine explicit `"env" in sp_kwargs` kontrolü; Linux'ta her zaman zararlı değişkenler temizleniyor
+  - `package_panel.py` — Orange3 kurulumu sonrası AppImage'da `import PyQt5; import Orange` doğrulaması yapılıyor; başarısız olursa kullanıcıya açıklayıcı uyarı + pip kurulumu önerisi gösteriliyor
+
+- **B60** — ✅ TAMAMLANDI: Windows cache loglarında path separator sorunu
+  - `venv_manager.py` — log satırında `_cache_key()` yerine `str(venv_path)` kullanıldı
+
+## 📝 AÇIKLAMALAR
+
+### requirements.txt vs requirements-frozen.txt — FARK VAR MI?
+Mevcut kodda (`pip_manager.py::freeze()`) **her ikisi de `pip freeze` çıktısı** kullanıyor — fark yok.
+Olması gereken fark:
+- `requirements.txt` → `pip freeze` (sadece paket==versiyon, hash yok)
+- `requirements-frozen.txt` → `pip download --require-hashes` veya `pip-compile --generate-hashes` çıktısı (SHA256 hash'li, tam reproducible)
+
+**B61** — ✅ TAMAMLANDI: F71 Export'ta requirements-frozen.txt artık gerçek SHA-256 hash'li
+- `main_window.py` — `pip download --no-deps` + `hashlib.sha256` ile her pakete hash ekleniyor
+- Çıktı formatı: `numpy==1.26.4 \\\n    --hash=sha256:...` — `pip install --require-hashes` ile doğrudan kullanılabilir
+
+## 🟡 YENİ PLANLI
+
+- **F71** — ✅ TAMAMLANDI (v1.4.27): Env sağ tık Export alt menüleri
+
+- **F72** — ✅ TAMAMLANDI (v1.4.27): Environments boş alana sağ tık menüsü
 
 - **F73** — UI/UX Genel İyileştirme
   - Font büyütünce layout bozulmaları (buton taşmaları, kart genişlikleri)
@@ -143,3 +216,5 @@
   - Responsive layout — pencere boyutuna göre uyum
   - Buton yazılarının kesilmemesi (elide yerine wrap veya minimum genişlik)
   - Genel görsel tutarlılık kontrolü (spacing, padding, alignment)
+
+- **F74** — Launch'ta Eğitimsel Linkler (bkz. EN ÖNCELİKLİ)

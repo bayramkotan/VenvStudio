@@ -37,7 +37,7 @@ def _build_theme(c: dict, font_family: str = "", font_size: int = 13,
     fs_small = max(tertiary_size, 8)                      # 11px default
     fs_tiny = max(tertiary_size, 8)                        # 11px default
 
-    return f"""
+    _stylesheet = f"""
 /* ── Base ── */
 QMainWindow, QDialog {{
     background-color: {c['bg']};
@@ -427,7 +427,37 @@ QProgressDialog {{
 QInputDialog {{
     background-color: {c['bg']};
 }}
+
 """
+
+    # ── B63: Linux input height fix ────────────────────────────────────────
+    # On Linux, Qt uses a different font metrics engine (fontconfig/freetype)
+    # which results in QLineEdit / QComboBox / QSpinBox being rendered shorter
+    # than on Windows. Enforce a comfortable minimum height platform-wide.
+    import sys as _sys
+    if _sys.platform == "linux":
+        _linux_input_height = max(font_size + 18, 32)   # scales with font size
+        _linux_text_height  = max(font_size + 16, 28)
+        _stylesheet = _stylesheet + f"""
+/* ── Linux input height fix (B63) ── */
+QLineEdit, QComboBox {{
+    min-height: {_linux_input_height}px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+}}
+QSpinBox {{
+    min-height: {_linux_input_height}px;
+    padding-top: 4px;
+    padding-bottom: 4px;
+}}
+QTextEdit, QPlainTextEdit {{
+    min-height: {_linux_text_height * 3}px;
+}}
+QComboBox::drop-down {{
+    min-height: {_linux_input_height}px;
+}}
+"""
+    return _stylesheet
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

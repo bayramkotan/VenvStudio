@@ -47,6 +47,11 @@ def main():
         from src.gui.main_window import MainWindow
         from src.utils.constants import APP_NAME, APP_VERSION
         from src.core.config_manager import ConfigManager
+        from src.utils.logger import setup_logging, get_logger
+
+        # ── Logging must be set up before anything else ──
+        log = setup_logging()
+        log.info(f"Starting {APP_NAME}")
 
         app = QApplication(sys.argv)
         app.setApplicationName(APP_NAME)

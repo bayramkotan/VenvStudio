@@ -169,6 +169,66 @@ class SettingsPage(QWidget):
         self._setup_ui()
         self._load_current_settings()
 
+    # ── Helper: ℹ️ info button ──────────────────────────────────────────────
+    def _make_info_btn(self, tooltip: str):
+        """Return a small ℹ️ QToolButton that shows a tooltip on hover/click."""
+        from PySide6.QtWidgets import QToolButton
+        from PySide6.QtCore import QSize
+        btn = QToolButton()
+        btn.setText("ℹ️")
+        btn.setToolTip(tooltip)
+        btn.setToolTipDuration(8000)
+        btn.setFixedSize(QSize(26, 26))
+        btn.setCursor(Qt.WhatsThisCursor)
+        btn.setStyleSheet(
+            f"QToolButton {{ border: none; background: transparent; "
+            f"font-size: {self._c()['fs_small']}px; }}"
+            f"QToolButton:hover {{ background: {self._c()['border']}; border-radius: 4px; }}"
+        )
+        # Also show a QMessageBox on click for accessibility
+        btn.clicked.connect(lambda: __import__('PySide6.QtWidgets', fromlist=['QToolTip']).QToolTip.showText(
+            btn.mapToGlobal(btn.rect().bottomLeft()), tooltip, btn, btn.rect(), 6000
+        ))
+        return btn
+
+    def _make_section_reset_btn(self, label: str, callback):
+        """Return a small 'Reset' QPushButton for a settings section."""
+        btn = QPushButton(f"↩ {label}")
+        btn.setObjectName("secondary")
+        btn.setToolTip(f"Reset {label.lower()} to defaults")
+        btn.clicked.connect(callback)
+        return btn
+
+    def _make_group_title_row(self, icon_title: str, tooltip: str, reset_label: str = None, reset_fn=None):
+        """
+        Returns (outer_widget, inner_layout) — a QWidget with a horizontal
+        header row (icon+title | stretch | ℹ️ [Reset]) to place above a section.
+        The outer_widget should be added to the scroll layout; then add the
+        QGroupBox immediately after.
+        """
+        row = QHBoxLayout()
+        row.setContentsMargins(0, 0, 0, 0)
+        row.setSpacing(6)
+
+        title_lbl = QLabel(icon_title)
+        title_lbl.setStyleSheet(
+            f"font-size: {self._c()['fs_base']}px; font-weight: bold; color: {self._c()['fg']};"
+        )
+        row.addWidget(title_lbl)
+        row.addStretch()
+
+        info_btn = self._make_info_btn(tooltip)
+        row.addWidget(info_btn)
+
+        if reset_label and reset_fn:
+            reset_btn = self._make_section_reset_btn(reset_label, reset_fn)
+            row.addWidget(reset_btn)
+
+        wrapper = QWidget()
+        wrapper.setLayout(row)
+        wrapper.setContentsMargins(0, 4, 0, 0)
+        return wrapper
+
     def _setup_ui(self):
         # Scrollable content
         scroll = QScrollArea()
@@ -190,7 +250,15 @@ class SettingsPage(QWidget):
         layout.addWidget(subtitle)
 
         # ── 1. APPEARANCE ──
-        appearance_group = QGroupBox(f"🎨 {tr('appearance')}")
+        layout.addWidget(self._make_group_title_row(
+            f"🎨 {tr('appearance')}",
+            "Control the visual look of VenvStudio: theme, fonts, and display scaling.\n"
+            "• Theme: Switch between dark/light colour schemes\n"
+            "• Fonts: Set separate sizes for headings, UI elements and detail labels\n"
+            "• Changes take effect immediately (no restart needed)",
+            "Reset Appearance", self._reset_appearance,
+        ))
+        appearance_group = QGroupBox()
         appearance_layout = QFormLayout()
         appearance_layout.setSpacing(12)
 
@@ -269,7 +337,15 @@ class SettingsPage(QWidget):
         layout.addWidget(appearance_group)
 
         # ── 2. LANGUAGE ──
-        lang_group = QGroupBox(f"🌍 {tr('language')}")
+        layout.addWidget(self._make_group_title_row(
+            f"🌍 {tr('language')}",
+            "Change the interface language of VenvStudio.\n"
+            "• Enable the checkbox to unlock the language selector\n"
+            "• 11 languages supported: EN, TR, DE, FR, ES, PT, RU, ZH, JA, KO, AR\n"
+            "• The application will restart automatically after saving",
+            "Reset Language", self._reset_language,
+        ))
+        lang_group = QGroupBox()
         lang_layout = QFormLayout()
         lang_layout.setSpacing(12)
 
@@ -295,7 +371,16 @@ class SettingsPage(QWidget):
         layout.addWidget(lang_group)
 
         # ── 3. PYTHON VERSIONS ──
-        python_group = QGroupBox(f"🐍 {tr('python_versions')}")
+        layout.addWidget(self._make_group_title_row(
+            f"🐍 {tr('python_versions')}",
+            "Manage Python installations used for creating virtual environments.\n"
+            "• Scan: Auto-detect all Python versions on your system\n"
+            "• Add Custom Path: Register a Python executable not found by scan\n"
+            "• Download Python: Fetch a standalone Python from python-build-standalone\n"
+            "• Set as default: The selected Python is used when creating new environments\n"
+            "• Verify pip & venv: Check modules are present and functional",
+        ))
+        python_group = QGroupBox()
         python_layout = QVBoxLayout()
         python_layout.setSpacing(12)
 
@@ -389,7 +474,14 @@ class SettingsPage(QWidget):
         layout.addWidget(python_group)
 
         # ── 4. PATHS ──
-        paths_group = QGroupBox(f"📂 {tr('paths')}")
+        layout.addWidget(self._make_group_title_row(
+            f"📂 {tr('paths')}",
+            "Configure where VenvStudio stores virtual environments.\n"
+            "• Environment Directory: All new venvs are created inside this folder\n"
+            "• Browse: Pick any folder on your system\n"
+            "• Reset: Restore the default location (~/.venvstudio/envs)",
+        ))
+        paths_group = QGroupBox()
         paths_layout = QFormLayout()
         paths_layout.setSpacing(12)
 
@@ -421,7 +513,14 @@ class SettingsPage(QWidget):
         layout.addWidget(paths_group)
 
         # ── 5. PACKAGE MANAGER ──
-        pkg_mgr_group = QGroupBox("📦 Package Manager")
+        layout.addWidget(self._make_group_title_row(
+            "📦 Package Manager",
+            "Choose the backend used to install and manage packages.\n"
+            "• pip: The standard Python package manager (default)\n"
+            "• uv: A Rust-based pip replacement — 10-100× faster installs\n"
+            "  uv is auto-installed if not present on your system",
+        ))
+        pkg_mgr_group = QGroupBox()
         pkg_mgr_layout = QFormLayout()
         pkg_mgr_layout.setSpacing(12)
 
@@ -451,6 +550,17 @@ class SettingsPage(QWidget):
         layout.addWidget(pkg_mgr_group)
 
         # ── 6. GENERAL ──
+        layout.addWidget(self._make_group_title_row(
+            f"⚙️ {tr('general')}",
+            "Miscellaneous behaviour settings for VenvStudio.\n"
+            "• Auto-upgrade pip: Runs pip install --upgrade pip after each env is created\n"
+            "• Confirm delete: Shows a dialog before permanently removing an environment\n"
+            "• Show hidden packages: Includes pip/setuptools/wheel in the package list\n"
+            "• Check updates: Polls PyPI for a new VenvStudio release on startup\n"
+            "• Remember window: Saves and restores window size/position between sessions\n"
+            "• Default terminal: Terminal app used by Open Terminal buttons",
+            "Reset General", self._reset_general,
+        ))
         general_group = QGroupBox(f"⚙️ {tr('general')}")
         general_layout = QFormLayout()
         general_layout.setSpacing(10)
@@ -2155,16 +2265,42 @@ class SettingsPage(QWidget):
             self.python_table.setItem(row, 0, QTableWidgetItem(version))
             self.python_table.setItem(row, 1, QTableWidgetItem(norm_path))
 
-            # User Install vs Custom ayrımı: kullanıcı klasörü altındaysa User Install
+            # Source label: System / User Install / Custom
             import os as _os
+            import sys as _sys
             _home = _os.path.expanduser("~").lower()
             _localappdata = _os.environ.get("LOCALAPPDATA", "").lower()
             _appdata = _os.environ.get("APPDATA", "").lower()
+            _progfiles = _os.environ.get("PROGRAMFILES", "C:\\Program Files").lower()
+            _progfiles86 = _os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)").lower()
+            _windir = _os.environ.get("WINDIR", "C:\\Windows").lower()
             _norm_lower = norm_path.lower()
-            if (_home and _norm_lower.startswith(_home)) or \
-               (_localappdata and _norm_lower.startswith(_localappdata)) or \
-               (_appdata and _norm_lower.startswith(_appdata)) or \
-               "/.local/" in _norm_lower or "/.pyenv/" in _norm_lower:
+
+            _this_exe = _os.path.normcase(_os.path.normpath(_sys.executable)).lower()
+            _is_this_python = (_os.path.normcase(norm_path).lower() == _this_exe)
+
+            if _is_this_python and getattr(_sys, "frozen", False):
+                source_item = QTableWidgetItem("System")
+                source_item.setForeground(QColor(c['success']))
+            elif (
+                (_progfiles and _norm_lower.startswith(_progfiles)) or
+                (_progfiles86 and _norm_lower.startswith(_progfiles86)) or
+                (_windir and _norm_lower.startswith(_windir)) or
+                "/usr/" in _norm_lower or
+                "/opt/" in _norm_lower or
+                _norm_lower.startswith("/bin/") or
+                _norm_lower.startswith("/usr/bin/")
+            ):
+                source_item = QTableWidgetItem("System")
+                source_item.setForeground(QColor(c['success']))
+            elif (
+                (_home and _norm_lower.startswith(_home)) or
+                (_localappdata and _norm_lower.startswith(_localappdata)) or
+                (_appdata and _norm_lower.startswith(_appdata)) or
+                "/.local/" in _norm_lower or
+                "/.pyenv/" in _norm_lower or
+                "/home/" in _norm_lower
+            ):
                 source_item = QTableWidgetItem("User Install")
                 source_item.setForeground(QColor(c['accent']))
             else:
@@ -3661,6 +3797,38 @@ try {{
             self._load_current_settings()
             self.theme_changed.emit("dark")
             QMessageBox.information(self, "Settings", "All settings reset to defaults.")
+
+    def _reset_appearance(self):
+        """Reset Appearance section to defaults."""
+        self.theme_cb.setChecked(False)
+        self.theme_combo.setEnabled(False)
+        idx = self.theme_combo.findData("dark")
+        if idx >= 0:
+            self.theme_combo.setCurrentIndex(idx)
+        self.config.set("theme", "dark")
+        self.theme_changed.emit("dark")
+        self._reset_fonts()
+
+    def _reset_language(self):
+        """Reset Language section to defaults."""
+        self.lang_enabled_cb.setChecked(False)
+        idx = self.lang_combo.findData("en")
+        if idx >= 0:
+            self.lang_combo.setCurrentIndex(idx)
+        self.config.set("language", "en")
+
+    def _reset_general(self):
+        """Reset General section to defaults."""
+        from src.core.config_manager import DEFAULT_SETTINGS
+        general_keys = [
+            "auto_upgrade_pip", "confirm_delete", "show_hidden_packages",
+            "check_updates", "remember_window", "default_terminal",
+        ]
+        for key in general_keys:
+            if key in DEFAULT_SETTINGS:
+                self.config.set(key, DEFAULT_SETTINGS[key])
+        self._load_current_settings()
+
 
 class _DownloadWorker(QThread):
     """Background worker for downloading Python."""
@@ -5317,16 +5485,42 @@ echo "OK"
             self.python_table.setItem(row, 0, QTableWidgetItem(version))
             self.python_table.setItem(row, 1, QTableWidgetItem(norm_path))
 
-            # User Install vs Custom ayrımı: kullanıcı klasörü altındaysa User Install
+            # Source label: System / User Install / Custom
             import os as _os
+            import sys as _sys
             _home = _os.path.expanduser("~").lower()
             _localappdata = _os.environ.get("LOCALAPPDATA", "").lower()
             _appdata = _os.environ.get("APPDATA", "").lower()
+            _progfiles = _os.environ.get("PROGRAMFILES", "C:\\Program Files").lower()
+            _progfiles86 = _os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)").lower()
+            _windir = _os.environ.get("WINDIR", "C:\\Windows").lower()
             _norm_lower = norm_path.lower()
-            if (_home and _norm_lower.startswith(_home)) or \
-               (_localappdata and _norm_lower.startswith(_localappdata)) or \
-               (_appdata and _norm_lower.startswith(_appdata)) or \
-               "/.local/" in _norm_lower or "/.pyenv/" in _norm_lower:
+
+            _this_exe = _os.path.normcase(_os.path.normpath(_sys.executable)).lower()
+            _is_this_python = (_os.path.normcase(norm_path).lower() == _this_exe)
+
+            if _is_this_python and getattr(_sys, "frozen", False):
+                source_item = QTableWidgetItem("System")
+                source_item.setForeground(QColor(c['success']))
+            elif (
+                (_progfiles and _norm_lower.startswith(_progfiles)) or
+                (_progfiles86 and _norm_lower.startswith(_progfiles86)) or
+                (_windir and _norm_lower.startswith(_windir)) or
+                "/usr/" in _norm_lower or
+                "/opt/" in _norm_lower or
+                _norm_lower.startswith("/bin/") or
+                _norm_lower.startswith("/usr/bin/")
+            ):
+                source_item = QTableWidgetItem("System")
+                source_item.setForeground(QColor(c['success']))
+            elif (
+                (_home and _norm_lower.startswith(_home)) or
+                (_localappdata and _norm_lower.startswith(_localappdata)) or
+                (_appdata and _norm_lower.startswith(_appdata)) or
+                "/.local/" in _norm_lower or
+                "/.pyenv/" in _norm_lower or
+                "/home/" in _norm_lower
+            ):
                 source_item = QTableWidgetItem("User Install")
                 source_item.setForeground(QColor(c['accent']))
             else:

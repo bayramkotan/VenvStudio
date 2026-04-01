@@ -167,6 +167,11 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        # ── Logger — must be first so all subsequent calls are covered ──
+        from src.utils.logger import get_logger
+        self._log = get_logger("venvstudio.main_window")
+        self._log.info("MainWindow.__init__ started")
+
         self.config = ConfigManager()
         self.venv_manager = VenvManager(self.config.get_venv_base_dir())
         self.selected_env = None
@@ -193,6 +198,7 @@ class MainWindow(QMainWindow):
             from PySide6.QtCore import QTimer
             QTimer.singleShot(3000, self._auto_check_update)
 
+        self._log.info("MainWindow.__init__ complete")
     def _auto_check_update(self):
         """Silently check for updates on startup — runs in background thread."""
         class _UpdateWorker(QThread):
@@ -566,6 +572,8 @@ class MainWindow(QMainWindow):
         return page
 
     def _switch_page(self, index):
+        page_names = {0: "Packages", 1: "Environments", 2: "Settings"}
+        self._log.debug(f"_switch_page → {page_names.get(index, index)}")
         self.stack.setCurrentIndex(index)
         for i, btn in enumerate(self.nav_buttons):
             btn.setChecked(i == index)
@@ -726,6 +734,7 @@ class MainWindow(QMainWindow):
         """Phase 1: Load from cache instantly. Phase 2: fetch missing in background.
         If force=True (manual Refresh button), invalidates all caches first.
         """
+        self._log.debug(f"_refresh_env_list called (force={force})")
         self.env_table.setRowCount(0)
 
         # Manual refresh: invalidate all caches, show overlay, disable button
@@ -864,6 +873,7 @@ class MainWindow(QMainWindow):
         self.info_label.setText(f"\U0001f4c2 {base_dir}  \u2022  {count} environment(s)")
 
     def _on_env_selected(self):
+        self._log.debug("_on_env_selected triggered")
         rows = self.env_table.selectionModel().selectedRows()
         has_selection = len(rows) > 0
         self.btn_manage_pkgs.setEnabled(has_selection)
@@ -913,6 +923,7 @@ class MainWindow(QMainWindow):
 
     def _show_env_context_menu(self, pos):
         """Show right-click context menu on environment table."""
+        self._log.debug(f"_show_env_context_menu at pos={pos.x()},{pos.y()}")
         from PySide6.QtWidgets import QMenu
         from PySide6.QtGui import QAction
 
@@ -1401,12 +1412,12 @@ class MainWindow(QMainWindow):
         QMessageBox.information(self, "✅ Copied", f"{count} packages copied to clipboard.")
 
     def _export_frozen(self):
-        """Export requirements with hashes (pip freeze --all style)."""
+        """Export requirements with SHA-256 hashes (--require-hashes compatible)."""
         name = self._get_selected_env_name()
         if not name:
             return
         venv_path = self.venv_manager.base_dir / name
-        import subprocess, os
+        import subprocess, os, tempfile, hashlib, glob
         from src.utils.platform_utils import subprocess_args
         if os.name == "nt":
             pip_exe = venv_path / "Scripts" / "pip.exe"
@@ -1415,28 +1426,82 @@ class MainWindow(QMainWindow):
         if not pip_exe.exists():
             QMessageBox.warning(self, "Error", "pip not found in this environment.")
             return
+
+        # Step 1: get plain freeze list
         try:
             result = subprocess.run(
-                [str(pip_exe), "freeze", "--all"],
+                [str(pip_exe), "freeze"],
                 **subprocess_args(capture_output=True, text=True, timeout=30)
             )
-            freeze = result.stdout.strip()
+            freeze_lines = [l for l in result.stdout.strip().splitlines() if l and not l.startswith("#")]
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
             return
-        if not freeze:
+        if not freeze_lines:
             QMessageBox.information(self, "Info", "No packages installed.")
             return
+
+        # Step 2: download wheels into tmp dir and hash them
+        progress = QMessageBox(self)
+        progress.setWindowTitle("Generating Hashes")
+        progress.setText(f"Downloading {len(freeze_lines)} packages to compute hashes...\nThis may take a moment.")
+        progress.setStandardButtons(QMessageBox.NoButton)
+        progress.show()
+        from PySide6.QtWidgets import QApplication
+        QApplication.processEvents()
+
+        hashed_lines = []
+        failed = []
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            for pkg_spec in freeze_lines:
+                try:
+                    dl = subprocess.run(
+                        [str(pip_exe), "download", "--no-deps", "--dest", tmp_dir, pkg_spec],
+                        **subprocess_args(capture_output=True, text=True, timeout=120)
+                    )
+                    # Find the downloaded file(s) for this package
+                    pkg_name = pkg_spec.split("==")[0].strip() if "==" in pkg_spec else pkg_spec.strip()
+                    downloaded = glob.glob(os.path.join(tmp_dir, f"{pkg_name.replace('-','_')}*")) + \
+                                 glob.glob(os.path.join(tmp_dir, f"{pkg_name}*"))
+                    # Pick the newest file
+                    downloaded = sorted(set(downloaded), key=os.path.getmtime, reverse=True)
+                    if downloaded:
+                        fpath = downloaded[0]
+                        sha256 = hashlib.sha256(open(fpath, "rb").read()).hexdigest()
+                        hashed_lines.append(f"{pkg_spec} \\\n    --hash=sha256:{sha256}")
+                        os.remove(fpath)
+                    else:
+                        # Download failed or not found — add without hash with comment
+                        hashed_lines.append(f"{pkg_spec}  # hash unavailable")
+                        failed.append(pkg_spec)
+                except Exception:
+                    hashed_lines.append(f"{pkg_spec}  # hash unavailable")
+                    failed.append(pkg_spec)
+
+        progress.close()
+
+        header = (
+            "# Generated by VenvStudio — requirements with SHA-256 hashes\n"
+            "# Install with: pip install --require-hashes -r requirements-frozen.txt\n"
+            "#\n"
+        )
+        content = header + "\n".join(hashed_lines) + "\n"
+
         filepath, _ = QFileDialog.getSaveFileName(
             self, "Export Frozen Requirements", "requirements-frozen.txt", "Text Files (*.txt)"
         )
         if filepath:
             try:
                 with open(filepath, "w", encoding="utf-8") as f:
-                    f.write(freeze + "\n")
-                QMessageBox.information(self, "✅ Success", f"Exported {len(freeze.splitlines())} packages to:\n{filepath}")
+                    f.write(content)
+                msg = f"Exported {len(freeze_lines)} packages to:\n{filepath}"
+                if failed:
+                    msg += f"\n\n⚠️ {len(failed)} package(s) could not be hashed (marked in file)."
+                QMessageBox.information(self, "✅ Success", msg)
             except IOError as e:
                 QMessageBox.critical(self, "Error", str(e))
+
+
 
     def _export_json(self):
         """Export environment info as JSON."""

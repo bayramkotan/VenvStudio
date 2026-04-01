@@ -620,6 +620,142 @@ class PackagePanel(QWidget):
                 "open_browser": "http://localhost:8001",
                 "browser_delay": 3,
             },
+            # ── pip-based: Marimo ─────────────────────────────────────────────
+            {
+                "name": "Marimo",
+                "icon": "🌊",
+                "icon_key": "marimo",
+                "package": "marimo",
+                "command": ["-m", "marimo", "edit"],
+                "desc": "Reactive notebook — next-gen Jupyter alternative",
+                "needs_console": True,
+                "open_browser": "http://localhost:2718",
+                "browser_delay": 3,
+            },
+            # ── System-level apps (detect & launch, no pip install) ───────────
+            {
+                "name": "R Console",
+                "icon": "📐",
+                "icon_key": "r_console",
+                "package": "__system__",
+                "system_app": True,
+                "system_commands": {
+                    "windows": ["R.exe", "--no-save"],
+                    "linux":   ["R", "--no-save"],
+                    "macos":   ["R", "--no-save"],
+                },
+                "system_search_paths": {
+                    "windows": [
+                        r"C:\Program Files\R",
+                        r"C:\Program Files (x86)\R",
+                    ],
+                },
+                "system_exe_glob": {
+                    "windows": r"R-*\bin\R.exe",
+                },
+                "desc": "R statistical computing language — open R console",
+                "needs_console": True,
+            },
+            {
+                "name": "RStudio",
+                "icon": "🎯",
+                "icon_key": "rstudio",
+                "package": "__system__",
+                "system_app": True,
+                "system_commands": {
+                    "windows": ["rstudio.exe"],
+                    "linux":   ["rstudio"],
+                    "macos":   ["open", "-a", "RStudio"],
+                },
+                "system_search_paths": {
+                    "windows": [
+                        r"C:\Program Files\RStudio\bin",
+                        r"C:\Program Files (x86)\RStudio\bin",
+                    ],
+                    "linux": [
+                        "/usr/lib/rstudio/bin",
+                        "/usr/local/lib/rstudio/bin",
+                        "/opt/rstudio/bin",
+                    ],
+                },
+                "desc": "RStudio IDE — full R development environment",
+            },
+            {
+                "name": "Ollama",
+                "icon": "🦙",
+                "icon_key": "ollama",
+                "package": "__system__",
+                "system_app": True,
+                "system_commands": {
+                    "windows": ["ollama.exe", "serve"],
+                    "linux":   ["ollama", "serve"],
+                    "macos":   ["ollama", "serve"],
+                },
+                "desc": "Run local LLMs (Llama, Mistral, Gemma…) — starts Ollama server",
+                "needs_console": True,
+                "open_browser": "http://localhost:11434",
+                "browser_delay": 3,
+            },
+            {
+                "name": "DBeaver",
+                "icon": "🦫",
+                "icon_key": "dbeaver",
+                "package": "__system__",
+                "system_app": True,
+                "system_commands": {
+                    "windows": ["dbeaver.exe"],
+                    "linux":   ["dbeaver"],
+                    "macos":   ["open", "-a", "DBeaver"],
+                },
+                "system_search_paths": {
+                    "windows": [
+                        r"C:\Program Files\DBeaver",
+                        r"C:\Program Files (x86)\DBeaver",
+                    ],
+                    "linux": [
+                        "/usr/share/dbeaver",
+                        "/opt/dbeaver",
+                        "/snap/bin",
+                    ],
+                },
+                "desc": "Universal database manager — explore SQLite, PostgreSQL, MySQL…",
+            },
+            {
+                "name": "Quarto",
+                "icon": "📝",
+                "icon_key": "quarto",
+                "package": "quarto-cli",
+                "command": ["-m", "quarto_cli.quarto", "preview"],
+                "desc": "Publish documents, reports & dashboards from Python/R notebooks",
+                "needs_console": True,
+                "note": "Installs Quarto binary inside the environment (~100MB). No system install needed.",
+            },
+            {
+                "name": "jamovi",
+                "icon": "🧩",
+                "icon_key": "jamovi",
+                "package": "__system__",
+                "system_app": True,
+                "system_commands": {
+                    "windows": ["jamovi.exe"],
+                    "linux":   ["jamovi"],
+                    "macos":   ["open", "-a", "jamovi"],
+                },
+                "desc": "Point-and-click statistics — SPSS alternative, free & open source",
+            },
+            {
+                "name": "JASP",
+                "icon": "📊",
+                "icon_key": "jasp",
+                "package": "__system__",
+                "system_app": True,
+                "system_commands": {
+                    "windows": ["JASP.exe"],
+                    "linux":   ["JASP"],
+                    "macos":   ["open", "-a", "JASP"],
+                },
+                "desc": "Bayesian & frequentist statistics — beautiful, free, open source",
+            },
         ]
 
         self.launcher_cards = {}
@@ -792,7 +928,37 @@ class PackagePanel(QWidget):
         for name, card in self.launcher_cards.items():
             app_def = card._app_def
             pkg = app_def["package"].lower()
-            is_installed = pkg in self.installed_package_names
+            is_system_app = app_def.get("system_app", False)
+
+            # System apps: detect via installer's get_exe_path (more thorough than shutil.which)
+            if is_system_app:
+                from src.core.system_tools_installer import get_installer as _get_installer
+                _icon_key = app_def.get("icon_key", "")
+                _installer = _get_installer(_icon_key)
+                if _installer:
+                    system_found = _installer.is_installed()
+                else:
+                    import shutil as _shutil
+                    from src.utils.platform_utils import get_platform as _gp
+                    _sys_cmds = app_def.get("system_commands", {})
+                    _exe = (_sys_cmds.get(_gp()) or _sys_cmds.get("linux", [""]))[0]
+                    system_found = bool(_shutil.which(_exe))
+
+                status = card._status_label
+                card._launch_btn.setEnabled(True)
+                card._launch_btn.setStyleSheet("")
+                card._uninstall_btn.setVisible(False)
+                card._shortcut_btn.setVisible(False)
+                if system_found:
+                    status.setText("✅ Detected on system")
+                    status.setStyleSheet(f"color: {self._c()['success']}; font-size: {self._c()['fs_tiny']}px;")
+                else:
+                    status.setText("⚠️ Not found — install separately")
+                    status.setStyleSheet(f"color: {self._c().get('warning', '#f9e2af')}; font-size: {self._c()['fs_tiny']}px;")
+                continue
+
+            pkg_alt = pkg.replace("-", "_") if "-" in pkg else pkg.replace("_", "-")
+            is_installed = pkg in self.installed_package_names or pkg_alt in self.installed_package_names
 
             # Check Python version compatibility
             py_incompatible = False
@@ -854,7 +1020,21 @@ class PackagePanel(QWidget):
         for name, card in self.launcher_cards.items():
             app_def = card._app_def
             pkg = app_def["package"].lower()
-            if pkg not in self.installed_package_names:
+            # System apps: show in sidebar if detected on system
+            if app_def.get("system_app"):
+                from src.core.system_tools_installer import get_installer as _get_installer
+                _installer = _get_installer(app_def.get("icon_key", ""))
+                if _installer:
+                    if not _installer.is_installed():
+                        continue
+                else:
+                    import shutil as _shutil
+                    from src.utils.platform_utils import get_platform as _gp
+                    _sys_cmds = app_def.get("system_commands", {})
+                    _exe = (_sys_cmds.get(_gp()) or _sys_cmds.get("linux", [""]))[0]
+                    if not _shutil.which(_exe):
+                        continue  # not found — skip sidebar
+            elif pkg not in self.installed_package_names:
                 continue
             btn = QPushButton(app_def["icon"])
             btn.setFixedSize(48, 48)
@@ -880,6 +1060,154 @@ class PackagePanel(QWidget):
 
         # Show/hide sidebar based on installed count
         self.quick_sidebar.setVisible(len(self._sidebar_buttons) > 0)
+
+    def _launch_system_app(self, app_def: dict):
+        """
+        Detect and launch a system-level application.
+        Checks: (1) portable install in current env, (2) system PATH.
+        If not found anywhere, offers silent install — portable into env if
+        env is a system-tools env, otherwise system-wide.
+        """
+        import shutil as _shutil
+        from src.utils.platform_utils import get_platform
+        from src.core.system_tools_installer import get_installer
+
+        plat = get_platform()
+        name = app_def["name"]
+        icon_key = app_def.get("icon_key", "")
+        installer = get_installer(icon_key)
+
+        # Determine current env path (None if not a system-tools env)
+        env_path = None
+        if self.pip_manager:
+            vp = self.pip_manager.venv_path
+            marker = vp / ".venvstudio_env"
+            if marker.exists():
+                env_path = vp
+
+        # 1. Check portable install in env
+        exe_path = None
+        if installer and env_path:
+            exe_path = installer.get_portable_exe(env_path)
+
+        # 2. Check system PATH / known locations
+        if not exe_path and installer:
+            exe_path = installer.get_system_exe()
+
+        # 3. Fallback: shutil.which using system_commands
+        if not exe_path:
+            sys_cmds = app_def.get("system_commands", {})
+            cmd_parts = sys_cmds.get(plat) or sys_cmds.get("linux", [])
+            if cmd_parts:
+                exe_path = _shutil.which(cmd_parts[0])
+
+        # 4. Not found — offer install
+        if not exe_path:
+            if installer is None:
+                QMessageBox.information(
+                    self, f"{name} — Not Found",
+                    f"{name} is not installed.\n\nPlease install it manually."
+                )
+                return
+
+            # Choose install mode
+            if env_path:
+                msg = (
+                    f"{name} is not installed.\n\n"
+                    f"VenvStudio can install it portably into this environment:\n"
+                    f"  {env_path / 'apps' / icon_key}\n\n"
+                    f"No system-wide changes will be made.\n"
+                    f"Install {name} now?"
+                )
+            else:
+                msg = (
+                    f"{name} is not installed.\n\n"
+                    f"VenvStudio can download and install it automatically.\n"
+                    f"Install {name} now?"
+                )
+
+            reply = QMessageBox.question(
+                self, f"Install {name}?", msg,
+                QMessageBox.Yes | QMessageBox.No,
+            )
+            if reply != QMessageBox.Yes:
+                return
+
+            self._set_busy(True)
+            self.status_label.setText(f"Installing {name}...")
+
+            _env_path = env_path  # capture for closure
+
+            def _do_install(callback=None):
+                ok = installer.install(
+                    env_path=_env_path,
+                    progress_cb=callback,
+                    portable=(_env_path is not None),
+                )
+                return (ok,
+                        f"{name} installed successfully" if ok
+                        else f"{name} installation failed")
+
+            self.current_worker = WorkerThread(_do_install)
+            self.current_worker.progress.connect(self._on_progress)
+            self.current_worker.finished.connect(
+                lambda ok, msg, a=app_def: self._on_system_install_finished(ok, msg, a)
+            )
+            self.current_worker.start()
+            return
+
+        # 5. Found — build launch command
+        sys_cmds = app_def.get("system_commands", {})
+        cmd_parts = sys_cmds.get(plat) or sys_cmds.get("linux", [exe_path])
+        cmd = [exe_path] + list(cmd_parts[1:])
+        work_dir = os.path.expanduser("~")
+
+        try:
+            show_console = app_def.get("needs_console", False)
+            if plat == "windows":
+                if show_console:
+                    subprocess.Popen(cmd, cwd=work_dir,
+                                     creationflags=subprocess.CREATE_NEW_CONSOLE)
+                else:
+                    subprocess.Popen(cmd, cwd=work_dir,
+                                     creationflags=0x00000008 | 0x08000000,
+                                     stdout=subprocess.DEVNULL,
+                                     stderr=subprocess.DEVNULL)
+            else:
+                subprocess.Popen(cmd, cwd=work_dir,
+                                 stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL)
+
+            self.status_label.setText(f"✅ {name} launched")
+
+            url = app_def.get("open_browser")
+            if url:
+                from PySide6.QtCore import QTimer
+                import webbrowser
+                delay = app_def.get("browser_delay", 2)
+                QTimer.singleShot(delay * 1000, lambda: webbrowser.open(url))
+
+        except Exception as e:
+            QMessageBox.critical(self, f"{name} — Launch Error", str(e))
+
+    def _on_system_install_finished(self, success: bool, message: str, app_def: dict):
+        """Called after a system tool silent install completes."""
+        self._set_busy(False)
+        name = app_def["name"]
+        if success:
+            self.status_label.setText(f"✅ {name} installed. Launching...")
+            # Refresh card states then launch
+            self._update_launcher_status()
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(500, lambda: self._launch_system_app(app_def))
+        else:
+            self.status_label.setText(f"❌ {name} install failed")
+            QMessageBox.critical(
+                self, f"{name} — Install Failed",
+                f"Could not install {name} automatically.\n\n"
+                f"{message}\n\n"
+                f"Please install it manually and try again."
+            )
 
     def _get_orange3_packages(self, python_exe) -> list:
         """Return the right Orange3 packages based on Python version.
@@ -990,6 +1318,11 @@ class PackagePanel(QWidget):
             QMessageBox.warning(self, tr("warning"), tr("select_environment"))
             return
 
+        # ── System-level app (R, RStudio, Ollama, DBeaver, Quarto…) ─────────
+        if app_def.get("system_app"):
+            self._launch_system_app(app_def)
+            return
+
         # TensorBoard and similar tools need a log directory
         if app_def.get("pick_logdir", False):
             logdir = QFileDialog.getExistingDirectory(
@@ -1009,7 +1342,9 @@ class PackagePanel(QWidget):
         python_exe = get_python_executable(venv_path)
 
         pkg_name = app_def["package"].lower()
-        is_installed = pkg_name in self.installed_package_names
+        # pip normalizes package names: quarto-cli ↔ quarto_cli — check both
+        pkg_name_alt = pkg_name.replace("-", "_") if "-" in pkg_name else pkg_name.replace("_", "-")
+        is_installed = pkg_name in self.installed_package_names or pkg_name_alt in self.installed_package_names
 
         if not is_installed:
             # Check min/max Python version if specified
@@ -2243,7 +2578,13 @@ $s.Save()
         # Save to cache
         self._save_pkg_cache(packages)
 
-        self.installed_package_names = {pkg.name.lower() for pkg in packages}
+        # Store both dash and underscore variants for robust matching (e.g. quarto-cli ↔ quarto_cli)
+        self.installed_package_names = set()
+        for pkg in packages:
+            n = pkg.name.lower()
+            self.installed_package_names.add(n)
+            self.installed_package_names.add(n.replace("-", "_"))
+            self.installed_package_names.add(n.replace("_", "-"))
 
         self.packages_table.setRowCount(len(packages))
         for i, pkg in enumerate(packages):
@@ -2289,7 +2630,13 @@ $s.Save()
             return
 
         packages = self.pip_manager.list_packages()
-        self.installed_package_names = {pkg.name.lower() for pkg in packages}
+        # Store both dash and underscore variants for robust matching (e.g. quarto-cli ↔ quarto_cli)
+        self.installed_package_names = set()
+        for pkg in packages:
+            n = pkg.name.lower()
+            self.installed_package_names.add(n)
+            self.installed_package_names.add(n.replace("-", "_"))
+            self.installed_package_names.add(n.replace("_", "-"))
 
         self.packages_table.setRowCount(len(packages))
         for i, pkg in enumerate(packages):

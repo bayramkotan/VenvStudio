@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QMenu, QComboBox,
 )
 from PySide6.QtCore import Qt, QThread, Signal
-from PySide6.QtGui import QFont, QAction
+from PySide6.QtGui import QFont, QAction, QColor
 
 from src.core.venv_manager import VenvManager
 from src.core.config_manager import ConfigManager
@@ -783,7 +783,11 @@ class MainWindow(QMainWindow):
 
         for i, env in enumerate(envs):
             name_item = QTableWidgetItem(f"  {env.name}")
-            if not env.is_valid:
+            is_system_tools = str(env.python_version).startswith("🗂")
+            if is_system_tools:
+                name_item.setForeground(QColor(self._c().get("accent", "#89b4fa")))
+                name_item.setToolTip("System tools environment — install R, RStudio, Ollama, DBeaver etc. from Launch tab")
+            elif not env.is_valid:
                 name_item.setForeground(Qt.red)
                 name_item.setToolTip("Invalid environment (Python not found)")
             name_font = QFont()
@@ -1032,6 +1036,9 @@ class MainWindow(QMainWindow):
         dialog = EnvCreateDialog(self.venv_manager, self.config, self)
         dialog.env_created.connect(lambda name: self._refresh_env_list())
         dialog.exec()
+        # Refresh again after dialog closes — catches empty folder envs
+        # and any env created just before dialog closed
+        self._refresh_env_list()
 
     def _get_new_name_for_rename(self, name):
         """Yeni isim giriş dialog'u — ortak kullanım."""

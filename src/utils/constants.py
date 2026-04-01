@@ -3,7 +3,7 @@ VenvStudio - Constants and Popular Package Catalog
 """
 
 APP_NAME = "VenvStudio"
-APP_VERSION = "1.4.28"
+APP_VERSION = "1.4.29"
 APP_DESCRIPTION = "Lightweight Python Virtual Environment Manager"
 APP_AUTHOR = "VenvStudio Team"
 
@@ -214,6 +214,67 @@ LAUNCHER_TOOLTIPS = {
         "Browse tables, run SQL queries, export data as JSON/CSV.\n\n"
         "💡 Perfect for: data exploration, publishing open data\n"
         "🌐 Opens at http://localhost:8001"
+    ),
+    "marimo": (
+        "🌊 Marimo — Reactive Notebook\n\n"
+        "A next-generation Python notebook where every cell is reactive.\n"
+        "Change a variable and all dependent cells update automatically.\n"
+        "Notebooks run as scripts, apps, or slides too.\n\n"
+        "💡 Perfect for: interactive data exploration, reproducible analysis\n"
+        "🌐 Opens at http://localhost:2718"
+    ),
+    "r_console": (
+        "📐 R Console — Statistical Computing\n\n"
+        "R is the leading language for statistical analysis and data science.\n"
+        "Thousands of packages via CRAN for statistics, ML, and visualization.\n\n"
+        "💡 Perfect for: statistics, bioinformatics, academic research\n"
+        "⚠️ Requires R to be installed: https://cran.r-project.org"
+    ),
+    "rstudio": (
+        "🎯 RStudio — R Development Environment\n\n"
+        "The most popular IDE for R with integrated console, plots,\n"
+        "environment inspector, package manager, and R Markdown support.\n\n"
+        "💡 Perfect for: data analysis, statistical modeling, reporting\n"
+        "⚠️ Requires RStudio: https://posit.co/download/rstudio-desktop"
+    ),
+    "ollama": (
+        "🦙 Ollama — Local LLM Runner\n\n"
+        "Run large language models locally on your own hardware.\n"
+        "Supports Llama 3, Mistral, Gemma, Phi, Qwen, and many more.\n"
+        "Starts an OpenAI-compatible API at http://localhost:11434\n\n"
+        "💡 Perfect for: private AI, offline LLMs, API integration\n"
+        "⚠️ Requires Ollama: https://ollama.com"
+    ),
+    "dbeaver": (
+        "🦫 DBeaver — Universal Database Manager\n\n"
+        "Connect to PostgreSQL, MySQL, SQLite, MongoDB, and 80+ databases.\n"
+        "Visual query builder, ER diagrams, data export/import.\n\n"
+        "💡 Perfect for: database exploration, SQL development\n"
+        "⚠️ Requires DBeaver: https://dbeaver.io"
+    ),
+    "quarto": (
+        "📝 Quarto — Scientific Publishing System\n\n"
+        "Create documents, slides, websites, and books from notebooks.\n"
+        "Supports Python, R, Julia, and Observable JS in one document.\n"
+        "Output to HTML, PDF, Word, Reveal.js, and more.\n\n"
+        "💡 Perfect for: research reports, technical documentation\n"
+        "⚠️ Requires Quarto: https://quarto.org"
+    ),
+    "jamovi": (
+        "🧩 jamovi — Point-and-Click Statistics\n\n"
+        "A free, open SPSS alternative with a clean modern interface.\n"
+        "Runs on R under the hood — no coding needed.\n"
+        "Descriptives, t-tests, ANOVA, regression, factor analysis and more.\n\n"
+        "💡 Perfect for: students, researchers, SPSS/SPSS migrants\n"
+        "⚠️ System install — VenvStudio will auto-install if not found"
+    ),
+    "jasp": (
+        "📊 JASP — Bayesian & Frequentist Statistics\n\n"
+        "Beautiful free statistics software with Bayesian analysis.\n"
+        "Point-and-click interface with publication-ready output.\n"
+        "Covers t-tests, ANOVA, regression, SEM, meta-analysis and more.\n\n"
+        "💡 Perfect for: academic research, Bayesian inference\n"
+        "⚠️ System install — VenvStudio will auto-install if not found"
     ),
 }
 

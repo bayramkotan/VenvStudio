@@ -446,6 +446,25 @@ class VenvManager:
         for item in sorted(self.base_dir.iterdir()):
             if not item.is_dir():
                 continue
+            # ── System tools env (empty folder with marker) ──────────────
+            marker = item / ".venvstudio_env"
+            if marker.exists():
+                try:
+                    with open(marker) as f:
+                        marker_data = json.load(f)
+                except Exception:
+                    marker_data = {}
+                info = VenvInfo(name=item.name, path=item, is_valid=True)
+                info.python_version = f"🗂 {marker_data.get('type', 'system_tools')}"
+                info.package_count = 0
+                info.size = get_venv_size(item)
+                try:
+                    info.created = datetime.fromtimestamp(item.stat().st_ctime).isoformat()
+                except OSError:
+                    pass
+                venvs.append(info)
+                continue
+            # ─────────────────────────────────────────────────────────────
             python_exe = get_python_executable(item)
             is_valid = python_exe.exists()
             info = VenvInfo(name=item.name, path=item, is_valid=is_valid)
@@ -503,6 +522,27 @@ class VenvManager:
 
                     self.write_cache(item, info.python_version, info.package_count, info.size)
 
+            # Not a valid Python venv — treat as system tools env and auto-create marker
+            if not is_valid:
+                info.is_valid = True  # show in list
+                info.python_version = "🗂 system_tools"
+                info.package_count = 0
+                info.size = get_venv_size(item)
+                # Auto-create marker so it's recognized next time
+                try:
+                    import json as _json, datetime as _dt
+                    marker = item / ".venvstudio_env"
+                    if not marker.exists():
+                        with open(marker, "w") as _f:
+                            _json.dump({
+                                "type": "system_tools",
+                                "name": item.name,
+                                "created": _dt.datetime.now().isoformat(),
+                                "auto_detected": True,
+                            }, _f, indent=2)
+                except Exception:
+                    pass
+
             venvs.append(info)
         return venvs
 
@@ -512,6 +552,18 @@ class VenvManager:
             return venvs
         for item in sorted(self.base_dir.iterdir()):
             if item.is_dir():
+                # System tools env shortcut
+                marker = item / ".venvstudio_env"
+                if marker.exists():
+                    info = VenvInfo(name=item.name, path=item, is_valid=True)
+                    info.python_version = "🗂 system_tools"
+                    info.size = get_venv_size(item)
+                    try:
+                        info.created = datetime.fromtimestamp(item.stat().st_ctime).isoformat()
+                    except OSError:
+                        pass
+                    venvs.append(info)
+                    continue
                 info = self.get_venv_info(item.name, use_cache=use_cache)
                 if info:
                     venvs.append(info)

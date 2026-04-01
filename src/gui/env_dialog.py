@@ -123,6 +123,20 @@ class EnvCreateDialog(QDialog):
         loc_layout.addWidget(change_btn)
         form_layout.addRow("Location:", loc_layout)
 
+        # ── Environment Type ──────────────────────────────────────────────
+        from PySide6.QtWidgets import QComboBox as _QCB
+        self.env_type_combo = _QCB()
+        self.env_type_combo.addItem("🐍 Python Virtual Environment", "venv")
+        self.env_type_combo.addItem("🛠 Tool Environment", "empty")
+        self.env_type_combo.setToolTip(
+            "Python venv: isolated Python environment with pip\n"
+            "Empty folder: plain directory for installing system tools\n"
+            "           (R, RStudio, Ollama, DBeaver, Quarto, JASP, jamovi…)"
+        )
+        self.env_type_combo.currentIndexChanged.connect(self._on_env_type_changed)
+        form_layout.addRow("Type:", self.env_type_combo)
+        # ─────────────────────────────────────────────────────────────────
+
         self.python_combo = QComboBox()
         self.python_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
@@ -191,20 +205,32 @@ class EnvCreateDialog(QDialog):
         except Exception as e:
             print(f"[DEBUG] Could not load downloaded pythons: {e}")
 
-        form_layout.addRow("Python:", self.python_combo)
+        # Python row — back in form_layout but using QLabel widget (not string)
+        # so setVisible on the label works reliably
+        from PySide6.QtWidgets import QWidget as _QW
+        self.python_label_widget = QLabel("Python:")
 
-        # Seçili Python'un tam yolunu göster
+        _py_inner = _QW()
+        _py_inner_layout = QVBoxLayout(_py_inner)
+        _py_inner_layout.setContentsMargins(0, 0, 0, 0)
+        _py_inner_layout.setSpacing(2)
+        _py_inner_layout.addWidget(self.python_combo)
+
         self.python_path_label = QLabel("")
         self.python_path_label.setStyleSheet("color: #a6adc8; font-size: 11px;")
         self.python_path_label.setWordWrap(False)
         self.python_path_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        form_layout.addRow("", self.python_path_label)
-        self.python_combo.currentIndexChanged.connect(self._on_python_changed)
-        self._on_python_changed(0)  # İlk seçimi göster
+        _py_inner_layout.addWidget(self.python_path_label)
+
+        form_layout.addRow(self.python_label_widget, _py_inner)
+
         form_group.setLayout(form_layout)
         left.addWidget(form_group)
 
-        options_group = QGroupBox("Options")
+        self.python_combo.currentIndexChanged.connect(self._on_python_changed)
+        self._on_python_changed(0)  # İlk seçimi göster
+
+        self.options_group = QGroupBox("Options")
         options_layout = QVBoxLayout()
         self.upgrade_pip_cb = QCheckBox("Upgrade pip after creation")
         self.upgrade_pip_cb.setChecked(True)
@@ -212,8 +238,8 @@ class EnvCreateDialog(QDialog):
         self.system_packages_cb = QCheckBox("Include system site-packages")
         self.system_packages_cb.setChecked(False)
         options_layout.addWidget(self.system_packages_cb)
-        options_group.setLayout(options_layout)
-        left.addWidget(options_group)
+        self.options_group.setLayout(options_layout)
+        left.addWidget(self.options_group)
         left.addStretch()
 
         body.addLayout(left, stretch=4)
@@ -269,6 +295,38 @@ class EnvCreateDialog(QDialog):
 
         root.addLayout(btn_layout)
 
+    def _on_env_type_changed(self, index):
+        """Show/hide Python row and Options based on env type."""
+        is_venv = self.env_type_combo.currentData() == "venv"
+
+        # python_label_widget is a QLabel widget (not string) in QFormLayout
+        # — setVisible works reliably on both label and field
+        if hasattr(self, "python_label_widget"):
+            self.python_label_widget.setVisible(is_venv)
+        if hasattr(self, "python_combo"):
+            self.python_combo.setVisible(is_venv)
+        if hasattr(self, "python_path_label"):
+            self.python_path_label.setVisible(is_venv)
+        # Also hide the field widget (parent of combo)
+        if hasattr(self, "python_combo") and self.python_combo.parent():
+            self.python_combo.parent().setVisible(is_venv)
+
+        if hasattr(self, "options_group"):
+            self.options_group.setVisible(is_venv)
+
+        if is_venv:
+            self.cmd_label.setText(
+                "💡  Equivalent terminal commands:\n"
+                "will appear here when creation starts."
+            )
+        else:
+            self.cmd_label.setText(
+                "🛠  A Tool Environment folder will be created.\n\n"
+                "You can then install tools from the Launch tab:\n"
+                "R, RStudio, Ollama, DBeaver, JASP, jamovi…\n\n"
+                "No Python required — fully self-contained."
+            )
+
     def _on_python_changed(self, index):
         """Seçili Python'un tam yolunu göster."""
         import shutil, sys
@@ -304,6 +362,42 @@ class EnvCreateDialog(QDialog):
                 "Avoid: spaces, /, \\, :, *, ?, \", <, >, |"
             )
             return
+
+        # ── Empty folder env ──────────────────────────────────────────────
+        env_type = self.env_type_combo.currentData() if hasattr(self, "env_type_combo") else "venv"
+        if env_type == "empty":
+            import os
+            location = self.location_label.text()
+            folder_path = os.path.join(location, name)
+            try:
+                os.makedirs(folder_path, exist_ok=False)
+                # Write a marker so VenvStudio knows this is a system-tools env
+                marker = os.path.join(folder_path, ".venvstudio_env")
+                with open(marker, "w") as f:
+                    import json, datetime
+                    json.dump({
+                        "type": "system_tools",
+                        "name": name,
+                        "created": datetime.datetime.now().isoformat(),
+                    }, f, indent=2)
+                self.status_label.setText(f"✅ Folder '{name}' created.")
+                self.cmd_label.setText(
+                    f"📁 Created: {folder_path}\n\n"
+                    f"Go to Launch tab to install tools\n"
+                    f"(R, RStudio, Ollama, DBeaver, JASP, jamovi…)"
+                )
+                self.create_btn.setText("Done")
+                self.create_btn.setEnabled(False)
+                # Emit env_created so main_window refreshes the list immediately
+                self.env_created.emit(name)
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(800, self.accept)
+            except FileExistsError:
+                QMessageBox.warning(self, "Warning", f"A folder named '{name}' already exists.")
+            except Exception as e:
+                QMessageBox.critical(self, "Error", f"Could not create folder:\n{e}")
+            return
+        # ─────────────────────────────────────────────────────────────────
 
         python_path = self.python_combo.currentData() or None
 

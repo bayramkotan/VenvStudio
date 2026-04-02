@@ -111,6 +111,7 @@ class VenvInfo:
     created: str = ""
     package_count: int = 0
     is_valid: bool = True
+    env_type: str = "venv"  # venv | uv | poetry | rye | pipx | conda | system_tools
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -121,6 +122,7 @@ class VenvInfo:
             "created": self.created,
             "package_count": self.package_count,
             "is_valid": self.is_valid,
+            "env_type": self.env_type,
         }
 
 
@@ -455,35 +457,67 @@ class VenvManager:
                 except Exception:
                     marker_data = {}
                 env_type = marker_data.get("type", "system_tools")
-                info = VenvInfo(name=item.name, path=item, is_valid=True)
-                _type_icons = {
-                    "conda":        "🦎",
-                    "uv":           "⚡",
-                    "poetry":       "📜",
-                    "rye":          "🌾",
-                    "pipx":         "📦",
-                    "system_tools": "🗂",
-                }
-                _icon = _type_icons.get(env_type, "🗂")
+                info = VenvInfo(name=item.name, path=item, is_valid=True,
+                                env_type=env_type)
+
+                # ── Resolve Python version from marker or venv binary ─────
+                marker_pyver = marker_data.get("python_version", "")
+
                 if env_type == "conda":
-                    pyver = marker_data.get("python_version", "")
-                    info.python_version = (
-                        f"{_icon} conda py{pyver}" if pyver else f"{_icon} conda"
-                    )
+                    # Always try real binary first — marker may have short version
+                    _conda_pyver = ""
+                    _conda_py = None
+                    for _cand in (
+                        item / "python.exe",
+                        item / "Scripts" / "python.exe",
+                        item / "bin" / "python",
+                        item / "bin" / "python3",
+                    ):
+                        if _cand.exists():
+                            _conda_py = _cand
+                            break
+                    if _conda_py:
+                        try:
+                            _r = _run([str(_conda_py), "--version"],
+                                      capture_output=True, text=True, timeout=5)
+                            _conda_pyver = (
+                                _r.stdout.strip() or _r.stderr.strip()
+                            ).replace("Python ", "")
+                        except Exception:
+                            pass
+                    info.python_version = _conda_pyver or marker_pyver or ""
                     try:
                         from src.core.micromamba_installer import list_conda_packages
                         info.package_count = len(list_conda_packages(item))
                     except Exception:
                         info.package_count = 0
+
                 elif env_type in ("uv", "poetry", "rye"):
-                    info.python_version = f"{_icon} {env_type}"
-                    info.is_valid = True
+                    # These create standard venvs — try reading Python version
+                    if marker_pyver:
+                        info.python_version = marker_pyver
+                    else:
+                        _py = get_python_executable(item)
+                        if _py.exists():
+                            try:
+                                _r = _run([str(_py), "--version"],
+                                          capture_output=True, text=True, timeout=5)
+                                _v = (_r.stdout.strip() or _r.stderr.strip()
+                                       ).replace("Python ", "")
+                                info.python_version = _v
+                            except Exception:
+                                info.python_version = ""
+                        else:
+                            info.python_version = ""
+
                 elif env_type == "pipx":
-                    info.python_version = f"{_icon} pipx"
+                    info.python_version = ""
                     info.package_count = 1
-                else:
-                    info.python_version = f"{_icon} {env_type}"
+
+                else:  # system_tools
+                    info.python_version = ""
                     info.package_count = 0
+
                 info.size = get_venv_size(item)
                 try:
                     info.created = datetime.fromtimestamp(
@@ -553,7 +587,8 @@ class VenvManager:
             # Not a valid Python venv — treat as system tools env and auto-create marker
             if not is_valid:
                 info.is_valid = True  # show in list
-                info.python_version = "🗂 system_tools"
+                info.env_type = "system_tools"
+                info.python_version = ""
                 info.package_count = 0
                 info.size = get_venv_size(item)
                 # Auto-create marker so it's recognized next time
@@ -589,19 +624,55 @@ class VenvManager:
                     except Exception:
                         marker_data = {}
                     env_type = marker_data.get("type", "system_tools")
-                    info = VenvInfo(name=item.name, path=item, is_valid=True)
-                    _type_icons2 = {
-                        "conda": "🦎", "uv": "⚡", "poetry": "📜",
-                        "rye": "🌾", "pipx": "📦", "system_tools": "🗂",
-                    }
-                    _icon2 = _type_icons2.get(env_type, "🗂")
+                    info = VenvInfo(name=item.name, path=item, is_valid=True,
+                                    env_type=env_type)
+                    marker_pyver = marker_data.get("python_version", "")
+
                     if env_type == "conda":
-                        pyver = marker_data.get("python_version", "")
-                        info.python_version = (
-                            f"{_icon2} conda py{pyver}" if pyver else f"{_icon2} conda"
-                        )
+                        _conda_pyver = ""
+                        _conda_py = None
+                        for _cand in (
+                            item / "bin" / "python",
+                            item / "bin" / "python3",
+                            item / "python.exe",
+                            item / "Scripts" / "python.exe",
+                        ):
+                            if _cand.exists():
+                                _conda_py = _cand
+                                break
+                        if _conda_py:
+                            try:
+                                _r = _run([str(_conda_py), "--version"],
+                                          capture_output=True, text=True, timeout=5)
+                                _conda_pyver = (
+                                    _r.stdout.strip() or _r.stderr.strip()
+                                ).replace("Python ", "")
+                            except Exception:
+                                pass
+                        info.python_version = _conda_pyver or marker_pyver or ""
+                    elif env_type in ("uv", "poetry", "rye"):
+                        if marker_pyver:
+                            info.python_version = marker_pyver
+                        else:
+                            _py = get_python_executable(item)
+                            if _py.exists():
+                                try:
+                                    _r = _run([str(_py), "--version"],
+                                              capture_output=True, text=True, timeout=5)
+                                    _v = (_r.stdout.strip() or _r.stderr.strip()
+                                           ).replace("Python ", "")
+                                    info.python_version = _v
+                                except Exception:
+                                    info.python_version = ""
+                            else:
+                                info.python_version = ""
+                    elif env_type == "pipx":
+                        info.python_version = ""
+                        info.package_count = 1
                     else:
-                        info.python_version = f"{_icon2} {env_type}"
+                        info.python_version = ""
+                        info.package_count = 0
+
                     info.size = get_venv_size(item)
                     try:
                         info.created = datetime.fromtimestamp(

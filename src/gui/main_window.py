@@ -91,6 +91,10 @@ class EnvDetailWorker(QThread):
     def _fetch_one(self, args):
         i, name = args
         venv_path = self.venv_manager.base_dir / name
+        # Skip marker-based envs — already resolved by list_venvs_fast
+        marker = venv_path / ".venvstudio_env"
+        if marker.exists():
+            return None
         cached = self.venv_manager._read_cache(venv_path)
         if cached:
             return None  # already loaded by list_venvs_fast
@@ -460,13 +464,13 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.info_label)
 
         self.env_table = QTableWidget()
-        self.env_table.setColumnCount(6)
-        self.env_table.setHorizontalHeaderLabels(["Name", "Runtime", "Packages", "Size", "Created", "Default"])
+        self.env_table.setColumnCount(7)
+        self.env_table.setHorizontalHeaderLabels(["Name", "Type", "Runtime", "Packages", "Size", "Created", "Default"])
         self.env_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        for col in range(1, 5):
+        for col in range(1, 6):
             self.env_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeToContents)
-        self.env_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Fixed)
-        self.env_table.setColumnWidth(5, 70)
+        self.env_table.horizontalHeader().setSectionResizeMode(6, QHeaderView.Fixed)
+        self.env_table.setColumnWidth(6, 70)
         self.env_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.env_table.setSelectionMode(QTableWidget.SingleSelection)
         self.env_table.setAlternatingRowColors(True)
@@ -781,33 +785,36 @@ class MainWindow(QMainWindow):
                 self._rebuild_ql_buttons(set())
             self.ql_env_selector.blockSignals(False)
 
+        _type_labels = {
+            "venv":         "🐍 venv",
+            "uv":           "⚡ uv",
+            "poetry":       "📜 Poetry",
+            "rye":          "🌾 Rye",
+            "pipx":         "📦 pipx",
+            "conda":        "🦎 Conda",
+            "system_tools": "🗂 Tools",
+        }
+        _type_colors = {
+            "uv":           "#f9e2af",
+            "poetry":       "#cba6f7",
+            "rye":          "#fab387",
+            "pipx":         "#89dceb",
+            "conda":        "#a6e3a1",
+            "system_tools": None,  # uses accent
+        }
+
         for i, env in enumerate(envs):
+            etype = getattr(env, "env_type", "venv")
+
+            # ── Name column ──
             name_item = QTableWidgetItem(f"  {env.name}")
-            _rv_str = str(env.python_version)
-            is_system_tools = _rv_str.startswith("🗂")
-            is_conda_env    = _rv_str.startswith("🦎")
-            is_uv_env       = _rv_str.startswith("⚡")
-            is_poetry_env   = _rv_str.startswith("📜")
-            is_rye_env      = _rv_str.startswith("🌾")
-            is_pipx_env     = _rv_str.startswith("📦")
-            if is_system_tools:
+            _color = _type_colors.get(etype)
+            if etype == "system_tools":
                 name_item.setForeground(QColor(self._c().get("accent", "#89b4fa")))
                 name_item.setToolTip("System tools environment — install R, RStudio, Ollama, DBeaver etc. from Launch tab")
-            elif is_conda_env:
-                name_item.setForeground(QColor("#a6e3a1"))
-                name_item.setToolTip("Conda environment (micromamba) — install any conda-forge package from Launch tab")
-            elif is_uv_env:
-                name_item.setForeground(QColor("#f9e2af"))
-                name_item.setToolTip("uv environment — fast Rust-powered virtual environment")
-            elif is_poetry_env:
-                name_item.setForeground(QColor("#cba6f7"))
-                name_item.setToolTip("Poetry environment — dependency management with lock file")
-            elif is_rye_env:
-                name_item.setForeground(QColor("#fab387"))
-                name_item.setToolTip("Rye environment — all-in-one Python toolchain")
-            elif is_pipx_env:
-                name_item.setForeground(QColor("#89dceb"))
-                name_item.setToolTip("pipx app — isolated CLI application")
+            elif _color:
+                name_item.setForeground(QColor(_color))
+                name_item.setToolTip(f"{_type_labels.get(etype, etype)} environment")
             elif not env.is_valid:
                 name_item.setForeground(Qt.red)
                 name_item.setToolTip("Invalid environment (Python not found)")
@@ -816,16 +823,29 @@ class MainWindow(QMainWindow):
             name_item.setFont(name_font)
             self.env_table.setItem(i, 0, name_item)
 
-            # Runtime column: add "Python" prefix for plain version numbers
-            _rv = str(env.python_version)
-            if _rv and _rv[0].isdigit():
-                _runtime_str = f"  🐍 Python {_rv}"
+            # ── Type column ──
+            type_item = QTableWidgetItem(f"  {_type_labels.get(etype, '🐍 venv')}")
+            if _color:
+                type_item.setForeground(QColor(_color))
+            elif etype == "system_tools":
+                type_item.setForeground(QColor(self._c().get("accent", "#89b4fa")))
+            self.env_table.setItem(i, 1, type_item)
+
+            # ── Runtime column: Python version or "----" ──
+            _rv = str(env.python_version).strip()
+            if _rv and _rv not in ("Unknown", "?", "..."):
+                if _rv[0].isdigit():
+                    _runtime_str = f"  Python {_rv}"
+                else:
+                    _runtime_str = f"  Python {_rv}"
             else:
-                _runtime_str = f"  {_rv}"
-            self.env_table.setItem(i, 1, QTableWidgetItem(_runtime_str))
-            pkg = str(env.package_count) if env.package_count else "..."
-            self.env_table.setItem(i, 2, QTableWidgetItem(f"  {pkg}"))
-            self.env_table.setItem(i, 3, QTableWidgetItem(f"  {env.size}"))
+                _runtime_str = "  ----"
+            self.env_table.setItem(i, 2, QTableWidgetItem(_runtime_str))
+
+            pkg = str(env.package_count) if env.package_count else "0"
+            self.env_table.setItem(i, 3, QTableWidgetItem(f"  {pkg}"))
+            _size = env.size if env.size and env.size not in ("N/A", "?", "...") else "0 MB"
+            self.env_table.setItem(i, 4, QTableWidgetItem(f"  {_size}"))
 
             created_str = ""
             if env.created:
@@ -834,14 +854,14 @@ class MainWindow(QMainWindow):
                     created_str = dt.strftime("%Y-%m-%d %H:%M")
                 except ValueError:
                     created_str = env.created[:16]
-            self.env_table.setItem(i, 4, QTableWidgetItem(f"  {created_str}"))
+            self.env_table.setItem(i, 5, QTableWidgetItem(f"  {created_str}"))
 
             # Default column
             default_env = self.config.get("default_env", "")
             default_item = QTableWidgetItem("⭐" if env.name == default_env else "")
             default_item.setTextAlignment(Qt.AlignCenter)
             default_item.setFlags(default_item.flags() & ~Qt.ItemIsEditable)
-            self.env_table.setItem(i, 5, default_item)
+            self.env_table.setItem(i, 6, default_item)
 
         self._update_info_label_fast(len(envs))
 
@@ -859,7 +879,7 @@ class MainWindow(QMainWindow):
         missing_names = [
             self.env_table.item(i, 0).text().strip()
             for i in range(self.env_table.rowCount())
-            if self.env_table.item(i, 1) and self.env_table.item(i, 1).text().strip() in ("...", "")
+            if self.env_table.item(i, 2) and self.env_table.item(i, 2).text().strip() in ("...", "", "----")
         ]
 
         if missing_names:
@@ -881,9 +901,18 @@ class MainWindow(QMainWindow):
     def _on_env_detail_ready(self, row, python_version, package_count, size):
         """Update a single row with detailed info from background thread."""
         if row < self.env_table.rowCount():
-            self.env_table.setItem(row, 1, QTableWidgetItem(f"  {python_version}"))
-            self.env_table.setItem(row, 2, QTableWidgetItem(f"  {package_count}"))
-            self.env_table.setItem(row, 3, QTableWidgetItem(f"  {size}"))
+            _rv = str(python_version).strip()
+            if _rv and _rv not in ("Unknown", "?", "..."):
+                if _rv[0].isdigit():
+                    _runtime_str = f"  Python {_rv}"
+                else:
+                    _runtime_str = f"  Python {_rv}"
+            else:
+                _runtime_str = "  ----"
+            self.env_table.setItem(row, 2, QTableWidgetItem(_runtime_str))
+            self.env_table.setItem(row, 3, QTableWidgetItem(f"  {package_count}"))
+            _size = size if size and size not in ("N/A", "?", "...") else "0 MB"
+            self.env_table.setItem(row, 4, QTableWidgetItem(f"  {_size}"))
 
     def _on_all_details_done(self):
         self.loading_label.setVisible(False)

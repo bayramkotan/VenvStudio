@@ -104,7 +104,8 @@ class EnvCreateDialog(QDialog):
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("e.g., my-project, data-science, web-api")
         self.name_input.returnPressed.connect(self._create)
-        form_layout.addRow("Name:", self.name_input)
+        self._name_form_label = QLabel("Name:")
+        form_layout.addRow(self._name_form_label, self.name_input)
 
         loc_layout = QHBoxLayout()
         loc_layout.setSpacing(8)
@@ -343,7 +344,26 @@ class EnvCreateDialog(QDialog):
         is_venv  = env_type == "venv"
         is_conda = env_type == "conda"
         is_empty = env_type == "empty"
+        is_pipx  = env_type == "pipx"
         is_pip_like = env_type in ("venv", "uv")  # types that use Python combo
+
+        # ── Name label + placeholder per env type ─────────────────────────
+        if is_pipx:
+            self.name_input.parentWidget()  # ensure it exists
+            # Find the QFormLayout label for "Name:" and change it
+            form = self.name_input.parentWidget()
+            if hasattr(self, "_name_form_label"):
+                self._name_form_label.setText("Package:")
+            self.name_input.setPlaceholderText("e.g., httpie, black, ruff, poetry, cowsay")
+            self.name_input.setToolTip(
+                "Enter a PyPI package name to install as an isolated CLI app.\n"
+                "This is NOT an environment name — it's the package to install."
+            )
+        else:
+            if hasattr(self, "_name_form_label"):
+                self._name_form_label.setText("Name:")
+            self.name_input.setPlaceholderText("e.g., my-project, data-science, web-api")
+            self.name_input.setToolTip("")
 
         # Python row (venv + uv)
         if hasattr(self, "python_label_widget"):
@@ -604,9 +624,27 @@ class EnvCreateDialog(QDialog):
                                        timeout=120, **subprocess_args())
                     if r.returncode != 0:
                         return False, r.stderr[:400] or "uv venv failed"
+                    # Detect Python version in new env
+                    _uv_pyver = ""
+                    try:
+                        if plat == "windows":
+                            _uv_py = _env_path / "Scripts" / "python.exe"
+                        else:
+                            _uv_py = _env_path / "bin" / "python"
+                        if _uv_py.exists():
+                            _vr = subprocess.run(
+                                [str(_uv_py), "--version"],
+                                capture_output=True, text=True, timeout=5,
+                                **subprocess_args()
+                            )
+                            _uv_pyver = (_vr.stdout.strip() or _vr.stderr.strip()
+                                          ).replace("Python ", "")
+                    except Exception:
+                        pass
                     # Write marker
                     with open(_env_path / ".venvstudio_env", "w") as f:
                         json.dump({"type": "uv", "name": _name,
+                                   "python_version": _uv_pyver,
                                    "created": datetime.datetime.now().isoformat()}, f, indent=2)
                     _cb(f"✅ uv environment '{_name}' created!")
                     return True, f"uv environment '{_name}' created"
@@ -638,8 +676,28 @@ class EnvCreateDialog(QDialog):
                                             **subprocess_args())
                         if r2.returncode != 0:
                             return False, r.stderr[:400] or "poetry new failed"
+                    # Detect Python version
+                    _po_pyver = ""
+                    try:
+                        _po_py = (_env_path / ".venv" / ("Scripts" if plat == "windows" else "bin")
+                                  / ("python.exe" if plat == "windows" else "python"))
+                        if not _po_py.exists():
+                            # Poetry may use system python
+                            _po_py_str = shutil.which("python3") or shutil.which("python") or sys.executable
+                            _po_py = Path(_po_py_str)
+                        if _po_py.exists():
+                            _vr = subprocess.run(
+                                [str(_po_py), "--version"],
+                                capture_output=True, text=True, timeout=5,
+                                **subprocess_args()
+                            )
+                            _po_pyver = (_vr.stdout.strip() or _vr.stderr.strip()
+                                          ).replace("Python ", "")
+                    except Exception:
+                        pass
                     with open(_env_path / ".venvstudio_env", "w") as f:
                         json.dump({"type": "poetry", "name": _name,
+                                   "python_version": _po_pyver,
                                    "created": datetime.datetime.now().isoformat()}, f, indent=2)
                     _cb(f"✅ Poetry environment '{_name}' created!")
                     return True, f"Poetry environment '{_name}' created"
@@ -661,8 +719,24 @@ class EnvCreateDialog(QDialog):
                                        timeout=120, **subprocess_args())
                     if r.returncode != 0:
                         return False, r.stderr[:400] or "rye init failed"
+                    # Detect Python version
+                    _rye_pyver = ""
+                    try:
+                        _rye_py = (_env_path / ".venv" / ("Scripts" if plat == "windows" else "bin")
+                                   / ("python.exe" if plat == "windows" else "python"))
+                        if _rye_py.exists():
+                            _vr = subprocess.run(
+                                [str(_rye_py), "--version"],
+                                capture_output=True, text=True, timeout=5,
+                                **subprocess_args()
+                            )
+                            _rye_pyver = (_vr.stdout.strip() or _vr.stderr.strip()
+                                           ).replace("Python ", "")
+                    except Exception:
+                        pass
                     with open(_env_path / ".venvstudio_env", "w") as f:
                         json.dump({"type": "rye", "name": _name,
+                                   "python_version": _rye_pyver,
                                    "created": datetime.datetime.now().isoformat()}, f, indent=2)
                     _cb(f"✅ Rye environment '{_name}' created!")
                     return True, f"Rye environment '{_name}' created"

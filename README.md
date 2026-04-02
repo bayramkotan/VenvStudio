@@ -22,6 +22,7 @@
 <p align="center">
   <a href="#-install">Install</a> •
   <a href="#-features">Features</a> •
+  <a href="#-supported-environment-types">Env Types</a> •
   <a href="#-screenshots">Screenshots</a> •
   <a href="#-quick-start">Quick Start</a> •
   <a href="#-export-formats">Export</a> •
@@ -54,12 +55,14 @@ Or download the standalone binary — **no Python required:**
 <td width="50%" valign="top">
 
 ### 🗂️ Environment Management
-- Create, rename, clone, delete virtual environments
+- **7 environment types** — venv, uv, Poetry, Rye, pipx, Conda, Tool Environment
+- Create, rename, clone, delete environments with a modern GUI
+- **Type** column in the environment table — see each env's manager at a glance
 - Auto-detect existing environments at startup
 - Per-environment cache — instant load, zero delays
 - **Default Environment** — opens automatically on launch
 - Open terminal with env pre-activated
-- Export to 6 formats (see below)
+- Export to 6+ formats (see below)
 
 </td>
 <td width="50%" valign="top">
@@ -80,6 +83,7 @@ Or download the standalone binary — **no Python required:**
 ### 🚀 Quick Launch
 - Sidebar shows installed apps for active env
 - **13+ one-click launchers** — [see full list below](#-supported-launchers)
+- **System tools** — R, RStudio, Ollama, DBeaver, jamovi, JASP via Conda or portable install
 - **Jupyter Working Directory** — configurable per launch
 - **Create Desktop Shortcut** for any app
 - Instant sync across sidebar, table, and panel
@@ -99,9 +103,9 @@ Or download the standalone binary — **no Python required:**
 <td width="50%" valign="top">
 
 ### ⚙️ Settings
-- 🌙 Dark (Catppuccin) and ☀️ Light themes
-- Font family and size customization
-- 🌍 English & Turkish
+- 🌙 13 themes (8 dark + 5 light, Catppuccin-based)
+- 3-level font system (Headings / UI & Menus / Details)
+- 🌍 11 languages: EN, TR, DE, ES, RU, JA, AR, FR, PT, ZH, KO
 - Custom venv directory, terminal, catalog, presets
 - Export/Import settings
 - Auto-check for updates
@@ -121,6 +125,24 @@ Or download the standalone binary — **no Python required:**
 </td>
 </tr>
 </table>
+
+---
+
+## 🔧 Supported Environment Types
+
+VenvStudio supports **7 different environment types**, each with its own icon and color in the environment table:
+
+| Icon | Type | Backend | Description |
+|:----:|:-----|:--------|:------------|
+| 🐍 | **Python venv** | `python -m venv` | Standard Python virtual environment with pip |
+| ⚡ | **uv** | `uv venv` | Rust-powered — 10–100× faster than pip |
+| 📜 | **Poetry** | `poetry new` | Dependency management with lock file and pyproject.toml |
+| 🌾 | **Rye** | `rye init` | All-in-one Python toolchain by the creator of Flask |
+| 📦 | **pipx** | `pipx install` | Install Python CLI apps in isolated environments |
+| 🦎 | **Conda** | micromamba | conda-forge powered — R, RStudio, jamovi, JASP, DBeaver and 25,000+ packages |
+| 🗂 | **Tool Environment** | — | Plain directory for portable system tools (no Python required) |
+
+Each environment is tracked with a `.venvstudio_env` marker file, and the **Runtime** column shows the actual Python version detected from the environment's binary.
 
 ---
 
@@ -207,6 +229,8 @@ Or download the standalone binary — **no Python required:**
 
 </div>
 
+### 📓 Python Launchers (pip / uv)
+
 | | Tool | Description | Category | Website |
 |:---:|:-----|:-----------|:--------:|:-------:|
 | ![Jupyter](https://img.shields.io/badge/-F37626?style=flat-square&logo=jupyter&logoColor=white) | **JupyterLab** | Next-gen interactive development environment for notebooks | 📓 Notebooks | [jupyter.org](https://jupyter.org/) |
@@ -223,6 +247,19 @@ Or download the standalone binary — **no Python required:**
 | ![Orange](https://img.shields.io/badge/-E6812C?style=flat-square) | **Orange Data Mining** | Visual programming for data analysis and ML | 🔬 Data Science | [orangedatamining.com](https://orangedatamining.com/) |
 | ![Datasette](https://img.shields.io/badge/-4A8B6E?style=flat-square) | **Datasette** | Explore and publish data with instant JSON API | 🗄️ Data | [datasette.io](https://datasette.io/) |
 | ![IPython](https://img.shields.io/badge/-3776AB?style=flat-square&logo=python&logoColor=white) | **IPython** | Enhanced interactive Python shell | 🐍 Shell | [ipython.org](https://ipython.org/) |
+
+### 🛠️ System Tools (Conda / Portable)
+
+*Available in Conda and Tool environments — installed via conda-forge or as portable binaries.*
+
+| Tool | Description | Install Method |
+|:-----|:-----------|:--------------|
+| **R** | Statistical computing language | Conda (`r-base`) or system NSIS installer |
+| **RStudio** | IDE for R | Conda (`rstudio`) or portable download |
+| **Ollama** | Run large language models locally | Portable binary |
+| **DBeaver** | Universal database tool | Conda or portable ZIP |
+| **jamovi** | Statistical spreadsheet | Conda or AppImage (Linux) |
+| **JASP** | Bayesian statistics | Conda or AppImage (Linux) |
 
 ---
 
@@ -261,6 +298,8 @@ Export your environment from the **Export ▾** dropdown:
 | Format | File(s) | Use Case |
 |--------|---------|----------|
 | 📄 requirements.txt | `requirements.txt` | Standard pip |
+| 🔒 requirements-frozen.txt | `requirements-frozen.txt` | Reproducible install with SHA-256 hashes |
+| 📋 JSON | `packages.json` | Machine-readable package list |
 | 🐳 Dockerfile | `Dockerfile` + `requirements.txt` | Docker container |
 | 🐳 docker-compose.yml | 3 files | Docker Compose |
 | 📦 pyproject.toml | `pyproject.toml` | Modern Python packaging |

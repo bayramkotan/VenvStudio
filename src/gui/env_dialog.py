@@ -82,7 +82,8 @@ class EnvCreateDialog(QDialog):
         title.setObjectName("header")
         root.addWidget(title)
 
-        subtitle = QLabel("Set up a fresh Python virtual environment")
+        self.subtitle_label = QLabel("Set up a fresh Python virtual environment")
+        subtitle = self.subtitle_label
         subtitle.setObjectName("subheader")
         root.addWidget(subtitle)
 
@@ -127,6 +128,10 @@ class EnvCreateDialog(QDialog):
         from PySide6.QtWidgets import QComboBox as _QCB
         self.env_type_combo = _QCB()
         self.env_type_combo.addItem("🐍 Python Virtual Environment", "venv")
+        self.env_type_combo.addItem("⚡ uv Environment", "uv")
+        self.env_type_combo.addItem("📜 Poetry Environment", "poetry")
+        self.env_type_combo.addItem("🌾 Rye Environment", "rye")
+        self.env_type_combo.addItem("📦 pipx App", "pipx")
         self.env_type_combo.addItem("🦎 Conda Environment (micromamba)", "conda")
         self.env_type_combo.addItem("🛠 Tool Environment", "empty")
         self.env_type_combo.setToolTip(
@@ -333,21 +338,22 @@ class EnvCreateDialog(QDialog):
         root.addLayout(btn_layout)
 
     def _on_env_type_changed(self, index):
-        """Show/hide rows based on env type: venv / conda / empty."""
+        """Show/hide rows based on env type."""
         env_type = self.env_type_combo.currentData()
         is_venv  = env_type == "venv"
         is_conda = env_type == "conda"
         is_empty = env_type == "empty"
+        is_pip_like = env_type in ("venv", "uv")  # types that use Python combo
 
-        # Python row (venv only)
+        # Python row (venv + uv)
         if hasattr(self, "python_label_widget"):
-            self.python_label_widget.setVisible(is_venv)
+            self.python_label_widget.setVisible(is_pip_like)
         if hasattr(self, "python_combo"):
-            self.python_combo.setVisible(is_venv)
+            self.python_combo.setVisible(is_pip_like)
         if hasattr(self, "python_path_label"):
-            self.python_path_label.setVisible(is_venv)
+            self.python_path_label.setVisible(is_pip_like)
         if hasattr(self, "python_combo") and self.python_combo.parent():
-            self.python_combo.parent().setVisible(is_venv)
+            self.python_combo.parent().setVisible(is_pip_like)
 
         # Conda row
         if hasattr(self, "conda_row_widget"):
@@ -355,31 +361,71 @@ class EnvCreateDialog(QDialog):
         if hasattr(self, "conda_row_label"):
             self.conda_row_label.setVisible(is_conda)
 
-        # Options (venv only)
+        # Options (venv + uv only)
         if hasattr(self, "options_group"):
-            self.options_group.setVisible(is_venv)
+            self.options_group.setVisible(is_pip_like)
 
-        # Progress text
-        if is_venv:
-            self.cmd_label.setText(
+        # Subtitles per env type
+        subtitles = {
+            "venv":   "Set up a fresh Python virtual environment",
+            "uv":     "Create a fast uv virtual environment (Rust-powered pip)",
+            "poetry": "Create a Poetry project environment",
+            "rye":    "Create a Rye managed Python environment",
+            "pipx":   "Install an isolated Python CLI application",
+            "conda":  "Create a conda environment powered by micromamba",
+            "empty":  "Create a self-contained folder for system tools",
+        }
+        if hasattr(self, "subtitle_label"):
+            self.subtitle_label.setText(subtitles.get(env_type, subtitles["venv"]))
+
+        # Progress panel hints
+        hints = {
+            "venv": (
                 "💡  Equivalent terminal commands:\n"
                 "will appear here when creation starts."
-            )
-        elif is_conda:
-            self.cmd_label.setText(
+            ),
+            "uv": (
+                "⚡  uv is 10-100x faster than pip.\n\n"
+                "uv will be downloaded automatically\n"
+                "if not already installed (~5 MB).\n\n"
+                "Equivalent: uv venv <name>"
+            ),
+            "poetry": (
+                "📜  Poetry manages dependencies and\n"
+                "virtual environments together.\n\n"
+                "Poetry will be installed automatically\n"
+                "if not already available.\n\n"
+                "Equivalent: poetry new <name>"
+            ),
+            "rye": (
+                "🌾  Rye is an all-in-one Python toolchain\n"
+                "by the creator of Flask.\n\n"
+                "Rye will be downloaded automatically\n"
+                "if not already installed.\n\n"
+                "Equivalent: rye init <name>"
+            ),
+            "pipx": (
+                "📦  pipx installs Python CLI apps\n"
+                "into isolated environments.\n\n"
+                "Enter the package name (e.g. 'httpie',\n"
+                "'black', 'poetry', 'ruff').\n\n"
+                "Equivalent: pipx install <package>"
+            ),
+            "conda": (
                 "🦎  A Conda Environment will be created\n"
                 "    using micromamba + conda-forge.\n\n"
                 "You can install R, RStudio, jamovi, JASP,\n"
                 "DBeaver and 25,000+ packages from the\n"
                 "Launch tab after creation."
-            )
-        else:
-            self.cmd_label.setText(
+            ),
+            "empty": (
                 "🛠  A Tool Environment folder will be created.\n\n"
                 "You can then install tools from the Launch tab:\n"
                 "R, RStudio, Ollama, DBeaver, JASP, jamovi…\n\n"
                 "No Python required — fully self-contained."
-            )
+            ),
+        }
+        self.cmd_label.setText(hints.get(env_type, hints["venv"]))
 
     def _on_python_changed(self, index):
         """Seçili Python'un tam yolunu göster."""
@@ -486,7 +532,227 @@ class EnvCreateDialog(QDialog):
             self.worker.finished.connect(_on_conda_done)
             self.worker.start()
             return
-        # ─────────────────────────────────────────────────────────────────
+        # ── conda end ─────────────────────────────────────────────────────
+
+        # ── uv / Poetry / Rye / pipx ──────────────────────────────────────
+        if env_type in ("uv", "poetry", "rye", "pipx"):
+            import os
+            location = self.location_label.text()
+            env_path = Path(os.path.join(location, name))
+            python_path = self.python_combo.currentData() or None
+
+            self.progress_bar.setVisible(True)
+            self.create_btn.setEnabled(False)
+            self.create_btn.setText("Creating...")
+            self.name_input.setEnabled(False)
+            self.env_type_combo.setEnabled(False)
+            self.status_label.setText(f"Creating {env_type} environment...")
+
+            _env_path = env_path
+            _python  = python_path
+            _name    = name
+            _etype   = env_type
+
+            def _do_alt_create(callback=None):
+                import subprocess, shutil, sys, json, datetime
+                from src.utils.platform_utils import get_platform, subprocess_args
+                plat = get_platform()
+
+                def _cb(msg):
+                    if callback: callback(msg)
+
+                if _etype == "uv":
+                    # ── uv ───────────────────────────────────────────────
+                    def _find_tool(name_):
+                        found = shutil.which(name_) or shutil.which(name_ + ".exe")
+                        if found:
+                            return found
+                        import os
+                        scripts = os.path.join(os.path.dirname(sys.executable),
+                            "Scripts" if sys.platform == "win32" else "bin")
+                        for n in (name_, name_ + ".exe"):
+                            cand = os.path.join(scripts, n)
+                            if os.path.isfile(cand):
+                                return cand
+                        return None
+
+                    uv_exe = _find_tool("uv")
+                    if not uv_exe:
+                        _cb("Installing uv...")
+                        subprocess.run(
+                            [sys.executable, "-m", "pip", "install", "uv", "-q"],
+                            capture_output=True, text=True, **subprocess_args()
+                        )
+                        uv_exe = _find_tool("uv")
+                        if not uv_exe:
+                            # Try python -m uv
+                            t = subprocess.run([sys.executable, "-m", "uv", "--version"],
+                                               capture_output=True, **subprocess_args())
+                            if t.returncode == 0:
+                                uv_exe = f"{sys.executable} -m uv"
+                            else:
+                                return False, "Could not install uv — try: pip install uv"
+
+                    if " -m " in str(uv_exe):
+                        cmd = uv_exe.split() + ["venv", str(_env_path)]
+                    else:
+                        cmd = [uv_exe, "venv", str(_env_path)]
+                    if _python:
+                        cmd += ["--python", _python]
+                    _cb(f"$ {' '.join(cmd)}")
+                    r = subprocess.run(cmd, capture_output=True, text=True,
+                                       timeout=120, **subprocess_args())
+                    if r.returncode != 0:
+                        return False, r.stderr[:400] or "uv venv failed"
+                    # Write marker
+                    with open(_env_path / ".venvstudio_env", "w") as f:
+                        json.dump({"type": "uv", "name": _name,
+                                   "created": datetime.datetime.now().isoformat()}, f, indent=2)
+                    _cb(f"✅ uv environment '{_name}' created!")
+                    return True, f"uv environment '{_name}' created"
+
+                elif _etype == "poetry":
+                    # ── Poetry ───────────────────────────────────────────
+                    poetry_exe = _find_tool("poetry")
+                    if not poetry_exe:
+                        _cb("Installing Poetry...")
+                        subprocess.run(
+                            [sys.executable, "-m", "pip", "install", "poetry", "-q"],
+                            capture_output=True, text=True, **subprocess_args()
+                        )
+                        poetry_exe = _find_tool("poetry")
+                        if not poetry_exe:
+                            return False, "Could not install Poetry — try: pip install poetry"
+                    _env_path.mkdir(parents=True, exist_ok=True)
+                    cmd = [poetry_exe, "new", str(_env_path)]
+                    _cb(f"$ {' '.join(cmd)}")
+                    r = subprocess.run(cmd, capture_output=True, text=True,
+                                       timeout=120, cwd=str(_env_path.parent),
+                                       **subprocess_args())
+                    if r.returncode != 0:
+                        # poetry new fails if dir exists — try init
+                        cmd2 = [poetry_exe, "init", "--no-interaction",
+                                "--name", _name]
+                        r2 = subprocess.run(cmd2, capture_output=True, text=True,
+                                            timeout=60, cwd=str(_env_path),
+                                            **subprocess_args())
+                        if r2.returncode != 0:
+                            return False, r.stderr[:400] or "poetry new failed"
+                    with open(_env_path / ".venvstudio_env", "w") as f:
+                        json.dump({"type": "poetry", "name": _name,
+                                   "created": datetime.datetime.now().isoformat()}, f, indent=2)
+                    _cb(f"✅ Poetry environment '{_name}' created!")
+                    return True, f"Poetry environment '{_name}' created"
+
+                elif _etype == "rye":
+                    # ── Rye ──────────────────────────────────────────────
+                    rye_exe = shutil.which("rye") or shutil.which("rye.exe")
+                    if not rye_exe:
+                        _cb("Rye not found — install from https://rye.astral.sh")
+                        return False, (
+                            "Rye is not installed.\n\n"
+                            "Install it from: https://rye.astral.sh\n"
+                            "Then restart VenvStudio."
+                        )
+                    _env_path.mkdir(parents=True, exist_ok=True)
+                    cmd = [rye_exe, "init", str(_env_path)]
+                    _cb(f"$ {' '.join(cmd)}")
+                    r = subprocess.run(cmd, capture_output=True, text=True,
+                                       timeout=120, **subprocess_args())
+                    if r.returncode != 0:
+                        return False, r.stderr[:400] or "rye init failed"
+                    with open(_env_path / ".venvstudio_env", "w") as f:
+                        json.dump({"type": "rye", "name": _name,
+                                   "created": datetime.datetime.now().isoformat()}, f, indent=2)
+                    _cb(f"✅ Rye environment '{_name}' created!")
+                    return True, f"Rye environment '{_name}' created"
+
+                elif _etype == "pipx":
+                    # ── pipx ─────────────────────────────────────────────
+                    def _find_pipx():
+                        # 1. shutil.which
+                        found = shutil.which("pipx") or shutil.which("pipx.exe")
+                        if found:
+                            return found
+                        # 2. Scripts/bin dir next to current python
+                        import os
+                        scripts = os.path.join(os.path.dirname(sys.executable),
+                                               "Scripts" if sys.platform == "win32" else "bin")
+                        for name_ in ("pipx", "pipx.exe"):
+                            cand = os.path.join(scripts, name_)
+                            if os.path.isfile(cand):
+                                return cand
+                        # 3. User base Scripts
+                        import site
+                        user_scripts = os.path.join(site.getusersitepackages(),
+                                                     "..", "..", "Scripts" if sys.platform == "win32" else "bin")
+                        for name_ in ("pipx", "pipx.exe"):
+                            cand = os.path.normpath(os.path.join(user_scripts, name_))
+                            if os.path.isfile(cand):
+                                return cand
+                        return None
+
+                    pipx_exe = _find_pipx()
+                    if not pipx_exe:
+                        _cb("Installing pipx...")
+                        r = subprocess.run(
+                            [sys.executable, "-m", "pip", "install", "--user", "pipx", "-q"],
+                            capture_output=True, text=True, **subprocess_args()
+                        )
+                        pipx_exe = _find_pipx()
+
+                    # Even if not found as exe, try python -m pipx
+                    if not pipx_exe:
+                        # Test python -m pipx works
+                        test = subprocess.run(
+                            [sys.executable, "-m", "pipx", "--version"],
+                            capture_output=True, text=True, **subprocess_args()
+                        )
+                        if test.returncode == 0:
+                            pipx_cmd = [sys.executable, "-m", "pipx"]
+                        else:
+                            return False, (
+                                "Could not install pipx.\n\n"
+                                "Install manually:\n  pip install pipx\n"
+                                "Then: pipx ensurepath"
+                            )
+                    else:
+                        pipx_cmd = [pipx_exe]
+
+                    # For pipx, "name" is the package to install
+                    cmd = pipx_cmd + ["install", _name]
+                    _cb(f"$ {' '.join(cmd)}")
+                    r = subprocess.run(cmd, capture_output=True, text=True,
+                                       timeout=300, **subprocess_args())
+                    if r.returncode != 0:
+                        return False, r.stderr[:400] or r.stdout[:400] or f"pipx install {_name} failed"
+                    _cb(f"✅ pipx installed '{_name}'!")
+                    return True, f"pipx app '{_name}' installed"
+
+                return False, f"Unknown env type: {_etype}"
+
+            def _on_alt_done(success, message):
+                self.progress_bar.setVisible(False)
+                self.create_btn.setEnabled(True)
+                self.create_btn.setText("Create Environment")
+                self.name_input.setEnabled(True)
+                self.env_type_combo.setEnabled(True)
+                if success:
+                    self.status_label.setText(f"✅ {message}")
+                    self.env_created.emit(_name)
+                    from PySide6.QtCore import QTimer
+                    QTimer.singleShot(800, self.accept)
+                else:
+                    self.status_label.setText(f"❌ Failed")
+                    QMessageBox.critical(self, "Error", message)
+
+            from src.gui.package_panel import WorkerThread
+            self.worker = WorkerThread(_do_alt_create)
+            self.worker.progress.connect(lambda msg: self.cmd_label.setText(msg))
+            self.worker.finished.connect(_on_alt_done)
+            self.worker.start()
+            return
+        # ── alt env types end ─────────────────────────────────────────────
 
         if env_type == "empty":
             import os

@@ -456,19 +456,33 @@ class VenvManager:
                     marker_data = {}
                 env_type = marker_data.get("type", "system_tools")
                 info = VenvInfo(name=item.name, path=item, is_valid=True)
+                _type_icons = {
+                    "conda":        "🦎",
+                    "uv":           "⚡",
+                    "poetry":       "📜",
+                    "rye":          "🌾",
+                    "pipx":         "📦",
+                    "system_tools": "🗂",
+                }
+                _icon = _type_icons.get(env_type, "🗂")
                 if env_type == "conda":
                     pyver = marker_data.get("python_version", "")
                     info.python_version = (
-                        f"🦎 conda py{pyver}" if pyver else "🦎 conda"
+                        f"{_icon} conda py{pyver}" if pyver else f"{_icon} conda"
                     )
-                    # Count conda packages
                     try:
                         from src.core.micromamba_installer import list_conda_packages
                         info.package_count = len(list_conda_packages(item))
                     except Exception:
                         info.package_count = 0
+                elif env_type in ("uv", "poetry", "rye"):
+                    info.python_version = f"{_icon} {env_type}"
+                    info.is_valid = True
+                elif env_type == "pipx":
+                    info.python_version = f"{_icon} pipx"
+                    info.package_count = 1
                 else:
-                    info.python_version = "🗂 system_tools"
+                    info.python_version = f"{_icon} {env_type}"
                     info.package_count = 0
                 info.size = get_venv_size(item)
                 try:
@@ -576,13 +590,18 @@ class VenvManager:
                         marker_data = {}
                     env_type = marker_data.get("type", "system_tools")
                     info = VenvInfo(name=item.name, path=item, is_valid=True)
+                    _type_icons2 = {
+                        "conda": "🦎", "uv": "⚡", "poetry": "📜",
+                        "rye": "🌾", "pipx": "📦", "system_tools": "🗂",
+                    }
+                    _icon2 = _type_icons2.get(env_type, "🗂")
                     if env_type == "conda":
                         pyver = marker_data.get("python_version", "")
                         info.python_version = (
-                            f"🦎 conda py{pyver}" if pyver else "🦎 conda"
+                            f"{_icon2} conda py{pyver}" if pyver else f"{_icon2} conda"
                         )
                     else:
-                        info.python_version = "🗂 system_tools"
+                        info.python_version = f"{_icon2} {env_type}"
                     info.size = get_venv_size(item)
                     try:
                         info.created = datetime.fromtimestamp(

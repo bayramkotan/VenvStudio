@@ -231,74 +231,108 @@ def find_system_pythons() -> List[Tuple[str, str]]:
             return (0,)
     pythons.sort(key=_ver_key, reverse=True)
     return pythons
-def open_terminal_at(path: Path, terminal_type: str = "") -> None:
-    """Open a terminal/console at the given path with the venv activated."""
+def open_terminal_at(path: Path, terminal_type: str = "",
+                     env_type: str = "venv") -> None:
+    """Open a terminal/console at the given path.
+    
+    env_type:
+      "venv"         → activate the Python venv (Scripts/activate.bat etc.)
+      "conda"        → micromamba activate <path>
+      "system_tools" → just cd into the folder, no activation
+    """
     system = get_platform()
 
-    try:
-        if system == "windows":
+    # ── Build activation command based on env_type ────────────────────────
+    def _make_cmd_windows(path: Path, terminal_type: str) -> str:
+        if env_type == "system_tools":
+            # Just cd into the folder
+            if terminal_type == "wt" and shutil.which("wt"):
+                return f'start wt -d "{path}"'
+            elif terminal_type == "git-bash" and shutil.which("bash"):
+                git_bash = shutil.which("bash")
+                return f'start "" "{git_bash}" --login -c "cd \'{path}\' && exec bash"'
+            else:
+                return f'start cmd /k "cd /d {path}"'
+
+        elif env_type == "conda":
+            from src.core.micromamba_installer import get_micromamba_exe
+            mamba = get_micromamba_exe()
+            if mamba:
+                activate_cmd = f'"{mamba}" shell hook -s cmd.exe && "{mamba}" activate "{path}"'
+            else:
+                activate_cmd = f'conda activate "{path}"'
+            if terminal_type == "wt" and shutil.which("wt"):
+                return f'start wt -d "{path}" cmd /k "{activate_cmd}"'
+            elif terminal_type == "git-bash" and shutil.which("bash"):
+                git_bash = shutil.which("bash")
+                return f'start "" "{git_bash}" --login -c "cd \'{path}\'"'
+            else:
+                return f'start cmd /k "cd /d {path} && {activate_cmd}"'
+
+        else:  # venv
             activate_bat = path / "Scripts" / "activate.bat"
             activate_ps1 = path / "Scripts" / "Activate.ps1"
-
             if terminal_type == "cmd":
-                cmd = f'start cmd /k "cd /d {path} && {activate_bat}"'
+                return f'start cmd /k "cd /d {path} && {activate_bat}"'
             elif terminal_type == "wt":
                 if activate_ps1.exists():
-                    cmd = (
-                        f'start wt -d "{path}" powershell -NoExit -Command '
-                        f'"& \'{activate_ps1}\'"'
-                    )
-                else:
-                    cmd = f'start wt -d "{path}" cmd /k "{activate_bat}"'
+                    return (f'start wt -d "{path}" powershell -NoExit -Command '
+                            f'"& \'{activate_ps1}\'"')
+                return f'start wt -d "{path}" cmd /k "{activate_bat}"'
             elif terminal_type == "git-bash":
                 git_bash = shutil.which("bash")
                 if git_bash:
                     activate_sh = path / "Scripts" / "activate"
-                    cmd = f'start "" "{git_bash}" --login -c "cd \'{path}\' && source \'{activate_sh}\' && exec bash"'
-                else:
-                    cmd = f'start cmd /k "cd /d {path} && {activate_bat}"'
+                    return f'start "" "{git_bash}" --login -c "cd \'{path}\' && source \'{activate_sh}\' && exec bash"'
+                return f'start cmd /k "cd /d {path} && {activate_bat}"'
             else:
-                # Default: Windows Terminal (wt), yoksa PowerShell
                 if shutil.which("wt"):
                     if activate_ps1.exists():
-                        cmd = (
-                            f'start wt -d "{path}" powershell -NoExit -Command '
-                            f'"& \'{activate_ps1}\'"'
-                        )
-                    else:
-                        cmd = f'start wt -d "{path}" cmd /k "{activate_bat}"'
+                        return (f'start wt -d "{path}" powershell -NoExit -Command '
+                                f'"& \'{activate_ps1}\'"')
+                    return f'start wt -d "{path}" cmd /k "{activate_bat}"'
                 elif activate_ps1.exists():
-                    cmd = (
-                        f'start powershell -NoExit -Command "'
-                        f'Set-Location \'{path}\'; '
-                        f'& \'{activate_ps1}\'"'
-                    )
-                else:
-                    cmd = f'start cmd /k "cd /d {path} && {activate_bat}"'
+                    return (f'start powershell -NoExit -Command "'
+                            f'Set-Location \'{path}\'; '
+                            f'& \'{activate_ps1}\'"')
+                return f'start cmd /k "cd /d {path} && {activate_bat}"'
 
+    def _make_cmd_posix(path: Path) -> str:
+        if env_type == "system_tools":
+            return f"cd '{path}'"
+        elif env_type == "conda":
+            from src.core.micromamba_installer import get_micromamba_exe
+            mamba = get_micromamba_exe()
+            if mamba:
+                return f'eval "$("{mamba}" shell hook -s posix)" && micromamba activate "{path}"'
+            return f"conda activate '{path}'"
+        else:
+            return f"cd '{path}' && source '{path}/bin/activate'"
+
+    try:
+        if system == "windows":
+            cmd = _make_cmd_windows(path, terminal_type)
             subprocess.Popen(cmd, shell=True)
 
         elif system == "macos":
-            activate = path / "bin" / "activate"
+            posix_cmd = _make_cmd_posix(path)
             if terminal_type == "iterm2":
                 script = (
                     f'tell application "iTerm" to create window with default profile '
-                    f'command "cd \'{path}\' && source \'{activate}\'"'
+                    f'command "cd \'{path}\' && {posix_cmd}"'
                 )
             else:
                 script = (
                     f'tell application "Terminal" to do script '
-                    f'"cd \'{path}\' && source \'{activate}\'"'
+                    f'"cd \'{path}\' && {posix_cmd}"'
                 )
             subprocess.Popen(["osascript", "-e", script])
 
         else:  # linux
-            activate = path / "bin" / "activate"
+            posix_cmd = _make_cmd_posix(path)
 
             # AppImage bundles override PATH — resolve the real system PATH
-            # so we can find terminal emulators installed on the host.
             host_path = os.environ.get("PATH", "")
-            # Prepend standard system dirs that AppImage may have removed
             system_dirs = [
                 "/usr/local/bin", "/usr/bin", "/bin",
                 "/usr/local/sbin", "/usr/sbin", "/sbin",
@@ -308,7 +342,6 @@ def open_terminal_at(path: Path, terminal_type: str = "") -> None:
                 if d not in host_path:
                     host_path = d + ":" + host_path
 
-            # Find real system bash (not AppImage's bundled one)
             system_bash = "/bin/bash"
             for d in ["/usr/bin", "/bin", "/usr/local/bin"]:
                 candidate = os.path.join(d, "bash")
@@ -316,10 +349,7 @@ def open_terminal_at(path: Path, terminal_type: str = "") -> None:
                     system_bash = candidate
                     break
 
-            # Use --rcfile trick: bash reads our activation script as rc,
-            # so the terminal stays open with the venv activated.
-            # This is more reliable than "bash -c '... && exec bash'"
-            bash_cmd = f"cd '{path}' && source '{activate}' && exec {system_bash}"
+            bash_cmd = f"{posix_cmd} && exec {system_bash}"
 
             def _find_terminal(term: str) -> Optional[str]:
                 """Find terminal executable, checking system PATH even inside AppImage."""

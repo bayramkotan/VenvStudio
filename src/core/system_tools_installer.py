@@ -591,7 +591,7 @@ class DBeaverInstaller(BaseInstaller):
         plat = get_platform()
         arch = platform.machine().lower()
 
-        # Prefer portable ZIP/tarball
+        # Prefer portable ZIP/tarball — try exact name first, then fuzzy match
         portable_names = {
             "windows": f"dbeaver-ce-{version}-win32.win32.x86_64.zip",
             "linux":   f"dbeaver-ce-{version}-linux.gtk.x86_64.tar.gz",
@@ -600,13 +600,33 @@ class DBeaverInstaller(BaseInstaller):
                         else f"dbeaver-ce-{version}-macos-x86_64.dmg"),
         }
         target = portable_names.get(plat, "")
+
+        # Exact match
         for asset in data.get("assets", []):
             if asset["name"] == target:
                 return {"version": version, "url": asset["browser_download_url"],
                         "filename": target,
                         "portable": plat in ("windows", "linux")}
 
-        # Fallback to installer
+        # Fuzzy match for portable archives
+        portable_suffixes = {
+            "windows": (".zip",),
+            "linux":   (".tar.gz",),
+            "macos":   (".dmg",),
+        }
+        for asset in data.get("assets", []):
+            n = asset["name"].lower()
+            if "ce" not in n:
+                continue
+            for suf in portable_suffixes.get(plat, ()):
+                if n.endswith(suf):
+                    is_portable = plat in ("windows", "linux")
+                    return {"version": version,
+                            "url": asset["browser_download_url"],
+                            "filename": asset["name"],
+                            "portable": is_portable}
+
+        # Final fallback to installer (.exe / .deb)
         suf = {"windows": ".exe", "linux": "amd64.deb", "macos": ".dmg"}.get(plat, ".exe")
         for asset in data.get("assets", []):
             if asset["name"].endswith(suf) and "ce" in asset["name"].lower():

@@ -414,18 +414,21 @@ class PackagePanel(QWidget):
         layout.addWidget(self.env_bar)
 
         self.tabs = QTabWidget()
-        self.tabs.addTab(self._create_launcher_tab(), f"🚀 {tr('app_launcher')}")
-        self.tabs.addTab(self._create_installed_tab(), f"📦 {tr('installed')}")
-        self.tabs.addTab(self._create_catalog_tab(), f"🛒 {tr('catalog')}")
-        self.tabs.addTab(self._create_presets_tab(), f"⚡ {tr('presets')}")
-        self.tabs.addTab(self._create_manual_tab(), f"⌨️ {tr('manual_install')}")
+        self.tabs.setUsesScrollButtons(False)  # No < > scroll buttons
 
-        # Educational: Tab tooltips
-        self.tabs.setTabToolTip(0, UI_TOOLTIPS.get("tab_launch", ""))
-        self.tabs.setTabToolTip(1, UI_TOOLTIPS.get("tab_installed", ""))
-        self.tabs.setTabToolTip(2, UI_TOOLTIPS.get("tab_catalog", ""))
-        self.tabs.setTabToolTip(3, UI_TOOLTIPS.get("tab_presets", ""))
-        self.tabs.setTabToolTip(4, UI_TOOLTIPS.get("tab_manual", ""))
+        # Store tab definitions for dynamic show/hide via removeTab/insertTab
+        self._tab_defs = [
+            ("launcher",  f"🚀 {tr('app_launcher')}",   self._create_launcher_tab(),  UI_TOOLTIPS.get("tab_launch", "")),
+            ("installed", f"📦 {tr('installed')}",       self._create_installed_tab(), UI_TOOLTIPS.get("tab_installed", "")),
+            ("catalog",   f"🛒 {tr('catalog')}",         self._create_catalog_tab(),   UI_TOOLTIPS.get("tab_catalog", "")),
+            ("presets",   f"⚡ {tr('presets')}",         self._create_presets_tab(),   UI_TOOLTIPS.get("tab_presets", "")),
+            ("manual",    f"⌨️ {tr('manual_install')}",  self._create_manual_tab(),    UI_TOOLTIPS.get("tab_manual", "")),
+        ]
+        # Add all tabs initially
+        for key, label, widget, tooltip in self._tab_defs:
+            self.tabs.addTab(widget, label)
+        for i, (key, label, widget, tooltip) in enumerate(self._tab_defs):
+            self.tabs.setTabToolTip(i, tooltip)
         layout.addWidget(self.tabs)
 
         # Status bar with cancel button
@@ -477,12 +480,14 @@ class PackagePanel(QWidget):
         # App cards grid
         self.launcher_grid = QGridLayout()
         self.launcher_grid.setSpacing(16)
+        self.launcher_grid.setAlignment(Qt.AlignTop)
 
         self.app_definitions = [
             {
                 "name": "JupyterLab",
                 "icon": "🔬",
                 "icon_key": "jupyterlab",
+                "env_types": ["venv"],
                 "package": "jupyterlab",
                 "command": ["-m", "jupyter", "lab"],
                 "desc": "Next-generation notebook interface for interactive computing",
@@ -491,6 +496,7 @@ class PackagePanel(QWidget):
                 "name": "Jupyter Notebook",
                 "icon": "📓",
                 "icon_key": "jupyter_notebook",
+                "env_types": ["venv"],
                 "package": "notebook",
                 "command": ["-m", "jupyter", "notebook"],
                 "desc": "Classic Jupyter Notebook — simple, document-centric interface",
@@ -499,6 +505,7 @@ class PackagePanel(QWidget):
                 "name": "Orange Data Mining",
                 "icon": "🍊",
                 "icon_key": "orange3",
+                "env_types": ["venv"],
                 "package": "orange3",
                 "command": ["-m", "Orange.canvas"],
                 "desc": "Visual programming for data mining and machine learning",
@@ -508,6 +515,7 @@ class PackagePanel(QWidget):
                 "name": "Spyder IDE",
                 "icon": "🕷️",
                 "icon_key": "spyder",
+                "env_types": ["venv"],
                 "package": "spyder",
                 "command": ["-m", "spyder.app.start"],
                 "desc": "Scientific Python development environment",
@@ -516,6 +524,7 @@ class PackagePanel(QWidget):
                 "name": "IPython",
                 "icon": "🐍",
                 "icon_key": "ipython",
+                "env_types": ["venv"],
                 "package": "ipython",
                 "command": ["-m", "IPython"],
                 "desc": "Enhanced interactive Python shell",
@@ -525,6 +534,7 @@ class PackagePanel(QWidget):
                 "name": "Streamlit",
                 "icon": "🎈",
                 "icon_key": "streamlit",
+                "env_types": ["venv"],
                 "package": "streamlit",
                 "command": ["-m", "streamlit", "hello", "--server.headless", "true"],
                 "desc": "Build data apps in minutes — launches demo app",
@@ -536,6 +546,7 @@ class PackagePanel(QWidget):
                 "name": "Gradio",
                 "icon": "🤗",
                 "icon_key": "gradio",
+                "env_types": ["venv"],
                 "package": "gradio",
                 "command": ["-c", "import gradio as gr; gr.Interface(lambda x: x, 'text', 'text', title='Gradio Demo').launch()"],
                 "desc": "Build ML model demos & web apps",
@@ -547,6 +558,7 @@ class PackagePanel(QWidget):
                 "name": "Dash",
                 "icon": "📊",
                 "icon_key": "dash",
+                "env_types": ["venv"],
                 "package": "dash",
                 "command": ["-c", "import dash; from dash import html; app=dash.Dash(); app.layout=html.H1('Dash is running!'); app.run(debug=False)"],
                 "desc": "Interactive dashboards by Plotly",
@@ -558,6 +570,7 @@ class PackagePanel(QWidget):
                 "name": "Panel",
                 "icon": "🔲",
                 "icon_key": "panel",
+                "env_types": ["venv"],
                 "package": "panel",
                 "command": ["-m", "panel", "serve", "--show"],
                 "desc": "HoloViz dashboards & data apps",
@@ -567,6 +580,7 @@ class PackagePanel(QWidget):
                 "name": "Voilà",
                 "icon": "📓",
                 "icon_key": "voila",
+                "env_types": ["venv"],
                 "package": "voila",
                 "command": ["-m", "voila", "--no-browser"],
                 "desc": "Turn notebooks into standalone web apps",
@@ -578,6 +592,7 @@ class PackagePanel(QWidget):
                 "name": "MLflow UI",
                 "icon": "🧪",
                 "icon_key": "mlflow",
+                "env_types": ["venv"],
                 "package": "mlflow",
                 "command": ["-m", "mlflow", "ui"],
                 "desc": "ML experiment tracking & model registry",
@@ -590,6 +605,7 @@ class PackagePanel(QWidget):
                 "script_launcher": True,
                 "icon": "📈",
                 "icon_key": "tensorboard",
+                "env_types": ["venv"],
                 "package": "tensorboard",
                 "command": ["-m", "tensorboard.main", "--logdir", "."],
                 "desc": "Visualize training metrics — pick a log directory",
@@ -625,6 +641,7 @@ class PackagePanel(QWidget):
                 "name": "Marimo",
                 "icon": "🌊",
                 "icon_key": "marimo",
+                "env_types": ["venv"],
                 "package": "marimo",
                 "command": ["-m", "marimo", "edit"],
                 "desc": "Reactive notebook — next-gen Jupyter alternative",
@@ -637,6 +654,7 @@ class PackagePanel(QWidget):
                 "name": "R Console",
                 "icon": "📐",
                 "icon_key": "r_console",
+                "env_types": ["conda", "system_tools"],
                 "package": "__system__",
                 "system_app": True,
                 "conda_packages": ["r-base"],
@@ -662,6 +680,7 @@ class PackagePanel(QWidget):
                 "name": "RStudio",
                 "icon": "🎯",
                 "icon_key": "rstudio",
+                "env_types": ["conda", "system_tools"],
                 "package": "__system__",
                 "system_app": True,
                 "conda_packages": ["rstudio"],
@@ -688,6 +707,7 @@ class PackagePanel(QWidget):
                 "name": "Ollama",
                 "icon": "🦙",
                 "icon_key": "ollama",
+                "env_types": ["conda", "system_tools"],
                 "package": "__system__",
                 "system_app": True,
                 "system_commands": {
@@ -704,6 +724,7 @@ class PackagePanel(QWidget):
                 "name": "DBeaver",
                 "icon": "🦫",
                 "icon_key": "dbeaver",
+                "env_types": ["conda", "system_tools"],
                 "package": "__system__",
                 "system_app": True,
                 "conda_packages": ["dbeaver-ce"],
@@ -730,6 +751,7 @@ class PackagePanel(QWidget):
                 "name": "Quarto",
                 "icon": "📝",
                 "icon_key": "quarto",
+                "env_types": ["venv"],
                 "package": "quarto-cli",
                 "command": ["-m", "quarto_cli.quarto", "preview"],
                 "desc": "Publish documents, reports & dashboards from Python/R notebooks",
@@ -740,6 +762,7 @@ class PackagePanel(QWidget):
                 "name": "jamovi",
                 "icon": "🧩",
                 "icon_key": "jamovi",
+                "env_types": ["conda", "system_tools"],
                 "package": "__system__",
                 "system_app": True,
                 "conda_packages": ["jamovi"],
@@ -755,6 +778,7 @@ class PackagePanel(QWidget):
                 "name": "JASP",
                 "icon": "📊",
                 "icon_key": "jasp",
+                "env_types": ["conda", "system_tools"],
                 "package": "__system__",
                 "system_app": True,
                 "conda_packages": ["jasp"],
@@ -769,12 +793,14 @@ class PackagePanel(QWidget):
         ]
 
         self.launcher_cards = {}
+        self.launcher_grid_widget = QWidget()
+        self.launcher_grid_widget.setLayout(self.launcher_grid)
         for i, app in enumerate(self.app_definitions):
             card = self._create_app_card(app)
             self.launcher_grid.addWidget(card, i // 3, i % 3)
             self.launcher_cards[app["name"]] = card
-
-        layout.addLayout(self.launcher_grid)
+        self._launcher_container_layout = layout  # keep ref for rebuild
+        layout.addWidget(self.launcher_grid_widget)
         layout.addStretch()
 
         scroll.setWidget(container)
@@ -785,6 +811,8 @@ class PackagePanel(QWidget):
         card = QFrame()
         card.setObjectName("card")
         card.setMinimumHeight(200)
+        card.setMaximumHeight(280)
+        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         card.setStyleSheet("""
             QFrame#card {
                 background-color: rgba(137, 180, 250, 0.05);
@@ -950,8 +978,13 @@ class PackagePanel(QWidget):
                     from src.core.micromamba_installer import list_conda_packages
                     _conda_pkgs = app_def.get("conda_packages", [])
                     if _conda_pkgs:
-                        _installed = {p.get("name", "").lower()
-                                      for p in list_conda_packages(_env_path)}
+                        # Use cached set to avoid repeated subprocess per card
+                        _cache_key = f"_conda_installed_cache_{_env_path}"
+                        if not hasattr(self, _cache_key):
+                            setattr(self, _cache_key,
+                                    {p.get("name", "").lower()
+                                     for p in list_conda_packages(_env_path)})
+                        _installed = getattr(self, _cache_key)
                         _found = _conda_pkgs[0].lower() in _installed
                         status = card._status_label
                         card._launch_btn.setEnabled(True)
@@ -1335,6 +1368,11 @@ class PackagePanel(QWidget):
         name = app_def["name"]
         if success:
             self.status_label.setText(f"✅ {name} installed. Launching...")
+            # Invalidate conda package cache so status refreshes correctly
+            if self.pip_manager:
+                _cache_key = f"_conda_installed_cache_{self.pip_manager.venv_path}"
+                if hasattr(self, _cache_key):
+                    delattr(self, _cache_key)
             # Refresh card states then launch
             self._update_launcher_status()
             from PySide6.QtCore import QTimer
@@ -1345,7 +1383,7 @@ class PackagePanel(QWidget):
                 self, f"{name} — Install Failed",
                 f"Could not install {name} automatically.\n\n"
                 f"{message}\n\n"
-                f"Please install it manually and try again."
+                f"Please install it manually and try again.\n"
             )
 
     def _get_orange3_packages(self, python_exe) -> list:
@@ -1938,10 +1976,10 @@ $s.Save()
         self.update_btn.clicked.connect(self._check_outdated)
         toolbar.addWidget(self.update_btn)
 
-        uninstall_btn = QPushButton(f"🗑️ {tr('uninstall_selected')}")
-        uninstall_btn.setObjectName("danger")
-        uninstall_btn.clicked.connect(self._uninstall_selected)
-        toolbar.addWidget(uninstall_btn)
+        self.uninstall_btn = QPushButton(f"🗑️ {tr('uninstall_selected')}")
+        self.uninstall_btn.setObjectName("danger")
+        self.uninstall_btn.clicked.connect(self._uninstall_selected)
+        toolbar.addWidget(self.uninstall_btn)
 
         # Export dropdown button (in toolbar for visibility)
         export_btn = QPushButton("📤 Export ▾")
@@ -2070,16 +2108,22 @@ $s.Save()
 
     def reload_presets_tab(self):
         """Reload presets tab — called after settings saved to show new custom presets."""
-        # Find preset tab index (index 3)
-        preset_idx = 3
-        old_widget = self.tabs.widget(preset_idx)
         new_widget = self._create_presets_tab()
-        self.tabs.removeTab(preset_idx)
-        self.tabs.insertTab(preset_idx, new_widget, f"⚡ {tr('presets')}")
-        self.tabs.setCurrentIndex(self.tabs.currentIndex())  # keep current tab
-        if old_widget:
-            old_widget.deleteLater()
-        # Update badge states
+        new_label = f"⚡ {tr('presets')}"
+        new_tooltip = UI_TOOLTIPS.get("tab_presets", "")
+
+        # Update _tab_defs
+        if hasattr(self, "_tab_defs"):
+            for idx, (key, label, widget, tooltip) in enumerate(self._tab_defs):
+                if key == "presets":
+                    old_widget = widget
+                    self._tab_defs[idx] = ("presets", new_label, new_widget, new_tooltip)
+                    if old_widget:
+                        old_widget.deleteLater()
+                    break
+
+        # Re-apply tab visibility (will rebuild tabs with new presets widget)
+        self._update_tabs_for_env_type()
         self._update_preset_badges()
 
     def _create_presets_tab(self) -> QWidget:
@@ -2415,7 +2459,9 @@ $s.Save()
             from src.utils.platform_utils import open_terminal_at
             from src.core.config_manager import ConfigManager
             terminal_type = ConfigManager().get("terminal_type", "")
-            open_terminal_at(self._current_venv_path, terminal_type)
+            env_type = getattr(self, "_current_env_type", "venv")
+            open_terminal_at(self._current_venv_path, terminal_type,
+                             env_type=env_type)
         except Exception as e:
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "Error", f"Could not open terminal:\n{e}")
@@ -2465,8 +2511,104 @@ $s.Save()
         self.env_selector.blockSignals(False)
         self.status_label.setText(f"Loading packages for {name}...")
         self._update_env_info_bar(venv_path, backend)
+        self._update_tabs_for_env_type()
         # Async refresh — UI hemen görünür, paketler arka planda yüklenir
         self._async_refresh_packages()
+
+    def _update_tabs_for_env_type(self):
+        """
+        Show/hide tabs based on current env type using removeTab/insertTab.
+        This is the most reliable approach across all Qt versions.
+        - venv:         all 5 tabs
+        - conda:        Launch + Installed only
+        - system_tools: Launch only
+        """
+        if not hasattr(self, "_tab_defs"):
+            return
+
+        env_type = getattr(self, "_current_env_type", "venv")
+
+        # Which tab keys should be visible?
+        visible_keys = {
+            "venv":         {"launcher", "installed", "catalog", "presets", "manual"},
+            "conda":        {"launcher", "installed"},
+            "system_tools": {"launcher"},
+        }.get(env_type, {"launcher", "installed", "catalog", "presets", "manual"})
+
+        # Remember current tab key before we remove tabs
+        cur_widget = self.tabs.currentWidget()
+        cur_key = None
+        for key, label, widget, tooltip in self._tab_defs:
+            if widget is cur_widget:
+                cur_key = key
+                break
+
+        # Block signals to prevent feedback loops
+        self.tabs.blockSignals(True)
+
+        # Remove all tabs (widgets are kept alive, just removed from tab bar)
+        while self.tabs.count() > 0:
+            self.tabs.removeTab(0)
+
+        # Re-add only visible tabs in original order
+        for key, label, widget, tooltip in self._tab_defs:
+            if key in visible_keys:
+                idx = self.tabs.addTab(widget, label)
+                self.tabs.setTabToolTip(idx, tooltip)
+
+        self.tabs.blockSignals(False)
+
+        # Restore current tab if still visible, else go to Launch
+        restored = False
+        if cur_key and cur_key in visible_keys:
+            for i, (key, label, widget, tooltip) in enumerate(self._tab_defs):
+                if key == cur_key and key in visible_keys:
+                    # Find its actual index in the new tab order
+                    for j in range(self.tabs.count()):
+                        if self.tabs.widget(j) is widget:
+                            self.tabs.setCurrentIndex(j)
+                            restored = True
+                            break
+                    break
+        if not restored:
+            self.tabs.setCurrentIndex(0)
+
+        # Installed tab toolbar: disable pip-only actions for non-venv
+        is_pip = env_type == "venv"
+        if hasattr(self, "update_btn"):
+            self.update_btn.setEnabled(is_pip)
+            self.update_btn.setToolTip(
+                "" if is_pip else "Not available for conda environments"
+            )
+        if hasattr(self, "uninstall_btn"):
+            self.uninstall_btn.setEnabled(is_pip)
+            self.uninstall_btn.setToolTip(
+                "" if is_pip else "Use conda to uninstall packages"
+            )
+
+        # Rebuild launcher grid — remove gaps from hidden cards
+        if hasattr(self, "launcher_cards") and hasattr(self, "launcher_grid"):
+            # Collect visible apps for this env type
+            visible_apps = [
+                app for app in self.app_definitions
+                if env_type in app.get("env_types",
+                    ["venv"] if not app.get("system_app")
+                    else ["conda", "system_tools"])
+            ]
+
+            # Hide all cards first
+            for card in self.launcher_cards.values():
+                card.setVisible(False)
+                self.launcher_grid.removeWidget(card)
+
+            # Re-add only visible cards in order (no gaps)
+            col_count = 3
+            for idx, app in enumerate(visible_apps):
+                card = self.launcher_cards.get(app["name"])
+                if card:
+                    row, col = divmod(idx, col_count)
+                    self.launcher_grid.addWidget(card, row, col)
+                    card.setVisible(True)
 
     def populate_env_list(self, env_list):
         """Populate the environment dropdown from main window."""
@@ -2539,15 +2681,30 @@ $s.Save()
                 backend = ConfigManager().get("package_manager", "pip")
             except Exception:
                 pass
-            self.pip_manager = PipManager(Path(path_str), backend=backend)
-            self._current_venv_path = Path(path_str)
+            venv_path = Path(path_str)
+            self.pip_manager = PipManager(venv_path, backend=backend)
+            self._current_venv_path = venv_path
+
+            # Detect env type from marker — same as set_venv
+            self._current_env_type = "venv"
+            marker = venv_path / ".venvstudio_env"
+            if marker.exists():
+                try:
+                    import json as _json
+                    with open(marker) as f:
+                        _m = _json.load(f)
+                    self._current_env_type = _m.get("type", "system_tools")
+                except Exception:
+                    self._current_env_type = "system_tools"
+
             if hasattr(self, "_env_bar_terminal_btn"):
                 self._env_bar_terminal_btn.setEnabled(True)
             self.status_label.setText(f"Loading packages...")
-            self._update_env_info_bar(Path(path_str), backend)
+            self._update_env_info_bar(venv_path, backend)
+            self._update_tabs_for_env_type()
             # Notify main window to sync QL selector immediately
             if hasattr(self, "_ql_env_changed_callback") and callable(self._ql_env_changed_callback):
-                self._ql_env_changed_callback(Path(path_str).name)
+                self._ql_env_changed_callback(venv_path.name)
             self._async_refresh_packages()
         else:
             self._safe_clear_env_state()
@@ -2629,8 +2786,14 @@ $s.Save()
             except Exception:
                 self.env_disk_label.setText("💾 ?")
 
-        # 4) Backend (pip/uv)
-        backend_display = backend.upper() if backend else "PIP"
+        # 4) Backend (pip/uv/conda)
+        _env_type = getattr(self, "_current_env_type", "venv")
+        if _env_type == "conda":
+            backend_display = "Conda"
+        elif _env_type == "system_tools":
+            backend_display = "Tools"
+        else:
+            backend_display = backend.upper() if backend else "PIP"
         self.env_backend_label.setText(f"⚙️ {backend_display}")
 
         # 5) Last used (modification time of pyvenv.cfg or activate script)
@@ -2703,21 +2866,35 @@ $s.Save()
 
         # Capture pip_manager reference (env may change before thread finishes)
         pip_mgr_snapshot = self.pip_manager
+        _env_type = getattr(self, "_current_env_type", "venv")
+        _venv_path = self._current_venv_path if hasattr(self, "_current_venv_path") else None
 
         # Use QThread for background loading
         class PkgLoader(QThread):
             done = Signal(list)
-            def __init__(self, pip_mgr, parent=None):
+            def __init__(self, pip_mgr, env_type, venv_path, parent=None):
                 super().__init__(parent)
                 self.pip_mgr = pip_mgr
+                self.env_type = env_type
+                self.venv_path = venv_path
             def run(self):
                 try:
-                    pkgs = self.pip_mgr.list_packages()
+                    if self.env_type == "conda" and self.venv_path:
+                        from src.core.micromamba_installer import list_conda_packages
+                        raw = list_conda_packages(self.venv_path)
+                        class _Pkg:
+                            def __init__(self, name, version):
+                                self.name = name
+                                self.version = version
+                        pkgs = [_Pkg(p.get("name",""), p.get("version",""))
+                                for p in raw]
+                    else:
+                        pkgs = self.pip_mgr.list_packages()
                     self.done.emit(pkgs)
                 except Exception:
                     self.done.emit([])
 
-        self._pkg_loader = PkgLoader(pip_mgr_snapshot, parent=self)
+        self._pkg_loader = PkgLoader(pip_mgr_snapshot, _env_type, _venv_path, parent=self)
         self._pkg_loader.done.connect(self._on_packages_loaded)
         self._pkg_loader.start()
 

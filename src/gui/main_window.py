@@ -461,7 +461,7 @@ class MainWindow(QMainWindow):
 
         self.env_table = QTableWidget()
         self.env_table.setColumnCount(6)
-        self.env_table.setHorizontalHeaderLabels(["Name", "Python", "Packages", "Size", "Created", "Default"])
+        self.env_table.setHorizontalHeaderLabels(["Name", "Runtime", "Packages", "Size", "Created", "Default"])
         self.env_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
         for col in range(1, 5):
             self.env_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeToContents)
@@ -783,14 +783,31 @@ class MainWindow(QMainWindow):
 
         for i, env in enumerate(envs):
             name_item = QTableWidgetItem(f"  {env.name}")
-            is_system_tools = str(env.python_version).startswith("🗂")
-            is_conda_env    = str(env.python_version).startswith("🦎")
+            _rv_str = str(env.python_version)
+            is_system_tools = _rv_str.startswith("🗂")
+            is_conda_env    = _rv_str.startswith("🦎")
+            is_uv_env       = _rv_str.startswith("⚡")
+            is_poetry_env   = _rv_str.startswith("📜")
+            is_rye_env      = _rv_str.startswith("🌾")
+            is_pipx_env     = _rv_str.startswith("📦")
             if is_system_tools:
                 name_item.setForeground(QColor(self._c().get("accent", "#89b4fa")))
                 name_item.setToolTip("System tools environment — install R, RStudio, Ollama, DBeaver etc. from Launch tab")
             elif is_conda_env:
-                name_item.setForeground(QColor("#a6e3a1"))  # green
+                name_item.setForeground(QColor("#a6e3a1"))
                 name_item.setToolTip("Conda environment (micromamba) — install any conda-forge package from Launch tab")
+            elif is_uv_env:
+                name_item.setForeground(QColor("#f9e2af"))
+                name_item.setToolTip("uv environment — fast Rust-powered virtual environment")
+            elif is_poetry_env:
+                name_item.setForeground(QColor("#cba6f7"))
+                name_item.setToolTip("Poetry environment — dependency management with lock file")
+            elif is_rye_env:
+                name_item.setForeground(QColor("#fab387"))
+                name_item.setToolTip("Rye environment — all-in-one Python toolchain")
+            elif is_pipx_env:
+                name_item.setForeground(QColor("#89dceb"))
+                name_item.setToolTip("pipx app — isolated CLI application")
             elif not env.is_valid:
                 name_item.setForeground(Qt.red)
                 name_item.setToolTip("Invalid environment (Python not found)")
@@ -798,7 +815,14 @@ class MainWindow(QMainWindow):
             name_font.setBold(True)
             name_item.setFont(name_font)
             self.env_table.setItem(i, 0, name_item)
-            self.env_table.setItem(i, 1, QTableWidgetItem(f"  {env.python_version}"))
+
+            # Runtime column: add "Python" prefix for plain version numbers
+            _rv = str(env.python_version)
+            if _rv and _rv[0].isdigit():
+                _runtime_str = f"  🐍 Python {_rv}"
+            else:
+                _runtime_str = f"  {_rv}"
+            self.env_table.setItem(i, 1, QTableWidgetItem(_runtime_str))
             pkg = str(env.package_count) if env.package_count else "..."
             self.env_table.setItem(i, 2, QTableWidgetItem(f"  {pkg}"))
             self.env_table.setItem(i, 3, QTableWidgetItem(f"  {env.size}"))

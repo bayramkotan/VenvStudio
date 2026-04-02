@@ -890,9 +890,14 @@ class PackagePanel(QWidget):
             "QPushButton:hover { background-color: #45475a; border-color: #89b4fa; }"
         )
 
-        # Build install + run commands
+        # Build install + run commands (env-type aware)
         pkg_name = app_def["package"]
-        install_cmd = f"pip install {pkg_name}"
+        _env_type = getattr(self, "_current_env_type", "venv")
+        _install_prefixes = {
+            "venv": "pip install", "uv": "uv pip install",
+            "poetry": "poetry add", "rye": "rye add",
+        }
+        install_cmd = f"{_install_prefixes.get(_env_type, 'pip install')} {pkg_name}"
         run_parts = app_def.get("command", [])
         if run_parts:
             run_cmd = "python " + " ".join(run_parts)
@@ -2195,15 +2200,7 @@ $s.Save()
 
             copy_btn = QPushButton(f"📋 {tr('copy_command')}")
             copy_btn.setObjectName("secondary")
-            pip_cmd = "pip install " + " ".join(packages)
-            copy_btn.setToolTip(
-                f"<p style='font-size:14px; font-weight:bold; color:#a6e3a1;'>"
-                f"💡 Equivalent terminal command:</p>"
-                f"<p style='font-size:16px; font-family:Consolas,monospace; color:#cdd6f4; "
-                f"background-color:#1e1e2e; padding:8px; border-radius:4px;'>"
-                f"{pip_cmd}</p>"
-                f"<p style='font-size:11px; color:#6c7086;'>Click to copy to clipboard</p>"
-            )
+            copy_btn._preset_packages = packages  # store for dynamic tooltip update
             copy_btn.clicked.connect(
                 lambda checked, pkgs=packages: self._copy_preset_command(pkgs)
             )
@@ -2213,6 +2210,7 @@ $s.Save()
                 "badge": badge,
                 "install_btn": install_btn,
                 "uninstall_btn": uninstall_btn,
+                "copy_btn": copy_btn,
                 "packages": packages,
             }
 
@@ -2307,7 +2305,7 @@ $s.Save()
 
         copy_cmd_btn = QPushButton("📋 Copy Command")
         copy_cmd_btn.setObjectName("secondary")
-        copy_cmd_btn.setToolTip("Copy the pip install command to clipboard")
+        copy_cmd_btn.setToolTip("Copy the install command to clipboard")
         copy_cmd_btn.clicked.connect(self._copy_install_command)
         btn_layout.addWidget(copy_cmd_btn)
 
@@ -2484,10 +2482,8 @@ $s.Save()
             backend = ConfigManager().get("package_manager", "pip")
         except Exception:
             pass
-        self.pip_manager = PipManager(venv_path, backend=backend)
-        self._current_venv_path = venv_path
 
-        # Detect env type from marker
+        # Detect env type from marker FIRST — needed to choose backend
         self._current_env_type = "venv"  # default
         marker = venv_path / ".venvstudio_env"
         if marker.exists():
@@ -2498,6 +2494,14 @@ $s.Save()
                 self._current_env_type = _m.get("type", "system_tools")
             except Exception:
                 self._current_env_type = "system_tools"
+
+        # Override backend based on env type
+        if self._current_env_type == "uv":
+            backend = "uv"
+
+        self.pip_manager = PipManager(venv_path, backend=backend)
+        self._current_venv_path = venv_path
+
         if hasattr(self, "_env_bar_terminal_btn"):
             self._env_bar_terminal_btn.setEnabled(True)
         # Select in dropdown
@@ -2512,7 +2516,7 @@ $s.Save()
         self.status_label.setText(f"Loading packages for {name}...")
         self._update_env_info_bar(venv_path, backend)
         self._update_tabs_for_env_type()
-        # Async refresh — UI hemen görünür, paketler arka planda yüklenir
+        # Async refresh
         self._async_refresh_packages()
 
     def _update_tabs_for_env_type(self):
@@ -2531,7 +2535,11 @@ $s.Save()
         # Which tab keys should be visible?
         visible_keys = {
             "venv":         {"launcher", "installed", "catalog", "presets", "manual"},
+            "uv":           {"launcher", "installed", "catalog", "presets", "manual"},
+            "poetry":       {"launcher", "installed", "catalog", "manual"},
+            "rye":          {"launcher", "installed", "catalog", "manual"},
             "conda":        {"launcher", "installed"},
+            "pipx":         {"launcher"},
             "system_tools": {"launcher"},
         }.get(env_type, {"launcher", "installed", "catalog", "presets", "manual"})
 
@@ -2550,9 +2558,27 @@ $s.Save()
         while self.tabs.count() > 0:
             self.tabs.removeTab(0)
 
-        # Re-add only visible tabs in original order
+        # Re-add only visible tabs in original order with env-type-aware tooltips
+        _manual_tooltips = {
+            "venv":   "📝 Manually install packages by name.\nYou can paste from pip install commands.",
+            "uv":     "📝 Manually install packages by name.\nUses uv pip install (10-100× faster).",
+            "poetry": "📝 Manually add packages.\nUses poetry add command.",
+            "rye":    "📝 Manually add packages.\nUses rye add command.",
+        }
+        _installed_tooltips = {
+            "venv":   "📦 View and manage installed pip packages.",
+            "uv":     "📦 View and manage installed packages (uv backend).",
+            "poetry": "📦 View installed packages (Poetry environment).",
+            "rye":    "📦 View installed packages (Rye environment).",
+            "conda":  "📦 View installed conda packages.",
+        }
         for key, label, widget, tooltip in self._tab_defs:
             if key in visible_keys:
+                # Override tooltip for env-type awareness
+                if key == "manual":
+                    tooltip = _manual_tooltips.get(env_type, tooltip)
+                elif key == "installed":
+                    tooltip = _installed_tooltips.get(env_type, tooltip)
                 idx = self.tabs.addTab(widget, label)
                 self.tabs.setTabToolTip(idx, tooltip)
 
@@ -2573,17 +2599,17 @@ $s.Save()
         if not restored:
             self.tabs.setCurrentIndex(0)
 
-        # Installed tab toolbar: disable pip-only actions for non-venv
-        is_pip = env_type == "venv"
+        # Installed tab toolbar: disable pip-only actions for non-pip envs
+        is_pip_like = env_type in ("venv", "uv", "poetry", "rye")
         if hasattr(self, "update_btn"):
-            self.update_btn.setEnabled(is_pip)
+            self.update_btn.setEnabled(is_pip_like)
             self.update_btn.setToolTip(
-                "" if is_pip else "Not available for conda environments"
+                "" if is_pip_like else f"Not available for {env_type} environments"
             )
         if hasattr(self, "uninstall_btn"):
-            self.uninstall_btn.setEnabled(is_pip)
+            self.uninstall_btn.setEnabled(is_pip_like)
             self.uninstall_btn.setToolTip(
-                "" if is_pip else "Use conda to uninstall packages"
+                "" if is_pip_like else f"Not available for {env_type} environments"
             )
 
         # Rebuild launcher grid — remove gaps from hidden cards
@@ -2609,6 +2635,29 @@ $s.Save()
                     row, col = divmod(idx, col_count)
                     self.launcher_grid.addWidget(card, row, col)
                     card.setVisible(True)
+
+        # Update preset copy button tooltips for current env type
+        _cmd_prefixes = {
+            "venv":   "pip install",
+            "uv":     "uv pip install",
+            "poetry": "poetry add",
+            "rye":    "rye add",
+        }
+        _prefix = _cmd_prefixes.get(env_type, "pip install")
+        if hasattr(self, "_preset_cards"):
+            for pname, pdata in self._preset_cards.items():
+                copy_btn = pdata.get("copy_btn")
+                if copy_btn and hasattr(copy_btn, "_preset_packages"):
+                    _pkgs = copy_btn._preset_packages
+                    _cmd = f"{_prefix} {' '.join(_pkgs)}"
+                    copy_btn.setToolTip(
+                        f"<p style='font-size:14px; font-weight:bold; color:#a6e3a1;'>"
+                        f"💡 Equivalent terminal command:</p>"
+                        f"<p style='font-size:16px; font-family:Consolas,monospace; color:#cdd6f4; "
+                        f"background-color:#1e1e2e; padding:8px; border-radius:4px;'>"
+                        f"{_cmd}</p>"
+                        f"<p style='font-size:11px; color:#6c7086;'>Click to copy to clipboard</p>"
+                    )
 
     def populate_env_list(self, env_list):
         """Populate the environment dropdown from main window."""
@@ -2682,7 +2731,6 @@ $s.Save()
             except Exception:
                 pass
             venv_path = Path(path_str)
-            self.pip_manager = PipManager(venv_path, backend=backend)
             self._current_venv_path = venv_path
 
             # Detect env type from marker — same as set_venv
@@ -2696,6 +2744,12 @@ $s.Save()
                     self._current_env_type = _m.get("type", "system_tools")
                 except Exception:
                     self._current_env_type = "system_tools"
+
+            # Override backend based on env type
+            if self._current_env_type == "uv":
+                backend = "uv"
+
+            self.pip_manager = PipManager(venv_path, backend=backend)
 
             if hasattr(self, "_env_bar_terminal_btn"):
                 self._env_bar_terminal_btn.setEnabled(True)
@@ -2786,14 +2840,18 @@ $s.Save()
             except Exception:
                 self.env_disk_label.setText("💾 ?")
 
-        # 4) Backend (pip/uv/conda)
+        # 4) Backend (pip/uv/conda/poetry/rye/pipx)
         _env_type = getattr(self, "_current_env_type", "venv")
-        if _env_type == "conda":
-            backend_display = "Conda"
-        elif _env_type == "system_tools":
-            backend_display = "Tools"
-        else:
-            backend_display = backend.upper() if backend else "PIP"
+        _backend_names = {
+            "venv": backend.upper() if backend else "PIP",
+            "uv": "UV",
+            "poetry": "Poetry",
+            "rye": "Rye",
+            "pipx": "pipx",
+            "conda": "Conda",
+            "system_tools": "Tools",
+        }
+        backend_display = _backend_names.get(_env_type, backend.upper() if backend else "PIP")
         self.env_backend_label.setText(f"⚙️ {backend_display}")
 
         # 5) Last used (modification time of pyvenv.cfg or activate script)
@@ -3266,8 +3324,16 @@ $s.Save()
         if reply != QMessageBox.Yes:
             return
 
-        # Show command hint
-        cmd = COMMAND_HINTS["install"].format(packages=" ".join(packages))
+        # Show command hint based on env type
+        _env_type = getattr(self, "_current_env_type", "venv")
+        _install_cmds = {
+            "venv":   "pip install {packages}",
+            "uv":     "uv pip install {packages}",
+            "poetry": "poetry add {packages}",
+            "rye":    "rye add {packages}",
+        }
+        _cmd_template = _install_cmds.get(_env_type, COMMAND_HINTS["install"])
+        cmd = _cmd_template.format(packages=" ".join(packages))
         self._show_command_hint(hint_name or "Install Packages", cmd)
 
         self._do_install(packages)
@@ -3282,7 +3348,7 @@ $s.Save()
         self.current_worker.start()
 
     def _copy_install_command(self):
-        """Copy the pip install command for entered packages."""
+        """Copy the install command for entered packages (env-type aware)."""
         text = self.manual_input.toPlainText().strip()
         if not text:
             self.status_label.setText("⚠️ No packages entered")
@@ -3311,7 +3377,15 @@ $s.Save()
                     cleaned.append(t)
 
         if cleaned:
-            cmd = f"pip install {' '.join(cleaned)}"
+            _env_type = getattr(self, "_current_env_type", "venv")
+            _cmd_prefixes = {
+                "venv":   "pip install",
+                "uv":     "uv pip install",
+                "poetry": "poetry add",
+                "rye":    "rye add",
+            }
+            _prefix = _cmd_prefixes.get(_env_type, "pip install")
+            cmd = f"{_prefix} {' '.join(cleaned)}"
             from PySide6.QtWidgets import QApplication
             QApplication.clipboard().setText(cmd)
             self.status_label.setText(f"📋 Copied: {cmd}")
@@ -3712,6 +3786,12 @@ dependencies:
             return
 
         menu = QMenu(self)
+        _env_type = getattr(self, "_current_env_type", "venv")
+        _prefixes = {
+            "venv": "pip install", "uv": "uv pip install",
+            "poetry": "poetry add", "rye": "rye add",
+        }
+        _prefix = _prefixes.get(_env_type, "pip install")
 
         # Gather selected package names
         selected_pkgs = []
@@ -3725,19 +3805,19 @@ dependencies:
 
         if len(selected_pkgs) == 1:
             pkg, ver = selected_pkgs[0]
-            menu.addAction(f"ℹ️ Package Info (pip show)", lambda: self._show_pip_info(pkg))
+            menu.addAction(f"ℹ️ Package Info", lambda: self._show_pip_info(pkg))
             menu.addSeparator()
-            menu.addAction(f"📋 Copy: pip install {pkg}", lambda: self._copy_to_clipboard(f"pip install {pkg}"))
-            menu.addAction(f"📋 Copy: pip install {pkg}=={ver}", lambda: self._copy_to_clipboard(f"pip install {pkg}=={ver}"))
+            menu.addAction(f"📋 Copy: {_prefix} {pkg}", lambda p=pkg: self._copy_to_clipboard(f"{_prefix} {p}"))
+            menu.addAction(f"📋 Copy: {_prefix} {pkg}=={ver}", lambda p=pkg, v=ver: self._copy_to_clipboard(f"{_prefix} {p}=={v}"))
             menu.addSeparator()
             menu.addAction(f"📋 Copy package name", lambda: self._copy_to_clipboard(pkg))
             menu.addAction(f"🌐 Open on PyPI", lambda: self._open_pypi(pkg))
         else:
             names = " ".join(p for p, _ in selected_pkgs)
-            menu.addAction(f"📋 Copy: pip install {names}", lambda: self._copy_to_clipboard(f"pip install {names}"))
+            menu.addAction(f"📋 Copy: {_prefix} {names}", lambda: self._copy_to_clipboard(f"{_prefix} {names}"))
             pinned = " ".join(f"{p}=={v}" for p, v in selected_pkgs if v)
             if pinned:
-                menu.addAction(f"📋 Copy with versions", lambda: self._copy_to_clipboard(f"pip install {pinned}"))
+                menu.addAction(f"📋 Copy with versions", lambda: self._copy_to_clipboard(f"{_prefix} {pinned}"))
 
         menu.exec(self.packages_table.viewport().mapToGlobal(position))
 
@@ -3756,11 +3836,18 @@ dependencies:
         is_installed = pkg.lower() in self.installed_package_names
 
         menu = QMenu(self)
+        _env_type = getattr(self, "_current_env_type", "venv")
+        _prefixes = {
+            "venv": "pip install", "uv": "uv pip install",
+            "poetry": "poetry add", "rye": "rye add",
+        }
+        _prefix = _prefixes.get(_env_type, "pip install")
+
         menu.addAction(f"ℹ️ Package Info", lambda: self._show_pip_info(pkg))
         if not is_installed:
             menu.addAction(f"⬇️ Install {pkg}", lambda: self._install_packages([pkg], hint_name=pkg))
         menu.addSeparator()
-        menu.addAction(f"📋 Copy: pip install {pkg}", lambda: self._copy_to_clipboard(f"pip install {pkg}"))
+        menu.addAction(f"📋 Copy: {_prefix} {pkg}", lambda: self._copy_to_clipboard(f"{_prefix} {pkg}"))
         menu.addAction(f"📋 Copy package name", lambda: self._copy_to_clipboard(pkg))
         menu.addSeparator()
         menu.addAction(f"🌐 Open on PyPI", lambda: self._open_pypi(pkg))
@@ -4051,8 +4138,16 @@ dependencies:
             self.current_worker.start()
 
     def _copy_preset_command(self, packages):
-        """Copy pip install command to clipboard."""
-        cmd = f"pip install {' '.join(packages)}"
+        """Copy install command to clipboard (env-type-aware)."""
+        _env_type = getattr(self, "_current_env_type", "venv")
+        _cmd_prefixes = {
+            "venv":   "pip install",
+            "uv":     "uv pip install",
+            "poetry": "poetry add",
+            "rye":    "rye add",
+        }
+        _prefix = _cmd_prefixes.get(_env_type, "pip install")
+        cmd = f"{_prefix} {' '.join(packages)}"
         from PySide6.QtWidgets import QApplication
         clipboard = QApplication.clipboard()
         clipboard.setText(cmd)

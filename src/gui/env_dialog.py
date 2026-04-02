@@ -660,7 +660,12 @@ class EnvCreateDialog(QDialog):
                         )
                         poetry_exe = _find_tool("poetry")
                         if not poetry_exe:
-                            return False, "Could not install Poetry — try: pip install poetry"
+                            return False, (
+                                "Could not install Poetry automatically.\n\n"
+                                "Install manually:\n"
+                                "  pip install poetry\n\n"
+                                "Or visit: https://python-poetry.org/docs/#installation"
+                            )
                     _env_path.mkdir(parents=True, exist_ok=True)
                     cmd = [poetry_exe, "new", str(_env_path)]
                     _cb(f"$ {' '.join(cmd)}")
@@ -706,12 +711,47 @@ class EnvCreateDialog(QDialog):
                     # ── Rye ──────────────────────────────────────────────
                     rye_exe = shutil.which("rye") or shutil.which("rye.exe")
                     if not rye_exe:
-                        _cb("Rye not found — install from https://rye.astral.sh")
-                        return False, (
-                            "Rye is not installed.\n\n"
-                            "Install it from: https://rye.astral.sh\n"
-                            "Then restart VenvStudio."
-                        )
+                        _cb("Rye not found — attempting automatic install...")
+                        # Try platform-specific install
+                        try:
+                            if plat == "windows":
+                                # Windows: use official installer via PowerShell
+                                _cb("Downloading Rye installer for Windows...")
+                                _inst = subprocess.run(
+                                    ["powershell", "-Command",
+                                     "irm https://rye.astral.sh/get | iex"],
+                                    capture_output=True, text=True, timeout=300,
+                                    **subprocess_args()
+                                )
+                            else:
+                                # Linux/macOS: curl installer
+                                _cb("Downloading Rye installer...")
+                                _inst = subprocess.run(
+                                    ["bash", "-c",
+                                     "curl -sSf https://rye.astral.sh/get | bash"],
+                                    capture_output=True, text=True, timeout=300,
+                                    **subprocess_args()
+                                )
+                            rye_exe = shutil.which("rye") or shutil.which("rye.exe")
+                            # Also check ~/.rye/shims/rye
+                            if not rye_exe:
+                                import os as _os
+                                _rye_shim = _os.path.expanduser("~/.rye/shims/rye")
+                                if _os.path.isfile(_rye_shim):
+                                    rye_exe = _rye_shim
+                                elif plat == "windows":
+                                    _rye_win = _os.path.expandvars(r"%USERPROFILE%\.rye\shims\rye.exe")
+                                    if _os.path.isfile(_rye_win):
+                                        rye_exe = _rye_win
+                        except Exception as _e:
+                            _cb(f"Auto-install failed: {_e}")
+
+                        if not rye_exe:
+                            return False, (
+                                "Could not install Rye automatically.\n\n"
+                                "Install manually from: https://rye.astral.sh\n"
+                                "Then restart VenvStudio."
+                            )
                     _env_path.mkdir(parents=True, exist_ok=True)
                     cmd = [rye_exe, "init", str(_env_path)]
                     _cb(f"$ {' '.join(cmd)}")

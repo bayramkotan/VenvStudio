@@ -34,24 +34,52 @@ class PipManager:
         self._uv_exe = None  # cached uv path
 
     def _find_uv(self) -> Optional[str]:
-        """Find uv executable — check venv, then system PATH."""
+        """Find uv executable — check venv, system Scripts, then PATH."""
         if self._uv_exe is not None:
             return self._uv_exe if self._uv_exe else None
-        import shutil
-        # Check venv Scripts/bin first
+        import shutil, sys, os
         from src.utils.platform_utils import get_platform
-        if get_platform() == "windows":
+        is_win = get_platform() == "windows"
+
+        # 1. Check venv Scripts/bin
+        if is_win:
             venv_uv = self.venv_path / "Scripts" / "uv.exe"
         else:
             venv_uv = self.venv_path / "bin" / "uv"
         if venv_uv.exists():
             self._uv_exe = str(venv_uv)
             return self._uv_exe
-        # Then system PATH
+
+        # 2. System PATH
         found = shutil.which("uv")
         if found:
             self._uv_exe = found
             return self._uv_exe
+
+        # 3. Scripts dir next to system python
+        scripts_dir = os.path.join(os.path.dirname(sys.executable),
+                                    "Scripts" if is_win else "bin")
+        uv_cand = os.path.join(scripts_dir, "uv.exe" if is_win else "uv")
+        if os.path.isfile(uv_cand):
+            self._uv_exe = uv_cand
+            return self._uv_exe
+
+        # 4. User base Scripts (pip install --user uv)
+        try:
+            import site
+            user_scripts = os.path.join(
+                site.getusersitepackages(), "..", "..",
+                "Scripts" if is_win else "bin"
+            )
+            uv_user = os.path.normpath(os.path.join(
+                user_scripts, "uv.exe" if is_win else "uv"
+            ))
+            if os.path.isfile(uv_user):
+                self._uv_exe = uv_user
+                return self._uv_exe
+        except Exception:
+            pass
+
         self._uv_exe = ""
         return None
 
@@ -135,12 +163,16 @@ class PipManager:
                 break
 
         # Use uv if selected and available
-        if self._backend == "uv" and self._find_uv():
+        if self._backend == "uv":
             uv_exe = self._find_uv()
-            cmd = [uv_exe, "pip"] + args + ["--python", str(self.python_exe)]
+            if uv_exe:
+                cmd = [uv_exe, "pip"] + args + ["--python", str(self.python_exe)]
+            else:
+                # Fallback: try python -m uv (uv might be installed as a package)
+                cmd = [str(self.python_exe), "-m", "uv", "pip"] + args
         else:
             cmd = [str(self.python_exe), "-m", "pip"] + args
-            # Her zaman --cert ekle (SSL sertifikası varsa)
+            # Add --cert if SSL cert found
             if _cert_path and args and args[0] in ("install", "download", "list", "search"):
                 cmd.extend(["--cert", _cert_path])
 

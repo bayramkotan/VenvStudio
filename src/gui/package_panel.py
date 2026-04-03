@@ -896,6 +896,8 @@ class PackagePanel(QWidget):
         _install_prefixes = {
             "venv": "pip install", "uv": "uv pip install",
             "poetry": "poetry add", "rye": "rye add",
+            "conda": "conda install", "pipx": "pipx install",
+            "system_tools": "pip install",
         }
         install_cmd = f"{_install_prefixes.get(_env_type, 'pip install')} {pkg_name}"
         run_parts = app_def.get("command", [])
@@ -2538,7 +2540,7 @@ $s.Save()
             "uv":           {"launcher", "installed", "catalog", "presets", "manual"},
             "poetry":       {"launcher", "installed", "catalog", "manual"},
             "rye":          {"launcher", "installed", "catalog", "manual"},
-            "conda":        {"launcher", "installed"},
+            "conda":        {"launcher", "installed", "catalog"},
             "pipx":         {"launcher"},
             "system_tools": {"launcher"},
         }.get(env_type, {"launcher", "installed", "catalog", "presets", "manual"})
@@ -2564,6 +2566,7 @@ $s.Save()
             "uv":     "📝 Manually install packages by name.\nUses uv pip install (10-100× faster).",
             "poetry": "📝 Manually add packages.\nUses poetry add command.",
             "rye":    "📝 Manually add packages.\nUses rye add command.",
+            "conda":  "📝 Manually install packages by name.\nUses conda install command.",
         }
         _installed_tooltips = {
             "venv":   "📦 View and manage installed pip packages.",
@@ -2572,6 +2575,9 @@ $s.Save()
             "rye":    "📦 View installed packages (Rye environment).",
             "conda":  "📦 View installed conda packages.",
         }
+        _catalog_tooltips = {
+            "conda":  "🛒 Browse popular packages.\nInstalls via conda-forge channel.",
+        }
         for key, label, widget, tooltip in self._tab_defs:
             if key in visible_keys:
                 # Override tooltip for env-type awareness
@@ -2579,6 +2585,8 @@ $s.Save()
                     tooltip = _manual_tooltips.get(env_type, tooltip)
                 elif key == "installed":
                     tooltip = _installed_tooltips.get(env_type, tooltip)
+                elif key == "catalog":
+                    tooltip = _catalog_tooltips.get(env_type, tooltip)
                 idx = self.tabs.addTab(widget, label)
                 self.tabs.setTabToolTip(idx, tooltip)
 
@@ -2615,9 +2623,11 @@ $s.Save()
         # Rebuild launcher grid — remove gaps from hidden cards
         if hasattr(self, "launcher_cards") and hasattr(self, "launcher_grid"):
             # Collect visible apps for this env type
+            # uv environments support the same pip-based apps as venv
+            _filter_type = "venv" if env_type == "uv" else env_type
             visible_apps = [
                 app for app in self.app_definitions
-                if env_type in app.get("env_types",
+                if _filter_type in app.get("env_types",
                     ["venv"] if not app.get("system_app")
                     else ["conda", "system_tools"])
             ]
@@ -2642,6 +2652,9 @@ $s.Save()
             "uv":     "uv pip install",
             "poetry": "poetry add",
             "rye":    "rye add",
+            "conda":  "conda install",
+            "pipx":   "pipx install",
+            "system_tools": "pip install",
         }
         _prefix = _cmd_prefixes.get(env_type, "pip install")
         if hasattr(self, "_preset_cards"):
@@ -2860,6 +2873,7 @@ $s.Save()
                 venv_path / "pyvenv.cfg",
                 venv_path / "Scripts" / "activate.bat",
                 venv_path / "bin" / "activate",
+                venv_path / "conda-meta" / "history",
             ]
             latest_mtime = 0
             for c in candidates:
@@ -3237,10 +3251,13 @@ $s.Save()
         _install_cmds = {
             "venv": "pip install {packages}", "uv": "uv pip install {packages}",
             "poetry": "poetry add {packages}", "rye": "rye add {packages}",
+            "conda": "conda install {packages}", "pipx": "pipx install {packages}",
+            "system_tools": "pip install {packages}",
         }
         _uninstall_cmds = {
             "venv": "pip uninstall -y {packages}", "uv": "uv pip uninstall {packages}",
             "poetry": "poetry remove {packages}", "rye": "rye remove {packages}",
+            "conda": "conda remove {packages}", "pipx": "pipx uninstall {packages}",
         }
         cmds = []
         if to_uninstall:
@@ -3340,6 +3357,9 @@ $s.Save()
             "uv":     "uv pip install {packages}",
             "poetry": "poetry add {packages}",
             "rye":    "rye add {packages}",
+            "conda":  "conda install {packages}",
+            "pipx":   "pipx install {packages}",
+            "system_tools": "pip install {packages}",
         }
         _cmd_template = _install_cmds.get(_env_type, COMMAND_HINTS["install"])
         cmd = _cmd_template.format(packages=" ".join(packages))
@@ -3351,7 +3371,34 @@ $s.Save()
         """Actually start install worker (no confirm dialog)."""
         self._set_busy(True)
         self.output_log.clear()
-        self.current_worker = WorkerThread(self.pip_manager.install_packages, packages)
+
+        _env_type = getattr(self, "_current_env_type", "venv")
+        if _env_type == "conda" and self.pip_manager and self.pip_manager.venv_path:
+            # Use conda install instead of pip for conda environments
+            _env_path = self.pip_manager.venv_path
+            _pkgs = list(packages)
+
+            def _do_conda_install(callback=None):
+                from src.core.micromamba_installer import (
+                    install_conda_packages, get_micromamba_exe, download_micromamba,
+                )
+                if not get_micromamba_exe():
+                    if callback:
+                        callback("Downloading micromamba...")
+                    download_micromamba(progress_cb=callback)
+                ok = install_conda_packages(
+                    _env_path, _pkgs,
+                    channels=["conda-forge"],
+                    progress_cb=callback,
+                )
+                return (ok,
+                        f"Installed: {', '.join(_pkgs)}" if ok
+                        else f"conda install failed for: {', '.join(_pkgs)}")
+
+            self.current_worker = WorkerThread(_do_conda_install)
+        else:
+            self.current_worker = WorkerThread(self.pip_manager.install_packages, packages)
+
         self.current_worker.progress.connect(self._on_progress)
         self.current_worker.finished.connect(self._on_install_finished)
         self.current_worker.start()
@@ -3392,6 +3439,9 @@ $s.Save()
                 "uv":     "uv pip install",
                 "poetry": "poetry add",
                 "rye":    "rye add",
+                "conda":  "conda install",
+                "pipx":   "pipx install",
+                "system_tools": "pip install",
             }
             _prefix = _cmd_prefixes.get(_env_type, "pip install")
             cmd = f"{_prefix} {' '.join(cleaned)}"
@@ -3519,6 +3569,8 @@ $s.Save()
             "uv":     "uv pip uninstall {packages}",
             "poetry": "poetry remove {packages}",
             "rye":    "rye remove {packages}",
+            "conda":  "conda remove {packages}",
+            "pipx":   "pipx uninstall {packages}",
         }
         cmd = _uninstall_cmds.get(_env_type, COMMAND_HINTS["uninstall"]).format(packages=" ".join(packages))
         self._show_command_hint("Uninstall Packages", cmd)
@@ -3542,6 +3594,7 @@ $s.Save()
                 "uv": "uv pip freeze > requirements.txt",
                 "poetry": "poetry export -f requirements.txt",
                 "rye": "rye list > requirements.txt",
+                "conda": "conda list --export > requirements.txt",
             }.get(getattr(self, "_current_env_type", "venv"), COMMAND_HINTS["freeze"]))
             if success:
                 QMessageBox.information(self, "Success", msg)
@@ -3796,6 +3849,7 @@ dependencies:
                 "uv": "uv pip install -r requirements.txt",
                 "poetry": "poetry install",
                 "rye": "rye sync",
+                "conda": "conda install --file requirements.txt",
             }.get(getattr(self, "_current_env_type", "venv"), COMMAND_HINTS["import_req"]))
             self._set_busy(True)
             self.current_worker = WorkerThread(
@@ -3816,6 +3870,8 @@ dependencies:
         _prefixes = {
             "venv": "pip install", "uv": "uv pip install",
             "poetry": "poetry add", "rye": "rye add",
+            "conda": "conda install", "pipx": "pipx install",
+            "system_tools": "pip install",
         }
         _prefix = _prefixes.get(_env_type, "pip install")
 
@@ -3866,6 +3922,8 @@ dependencies:
         _prefixes = {
             "venv": "pip install", "uv": "uv pip install",
             "poetry": "poetry add", "rye": "rye add",
+            "conda": "conda install", "pipx": "pipx install",
+            "system_tools": "pip install",
         }
         _prefix = _prefixes.get(_env_type, "pip install")
 
@@ -4171,6 +4229,9 @@ dependencies:
             "uv":     "uv pip install",
             "poetry": "poetry add",
             "rye":    "rye add",
+            "conda":  "conda install",
+            "pipx":   "pipx install",
+            "system_tools": "pip install",
         }
         _prefix = _cmd_prefixes.get(_env_type, "pip install")
         cmd = f"{_prefix} {' '.join(packages)}"

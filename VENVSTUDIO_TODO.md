@@ -145,6 +145,13 @@
 
 ## 🔴 YENİ BUGLAR
 
+- **B79** — Launch tab'da system app kartları "Detected" diyor ama env'de mi sistemde mi belirsiz
+  - System app kartlarında (R Console, RStudio, Ollama, DBeaver vb.) "Detected" yazıyor
+  - Kullanıcı bunun env içinde kurulu olduğunu sanabilir
+  - Çözüm: "Detected" altına küçük not ekle → "🖥️ Detected on the system" (sistem yolundan bulundu)
+  - Env içi pip paketleri için mevcut "Not installed" / "Installed" davranışı aynen kalacak
+  - Etkilenen: `package_panel.py` → `_create_app_card` veya kart status güncelleme fonksiyonu
+
 - **B62** — 🔴 Uygulama rastgele çöküyor (kritik stabilite sorunu)
   - **Tetikleyiciler:** açılışta, tab/kısım geçişlerinde, environment değiştirirken, sağ tıkta, pencere tam dolmadan taşınırken
   - **Kök neden adayları:**
@@ -218,3 +225,22 @@ Olması gereken fark:
   - Genel görsel tutarlılık kontrolü (spacing, padding, alignment)
 
 - **F74** — Launch'ta Eğitimsel Linkler (bkz. EN ÖNCELİKLİ)
+
+- **F80** — Tool Installer ile Admin Yetkileri (pip, uv, poetry, pipx, mamba, conda)
+  - Env oluşturma sırasında gerekli tool (uv, poetry, pipx, mamba, conda vb.) yoksa otomatik algıla
+  - Kullanıcıya "X bulunamadı, yüklensin mi?" dialog'u göster
+  - Windows'ta admin yetki isteği (UAC elevation) ile `pip install uv` / `pipx install poetry` vb.
+  - Linux'ta `sudo` ile veya `--user` flag ile kurulum seçeneği
+  - Kurulum sonrası PATH refresh ve tool doğrulaması
+  - Başarısız olursa kullanıcıya manual kurulum talimatı göster
+
+- **F81** — Settings > Python Toolchain Manager
+  - Settings altında yeni "🛠️ Toolchain" veya "📦 Package Managers" bölümü
+  - Sistemdeki tüm Python kurulumları listelenir (mevcut Python Versions tablosu gibi)
+  - Her Python altında kurulu/kurulmamış tool'lar gösterilir: pip, venv, uv, poetry, pipx, rye, mamba, conda
+  - Her tool yanında durum ikonu: ✅ Installed (versiyon) / ❌ Not installed
+  - "Install" butonu → seçili Python'a o tool'u kurar (admin yetkisi ile)
+  - "Uninstall" / "Update" seçenekleri
+  - Toplu kurulum: birden fazla tool seçip tek seferde kur
+  - Tool versiyonları ve yolları gösterilir
+  - F80 ile bağlantılı — env oluşturma sırasındaki auto-install buradan da tetiklenebilir

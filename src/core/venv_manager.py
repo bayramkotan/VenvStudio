@@ -519,11 +519,16 @@ class VenvManager:
                     info.package_count = 0
 
                 info.size = get_venv_size(item)
-                try:
-                    info.created = datetime.fromtimestamp(
-                        item.stat().st_ctime).isoformat()
-                except OSError:
-                    pass
+                # Created date: prefer marker, fallback to filesystem
+                _marker_created = marker_data.get("created", "")
+                if _marker_created:
+                    info.created = _marker_created
+                else:
+                    try:
+                        info.created = datetime.fromtimestamp(
+                            item.stat().st_ctime).isoformat()
+                    except OSError:
+                        pass
                 venvs.append(info)
                 continue
             # ─────────────────────────────────────────────────────────────
@@ -674,11 +679,16 @@ class VenvManager:
                         info.package_count = 0
 
                     info.size = get_venv_size(item)
-                    try:
-                        info.created = datetime.fromtimestamp(
-                            item.stat().st_ctime).isoformat()
-                    except OSError:
-                        pass
+                    # Created date: prefer marker, fallback to filesystem
+                    _marker_created = marker_data.get("created", "")
+                    if _marker_created:
+                        info.created = _marker_created
+                    else:
+                        try:
+                            info.created = datetime.fromtimestamp(
+                                item.stat().st_ctime).isoformat()
+                        except OSError:
+                            pass
                     venvs.append(info)
                     continue
                 info = self.get_venv_info(item.name, use_cache=use_cache)

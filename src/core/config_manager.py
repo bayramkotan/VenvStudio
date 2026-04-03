@@ -29,6 +29,8 @@ class ConfigManager:
         self._config_dir = get_config_dir()
         self._config_file = self._config_dir / "settings.json"
         self._settings = {}
+        self._batch_mode = False  # When True, set() won't auto-save
+        self._batch_dirty = False  # Track if any changes made during batch
         self.load()
 
     def load(self) -> None:
@@ -60,9 +62,24 @@ class ConfigManager:
         return self._settings.get(key, default)
 
     def set(self, key: str, value: Any) -> None:
-        """Set a setting value and save."""
+        """Set a setting value. Saves immediately unless in batch mode."""
         self._settings[key] = value
-        self.save()
+        if self._batch_mode:
+            self._batch_dirty = True
+        else:
+            self.save()
+
+    def begin_batch(self) -> None:
+        """Start batch mode — set() calls won't trigger disk writes."""
+        self._batch_mode = True
+        self._batch_dirty = False
+
+    def end_batch(self) -> None:
+        """End batch mode — writes to disk once if any changes were made."""
+        self._batch_mode = False
+        if self._batch_dirty:
+            self.save()
+            self._batch_dirty = False
 
     def get_venv_base_dir(self) -> Path:
         """Get the base directory for virtual environments."""

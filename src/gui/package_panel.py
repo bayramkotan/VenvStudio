@@ -3232,12 +3232,21 @@ $s.Save()
         if reply != QMessageBox.Yes:
             return
 
-        # Show command hint
+        # Show command hint (env-type aware)
+        _env_type = getattr(self, "_current_env_type", "venv")
+        _install_cmds = {
+            "venv": "pip install {packages}", "uv": "uv pip install {packages}",
+            "poetry": "poetry add {packages}", "rye": "rye add {packages}",
+        }
+        _uninstall_cmds = {
+            "venv": "pip uninstall -y {packages}", "uv": "uv pip uninstall {packages}",
+            "poetry": "poetry remove {packages}", "rye": "rye remove {packages}",
+        }
         cmds = []
         if to_uninstall:
-            cmds.append(COMMAND_HINTS["uninstall"].format(packages=" ".join(to_uninstall)))
+            cmds.append(_uninstall_cmds.get(_env_type, COMMAND_HINTS["uninstall"]).format(packages=" ".join(to_uninstall)))
         if to_install:
-            cmds.append(COMMAND_HINTS["install"].format(packages=" ".join(to_install)))
+            cmds.append(_install_cmds.get(_env_type, COMMAND_HINTS["install"]).format(packages=" ".join(to_install)))
         self._show_command_hint("Apply Changes", " && ".join(cmds))
 
         self._set_busy(True)
@@ -3504,7 +3513,14 @@ $s.Save()
         if reply != QMessageBox.Yes:
             return
 
-        cmd = COMMAND_HINTS["uninstall"].format(packages=" ".join(packages))
+        _env_type = getattr(self, "_current_env_type", "venv")
+        _uninstall_cmds = {
+            "venv":   "pip uninstall -y {packages}",
+            "uv":     "uv pip uninstall {packages}",
+            "poetry": "poetry remove {packages}",
+            "rye":    "rye remove {packages}",
+        }
+        cmd = _uninstall_cmds.get(_env_type, COMMAND_HINTS["uninstall"]).format(packages=" ".join(packages))
         self._show_command_hint("Uninstall Packages", cmd)
 
         self._set_busy(True)
@@ -3521,7 +3537,12 @@ $s.Save()
         )
         if filepath:
             success, msg = self.pip_manager.export_requirements(Path(filepath))
-            self._show_command_hint("Export Requirements", COMMAND_HINTS["freeze"])
+            self._show_command_hint("Export Requirements", {
+                "venv": "pip freeze > requirements.txt",
+                "uv": "uv pip freeze > requirements.txt",
+                "poetry": "poetry export -f requirements.txt",
+                "rye": "rye list > requirements.txt",
+            }.get(getattr(self, "_current_env_type", "venv"), COMMAND_HINTS["freeze"]))
             if success:
                 QMessageBox.information(self, "Success", msg)
             else:
@@ -3770,7 +3791,12 @@ dependencies:
             self, "Import Requirements", "", "Text Files (*.txt);;All Files (*)"
         )
         if filepath:
-            self._show_command_hint("Import Requirements", COMMAND_HINTS["import_req"])
+            self._show_command_hint("Import Requirements", {
+                "venv": "pip install -r requirements.txt",
+                "uv": "uv pip install -r requirements.txt",
+                "poetry": "poetry install",
+                "rye": "rye sync",
+            }.get(getattr(self, "_current_env_type", "venv"), COMMAND_HINTS["import_req"]))
             self._set_busy(True)
             self.current_worker = WorkerThread(
                 self.pip_manager.import_requirements, Path(filepath)

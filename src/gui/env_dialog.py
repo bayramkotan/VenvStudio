@@ -144,6 +144,15 @@ class EnvCreateDialog(QDialog):
         self.env_type_combo.currentIndexChanged.connect(self._on_env_type_changed)
         form_layout.addRow("Type:", self.env_type_combo)
 
+        # Pre-select default env type from settings
+        try:
+            default_et = self.config.get("default_env_type", "venv")
+            et_idx = self.env_type_combo.findData(default_et)
+            if et_idx >= 0:
+                self.env_type_combo.setCurrentIndex(et_idx)
+        except Exception:
+            pass
+
         # ── Conda options row (hidden by default) ─────────────────────────
         from PySide6.QtWidgets import QWidget as _QW2
         self.conda_row_widget = _QW2()
@@ -556,10 +565,49 @@ class EnvCreateDialog(QDialog):
 
         # ── uv / Poetry / Rye / pipx ──────────────────────────────────────
         if env_type in ("uv", "poetry", "rye", "pipx"):
-            import os
+            import os, shutil as _shutil
             location = self.location_label.text()
             env_path = Path(os.path.join(location, name))
             python_path = self.python_combo.currentData() or None
+
+            # ── Pre-check: is the required tool available? ────────────
+            _tool_checks = {
+                "uv":     ("uv",     "pip install uv"),
+                "poetry": ("poetry", "pip install poetry"),
+                "rye":    ("rye",    "https://rye.astral.sh"),
+                "pipx":   ("pipx",   "pip install --user pipx"),
+            }
+            _tool_name, _tool_install = _tool_checks.get(env_type, ("", ""))
+            _tool_found = bool(
+                _shutil.which(_tool_name) or _shutil.which(_tool_name + ".exe")
+            )
+            # Also check python -m <tool>
+            if not _tool_found and env_type in ("uv", "poetry", "pipx"):
+                import sys as _sys, subprocess as _sp
+                try:
+                    _t = _sp.run(
+                        [_sys.executable, "-m", _tool_name, "--version"],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    _tool_found = _t.returncode == 0
+                except Exception:
+                    pass
+
+            if not _tool_found:
+                _msg = (
+                    f"'{_tool_name}' is not installed on your system.\n\n"
+                    f"VenvStudio can try to install it automatically.\n"
+                    f"Manual install: {_tool_install}\n\n"
+                    f"Install '{_tool_name}' now?"
+                )
+                reply = QMessageBox.question(
+                    self, f"{_tool_name} Not Found",
+                    _msg,
+                    QMessageBox.Yes | QMessageBox.No,
+                )
+                if reply != QMessageBox.Yes:
+                    return
+            # ── End pre-check ─────────────────────────────────────────
 
             self.progress_bar.setVisible(True)
             self.create_btn.setEnabled(False)
@@ -840,6 +888,17 @@ class EnvCreateDialog(QDialog):
                                        timeout=300, **subprocess_args())
                     if r.returncode != 0:
                         return False, r.stderr[:400] or r.stdout[:400] or f"pipx install {_name} failed"
+
+                    # Create marker folder in venv base dir so it appears in env list
+                    _env_path.mkdir(parents=True, exist_ok=True)
+                    with open(_env_path / ".venvstudio_env", "w") as f:
+                        json.dump({
+                            "type": "pipx",
+                            "name": _name,
+                            "package": _name,
+                            "created": datetime.datetime.now().isoformat(),
+                        }, f, indent=2)
+
                     _cb(f"✅ pipx installed '{_name}'!")
                     return True, f"pipx app '{_name}' installed"
 

@@ -512,18 +512,38 @@ class SettingsPage(QWidget):
         paths_group.setLayout(paths_layout)
         layout.addWidget(paths_group)
 
-        # ── 5. PACKAGE MANAGER ──
+        # ── 5. PACKAGE MANAGER & ENVIRONMENT DEFAULTS ──
         layout.addWidget(self._make_group_title_row(
-            "📦 Package Manager",
-            "Choose the backend used to install and manage packages.\n"
-            "• pip: The standard Python package manager (default)\n"
-            "• uv: A Rust-based pip replacement — 10-100× faster installs\n"
-            "  uv is auto-installed if not present on your system",
+            "📦 Package Manager & Defaults",
+            "Configure the default environment type and package backend.\n"
+            "• Default env type: Pre-selects the environment type when creating new environments\n"
+            "• pip backend: Override pip with uv for faster installs (applies to venv type)\n"
+            "• uv is auto-installed if not present on your system",
         ))
         pkg_mgr_group = QGroupBox()
         pkg_mgr_layout = QFormLayout()
         pkg_mgr_layout.setSpacing(12)
 
+        # Default Environment Type
+        self.default_env_type_combo = NoScrollComboBox()
+        self.default_env_type_combo.addItem("🐍 Python venv (default)", "venv")
+        self.default_env_type_combo.addItem("⚡ uv (fast, Rust-powered)", "uv")
+        self.default_env_type_combo.addItem("📜 Poetry (lock file)", "poetry")
+        self.default_env_type_combo.addItem("🌾 Rye (all-in-one)", "rye")
+        self.default_env_type_combo.addItem("📦 pipx (CLI apps)", "pipx")
+        self.default_env_type_combo.addItem("🦎 Conda (micromamba)", "conda")
+        self.default_env_type_combo.addItem("🛠 Tool Environment", "empty")
+        pkg_mgr_layout.addRow("Default Env Type:", self.default_env_type_combo)
+
+        env_type_note = QLabel(
+            "This pre-selects the environment type in the 'New Environment' dialog.\n"
+            "You can always change it when creating a new environment."
+        )
+        env_type_note.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
+        env_type_note.setWordWrap(True)
+        pkg_mgr_layout.addRow("", env_type_note)
+
+        # pip/uv backend override (for venv type)
         pkg_mgr_row = QHBoxLayout()
         self.pkg_mgr_cb = QCheckBox()
         self.pkg_mgr_cb.setChecked(False)
@@ -535,12 +555,12 @@ class SettingsPage(QWidget):
         self.pkg_manager_combo.addItem("pip (default)", "pip")
         self.pkg_manager_combo.addItem("uv (fast, pip-compatible)", "uv")
         pkg_mgr_row.addWidget(self.pkg_manager_combo, 1)
-        pkg_mgr_layout.addRow("Backend:", pkg_mgr_row)
+        pkg_mgr_layout.addRow("pip Backend:", pkg_mgr_row)
 
         # uv auto-install info
         uv_note = QLabel(
-            "uv is 10-100x faster than pip.\n"
-            "If uv is not installed, VenvStudio will auto-install it."
+            "Override pip with uv for venv environments (10-100× faster).\n"
+            "Note: uv environments always use uv regardless of this setting."
         )
         uv_note.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         uv_note.setWordWrap(True)
@@ -2100,6 +2120,13 @@ class SettingsPage(QWidget):
             self.pkg_mgr_cb.setChecked(False)
             self.pkg_manager_combo.setEnabled(False)
 
+        # Default environment type
+        if hasattr(self, "default_env_type_combo"):
+            default_et = self.config.get("default_env_type", "venv")
+            et_idx = self.default_env_type_combo.findData(default_et)
+            if et_idx >= 0:
+                self.default_env_type_combo.setCurrentIndex(et_idx)
+
         # Terminal — only enable if explicitly set to non-default
         terminal = self.config.get("default_terminal", "")
         if terminal and terminal.strip():
@@ -3669,6 +3696,8 @@ try {{
 
     def _save_settings(self):
         """Save all settings."""
+        # Use batch mode to avoid writing JSON 30+ times
+        self.config.begin_batch()
         # Theme
         if self.theme_cb.isChecked():
             new_theme = self.theme_combo.currentData()
@@ -3737,6 +3766,10 @@ try {{
         else:
             self.config.set("package_manager", "pip")
         # Default Terminal — only save if checkbox is enabled
+
+        # Default environment type
+        if hasattr(self, "default_env_type_combo"):
+            self.config.set("default_env_type", self.default_env_type_combo.currentData() or "venv")
         if self.terminal_cb.isChecked():
             self.config.set("default_terminal", self.terminal_combo.currentData())
         else:
@@ -3765,6 +3798,8 @@ try {{
         # Save custom catalog
         self._save_custom_catalog()
 
+        # End batch — single disk write for all settings
+        self.config.end_batch()
         self.settings_saved.emit()
         QMessageBox.information(self, "Settings", "Settings saved successfully! ✅")
 
@@ -5320,6 +5355,13 @@ echo "OK"
             self.pkg_mgr_cb.setChecked(False)
             self.pkg_manager_combo.setEnabled(False)
 
+        # Default environment type
+        if hasattr(self, "default_env_type_combo"):
+            default_et = self.config.get("default_env_type", "venv")
+            et_idx = self.default_env_type_combo.findData(default_et)
+            if et_idx >= 0:
+                self.default_env_type_combo.setCurrentIndex(et_idx)
+
         # Terminal — only enable if explicitly set to non-default
         terminal = self.config.get("default_terminal", "")
         if terminal and terminal.strip():
@@ -6889,6 +6931,8 @@ try {{
 
     def _save_settings(self):
         """Save all settings."""
+        # Use batch mode to avoid writing JSON 30+ times
+        self.config.begin_batch()
         # Theme
         if self.theme_cb.isChecked():
             new_theme = self.theme_combo.currentData()
@@ -6957,6 +7001,10 @@ try {{
         else:
             self.config.set("package_manager", "pip")
         # Default Terminal — only save if checkbox is enabled
+
+        # Default environment type
+        if hasattr(self, "default_env_type_combo"):
+            self.config.set("default_env_type", self.default_env_type_combo.currentData() or "venv")
         if self.terminal_cb.isChecked():
             self.config.set("default_terminal", self.terminal_combo.currentData())
         else:
@@ -6985,6 +7033,8 @@ try {{
         # Save custom catalog
         self._save_custom_catalog()
 
+        # End batch — single disk write for all settings
+        self.config.end_batch()
         self.settings_saved.emit()
         QMessageBox.information(self, "Settings", "Settings saved successfully! ✅")
 

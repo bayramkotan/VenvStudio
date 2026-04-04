@@ -511,8 +511,31 @@ class VenvManager:
                             info.python_version = ""
 
                 elif env_type == "pipx":
-                    info.python_version = ""
-                    info.package_count = 1
+                    # Get Python version — prefer marker, fallback to sys.executable
+                    if marker_pyver:
+                        info.python_version = marker_pyver
+                    else:
+                        try:
+                            import sys as _sys
+                            _r = _run([_sys.executable, "--version"],
+                                      capture_output=True, text=True, timeout=5)
+                            info.python_version = (
+                                _r.stdout.strip() or _r.stderr.strip()
+                            ).replace("Python ", "")
+                        except Exception:
+                            info.python_version = ""
+                    # Count installed pipx apps
+                    try:
+                        import sys as _sys
+                        _r = _run([_sys.executable, "-m", "pipx", "list", "--short"],
+                                  capture_output=True, text=True, timeout=15)
+                        if _r.returncode == 0:
+                            _lines = [l for l in _r.stdout.strip().splitlines() if l.strip()]
+                            info.package_count = len(_lines)
+                        else:
+                            info.package_count = 0
+                    except Exception:
+                        info.package_count = 0
 
                 else:  # system_tools
                     info.python_version = ""
@@ -672,8 +695,29 @@ class VenvManager:
                             else:
                                 info.python_version = ""
                     elif env_type == "pipx":
-                        info.python_version = ""
-                        info.package_count = 1
+                        if marker_pyver:
+                            info.python_version = marker_pyver
+                        else:
+                            try:
+                                import sys as _sys
+                                _r = _run([_sys.executable, "--version"],
+                                          capture_output=True, text=True, timeout=5)
+                                info.python_version = (
+                                    _r.stdout.strip() or _r.stderr.strip()
+                                ).replace("Python ", "")
+                            except Exception:
+                                info.python_version = ""
+                        try:
+                            import sys as _sys
+                            _r = _run([_sys.executable, "-m", "pipx", "list", "--short"],
+                                      capture_output=True, text=True, timeout=15)
+                            if _r.returncode == 0:
+                                _lines = [l for l in _r.stdout.strip().splitlines() if l.strip()]
+                                info.package_count = len(_lines)
+                            else:
+                                info.package_count = 0
+                        except Exception:
+                            info.package_count = 0
                     else:
                         info.python_version = ""
                         info.package_count = 0

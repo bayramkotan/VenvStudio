@@ -893,18 +893,41 @@ class PackagePanel(QWidget):
         # Build install + run commands (env-type aware)
         pkg_name = app_def["package"]
         _env_type = getattr(self, "_current_env_type", "venv")
-        _install_prefixes = {
-            "venv": "pip install", "uv": "uv pip install",
-            "poetry": "poetry add", "rye": "rye add",
-            "conda": "conda install", "pipx": "pipx install",
-            "system_tools": "pip install",
-        }
-        install_cmd = f"{_install_prefixes.get(_env_type, 'pip install')} {pkg_name}"
-        run_parts = app_def.get("command", [])
-        if run_parts:
-            run_cmd = "python " + " ".join(run_parts)
+        is_system_app = app_def.get("system_app", False)
+
+        if is_system_app:
+            # System apps: show system-level commands, not pip
+            from src.utils.platform_utils import get_platform as _gp
+            _plat = _gp()
+            _sys_cmds = app_def.get("system_commands", {})
+            _cmd_list = _sys_cmds.get(_plat, _sys_cmds.get("linux", []))
+            _conda_pkgs = app_def.get("conda_packages", [])
+
+            if _conda_pkgs and _env_type == "conda":
+                _channels = app_def.get("conda_channels", ["conda-forge"])
+                _ch_flag = " ".join(f"-c {c}" for c in _channels)
+                install_cmd = f"conda install {_ch_flag} {' '.join(_conda_pkgs)}"
+            elif _conda_pkgs:
+                _channels = app_def.get("conda_channels", ["conda-forge"])
+                _ch_flag = " ".join(f"-c {c}" for c in _channels)
+                install_cmd = f"conda install {_ch_flag} {' '.join(_conda_pkgs)}"
+            else:
+                install_cmd = f"Install {app_def['name']} from official website"
+
+            run_cmd = " ".join(_cmd_list) if _cmd_list else app_def["name"].lower()
         else:
-            run_cmd = f"python -m {pkg_name}"
+            _install_prefixes = {
+                "venv": "pip install", "uv": "uv pip install",
+                "poetry": "poetry add", "rye": "rye add",
+                "conda": "conda install", "pipx": "pipx install",
+                "system_tools": "pip install",
+            }
+            install_cmd = f"{_install_prefixes.get(_env_type, 'pip install')} {pkg_name}"
+            run_parts = app_def.get("command", [])
+            if run_parts:
+                run_cmd = "python " + " ".join(run_parts)
+            else:
+                run_cmd = f"python -m {pkg_name}"
 
         copy_cmd_btn.setToolTip(
             f"<p style='font-size:13px; font-weight:bold; color:#a6e3a1;'>"
@@ -945,6 +968,7 @@ class PackagePanel(QWidget):
         card._launch_btn = launch_btn
         card._uninstall_btn = uninstall_btn
         card._shortcut_btn = shortcut_btn
+        card._copy_cmd_btn = copy_cmd_btn
 
         return card
 
@@ -974,6 +998,51 @@ class PackagePanel(QWidget):
             app_def = card._app_def
             pkg = app_def["package"].lower()
             is_system_app = app_def.get("system_app", False)
+
+            # Update copy command tooltip for current env type
+            _env_type = getattr(self, "_current_env_type", "venv")
+            if hasattr(card, "_copy_cmd_btn"):
+                _pkg_name = app_def["package"]
+                if is_system_app:
+                    from src.utils.platform_utils import get_platform as _gp_upd
+                    _plat_upd = _gp_upd()
+                    _sys_cmds_upd = app_def.get("system_commands", {})
+                    _cmd_list_upd = _sys_cmds_upd.get(_plat_upd, _sys_cmds_upd.get("linux", []))
+                    _conda_pkgs_upd = app_def.get("conda_packages", [])
+                    if _conda_pkgs_upd:
+                        _channels_upd = app_def.get("conda_channels", ["conda-forge"])
+                        _ch_flag_upd = " ".join(f"-c {c}" for c in _channels_upd)
+                        _ic = f"conda install {_ch_flag_upd} {' '.join(_conda_pkgs_upd)}"
+                    else:
+                        _ic = f"Install {app_def['name']} from official website"
+                    _rc = " ".join(_cmd_list_upd) if _cmd_list_upd else app_def["name"].lower()
+                else:
+                    _ip = {
+                        "venv": "pip install", "uv": "uv pip install",
+                        "poetry": "poetry add", "rye": "rye add",
+                        "conda": "conda install", "pipx": "pipx install",
+                        "system_tools": "pip install",
+                    }
+                    _ic = f"{_ip.get(_env_type, 'pip install')} {_pkg_name}"
+                    _rp = app_def.get("command", [])
+                    _rc = ("python " + " ".join(_rp)) if _rp else f"python -m {_pkg_name}"
+                card._copy_cmd_btn.setToolTip(
+                    f"<p style='font-size:13px; font-weight:bold; color:#a6e3a1;'>"
+                    f"💡 Terminal commands for {app_def['name']}:</p>"
+                    f"<p style='font-size:15px; font-family:Consolas,monospace; color:#cdd6f4; "
+                    f"background-color:#1e1e2e; padding:6px; border-radius:4px;'>"
+                    f"1️⃣ {_ic}<br>"
+                    f"2️⃣ {_rc}</p>"
+                    f"<p style='font-size:11px; color:#6c7086;'>Click to copy both commands</p>"
+                )
+                # Update click handler with new commands
+                try:
+                    card._copy_cmd_btn.clicked.disconnect()
+                except Exception:
+                    pass
+                card._copy_cmd_btn.clicked.connect(
+                    lambda checked, ic=_ic, rc=_rc, nm=app_def["name"]: self._copy_launcher_commands(ic, rc, nm)
+                )
 
             # System apps: detect via installer's get_exe_path (more thorough than shutil.which)
             if is_system_app:
@@ -1010,12 +1079,26 @@ class PackagePanel(QWidget):
                                 f" font-size: {self._c()['fs_tiny']}px;")
                         continue
                     else:
+                        # No conda package defined — check if available on system
+                        _env_name = self.env_selector.currentText()
+                        import shutil as _shutil
+                        from src.utils.platform_utils import get_platform as _gp
+                        _sys_cmds = app_def.get("system_commands", {})
+                        _exe = (_sys_cmds.get(_gp()) or _sys_cmds.get("linux", [""]))[0]
+                        _sys_found = bool(_shutil.which(_exe)) if _exe else False
                         status = card._status_label
-                        status.setText("⚠️ Not available for conda")
-                        status.setStyleSheet(
-                            f"color: {self._c().get('warning','#f9e2af')};"
-                            f" font-size: {self._c()['fs_tiny']}px;")
-                        card._launch_btn.setEnabled(False)
+                        if _sys_found:
+                            status.setText(f"✅ Detected on system, not in {_env_name} env")
+                            status.setStyleSheet(
+                                f"color: {self._c()['success']};"
+                                f" font-size: {self._c()['fs_tiny']}px;")
+                            card._launch_btn.setEnabled(True)
+                        else:
+                            status.setText("❌ Not installed — click Launch to install")
+                            status.setStyleSheet(
+                                f"color: {self._c()['danger']};"
+                                f" font-size: {self._c()['fs_tiny']}px;")
+                            card._launch_btn.setEnabled(True)
                         continue
                 # ─────────────────────────────────────────────────────────
 
@@ -1036,11 +1119,12 @@ class PackagePanel(QWidget):
                 card._launch_btn.setStyleSheet("")
                 card._uninstall_btn.setVisible(False)
                 card._shortcut_btn.setVisible(False)
+                _env_name = self.env_selector.currentText()
                 if system_found:
-                    status.setText("✅ Detected on system")
+                    status.setText(f"✅ Detected on system, not in {_env_name} env")
                     status.setStyleSheet(f"color: {self._c()['success']}; font-size: {self._c()['fs_tiny']}px;")
                 else:
-                    status.setText("⚠️ Not found — install separately")
+                    status.setText("⚠️ Not found on system — install separately")
                     status.setStyleSheet(f"color: {self._c().get('warning', '#f9e2af')}; font-size: {self._c()['fs_tiny']}px;")
                 continue
 
@@ -2289,13 +2373,13 @@ $s.Save()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(12, 12, 12, 12)
 
-        info = QLabel(
+        self.manual_info_label = QLabel(
             "Enter package names separated by spaces or newlines.\n"
             "You can specify versions like: numpy==1.24.0 or pandas>=2.0"
         )
-        info.setObjectName("subheader")
-        info.setWordWrap(True)
-        layout.addWidget(info)
+        self.manual_info_label.setObjectName("subheader")
+        self.manual_info_label.setWordWrap(True)
+        layout.addWidget(self.manual_info_label)
 
         self.manual_input = QTextEdit()
         self.manual_input.setPlaceholderText(
@@ -2524,25 +2608,52 @@ $s.Save()
     def _update_tabs_for_env_type(self):
         """
         Show/hide tabs based on current env type using removeTab/insertTab.
-        This is the most reliable approach across all Qt versions.
-        - venv:         all 5 tabs
-        - conda:        Launch + Installed only
-        - system_tools: Launch only
+        All env types get full tabs except system_tools (launcher + manual).
         """
         if not hasattr(self, "_tab_defs"):
             return
 
         env_type = getattr(self, "_current_env_type", "venv")
 
+        # Update manual tab description and placeholder per env type
+        if hasattr(self, "manual_info_label") and hasattr(self, "manual_input"):
+            _manual_descriptions = {
+                "venv":   "Enter package names separated by spaces or newlines.\nYou can specify versions like: numpy==1.24.0 or pandas>=2.0",
+                "uv":    "Enter package names separated by spaces or newlines.\nUses uv pip install (10-100× faster than pip).",
+                "poetry": "Enter package names to add.\nUses poetry add command.",
+                "rye":    "Enter package names to add.\nUses rye add command.",
+                "conda":  "Enter package names separated by spaces or newlines.\nPackages will be installed from conda-forge.",
+                "pipx":   "Enter CLI app names to install globally.\nEach app gets its own isolated environment via pipx.",
+                "system_tools": (
+                    "Download links for system tools:\n"
+                    "• R: https://cran.r-project.org\n"
+                    "• RStudio: https://posit.co/download/rstudio-desktop\n"
+                    "• Ollama: https://ollama.com/download\n"
+                    "• DBeaver: https://dbeaver.io/download\n"
+                    "• Weka: https://waikato.github.io/weka-wiki/downloading_weka"
+                ),
+            }
+            _manual_placeholders = {
+                "venv":   "numpy pandas matplotlib\nscikit-learn==1.3.0\nrequests>=2.28",
+                "uv":     "numpy pandas matplotlib\nscikit-learn==1.3.0",
+                "poetry": "numpy pandas matplotlib",
+                "rye":    "numpy pandas matplotlib",
+                "conda":  "numpy pandas matplotlib\nscipy r-base",
+                "pipx":   "httpie black ruff poetry cowsay",
+                "system_tools": "This tab shows download links only.\nUse the links above to install tools.",
+            }
+            self.manual_info_label.setText(_manual_descriptions.get(env_type, _manual_descriptions["venv"]))
+            self.manual_input.setPlaceholderText(_manual_placeholders.get(env_type, _manual_placeholders["venv"]))
+
         # Which tab keys should be visible?
         visible_keys = {
             "venv":         {"launcher", "installed", "catalog", "presets", "manual"},
             "uv":           {"launcher", "installed", "catalog", "presets", "manual"},
-            "poetry":       {"launcher", "installed", "catalog", "manual"},
-            "rye":          {"launcher", "installed", "catalog", "manual"},
-            "conda":        {"launcher", "installed", "catalog"},
-            "pipx":         {"launcher"},
-            "system_tools": {"launcher"},
+            "poetry":       {"launcher", "installed", "catalog", "presets", "manual"},
+            "rye":          {"launcher", "installed", "catalog", "presets", "manual"},
+            "conda":        {"launcher", "installed", "catalog", "presets", "manual"},
+            "pipx":         {"launcher", "installed", "catalog", "presets", "manual"},
+            "system_tools": {"launcher", "manual"},
         }.get(env_type, {"launcher", "installed", "catalog", "presets", "manual"})
 
         # Remember current tab key before we remove tabs
@@ -2567,6 +2678,8 @@ $s.Save()
             "poetry": "📝 Manually add packages.\nUses poetry add command.",
             "rye":    "📝 Manually add packages.\nUses rye add command.",
             "conda":  "📝 Manually install packages by name.\nUses conda install command.",
+            "pipx":   "📝 Install CLI apps by name.\nUses pipx install command.",
+            "system_tools": "📝 Download links for system tools.\nR, RStudio, Ollama, DBeaver etc.",
         }
         _installed_tooltips = {
             "venv":   "📦 View and manage installed pip packages.",
@@ -2623,8 +2736,8 @@ $s.Save()
         # Rebuild launcher grid — remove gaps from hidden cards
         if hasattr(self, "launcher_cards") and hasattr(self, "launcher_grid"):
             # Collect visible apps for this env type
-            # uv environments support the same pip-based apps as venv
-            _filter_type = "venv" if env_type == "uv" else env_type
+            # pip-based env types share the same launcher apps as venv
+            _filter_type = "venv" if env_type in ("uv", "poetry", "rye", "pipx") else env_type
             visible_apps = [
                 app for app in self.app_definitions
                 if _filter_type in app.get("env_types",
@@ -2797,21 +2910,46 @@ $s.Save()
         except Exception:
             pass
 
-        # 1) Python version — from cache or subprocess
+        # 1) Python version — from cache, marker, or subprocess
         if python_ver:
             self.python_version_label.setText(f"🐍 Python {python_ver}")
         else:
-            try:
-                python_exe = get_python_executable(venv_path)
-                result = subprocess.run(
-                    [str(python_exe), "--version"],
-                    capture_output=True, text=True, timeout=10,
-                    **subprocess_args()
-                )
-                ver_text = result.stdout.strip() or result.stderr.strip()
-                self.python_version_label.setText(f"🐍 {ver_text}")
-            except Exception:
-                self.python_version_label.setText("")
+            # Try marker first (for pipx, conda, system_tools envs)
+            _marker_pyver = ""
+            _marker_file = venv_path / ".venvstudio_env"
+            if _marker_file.exists():
+                try:
+                    import json as _json
+                    with open(_marker_file) as _mf:
+                        _mdata = _json.load(_mf)
+                    _marker_pyver = _mdata.get("python_version", "")
+                except Exception:
+                    pass
+            if _marker_pyver:
+                self.python_version_label.setText(f"🐍 Python {_marker_pyver}")
+            else:
+                try:
+                    python_exe = get_python_executable(venv_path)
+                    result = subprocess.run(
+                        [str(python_exe), "--version"],
+                        capture_output=True, text=True, timeout=10,
+                        **subprocess_args()
+                    )
+                    ver_text = result.stdout.strip() or result.stderr.strip()
+                    self.python_version_label.setText(f"🐍 {ver_text}")
+                except Exception:
+                    # Last fallback: system Python
+                    try:
+                        import sys as _sys
+                        result = subprocess.run(
+                            [_sys.executable, "--version"],
+                            capture_output=True, text=True, timeout=5,
+                            **subprocess_args()
+                        )
+                        ver_text = result.stdout.strip() or result.stderr.strip()
+                        self.python_version_label.setText(f"🐍 {ver_text}")
+                    except Exception:
+                        self.python_version_label.setText("")
 
         # 2) Shortened path
         try:
@@ -2960,6 +3098,30 @@ $s.Save()
                                 self.version = version
                         pkgs = [_Pkg(p.get("name",""), p.get("version",""))
                                 for p in raw]
+                    elif self.env_type == "pipx":
+                        # List globally installed pipx apps
+                        import subprocess, sys, json as _json
+                        from src.utils.platform_utils import subprocess_args
+                        class _Pkg:
+                            def __init__(self, name, version):
+                                self.name = name
+                                self.version = version
+                        pkgs = []
+                        try:
+                            r = subprocess.run(
+                                [sys.executable, "-m", "pipx", "list", "--json"],
+                                capture_output=True, text=True, timeout=30,
+                                **subprocess_args()
+                            )
+                            if r.returncode == 0 and r.stdout.strip():
+                                data = _json.loads(r.stdout)
+                                venvs = data.get("venvs", {})
+                                for pkg_name, info in venvs.items():
+                                    meta = info.get("metadata", {})
+                                    ver = meta.get("main_package", {}).get("package_version", "")
+                                    pkgs.append(_Pkg(pkg_name, ver))
+                        except Exception:
+                            pass
                     else:
                         pkgs = self.pip_mgr.list_packages()
                     self.done.emit(pkgs)
@@ -3396,6 +3558,35 @@ $s.Save()
                         else f"conda install failed for: {', '.join(_pkgs)}")
 
             self.current_worker = WorkerThread(_do_conda_install)
+        elif _env_type == "pipx":
+            # Use pipx install for each package
+            _pkgs = list(packages)
+
+            def _do_pipx_install(callback=None):
+                import subprocess, sys
+                from src.utils.platform_utils import subprocess_args
+                installed = []
+                failed = []
+                for pkg in _pkgs:
+                    if callback:
+                        callback(f"pipx install {pkg}...")
+                    r = subprocess.run(
+                        [sys.executable, "-m", "pipx", "install", pkg],
+                        capture_output=True, text=True, timeout=300,
+                        **subprocess_args()
+                    )
+                    if r.returncode == 0:
+                        installed.append(pkg)
+                    else:
+                        failed.append(pkg)
+                if failed:
+                    _err_details = []
+                    for pkg in failed:
+                        _err_details.append(pkg)
+                    return (False, f"pipx install failed for: {', '.join(_err_details)}")
+                return (True, f"pipx installed: {', '.join(installed)}")
+
+            self.current_worker = WorkerThread(_do_pipx_install)
         else:
             self.current_worker = WorkerThread(self.pip_manager.install_packages, packages)
 

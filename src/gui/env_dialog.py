@@ -354,19 +354,16 @@ class EnvCreateDialog(QDialog):
         is_conda = env_type == "conda"
         is_empty = env_type == "empty"
         is_pipx  = env_type == "pipx"
-        is_pip_like = env_type in ("venv", "uv")  # types that use Python combo
+        is_pip_like = env_type in ("venv", "uv", "poetry", "rye", "pipx")  # types that use Python combo
 
         # ── Name label + placeholder per env type ─────────────────────────
         if is_pipx:
-            self.name_input.parentWidget()  # ensure it exists
-            # Find the QFormLayout label for "Name:" and change it
-            form = self.name_input.parentWidget()
             if hasattr(self, "_name_form_label"):
-                self._name_form_label.setText("Package:")
-            self.name_input.setPlaceholderText("e.g., httpie, black, ruff, poetry, cowsay")
+                self._name_form_label.setText("Name:")
+            self.name_input.setPlaceholderText("e.g., my-pipx-apps, cli-tools, dev-tools")
             self.name_input.setToolTip(
-                "Enter a PyPI package name to install as an isolated CLI app.\n"
-                "This is NOT an environment name — it's the package to install."
+                "Enter an environment name for managing pipx apps.\n"
+                "You can install CLI apps later from the Installed/Catalog tabs."
             )
         else:
             if hasattr(self, "_name_form_label"):
@@ -479,6 +476,9 @@ class EnvCreateDialog(QDialog):
     def _create(self):
         name = self.name_input.text().strip()
 
+        # ── Determine env type early for pipx-specific validation ─────
+        env_type = self.env_type_combo.currentData() if hasattr(self, "env_type_combo") else "venv"
+
         if not name:
             QMessageBox.warning(self, "Warning", "Please enter an environment name.")
             return
@@ -493,7 +493,6 @@ class EnvCreateDialog(QDialog):
             return
 
         # ── Empty folder env ──────────────────────────────────────────────
-        env_type = self.env_type_combo.currentData() if hasattr(self, "env_type_combo") else "venv"
 
         # ── Conda env ─────────────────────────────────────────────────────
         if env_type == "conda":
@@ -831,6 +830,8 @@ class EnvCreateDialog(QDialog):
 
                 elif _etype == "pipx":
                     # ── pipx ─────────────────────────────────────────────
+                    # Just create a marker folder — pipx apps are managed
+                    # from Installed/Catalog tabs after env creation.
                     def _find_pipx():
                         # 1. shutil.which
                         found = shutil.which("pipx") or shutil.which("pipx.exe")
@@ -854,6 +855,7 @@ class EnvCreateDialog(QDialog):
                                 return cand
                         return None
 
+                    # Ensure pipx is available on the system
                     pipx_exe = _find_pipx()
                     if not pipx_exe:
                         _cb("Installing pipx...")
@@ -863,44 +865,47 @@ class EnvCreateDialog(QDialog):
                         )
                         pipx_exe = _find_pipx()
 
-                    # Even if not found as exe, try python -m pipx
                     if not pipx_exe:
                         # Test python -m pipx works
                         test = subprocess.run(
                             [sys.executable, "-m", "pipx", "--version"],
                             capture_output=True, text=True, **subprocess_args()
                         )
-                        if test.returncode == 0:
-                            pipx_cmd = [sys.executable, "-m", "pipx"]
-                        else:
+                        if test.returncode != 0:
                             return False, (
                                 "Could not install pipx.\n\n"
                                 "Install manually:\n  pip install pipx\n"
                                 "Then: pipx ensurepath"
                             )
-                    else:
-                        pipx_cmd = [pipx_exe]
 
-                    # For pipx, "name" is the package to install
-                    cmd = pipx_cmd + ["install", _name]
-                    _cb(f"$ {' '.join(cmd)}")
-                    r = subprocess.run(cmd, capture_output=True, text=True,
-                                       timeout=300, **subprocess_args())
-                    if r.returncode != 0:
-                        return False, r.stderr[:400] or r.stdout[:400] or f"pipx install {_name} failed"
+                    # Get Python version from selected Python
+                    _pipx_python = _python or sys.executable
+                    _pipx_pyver = ""
+                    try:
+                        _pv = subprocess.run(
+                            [_pipx_python, "--version"],
+                            capture_output=True, text=True, timeout=5,
+                            **subprocess_args()
+                        )
+                        _pipx_pyver = (
+                            _pv.stdout.strip() or _pv.stderr.strip()
+                        ).replace("Python ", "")
+                    except Exception:
+                        pass
 
-                    # Create marker folder in venv base dir so it appears in env list
+                    # Create marker folder in venv base dir
                     _env_path.mkdir(parents=True, exist_ok=True)
                     with open(_env_path / ".venvstudio_env", "w") as f:
                         json.dump({
                             "type": "pipx",
                             "name": _name,
-                            "package": _name,
+                            "python_version": _pipx_pyver,
+                            "python_path": _pipx_python,
                             "created": datetime.datetime.now().isoformat(),
                         }, f, indent=2)
 
-                    _cb(f"✅ pipx installed '{_name}'!")
-                    return True, f"pipx app '{_name}' installed"
+                    _cb(f"✅ pipx environment '{_name}' created!")
+                    return True, f"pipx environment '{_name}' created"
 
                 return False, f"Unknown env type: {_etype}"
 

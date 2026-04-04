@@ -1033,10 +1033,12 @@ class MainWindow(QMainWindow):
         menu.addAction(a_clone)
 
         a_rename = QAction("✏️ Rename (Name Only)", self)
+        a_rename.setToolTip("Rename folder only — fast, but pip/python paths may break on Windows")
         a_rename.triggered.connect(self._rename_env_only)
         menu.addAction(a_rename)
 
         a_rename_full = QAction("🔄 Rename (Full)", self)
+        a_rename_full.setToolTip("Clone with new name + delete old — slow but safe, all packages reinstalled")
         a_rename_full.triggered.connect(self._rename_env_full)
         menu.addAction(a_rename_full)
 

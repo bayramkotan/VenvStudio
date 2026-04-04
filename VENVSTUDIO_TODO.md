@@ -244,3 +244,39 @@ Olması gereken fark:
   - Toplu kurulum: birden fazla tool seçip tek seferde kur
   - Tool versiyonları ve yolları gösterilir
   - F80 ile bağlantılı — env oluşturma sırasındaki auto-install buradan da tetiklenebilir
+
+- **F82** — Create Env'de Package Manager Yükleme Butonu
+  - Create Env dialog'unda seçilen package manager (uv, poetry, conda, rye, pipx) yanında "⬇️ Install" butonu
+  - Tıklanınca seçilen tool'u sisteme kurar (admin yetkili)
+  - Python seçiliyse: yeni bir Python sürüm yükleme ekranı açılsın (download + install)
+  - Yüklenen Python versiyonu otomatik olarak Create Env ekranındaki dropdown'a eklensin ve seçilsin
+  - F80/F81 ile bağlantılı
+
+- **F83** — Force Delete (Silinemeyen Env'ler İçin)
+  - Normal delete başarısız olursa (WinError 32, dosya kilitli vb.) "Force Delete" seçeneği sun
+  - Force yöntemler: retry with delay, rename-then-delete, `shutil.rmtree(onerror=...)`, process kill
+  - Linux'ta `rm -rf` fallback
+  - B52 ile bağlantılı
+
+- **F84** — Rename Tooltip Açıklamaları
+  - "Rename (Full)" butonuna hover → "Renames the folder on disk and updates all internal references"
+  - "Rename (Only Name)" butonuna hover → "Changes only the display name — folder stays the same"
+  - Sağ tık menüsündeki rename seçeneklerine de aynı tooltip'ler
+
+- **F85** — Weka Launcher Entegrasyonu
+  - Launch tab'a Weka (Waikato Environment for Knowledge Analysis) ekle
+  - System app olarak: Java tabanlı, `weka.jar` path tespiti
+  - `java -jar weka.jar` komutu ile çalıştırma
+  - env_types: ["system_tools"]
+
+- **F86** — Package Manager Env Yolu Sorunu (AppData vs Custom Path)
+  - Şu an micromamba/uv gibi tool'lar env'leri AppData altına kuruyor (`C:\Users\...\AppData\Roaming\VenvStudio\micromamba\...`)
+  - Bunun yerine kullanıcının seçtiği base_dir'e (`C:\venv\` gibi) doğrudan kursun
+  - Mevcut Python (system) kullanarak env oluşturabilsin → tool'un kendi Python'ını indirmek zorunda kalmasın
+  - `--prefix` parametresi kullanıcı path'ine yönlendirilmeli
+  - conda, mamba, rye, uv ve diğer tüm PM'ler için geçerli
+
+- **F87** — Sidebar Sıralama: Environments Üstte
+  - Sol sidebar'da Environments bölümü Packages'ın üzerine taşınsın
+  - Açılışta yine Packages → Launch tab aktif olsun (primary/default env için)
+  - Kullanıcı ilk bakışta env listesini görsün ama çalışma alanı Launch olarak açılsın

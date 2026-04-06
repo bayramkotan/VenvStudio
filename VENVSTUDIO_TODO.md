@@ -145,12 +145,7 @@
 
 ## 🔴 YENİ BUGLAR
 
-- **B79** — Launch tab'da system app kartları "Detected" diyor ama env'de mi sistemde mi belirsiz
-  - System app kartlarında (R Console, RStudio, Ollama, DBeaver vb.) "Detected" yazıyor
-  - Kullanıcı bunun env içinde kurulu olduğunu sanabilir
-  - Çözüm: "Detected" altına küçük not ekle → "🖥️ Detected on the system" (sistem yolundan bulundu)
-  - Env içi pip paketleri için mevcut "Not installed" / "Installed" davranışı aynen kalacak
-  - Etkilenen: `package_panel.py` → `_create_app_card` veya kart status güncelleme fonksiyonu
+- **B79** — ✅ TAMAMLANDI (v1.4.36): System app status mesajları düzeltildi
 
 - **B62** — 🔴 Uygulama rastgele çöküyor (kritik stabilite sorunu)
   - **Tetikleyiciler:** açılışta, tab/kısım geçişlerinde, environment değiştirirken, sağ tıkta, pencere tam dolmadan taşınırken
@@ -280,3 +275,119 @@ Olması gereken fark:
   - Sol sidebar'da Environments bölümü Packages'ın üzerine taşınsın
   - Açılışta yine Packages → Launch tab aktif olsun (primary/default env için)
   - Kullanıcı ilk bakışta env listesini görsün ama çalışma alanı Launch olarak açılsın
+
+- **F88** — Poetry/Rye Create'te Seçilen Python Kullanımı
+  - Poetry create flow'unda seçilen `_python`'ı `poetry env use <python_path>` ile geçir
+  - Rye create flow'unda `rye pin <python_version>` veya `--python` flag kullan
+  - Şu an Python combo görünüyor ama seçilen Python sadece marker'a yazılıyor, create'te kullanılmıyor
+
+- **F89** — VenvStudio Çoklu Platform Dağıtımı
+  - Şu an sadece `pip install venvstudio` (PyPI) ile kurulabiliyor
+  - Hedef: tüm popüler paket yöneticilerinden kurulabilir olması
+  - **conda / mamba:** conda-forge'a paket gönder
+    - `meta.yaml` (veya `recipe.yaml`) hazırla → conda-forge/staged-recipes repo'suna PR aç
+    - Gerekli: `meta.yaml`, `build.sh` (Linux/macOS), `bld.bat` (Windows)
+    - conda-forge review süreci ~1-2 hafta
+    - Sonuç: `conda install -c conda-forge venvstudio`
+  - **pipx:** Zaten çalışıyor → `pipx install venvstudio` (PyPI'den çeker, CLI entry point gerekli)
+    - `pyproject.toml`'da `[project.scripts]` veya `[tool.poetry.scripts]` ile entry point tanımla
+    - Örnek: `venvstudio = "src.main:main"` — pipx bunu otomatik izole CLI app olarak kurar
+  - **snap:** Snapcraft ile paketleme
+    - `snapcraft.yaml` hazırla
+    - `snapcraft` ile build → Snap Store'a yükle
+    - Sonuç: `sudo snap install venvstudio`
+  - **flatpak:** Flathub'a gönder
+    - `com.github.bayramkotan.VenvStudio.yml` manifest hazırla
+    - Flathub repo'suna PR aç
+    - Sonuç: `flatpak install flathub com.github.bayramkotan.VenvStudio`
+  - **AUR (Arch Linux):** PKGBUILD hazırla
+    - `PKGBUILD` dosyası yaz → AUR'a yükle
+    - Sonuç: `yay -S venvstudio` veya `paru -S venvstudio`
+  - **Homebrew (macOS/Linux):** Formula hazırla
+    - `venvstudio.rb` formula yaz → homebrew-core'a PR veya kendi tap oluştur
+    - Sonuç: `brew install venvstudio` veya `brew install bayramkotan/tap/venvstudio`
+  - **winget (Windows):** Microsoft Store / winget manifest
+    - `manifests/b/bayramkotan/VenvStudio/` altına YAML manifest
+    - winget-pkgs repo'suna PR aç
+    - Sonuç: `winget install bayramkotan.VenvStudio`
+  - **scoop (Windows):** Bucket manifest
+    - JSON manifest hazırla → kendi bucket repo'su oluştur veya scoop extras'a PR
+    - Sonuç: `scoop install venvstudio`
+  - **npm (Node.js wrapper):** Opsiyonel — Python dependency gerektirir
+  - **Öncelik sırası:** pipx (kolay) → conda-forge (geniş kitle) → AUR → Homebrew → winget → snap → flatpak → scoop
+- **F84** — ✅ TAMAMLANDI (v1.4.36): Rename tooltip açıklamaları eklendi
+
+- **B80** — 🔴 Rye Kaldırılacak (Artık Geliştirilmiyor)
+  - Rye resmi olarak geliştirilmeyi bıraktı — uv'ye yönlendiriliyor
+  - Kaldırılacak yerler: env_dialog.py, package_panel.py, venv_manager.py, constants.py, README'ler
+  - Mevcut rye env'ler kalsın ama yeni oluşturma devre dışı
+  - **5 env tipi kalacak:** venv, uv, poetry, conda, pipx
+
+- **B81** — 🔴 Tool Environment (system_tools) Kaldırılacak
+  - system_tools env tipi ayrı bir env olarak gereksiz — system app'ler zaten tüm env tiplerinden erişilebilir
+  - Kaldırılacak yerler: env_dialog, package_panel, venv_manager, constants
+  - System app kartları diğer env tiplerinde de gösterilecek
+  - **5 env tipi kalacak:** venv, uv, poetry, conda, pipx
+
+- **B82** — 🔴 pip dışı env'lerde Clone/Rename hata veriyor
+  - uv, poetry, conda, pipx env'lerinde clone ve rename başarısız
+  - Neden: clone/rename mantığı `python -m venv` + `pip freeze/install` varsayıyor
+  - Çözüm: her env tipi için özel clone/rename stratejisi
+    - uv: `uv venv` + `uv pip install -r`
+    - poetry: `poetry new` + `poetry add` (pyproject.toml'dan)
+    - conda: `conda create --clone` veya `conda list --export` + `conda install --file`
+    - pipx: marker klasörü kopyala
+
+- **F90** — Hardlink / Softlink Paylaşımlı Paket Deposu
+  - Büyük kütüphaneler (torch, tensorflow, opencv) her env'e ayrı kurulunca disk israfı
+  - Merkezi depo: `~/.venvstudio/shared-packages/` veya kullanıcı tanımlı path
+  - Yeni env'e paket kurulurken depoda varsa hardlink/symlink kullan
+  - Avantaj: 5 env × 2GB torch = 10GB yerine 2GB + 4 link
+  - Settings'ten açıp kapatılabilir
+  - Stratejiler: hardlink (aynı disk), symlink (farklı disk), copy (fallback)
+  - Versiyon çakışması yönetimi gerekli (torch 2.1 vs 2.2)
+
+- **F91** — Proje Görsel Haritası (Architecture Map)
+  - Dosya/modül yapısı görselleştirmesi
+  - Modül bağımlılık grafiği: import ilişkileri
+  - Fonksiyon çağrı haritası: ana flow'lar (env create, package install, launch app)
+  - Sınıf hiyerarşisi: QThread worker'lar, dialog'lar, panel'ler
+  - Signal-slot bağlantıları, callback chain'ler
+  - Araçlar: pydeps, pyreverse, mermaid, graphviz
+  - Çıktı: `docs/architecture.md` + mermaid/svg diagram'lar
+
+- **F92** — SDLC Uyumlu Proje Yapılandırması
+  - Projeyi Software Development Life Cycle standartlarına uygun yapılandır
+  - Dokümantasyon: `docs/` — architecture, contributing, changelog, API docs
+  - Test altyapısı: `tests/` — pytest, unit/integration test, mock
+  - CI/CD pipeline: GitHub Actions — lint, test, build, release
+  - Code quality: pre-commit hooks, type hints (mypy), code coverage
+  - Versiyonlama: Semantic versioning, CHANGELOG.md
+  - Issue/PR template: `.github/` templates
+  - Security: SECURITY.md, dependabot
+
+- **F93** — Tool Registry (Kurulu Araç Takip Sistemi)
+  - **Sorun:** uv, pipx, poetry, micromamba gibi tool'lar kurulunca nereye gittiği takip edilmiyor
+  - Kullanıcı hangi tool'un nerede olduğunu, versiyonunu bilemiyor
+  - **Çözüm:** Basit bir JSON registry dosyası — her tool kurulduğunda/bulunduğunda kaydedilir
+  - **Registry dosyası:**
+    - Windows: `%APPDATA%\VenvStudio\tool_registry.json`
+    - Linux: `~/.config/venvstudio/tool_registry.json`
+  - **Kayıt formatı:**
+    ```json
+    {
+      "uv": {"path": "C:\\...\\uv.exe", "version": "0.6.0", "installed_by": "venvstudio", "installed_at": "2026-04-06"},
+      "poetry": {"path": "C:\\...\\poetry.exe", "version": "1.8.0", "installed_by": "user", "installed_at": ""},
+      "micromamba": {"path": "C:\\...\\micromamba.exe", "version": "2.0.0", "installed_by": "venvstudio"}
+    }
+    ```
+  - **`installed_by`:** `"venvstudio"` (biz kurduk) vs `"user"` (sistemde zaten vardı, biz bulduk)
+  - **Davranış:**
+    - Tool kurulurken → registry'ye kaydet (path, version, tarih)
+    - Tool aranırken → önce registry'ye bak, sonra `shutil.which`
+    - Settings > Toolchain sayfasında → registry'den oku, göster
+    - Kullanıcı custom path belirleyebilsin → registry'ye yaz
+  - **Entegrasyon:**
+    - `env_dialog.py` — tool kurulunca registry'ye kaydet
+    - `package_panel.py` — install komutlarında registry'den tool path oku
+    - F81 (Settings > Toolchain Manager) — registry'yi görsel olarak yönet

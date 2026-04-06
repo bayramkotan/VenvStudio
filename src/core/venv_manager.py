@@ -111,7 +111,7 @@ class VenvInfo:
     created: str = ""
     package_count: int = 0
     is_valid: bool = True
-    env_type: str = "venv"  # venv | uv | poetry | rye | pipx | conda | system_tools
+    env_type: str = "venv"  # venv | uv | poetry | pipx | conda
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -492,7 +492,7 @@ class VenvManager:
                     except Exception:
                         info.package_count = 0
 
-                elif env_type in ("uv", "poetry", "rye"):
+                elif env_type in ("uv", "poetry"):
                     # These create standard venvs — try reading Python version
                     if marker_pyver:
                         info.python_version = marker_pyver
@@ -678,7 +678,7 @@ class VenvManager:
                             except Exception:
                                 pass
                         info.python_version = _conda_pyver or marker_pyver or ""
-                    elif env_type in ("uv", "poetry", "rye"):
+                    elif env_type in ("uv", "poetry"):
                         if marker_pyver:
                             info.python_version = marker_pyver
                         else:

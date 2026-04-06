@@ -14,7 +14,6 @@ from PySide6.QtCore import Qt, Signal, QThread
 
 from src.utils.platform_utils import find_system_pythons
 
-
 class CreateWorker(QThread):
     """Worker thread for async environment creation."""
     progress = Signal(str)
@@ -52,7 +51,6 @@ class CreateWorker(QThread):
 
     def cancel(self):
         self._cancelled = True
-
 
 class EnvCreateDialog(QDialog):
     """Dialog for creating a new virtual environment."""
@@ -131,15 +129,16 @@ class EnvCreateDialog(QDialog):
         self.env_type_combo.addItem("🐍 Python Virtual Environment", "venv")
         self.env_type_combo.addItem("⚡ uv Environment", "uv")
         self.env_type_combo.addItem("📜 Poetry Environment", "poetry")
-        self.env_type_combo.addItem("🌾 Rye Environment", "rye")
+        # Rye removed — no longer maintained, users redirected to uv
         self.env_type_combo.addItem("📦 pipx App", "pipx")
         self.env_type_combo.addItem("🦎 Conda Environment (micromamba)", "conda")
-        self.env_type_combo.addItem("🛠 Tool Environment", "empty")
+        # Tool Environment removed — system apps accessible from all env types
         self.env_type_combo.setToolTip(
             "Python venv: isolated Python environment with pip\n"
-            "Conda Environment: micromamba-powered — install R, RStudio,\n"
-            "           jamovi, JASP, DBeaver and any conda-forge package\n"
-            "Tool Environment: plain directory for portable system tools"
+            "uv: fast Rust-powered environment (10-100× faster)\n"
+            "Poetry: dependency management with pyproject.toml\n"
+            "Conda: micromamba-powered — R, RStudio, scientific packages\n"
+            "pipx: install isolated CLI apps globally"
         )
         self.env_type_combo.currentIndexChanged.connect(self._on_env_type_changed)
         form_layout.addRow("Type:", self.env_type_combo)
@@ -352,9 +351,8 @@ class EnvCreateDialog(QDialog):
         env_type = self.env_type_combo.currentData()
         is_venv  = env_type == "venv"
         is_conda = env_type == "conda"
-        is_empty = env_type == "empty"
         is_pipx  = env_type == "pipx"
-        is_pip_like = env_type in ("venv", "uv", "poetry", "rye", "pipx")  # types that use Python combo
+        is_pip_like = env_type in ("venv", "uv", "poetry", "pipx")  # types that use Python combo
 
         # ── Name label + placeholder per env type ─────────────────────────
         if is_pipx:
@@ -396,10 +394,8 @@ class EnvCreateDialog(QDialog):
             "venv":   "Set up a fresh Python virtual environment",
             "uv":     "Create a fast uv virtual environment (Rust-powered pip)",
             "poetry": "Create a Poetry project environment",
-            "rye":    "Create a Rye managed Python environment",
             "pipx":   "Install an isolated Python CLI application",
             "conda":  "Create a conda environment powered by micromamba",
-            "empty":  "Create a self-contained folder for system tools",
         }
         if hasattr(self, "subtitle_label"):
             self.subtitle_label.setText(subtitles.get(env_type, subtitles["venv"]))
@@ -423,13 +419,6 @@ class EnvCreateDialog(QDialog):
                 "if not already available.\n\n"
                 "Equivalent: poetry new <name>"
             ),
-            "rye": (
-                "🌾  Rye is an all-in-one Python toolchain\n"
-                "by the creator of Flask.\n\n"
-                "Rye will be downloaded automatically\n"
-                "if not already installed.\n\n"
-                "Equivalent: rye init <name>"
-            ),
             "pipx": (
                 "📦  pipx installs Python CLI apps\n"
                 "into isolated environments.\n\n"
@@ -443,12 +432,6 @@ class EnvCreateDialog(QDialog):
                 "You can install R, RStudio, jamovi, JASP,\n"
                 "DBeaver and 25,000+ packages from the\n"
                 "Launch tab after creation."
-            ),
-            "empty": (
-                "🛠  A Tool Environment folder will be created.\n\n"
-                "You can then install tools from the Launch tab:\n"
-                "R, RStudio, Ollama, DBeaver, JASP, jamovi…\n\n"
-                "No Python required — fully self-contained."
             ),
         }
         self.cmd_label.setText(hints.get(env_type, hints["venv"]))
@@ -563,24 +546,27 @@ class EnvCreateDialog(QDialog):
         # ── conda end ─────────────────────────────────────────────────────
 
         # ── uv / Poetry / Rye / pipx ──────────────────────────────────────
-        if env_type in ("uv", "poetry", "rye", "pipx"):
+        if env_type in ("uv", "poetry", "pipx"):
             import os, shutil as _shutil
             location = self.location_label.text()
             env_path = Path(os.path.join(location, name))
             python_path = self.python_combo.currentData() or None
 
             # ── Pre-check: is the required tool available? ────────────
+            from src.core.tool_registry import ToolRegistry
+            _registry = ToolRegistry()
+
             _tool_checks = {
                 "uv":     ("uv",     "pip install uv"),
                 "poetry": ("poetry", "pip install poetry"),
-                "rye":    ("rye",    "https://rye.astral.sh"),
                 "pipx":   ("pipx",   "pip install --user pipx"),
             }
             _tool_name, _tool_install = _tool_checks.get(env_type, ("", ""))
-            _tool_found = bool(
-                _shutil.which(_tool_name) or _shutil.which(_tool_name + ".exe")
-            )
-            # Also check python -m <tool>
+
+            # Use registry first, then shutil.which, then python -m
+            _tool_path = _registry.find(_tool_name)
+            _tool_found = bool(_tool_path)
+
             if not _tool_found and env_type in ("uv", "poetry", "pipx"):
                 import sys as _sys, subprocess as _sp
                 try:
@@ -588,7 +574,13 @@ class EnvCreateDialog(QDialog):
                         [_sys.executable, "-m", _tool_name, "--version"],
                         capture_output=True, text=True, timeout=5
                     )
-                    _tool_found = _t.returncode == 0
+                    if _t.returncode == 0:
+                        _tool_found = True
+                        _ver = _t.stdout.strip().split()[-1] if _t.stdout.strip() else ""
+                        _registry.register(_tool_name,
+                                           f"python -m {_tool_name}",
+                                           version=_ver,
+                                           installed_by="python_module")
                 except Exception:
                     pass
 
@@ -628,20 +620,35 @@ class EnvCreateDialog(QDialog):
                 def _cb(msg):
                     if callback: callback(msg)
 
+                # Registry for tracking tool paths
+                from src.core.tool_registry import ToolRegistry
+                _reg = ToolRegistry()
+
+                def _find_tool_registered(name_):
+                    """Find tool: registry → shutil.which → Scripts dir."""
+                    # 1. Registry
+                    reg_path = _reg.find(name_)
+                    if reg_path and os.path.isfile(reg_path):
+                        return reg_path
+                    # 2. shutil.which
+                    found = shutil.which(name_) or shutil.which(name_ + ".exe")
+                    if found:
+                        _reg.register(name_, found, installed_by="system")
+                        return found
+                    # 3. Scripts dir
+                    scripts = os.path.join(os.path.dirname(sys.executable),
+                        "Scripts" if sys.platform == "win32" else "bin")
+                    for n in (name_, name_ + ".exe"):
+                        cand = os.path.join(scripts, n)
+                        if os.path.isfile(cand):
+                            _reg.register(name_, cand, installed_by="system")
+                            return cand
+                    return None
+
                 if _etype == "uv":
                     # ── uv ───────────────────────────────────────────────
                     def _find_tool(name_):
-                        found = shutil.which(name_) or shutil.which(name_ + ".exe")
-                        if found:
-                            return found
-                        import os
-                        scripts = os.path.join(os.path.dirname(sys.executable),
-                            "Scripts" if sys.platform == "win32" else "bin")
-                        for n in (name_, name_ + ".exe"):
-                            cand = os.path.join(scripts, n)
-                            if os.path.isfile(cand):
-                                return cand
-                        return None
+                        return _find_tool_registered(name_)
 
                     uv_exe = _find_tool("uv")
                     if not uv_exe:
@@ -651,7 +658,9 @@ class EnvCreateDialog(QDialog):
                             capture_output=True, text=True, **subprocess_args()
                         )
                         uv_exe = _find_tool("uv")
-                        if not uv_exe:
+                        if uv_exe:
+                            _reg.register("uv", uv_exe, installed_by="venvstudio")
+                        elif not uv_exe:
                             # Try python -m uv
                             t = subprocess.run([sys.executable, "-m", "uv", "--version"],
                                                capture_output=True, **subprocess_args())
@@ -706,7 +715,9 @@ class EnvCreateDialog(QDialog):
                             capture_output=True, text=True, **subprocess_args()
                         )
                         poetry_exe = _find_tool("poetry")
-                        if not poetry_exe:
+                        if poetry_exe:
+                            _reg.register("poetry", poetry_exe, installed_by="venvstudio")
+                        elif not poetry_exe:
                             return False, (
                                 "Could not install Poetry automatically.\n\n"
                                 "Install manually:\n"
@@ -728,13 +739,24 @@ class EnvCreateDialog(QDialog):
                                             **subprocess_args())
                         if r2.returncode != 0:
                             return False, r.stderr[:400] or "poetry new failed"
+
+                    # Use selected Python if specified
+                    if _python:
+                        _cb(f"Setting Python: poetry env use {_python}")
+                        _env_cmd = [poetry_exe, "env", "use", _python]
+                        subprocess.run(_env_cmd, capture_output=True, text=True,
+                                       timeout=60, cwd=str(_env_path),
+                                       **subprocess_args())
+
                     # Detect Python version
                     _po_pyver = ""
                     try:
-                        _po_py = (_env_path / ".venv" / ("Scripts" if plat == "windows" else "bin")
-                                  / ("python.exe" if plat == "windows" else "python"))
+                        if _python:
+                            _po_py = Path(_python)
+                        else:
+                            _po_py = (_env_path / ".venv" / ("Scripts" if plat == "windows" else "bin")
+                                      / ("python.exe" if plat == "windows" else "python"))
                         if not _po_py.exists():
-                            # Poetry may use system python
                             _po_py_str = shutil.which("python3") or shutil.which("python") or sys.executable
                             _po_py = Path(_po_py_str)
                         if _po_py.exists():
@@ -753,80 +775,6 @@ class EnvCreateDialog(QDialog):
                                    "created": datetime.datetime.now().isoformat()}, f, indent=2)
                     _cb(f"✅ Poetry environment '{_name}' created!")
                     return True, f"Poetry environment '{_name}' created"
-
-                elif _etype == "rye":
-                    # ── Rye ──────────────────────────────────────────────
-                    rye_exe = shutil.which("rye") or shutil.which("rye.exe")
-                    if not rye_exe:
-                        _cb("Rye not found — attempting automatic install...")
-                        # Try platform-specific install
-                        try:
-                            if plat == "windows":
-                                # Windows: use official installer via PowerShell
-                                _cb("Downloading Rye installer for Windows...")
-                                _inst = subprocess.run(
-                                    ["powershell", "-Command",
-                                     "irm https://rye.astral.sh/get | iex"],
-                                    capture_output=True, text=True, timeout=300,
-                                    **subprocess_args()
-                                )
-                            else:
-                                # Linux/macOS: curl installer
-                                _cb("Downloading Rye installer...")
-                                _inst = subprocess.run(
-                                    ["bash", "-c",
-                                     "curl -sSf https://rye.astral.sh/get | bash"],
-                                    capture_output=True, text=True, timeout=300,
-                                    **subprocess_args()
-                                )
-                            rye_exe = shutil.which("rye") or shutil.which("rye.exe")
-                            # Also check ~/.rye/shims/rye
-                            if not rye_exe:
-                                import os as _os
-                                _rye_shim = _os.path.expanduser("~/.rye/shims/rye")
-                                if _os.path.isfile(_rye_shim):
-                                    rye_exe = _rye_shim
-                                elif plat == "windows":
-                                    _rye_win = _os.path.expandvars(r"%USERPROFILE%\.rye\shims\rye.exe")
-                                    if _os.path.isfile(_rye_win):
-                                        rye_exe = _rye_win
-                        except Exception as _e:
-                            _cb(f"Auto-install failed: {_e}")
-
-                        if not rye_exe:
-                            return False, (
-                                "Could not install Rye automatically.\n\n"
-                                "Install manually from: https://rye.astral.sh\n"
-                                "Then restart VenvStudio."
-                            )
-                    _env_path.mkdir(parents=True, exist_ok=True)
-                    cmd = [rye_exe, "init", str(_env_path)]
-                    _cb(f"$ {' '.join(cmd)}")
-                    r = subprocess.run(cmd, capture_output=True, text=True,
-                                       timeout=120, **subprocess_args())
-                    if r.returncode != 0:
-                        return False, r.stderr[:400] or "rye init failed"
-                    # Detect Python version
-                    _rye_pyver = ""
-                    try:
-                        _rye_py = (_env_path / ".venv" / ("Scripts" if plat == "windows" else "bin")
-                                   / ("python.exe" if plat == "windows" else "python"))
-                        if _rye_py.exists():
-                            _vr = subprocess.run(
-                                [str(_rye_py), "--version"],
-                                capture_output=True, text=True, timeout=5,
-                                **subprocess_args()
-                            )
-                            _rye_pyver = (_vr.stdout.strip() or _vr.stderr.strip()
-                                           ).replace("Python ", "")
-                    except Exception:
-                        pass
-                    with open(_env_path / ".venvstudio_env", "w") as f:
-                        json.dump({"type": "rye", "name": _name,
-                                   "python_version": _rye_pyver,
-                                   "created": datetime.datetime.now().isoformat()}, f, indent=2)
-                    _cb(f"✅ Rye environment '{_name}' created!")
-                    return True, f"Rye environment '{_name}' created"
 
                 elif _etype == "pipx":
                     # ── pipx ─────────────────────────────────────────────
@@ -864,6 +812,8 @@ class EnvCreateDialog(QDialog):
                             capture_output=True, text=True, **subprocess_args()
                         )
                         pipx_exe = _find_pipx()
+                        if pipx_exe:
+                            _reg.register("pipx", pipx_exe, installed_by="venvstudio")
 
                     if not pipx_exe:
                         # Test python -m pipx works
@@ -931,40 +881,6 @@ class EnvCreateDialog(QDialog):
             self.worker.start()
             return
         # ── alt env types end ─────────────────────────────────────────────
-
-        if env_type == "empty":
-            import os
-            location = self.location_label.text()
-            folder_path = os.path.join(location, name)
-            try:
-                os.makedirs(folder_path, exist_ok=False)
-                # Write a marker so VenvStudio knows this is a system-tools env
-                marker = os.path.join(folder_path, ".venvstudio_env")
-                with open(marker, "w") as f:
-                    import json, datetime
-                    json.dump({
-                        "type": "system_tools",
-                        "name": name,
-                        "created": datetime.datetime.now().isoformat(),
-                    }, f, indent=2)
-                self.status_label.setText(f"✅ Folder '{name}' created.")
-                self.cmd_label.setText(
-                    f"📁 Created: {folder_path}\n\n"
-                    f"Go to Launch tab to install tools\n"
-                    f"(R, RStudio, Ollama, DBeaver, JASP, jamovi…)"
-                )
-                self.create_btn.setText("Done")
-                self.create_btn.setEnabled(False)
-                # Emit env_created so main_window refreshes the list immediately
-                self.env_created.emit(name)
-                from PySide6.QtCore import QTimer
-                QTimer.singleShot(800, self.accept)
-            except FileExistsError:
-                QMessageBox.warning(self, "Warning", f"A folder named '{name}' already exists.")
-            except Exception as e:
-                QMessageBox.critical(self, "Error", f"Could not create folder:\n{e}")
-            return
-        # ─────────────────────────────────────────────────────────────────
 
         python_path = self.python_combo.currentData() or None
 

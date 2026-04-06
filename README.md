@@ -55,7 +55,7 @@ Or download the standalone binary — **no Python required:**
 <td width="50%" valign="top">
 
 ### 🗂️ Environment Management
-- **7 environment types** — venv, uv, Poetry, Rye, pipx, Conda, Tool Environment
+- **5 environment types** — venv, uv, Poetry, Conda, pipx
 - Create, rename, clone, delete environments with a modern GUI
 - **Type** column in the environment table — see each env's manager at a glance
 - Auto-detect existing environments at startup
@@ -83,7 +83,7 @@ Or download the standalone binary — **no Python required:**
 ### 🚀 Quick Launch
 - Sidebar shows installed apps for active env
 - **13+ one-click launchers** — [see full list below](#-supported-launchers)
-- **System tools** — R, RStudio, Ollama, DBeaver, jamovi, JASP via Conda or portable install
+- **System tools** — R, RStudio, Ollama, DBeaver, jamovi, JASP via Conda
 - **Jupyter Working Directory** — configurable per launch
 - **Create Desktop Shortcut** for any app
 - Instant sync across sidebar, table, and panel
@@ -130,17 +130,15 @@ Or download the standalone binary — **no Python required:**
 
 ## 🔧 Supported Environment Types
 
-VenvStudio supports **7 different environment types**, each with its own icon and color in the environment table:
+VenvStudio supports **5 environment types**, each with its own icon and color in the environment table:
 
 | Icon | Type | Backend | Description |
 |:----:|:-----|:--------|:------------|
 | 🐍 | **Python venv** | `python -m venv` | Standard Python virtual environment with pip |
 | ⚡ | **uv** | `uv venv` | Rust-powered — 10–100× faster than pip |
 | 📜 | **Poetry** | `poetry new` | Dependency management with lock file and pyproject.toml |
-| 🌾 | **Rye** | `rye init` | All-in-one Python toolchain by the creator of Flask |
 | 📦 | **pipx** | `pipx install` | Install Python CLI apps in isolated environments |
 | 🦎 | **Conda** | micromamba | conda-forge powered — R, RStudio, jamovi, JASP, DBeaver and 25,000+ packages |
-| 🗂 | **Tool Environment** | — | Plain directory for portable system tools (no Python required) |
 
 Each environment is tracked with a `.venvstudio_env` marker file, and the **Runtime** column shows the actual Python version detected from the environment's binary.
 
@@ -250,7 +248,7 @@ Each environment is tracked with a `.venvstudio_env` marker file, and the **Runt
 
 ### 🛠️ System Tools (Conda / Portable)
 
-*Available in Conda and Tool environments — installed via conda-forge or as portable binaries.*
+*Available in Conda environments — installed via conda-forge or detected on system.*
 
 | Tool | Description | Install Method |
 |:-----|:-----------|:--------------|

@@ -121,7 +121,6 @@ import subprocess
 import os
 import sys
 
-
 class WorkerThread(QThread):
     """Worker thread with cancel support."""
     finished = Signal(bool, str)
@@ -158,7 +157,6 @@ class WorkerThread(QThread):
 
     def cancel(self):
         self._cancelled = True
-
 
 class CommandHintDialog(QDialog):
     """Shows the equivalent pip command for educational purposes."""
@@ -202,7 +200,6 @@ class CommandHintDialog(QDialog):
         ok_btn.accepted.connect(self.accept)
         btn_layout.addWidget(ok_btn)
         layout.addLayout(btn_layout)
-
 
 class PackagePanel(QWidget):
     """Package management panel with catalog browsing and pip operations."""
@@ -654,7 +651,7 @@ class PackagePanel(QWidget):
                 "name": "R Console",
                 "icon": "📐",
                 "icon_key": "r_console",
-                "env_types": ["conda", "system_tools"],
+                "env_types": ["conda"],
                 "package": "__system__",
                 "system_app": True,
                 "conda_packages": ["r-base"],
@@ -680,7 +677,7 @@ class PackagePanel(QWidget):
                 "name": "RStudio",
                 "icon": "🎯",
                 "icon_key": "rstudio",
-                "env_types": ["conda", "system_tools"],
+                "env_types": ["conda"],
                 "package": "__system__",
                 "system_app": True,
                 "conda_packages": ["rstudio"],
@@ -707,7 +704,7 @@ class PackagePanel(QWidget):
                 "name": "Ollama",
                 "icon": "🦙",
                 "icon_key": "ollama",
-                "env_types": ["conda", "system_tools"],
+                "env_types": ["conda"],
                 "package": "__system__",
                 "system_app": True,
                 "system_commands": {
@@ -724,7 +721,7 @@ class PackagePanel(QWidget):
                 "name": "DBeaver",
                 "icon": "🦫",
                 "icon_key": "dbeaver",
-                "env_types": ["conda", "system_tools"],
+                "env_types": ["conda"],
                 "package": "__system__",
                 "system_app": True,
                 "conda_packages": ["dbeaver-ce"],
@@ -762,7 +759,7 @@ class PackagePanel(QWidget):
                 "name": "jamovi",
                 "icon": "🧩",
                 "icon_key": "jamovi",
-                "env_types": ["conda", "system_tools"],
+                "env_types": ["conda"],
                 "package": "__system__",
                 "system_app": True,
                 "conda_packages": ["jamovi"],
@@ -778,7 +775,7 @@ class PackagePanel(QWidget):
                 "name": "JASP",
                 "icon": "📊",
                 "icon_key": "jasp",
-                "env_types": ["conda", "system_tools"],
+                "env_types": ["conda"],
                 "package": "__system__",
                 "system_app": True,
                 "conda_packages": ["jasp"],
@@ -918,9 +915,8 @@ class PackagePanel(QWidget):
         else:
             _install_prefixes = {
                 "venv": "pip install", "uv": "uv pip install",
-                "poetry": "poetry add", "rye": "rye add",
+                "poetry": "poetry add",
                 "conda": "conda install", "pipx": "pipx install",
-                "system_tools": "pip install",
             }
             install_cmd = f"{_install_prefixes.get(_env_type, 'pip install')} {pkg_name}"
             run_parts = app_def.get("command", [])
@@ -1019,9 +1015,8 @@ class PackagePanel(QWidget):
                 else:
                     _ip = {
                         "venv": "pip install", "uv": "uv pip install",
-                        "poetry": "poetry add", "rye": "rye add",
+                        "poetry": "poetry add",
                         "conda": "conda install", "pipx": "pipx install",
-                        "system_tools": "pip install",
                     }
                     _ic = f"{_ip.get(_env_type, 'pip install')} {_pkg_name}"
                     _rp = app_def.get("command", [])
@@ -2621,26 +2616,15 @@ $s.Save()
                 "venv":   "Enter package names separated by spaces or newlines.\nYou can specify versions like: numpy==1.24.0 or pandas>=2.0",
                 "uv":    "Enter package names separated by spaces or newlines.\nUses uv pip install (10-100× faster than pip).",
                 "poetry": "Enter package names to add.\nUses poetry add command.",
-                "rye":    "Enter package names to add.\nUses rye add command.",
                 "conda":  "Enter package names separated by spaces or newlines.\nPackages will be installed from conda-forge.",
                 "pipx":   "Enter CLI app names to install globally.\nEach app gets its own isolated environment via pipx.",
-                "system_tools": (
-                    "Download links for system tools:\n"
-                    "• R: https://cran.r-project.org\n"
-                    "• RStudio: https://posit.co/download/rstudio-desktop\n"
-                    "• Ollama: https://ollama.com/download\n"
-                    "• DBeaver: https://dbeaver.io/download\n"
-                    "• Weka: https://waikato.github.io/weka-wiki/downloading_weka"
-                ),
             }
             _manual_placeholders = {
                 "venv":   "numpy pandas matplotlib\nscikit-learn==1.3.0\nrequests>=2.28",
                 "uv":     "numpy pandas matplotlib\nscikit-learn==1.3.0",
                 "poetry": "numpy pandas matplotlib",
-                "rye":    "numpy pandas matplotlib",
                 "conda":  "numpy pandas matplotlib\nscipy r-base",
                 "pipx":   "httpie black ruff poetry cowsay",
-                "system_tools": "This tab shows download links only.\nUse the links above to install tools.",
             }
             self.manual_info_label.setText(_manual_descriptions.get(env_type, _manual_descriptions["venv"]))
             self.manual_input.setPlaceholderText(_manual_placeholders.get(env_type, _manual_placeholders["venv"]))
@@ -2650,10 +2634,8 @@ $s.Save()
             "venv":         {"launcher", "installed", "catalog", "presets", "manual"},
             "uv":           {"launcher", "installed", "catalog", "presets", "manual"},
             "poetry":       {"launcher", "installed", "catalog", "presets", "manual"},
-            "rye":          {"launcher", "installed", "catalog", "presets", "manual"},
             "conda":        {"launcher", "installed", "catalog", "presets", "manual"},
             "pipx":         {"launcher", "installed", "catalog", "presets", "manual"},
-            "system_tools": {"launcher", "manual"},
         }.get(env_type, {"launcher", "installed", "catalog", "presets", "manual"})
 
         # Remember current tab key before we remove tabs
@@ -2676,16 +2658,13 @@ $s.Save()
             "venv":   "📝 Manually install packages by name.\nYou can paste from pip install commands.",
             "uv":     "📝 Manually install packages by name.\nUses uv pip install (10-100× faster).",
             "poetry": "📝 Manually add packages.\nUses poetry add command.",
-            "rye":    "📝 Manually add packages.\nUses rye add command.",
             "conda":  "📝 Manually install packages by name.\nUses conda install command.",
             "pipx":   "📝 Install CLI apps by name.\nUses pipx install command.",
-            "system_tools": "📝 Download links for system tools.\nR, RStudio, Ollama, DBeaver etc.",
         }
         _installed_tooltips = {
             "venv":   "📦 View and manage installed pip packages.",
             "uv":     "📦 View and manage installed packages (uv backend).",
             "poetry": "📦 View installed packages (Poetry environment).",
-            "rye":    "📦 View installed packages (Rye environment).",
             "conda":  "📦 View installed conda packages.",
         }
         _catalog_tooltips = {
@@ -2721,7 +2700,7 @@ $s.Save()
             self.tabs.setCurrentIndex(0)
 
         # Installed tab toolbar: disable pip-only actions for non-pip envs
-        is_pip_like = env_type in ("venv", "uv", "poetry", "rye")
+        is_pip_like = env_type in ("venv", "uv", "poetry")
         if hasattr(self, "update_btn"):
             self.update_btn.setEnabled(is_pip_like)
             self.update_btn.setToolTip(
@@ -2737,7 +2716,7 @@ $s.Save()
         if hasattr(self, "launcher_cards") and hasattr(self, "launcher_grid"):
             # Collect visible apps for this env type
             # pip-based env types share the same launcher apps as venv
-            _filter_type = "venv" if env_type in ("uv", "poetry", "rye", "pipx") else env_type
+            _filter_type = "venv" if env_type in ("uv", "poetry", "pipx") else env_type
             visible_apps = [
                 app for app in self.app_definitions
                 if _filter_type in app.get("env_types",
@@ -2764,10 +2743,8 @@ $s.Save()
             "venv":   "pip install",
             "uv":     "uv pip install",
             "poetry": "poetry add",
-            "rye":    "rye add",
             "conda":  "conda install",
             "pipx":   "pipx install",
-            "system_tools": "pip install",
         }
         _prefix = _cmd_prefixes.get(env_type, "pip install")
         if hasattr(self, "_preset_cards"):
@@ -2997,10 +2974,8 @@ $s.Save()
             "venv": backend.upper() if backend else "PIP",
             "uv": "UV",
             "poetry": "Poetry",
-            "rye": "Rye",
             "pipx": "pipx",
             "conda": "Conda",
-            "system_tools": "Tools",
         }
         backend_display = _backend_names.get(_env_type, backend.upper() if backend else "PIP")
         self.env_backend_label.setText(f"⚙️ {backend_display}")
@@ -3412,13 +3387,12 @@ $s.Save()
         _env_type = getattr(self, "_current_env_type", "venv")
         _install_cmds = {
             "venv": "pip install {packages}", "uv": "uv pip install {packages}",
-            "poetry": "poetry add {packages}", "rye": "rye add {packages}",
+            "poetry": "poetry add {packages}",
             "conda": "conda install {packages}", "pipx": "pipx install {packages}",
-            "system_tools": "pip install {packages}",
         }
         _uninstall_cmds = {
             "venv": "pip uninstall -y {packages}", "uv": "uv pip uninstall {packages}",
-            "poetry": "poetry remove {packages}", "rye": "rye remove {packages}",
+            "poetry": "poetry remove {packages}",
             "conda": "conda remove {packages}", "pipx": "pipx uninstall {packages}",
         }
         cmds = []
@@ -3518,10 +3492,8 @@ $s.Save()
             "venv":   "pip install {packages}",
             "uv":     "uv pip install {packages}",
             "poetry": "poetry add {packages}",
-            "rye":    "rye add {packages}",
             "conda":  "conda install {packages}",
             "pipx":   "pipx install {packages}",
-            "system_tools": "pip install {packages}",
         }
         _cmd_template = _install_cmds.get(_env_type, COMMAND_HINTS["install"])
         cmd = _cmd_template.format(packages=" ".join(packages))
@@ -3559,8 +3531,19 @@ $s.Save()
 
             self.current_worker = WorkerThread(_do_conda_install)
         elif _env_type == "pipx":
-            # Use pipx install for each package
+            # Use pipx install for each package — with selected Python from marker
             _pkgs = list(packages)
+            _pipx_python = None
+            if self.pip_manager and self.pip_manager.venv_path:
+                _marker = self.pip_manager.venv_path / ".venvstudio_env"
+                if _marker.exists():
+                    try:
+                        import json as _json
+                        with open(_marker) as _mf:
+                            _mdata = _json.load(_mf)
+                        _pipx_python = _mdata.get("python_path", "")
+                    except Exception:
+                        pass
 
             def _do_pipx_install(callback=None):
                 import subprocess, sys
@@ -3570,9 +3553,11 @@ $s.Save()
                 for pkg in _pkgs:
                     if callback:
                         callback(f"pipx install {pkg}...")
+                    cmd = [sys.executable, "-m", "pipx", "install", pkg]
+                    if _pipx_python:
+                        cmd += ["--python", _pipx_python]
                     r = subprocess.run(
-                        [sys.executable, "-m", "pipx", "install", pkg],
-                        capture_output=True, text=True, timeout=300,
+                        cmd, capture_output=True, text=True, timeout=300,
                         **subprocess_args()
                     )
                     if r.returncode == 0:
@@ -3580,10 +3565,7 @@ $s.Save()
                     else:
                         failed.append(pkg)
                 if failed:
-                    _err_details = []
-                    for pkg in failed:
-                        _err_details.append(pkg)
-                    return (False, f"pipx install failed for: {', '.join(_err_details)}")
+                    return (False, f"pipx install failed for: {', '.join(failed)}")
                 return (True, f"pipx installed: {', '.join(installed)}")
 
             self.current_worker = WorkerThread(_do_pipx_install)
@@ -3629,10 +3611,8 @@ $s.Save()
                 "venv":   "pip install",
                 "uv":     "uv pip install",
                 "poetry": "poetry add",
-                "rye":    "rye add",
                 "conda":  "conda install",
                 "pipx":   "pipx install",
-                "system_tools": "pip install",
             }
             _prefix = _cmd_prefixes.get(_env_type, "pip install")
             cmd = f"{_prefix} {' '.join(cleaned)}"
@@ -3759,7 +3739,6 @@ $s.Save()
             "venv":   "pip uninstall -y {packages}",
             "uv":     "uv pip uninstall {packages}",
             "poetry": "poetry remove {packages}",
-            "rye":    "rye remove {packages}",
             "conda":  "conda remove {packages}",
             "pipx":   "pipx uninstall {packages}",
         }
@@ -3784,7 +3763,6 @@ $s.Save()
                 "venv": "pip freeze > requirements.txt",
                 "uv": "uv pip freeze > requirements.txt",
                 "poetry": "poetry export -f requirements.txt",
-                "rye": "rye list > requirements.txt",
                 "conda": "conda list --export > requirements.txt",
             }.get(getattr(self, "_current_env_type", "venv"), COMMAND_HINTS["freeze"]))
             if success:
@@ -4039,7 +4017,6 @@ dependencies:
                 "venv": "pip install -r requirements.txt",
                 "uv": "uv pip install -r requirements.txt",
                 "poetry": "poetry install",
-                "rye": "rye sync",
                 "conda": "conda install --file requirements.txt",
             }.get(getattr(self, "_current_env_type", "venv"), COMMAND_HINTS["import_req"]))
             self._set_busy(True)
@@ -4060,9 +4037,8 @@ dependencies:
         _env_type = getattr(self, "_current_env_type", "venv")
         _prefixes = {
             "venv": "pip install", "uv": "uv pip install",
-            "poetry": "poetry add", "rye": "rye add",
+            "poetry": "poetry add",
             "conda": "conda install", "pipx": "pipx install",
-            "system_tools": "pip install",
         }
         _prefix = _prefixes.get(_env_type, "pip install")
 
@@ -4112,9 +4088,8 @@ dependencies:
         _env_type = getattr(self, "_current_env_type", "venv")
         _prefixes = {
             "venv": "pip install", "uv": "uv pip install",
-            "poetry": "poetry add", "rye": "rye add",
+            "poetry": "poetry add",
             "conda": "conda install", "pipx": "pipx install",
-            "system_tools": "pip install",
         }
         _prefix = _prefixes.get(_env_type, "pip install")
 
@@ -4419,10 +4394,8 @@ dependencies:
             "venv":   "pip install",
             "uv":     "uv pip install",
             "poetry": "poetry add",
-            "rye":    "rye add",
             "conda":  "conda install",
             "pipx":   "pipx install",
-            "system_tools": "pip install",
         }
         _prefix = _cmd_prefixes.get(_env_type, "pip install")
         cmd = f"{_prefix} {' '.join(packages)}"

@@ -31,9 +31,9 @@ Or download the standalone binary — **no Python required:**
 ## ✨ Features
 
 ### 🗂️ Environment Management
-- **7 environment types** — Python venv, uv, Poetry, Rye, pipx, Conda (micromamba), Tool Environment
+- **5 environment types** — Python venv, uv, Poetry, Conda (micromamba), pipx
 - Create, rename, clone, delete virtual environments with a modern GUI
-- **Type** column — see each env's package manager at a glance (🐍 venv, ⚡ uv, 📜 Poetry, 🌾 Rye, 📦 pipx, 🦎 Conda, 🗂 Tools)
+- **Type** column — see each env's package manager at a glance (🐍 venv, ⚡ uv, 📜 Poetry, 🦎 Conda, 📦 pipx)
 - **Runtime** column — actual Python version detected from each environment's binary
 - Auto-detect existing environments on disk at startup
 - Per-environment cache — instant load, no subprocess delays
@@ -48,10 +48,8 @@ Or download the standalone binary — **no Python required:**
 | 🐍 | **Python venv** | `python -m venv` | Standard virtual environment with pip |
 | ⚡ | **uv** | `uv venv` | Rust-powered — 10–100× faster than pip |
 | 📜 | **Poetry** | `poetry new` | Dependency management with lock file |
-| 🌾 | **Rye** | `rye init` | All-in-one Python toolchain |
 | 📦 | **pipx** | `pipx install` | Isolated CLI applications |
 | 🦎 | **Conda** | micromamba | conda-forge — R, RStudio, jamovi, JASP, DBeaver and 25,000+ packages |
-| 🗂 | **Tool Environment** | — | Portable system tools (no Python required) |
 
 ### 📦 Package Management
 - **Installed** tab — filter, select, uninstall, export, import packages
@@ -63,7 +61,7 @@ Or download the standalone binary — **no Python required:**
 ### 🚀 Quick Launch
 - Sidebar shows installed apps for the active environment
 - **13+ one-click launchers** — see full list below
-- **System tools** — R, RStudio, Ollama, DBeaver, jamovi, JASP via Conda or portable install
+- **System tools** — R, RStudio, Ollama, DBeaver, jamovi, JASP via Conda
 - **Jupyter Working Directory** — configurable (Home / Env Folder / Custom Path)
 - **Create Desktop Shortcut** for any app
 - Instant sync between sidebar dropdown, environment table, and package panel
@@ -110,7 +108,7 @@ Or download the standalone binary — **no Python required:**
 
 ### 🛠️ System Tools (Conda / Portable)
 
-*Available in Conda and Tool environments — installed via conda-forge or as portable binaries.*
+*Available in Conda environments — installed via conda-forge or detected on system.*
 
 | Tool | Description | Install Method |
 |:-----|:-----------|:--------------|

@@ -8,11 +8,9 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QComboBox, QCheckBox, QPushButton, QFileDialog, QMessageBox,
-    QGroupBox, QFormLayout, QProgressBar, QSizePolicy,
+    QGroupBox, QFormLayout, QProgressBar, QSizePolicy, QWidget,
 )
 from PySide6.QtCore import Qt, Signal, QThread
-
-from src.utils.platform_utils import find_system_pythons
 
 class CreateWorker(QThread):
     """Worker thread for async environment creation."""
@@ -61,14 +59,84 @@ class EnvCreateDialog(QDialog):
         super().__init__(parent)
         self.venv_manager = venv_manager
         self.config = config_manager
-        self.pythons = find_system_pythons()
+        self.pythons = []   # populated async after show
         self.worker = None
 
         self.setWindowTitle("Create New Environment")
-        self.setMinimumSize(920, 420)  # min size, not fixed — allows DPI scaling
-        self.resize(960, 460)
+        self.setMinimumSize(980, 560)
+        self.resize(1040, 600)
         self.setModal(True)
         self._setup_ui()
+
+        # Load pythons async so dialog opens instantly
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(100, self._load_pythons_async)
+
+    def _load_pythons_async(self):
+        """Populate python combo in background after dialog is shown."""
+        from src.utils.platform_utils import find_system_pythons
+        self.pythons = find_system_pythons()
+        self._populate_python_combo()
+
+    def _populate_python_combo(self):
+        """Fill python combo with found Python installations."""
+        import os, shutil, sys, subprocess
+        self.python_combo.clear()
+
+        seen_real = {}
+        for version, path in self.pythons:
+            norm = os.path.normpath(path)
+            try:
+                real = os.path.realpath(path)
+            except OSError:
+                real = norm
+            if real in seen_real:
+                if len(norm) < len(seen_real[real][1]):
+                    seen_real[real] = (version, norm)
+            else:
+                seen_real[real] = (version, norm)
+
+        listed_paths = set()
+        for _real, (version, norm) in seen_real.items():
+            self.python_combo.addItem(f"Python {version}", norm)
+            listed_paths.add(os.path.normcase(norm))
+
+        # System Default — insert at top
+        _sys_py = shutil.which("python") or shutil.which("python3") or sys.executable
+        _sys_ver = ""
+        try:
+            r = subprocess.run([_sys_py, "--version"], capture_output=True,
+                               text=True, timeout=3)
+            _sys_ver = (r.stdout.strip() or r.stderr.strip()).replace("Python ", "")
+        except Exception:
+            pass
+        _sys_label = f"System Default (Python {_sys_ver})" if _sys_ver else "System Default"
+        self.python_combo.insertItem(0, _sys_label, "")
+        self.python_combo.setCurrentIndex(0)
+
+        for entry in self.config.get("custom_pythons", []):
+            raw_path = entry.get("path", "")
+            if not raw_path:
+                continue
+            norm = os.path.normpath(raw_path)
+            if os.path.normcase(norm) in listed_paths:
+                continue
+            listed_paths.add(os.path.normcase(norm))
+            self.python_combo.addItem(f"Python {entry.get('version','?')} (Custom)", norm)
+
+        try:
+            from src.core.python_downloader import get_installed_pythons
+            for py in get_installed_pythons():
+                exe_path = os.path.normpath(str(py["python_exe"]))
+                if os.path.normcase(exe_path) in listed_paths:
+                    continue
+                listed_paths.add(os.path.normcase(exe_path))
+                self.python_combo.addItem(
+                    f"Python {py.get('version','?')} (Downloaded)", exe_path)
+        except Exception:
+            pass
+
+        self._on_python_changed(0)
 
     def _setup_ui(self):
         root = QVBoxLayout(self)
@@ -142,6 +210,7 @@ class EnvCreateDialog(QDialog):
         )
         self.env_type_combo.currentIndexChanged.connect(self._on_env_type_changed)
         form_layout.addRow("Type:", self.env_type_combo)
+        # ─────────────────────────────────────────────────────────────────
 
         # Pre-select default env type from settings
         try:
@@ -190,74 +259,9 @@ class EnvCreateDialog(QDialog):
 
         self.python_combo = QComboBox()
         self.python_combo.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.python_combo.addItem("Loading Python installations...", "")
 
-        import os
-        seen_real = {}
-        for version, path in self.pythons:
-            norm = os.path.normpath(path)
-            try:
-                real = os.path.realpath(path)
-            except OSError:
-                real = norm
-            if real in seen_real:
-                if len(norm) < len(seen_real[real][1]):
-                    seen_real[real] = (version, norm)
-            else:
-                seen_real[real] = (version, norm)
-
-        listed_paths = set()
-        first_version = None
-        for _real, (version, norm) in seen_real.items():
-            self.python_combo.addItem(f"Python {version}", norm)
-            listed_paths.add(os.path.normcase(norm))
-            if first_version is None:
-                first_version = version
-
-        # System Default — en başa ekle
-        import shutil, sys, subprocess
-        _sys_py = shutil.which("python") or shutil.which("python3") or sys.executable
-        _sys_ver = ""
-        try:
-            r = subprocess.run([_sys_py, "--version"], capture_output=True, text=True, timeout=3)
-            _sys_ver = (r.stdout.strip() or r.stderr.strip()).replace("Python ", "")
-        except Exception:
-            pass
-        _sys_label = f"System Default (Python {_sys_ver})" if _sys_ver else "System Default"
-        self.python_combo.insertItem(0, _sys_label, "")
-        self.python_combo.setCurrentIndex(0)
-
-        custom_pythons = self.config.get("custom_pythons", [])
-        print(f"[DEBUG] EnvDialog custom_pythons from config: {custom_pythons}")
-        for entry in custom_pythons:
-            raw_path = entry.get("path", "")
-            if not raw_path:
-                continue
-            norm = os.path.normpath(raw_path)
-            norm_case = os.path.normcase(norm)
-            ver = entry.get("version", "?")
-            if norm_case in listed_paths:
-                print(f"[DEBUG] Skipped duplicate: {norm}")
-                continue
-            listed_paths.add(norm_case)
-            self.python_combo.addItem(f"Python {ver} (Custom)", norm)
-            print(f"[DEBUG] Added custom python to env dialog: {ver} -> {norm}")
-
-        try:
-            from src.core.python_downloader import get_installed_pythons
-            for py in get_installed_pythons():
-                exe_path = os.path.normpath(str(py["python_exe"]))
-                exe_case = os.path.normcase(exe_path)
-                if exe_case in listed_paths:
-                    continue
-                listed_paths.add(exe_case)
-                ver = py.get("version", "?")
-                self.python_combo.addItem(f"Python {ver} (Downloaded)", exe_path)
-                print(f"[DEBUG] Added downloaded python to env dialog: {ver} -> {exe_path}")
-        except Exception as e:
-            print(f"[DEBUG] Could not load downloaded pythons: {e}")
-
-        # Python row — back in form_layout but using QLabel widget (not string)
-        # so setVisible on the label works reliably
+        # Python row
         from PySide6.QtWidgets import QWidget as _QW
         self.python_label_widget = QLabel("Python:")
 
@@ -276,7 +280,46 @@ class EnvCreateDialog(QDialog):
         form_layout.addRow(self.python_label_widget, _py_inner)
 
         form_group.setLayout(form_layout)
+        form_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         left.addWidget(form_group)
+
+        # ── Tool status note (uv/poetry/pipx only) ────────────────────────
+        self.tool_status_widget = QWidget()
+        _ts_layout = QHBoxLayout(self.tool_status_widget)
+        _ts_layout.setContentsMargins(4, 0, 4, 0)
+        _ts_layout.setSpacing(8)
+
+        self.tool_status_label = QLabel("")
+        self.tool_status_label.setStyleSheet("font-size: 11px; color: #f9e2af;")
+        _ts_layout.addWidget(self.tool_status_label, 1)
+
+        self.tool_install_user_btn = QPushButton("Install for User")
+        self.tool_install_user_btn.setObjectName("secondary")
+        self.tool_install_user_btn.setFixedHeight(26)
+        self.tool_install_user_btn.setFocusPolicy(Qt.NoFocus)
+        self.tool_install_user_btn.setDefault(False)
+        self.tool_install_user_btn.setAutoDefault(False)
+        self.tool_install_user_btn.setVisible(False)
+        self.tool_install_user_btn.clicked.connect(
+            lambda: self._install_tool("user"))
+        _ts_layout.addWidget(self.tool_install_user_btn)
+
+        self.tool_install_system_btn = QPushButton("Install for System 🔒")
+        self.tool_install_system_btn.setObjectName("secondary")
+        self.tool_install_system_btn.setFixedHeight(26)
+        self.tool_install_system_btn.setFocusPolicy(Qt.NoFocus)
+        self.tool_install_system_btn.setDefault(False)
+        self.tool_install_system_btn.setAutoDefault(False)
+        self.tool_install_system_btn.setVisible(False)
+        self.tool_install_system_btn.setToolTip(
+            "Install system-wide — requires Administrator privileges")
+        self.tool_install_system_btn.clicked.connect(
+            lambda: self._install_tool("system"))
+        _ts_layout.addWidget(self.tool_install_system_btn)
+
+        self.tool_status_widget.setVisible(False)
+        left.addWidget(self.tool_status_widget)
+        # ─────────────────────────────────────────────────────────────────
 
         self.python_combo.currentIndexChanged.connect(self._on_python_changed)
         self._on_python_changed(0)  # İlk seçimi göster
@@ -293,7 +336,7 @@ class EnvCreateDialog(QDialog):
         left.addWidget(self.options_group)
         left.addStretch()
 
-        body.addLayout(left, stretch=4)
+        body.addLayout(left, stretch=5)
 
         # RIGHT: terminal (always visible, never causes resize)
         right_group = QGroupBox("Progress")
@@ -389,6 +432,16 @@ class EnvCreateDialog(QDialog):
         if hasattr(self, "options_group"):
             self.options_group.setVisible(is_pip_like)
 
+        # ── Tool status note (uv / poetry / pipx only) ───────────────────
+        _tool_types = ("uv", "poetry", "pipx")
+        _show_tool_row = env_type in _tool_types
+        if hasattr(self, "tool_status_widget"):
+            self.tool_status_widget.setVisible(_show_tool_row)
+        if _show_tool_row:
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(50, lambda: self._refresh_tool_path_ui(env_type))
+        # ─────────────────────────────────────────────────────────────────
+
         # Subtitles per env type
         subtitles = {
             "venv":   "Set up a fresh Python virtual environment",
@@ -415,16 +468,18 @@ class EnvCreateDialog(QDialog):
             "poetry": (
                 "📜  Poetry manages dependencies and\n"
                 "virtual environments together.\n\n"
-                "Poetry will be installed automatically\n"
-                "if not already available.\n\n"
-                "Equivalent: poetry new <name>"
+                "💡  Equivalent terminal commands:\n\n"
+                "$ pip install poetry\n"
+                "$ poetry new <name>\n"
+                "$ cd <name> && poetry install"
             ),
             "pipx": (
                 "📦  pipx installs Python CLI apps\n"
                 "into isolated environments.\n\n"
-                "Enter the package name (e.g. 'httpie',\n"
-                "'black', 'poetry', 'ruff').\n\n"
-                "Equivalent: pipx install <package>"
+                "💡  Equivalent terminal commands:\n\n"
+                "$ pip install --user pipx\n"
+                "$ pipx install <package>\n"
+                "$ pipx list"
             ),
             "conda": (
                 "🦎  A Conda Environment will be created\n"
@@ -445,6 +500,181 @@ class EnvCreateDialog(QDialog):
         else:
             py = shutil.which("python") or shutil.which("python3") or sys.executable
             self.python_path_label.setText(f"📍 {py}")
+
+    def _refresh_tool_path_ui(self, env_type: str):
+        """Check if tool is available and update status note."""
+        if not hasattr(self, "tool_status_label"):
+            return
+        found = self._find_tool_exe(env_type)
+        # Auto-register if found via extended search
+        if found:
+            try:
+                from src.core.tool_registry import ToolRegistry
+                ToolRegistry().register(env_type, found, installed_by="system")
+            except Exception:
+                pass
+        if found:
+            self.tool_status_label.setText(f"✅ {env_type} found")
+            self.tool_status_label.setStyleSheet("font-size: 11px; color: #a6e3a1;")
+            if hasattr(self, "tool_install_user_btn"):
+                self.tool_install_user_btn.setVisible(False)
+            if hasattr(self, "tool_install_system_btn"):
+                self.tool_install_system_btn.setVisible(False)
+        else:
+            self.tool_status_label.setText(f"⚠️ {env_type} not found")
+            self.tool_status_label.setStyleSheet("font-size: 11px; color: #f9e2af;")
+            if hasattr(self, "tool_install_user_btn"):
+                self.tool_install_user_btn.setText(f"Install {env_type} (User)")
+                self.tool_install_user_btn.setVisible(True)
+            if hasattr(self, "tool_install_system_btn"):
+                self.tool_install_system_btn.setText(f"Install {env_type} (System 🔒)")
+                self.tool_install_system_btn.setVisible(True)
+
+    @staticmethod
+    def _find_tool_exe(tool: str) -> str:
+        """Search for a tool executable in all known locations. Returns path or ''."""
+        import shutil, os, sys, site
+
+        candidates = []
+
+        # 1. shutil.which (current PATH)
+        for n in (tool, tool + ".exe"):
+            w = shutil.which(n)
+            if w:
+                candidates.append(w)
+
+        # 2. ToolRegistry
+        try:
+            from src.core.tool_registry import ToolRegistry
+            rp = ToolRegistry().get_path(tool)
+            if rp:
+                candidates.append(rp)
+        except Exception:
+            pass
+
+        # 3. User Scripts/bin (site.getuserbase)
+        try:
+            ub = site.getuserbase()
+            scripts = os.path.join(ub,
+                "Scripts" if sys.platform == "win32" else "bin")
+            for n in (tool, tool + ".exe"):
+                candidates.append(os.path.join(scripts, n))
+        except Exception:
+            pass
+
+        # 4. Scripts next to sys.executable
+        py_scripts = os.path.join(os.path.dirname(sys.executable),
+            "Scripts" if sys.platform == "win32" else "bin")
+        for n in (tool, tool + ".exe"):
+            candidates.append(os.path.join(py_scripts, n))
+
+        # 5. Windows: %APPDATA%\Python\PythonXY\Scripts
+        if sys.platform == "win32":
+            py_appdata = os.path.join(os.environ.get("APPDATA", ""), "Python")
+            if os.path.isdir(py_appdata):
+                for sub in os.listdir(py_appdata):
+                    s = os.path.join(py_appdata, sub, "Scripts")
+                    for n in (tool, tool + ".exe"):
+                        candidates.append(os.path.join(s, n))
+
+        return next((c for c in candidates if c and os.path.isfile(c)), "")
+
+    def _install_tool(self, scope: str = "user"):
+        """Install the missing tool via pip — user install or system with UAC."""
+        env_type = self.env_type_combo.currentData() if hasattr(self, "env_type_combo") else ""
+        if not env_type:
+            return
+        import sys
+        _pip_pkgs = {"uv": "uv", "poetry": "poetry", "pipx": "pipx"}
+        pkg = _pip_pkgs.get(env_type, env_type)
+        python_path = self.python_combo.currentData() or sys.executable
+
+        # Disable both buttons while installing
+        for btn_name in ("tool_install_user_btn", "tool_install_system_btn"):
+            btn = getattr(self, btn_name, None)
+            if btn:
+                btn.setEnabled(False)
+        if hasattr(self, "tool_status_label"):
+            self.tool_status_label.setText(
+                f"⏳ Installing {env_type} ({'user' if scope == 'user' else 'system-wide'})...")
+            self.tool_status_label.setStyleSheet("font-size: 11px; color: #89b4fa;")
+
+        def _do_install(callback=None):
+            import subprocess, shutil, os, site
+
+            if scope == "system":
+                if sys.platform == "win32":
+                    try:
+                        import ctypes
+                        args = f'-m pip install {pkg} -q'
+                        ret = ctypes.windll.shell32.ShellExecuteW(
+                            None, "runas", python_path, args, None, 1)
+                        if ret <= 32:
+                            return False, f"UAC elevation failed (code {ret})"
+                        import time; time.sleep(4)
+                    except Exception as e:
+                        return False, f"UAC error: {e}"
+                else:
+                    r = subprocess.run(
+                        ["sudo", python_path, "-m", "pip", "install", pkg, "-q"],
+                        capture_output=True, text=True, timeout=120)
+                    if r.returncode != 0:
+                        return False, (r.stderr or r.stdout or "sudo install failed")[:200]
+            else:
+                r = subprocess.run(
+                    [python_path, "-m", "pip", "install", pkg, "--user", "-q"],
+                    capture_output=True, text=True, timeout=120)
+                if r.returncode != 0:
+                    return False, (r.stderr or r.stdout or "pip install failed")[:200]
+
+            # For pipx: run ensurepath to register Scripts dir
+            if env_type == "pipx":
+                try:
+                    subprocess.run(
+                        [python_path, "-m", "pipx", "ensurepath"],
+                        capture_output=True, text=True, timeout=30)
+                except Exception:
+                    pass
+
+            # Use shared search helper (covers PATH, registry, APPDATA)
+            found = EnvCreateDialog._find_tool_exe(env_type)
+            if found:
+                return True, found
+            return False, (
+                f"{env_type} installed but not found in PATH.\n"
+                f"Run: python -m {env_type} ensurepath (if supported)\n"
+                f"Then restart VenvStudio."
+            )
+
+
+        def _on_done(success, result):
+            if success:
+                if hasattr(self, "tool_status_label"):
+                    self.tool_status_label.setText(f"✅ {env_type} installed")
+                    self.tool_status_label.setStyleSheet("font-size: 11px; color: #a6e3a1;")
+                for btn_name in ("tool_install_user_btn", "tool_install_system_btn"):
+                    btn = getattr(self, btn_name, None)
+                    if btn:
+                        btn.setVisible(False)
+                try:
+                    from src.core.tool_registry import ToolRegistry
+                    ToolRegistry().register(env_type, result, installed_by="venvstudio")
+                except Exception:
+                    pass
+            else:
+                if hasattr(self, "tool_status_label"):
+                    self.tool_status_label.setText(f"❌ {result}")
+                    self.tool_status_label.setStyleSheet("font-size: 11px; color: #f38ba8;")
+                for btn_name in ("tool_install_user_btn", "tool_install_system_btn"):
+                    btn = getattr(self, btn_name, None)
+                    if btn:
+                        btn.setEnabled(True)
+
+        from src.gui.package_panel import WorkerThread
+        _w = WorkerThread(_do_install)
+        _w.finished.connect(_on_done)
+        _w.start()
+        self._install_worker = _w
 
     def _change_location(self):
         directory = QFileDialog.getExistingDirectory(
@@ -955,7 +1185,8 @@ class EnvCreateDialog(QDialog):
             if reply == QMessageBox.Yes:
                 self.status_label.setText("⛔ Cancelling...")
                 self.worker.cancel()
-                self.worker.wait(5000)
+                self.worker.quit()          # ask thread to stop
+                self.worker.wait(1000)      # max 1s — don't block UI
                 self._reset_ui()
                 self.status_label.setText("⛔ Creation cancelled")
         else:
@@ -973,5 +1204,6 @@ class EnvCreateDialog(QDialog):
     def closeEvent(self, event):
         if self.worker and self.worker.isRunning():
             self.worker.cancel()
-            self.worker.wait(3000)
+            self.worker.quit()
+            self.worker.wait(500)   # max 0.5s — accept event regardless
         super().closeEvent(event)

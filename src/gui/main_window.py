@@ -275,6 +275,14 @@ class MainWindow(QMainWindow):
         new_env_action.triggered.connect(self._create_env)
         file_menu.addAction(new_env_action)
         file_menu.addSeparator()
+
+        # ── Recent Environments submenu ───────────────────────────────────
+        self._recent_menu = QMenu("🕐 Recent Environments", self)
+        file_menu.addMenu(self._recent_menu)
+        self._populate_recent_menu()
+        file_menu.addSeparator()
+        # ─────────────────────────────────────────────────────────────────
+
         quit_action = QAction(f"❌ {tr('quit')}", self)
         quit_action.setShortcut("Ctrl+Q")
         quit_action.triggered.connect(self.close)
@@ -319,6 +327,100 @@ class MainWindow(QMainWindow):
         issues_action = QAction("🐛 Report a Bug", self)
         issues_action.triggered.connect(lambda: __import__("webbrowser").open("https://github.com/bayramkotan/VenvStudio/issues"))
         help_menu.addAction(issues_action)
+
+    def _populate_recent_menu(self):
+        """Rebuild the Recent Environments submenu from recent_envs.json."""
+        self._recent_menu.clear()
+        try:
+            from src.core.recent_envs import RecentEnvsManager
+            mgr = RecentEnvsManager()
+            entries = mgr.load()
+        except Exception:
+            entries = []
+
+        if not entries:
+            empty_action = QAction("  (No recent environments)", self)
+            empty_action.setEnabled(False)
+            self._recent_menu.addAction(empty_action)
+            return
+
+        # TYPE icons
+        _icons = {
+            "venv": "🐍", "uv": "⚡", "poetry": "📜",
+            "pipx": "📦", "conda": "🦎",
+        }
+        for entry in entries:
+            name       = entry.get("name", "?")
+            path       = entry.get("path", "")
+            env_type   = entry.get("type", "venv")
+            last_opened = entry.get("last_opened", "")[:16].replace("T", "  ")
+            icon       = _icons.get(env_type, "🐍")
+            label      = f"{icon} {name}   —   {last_opened}"
+            action = QAction(label, self)
+            action.setToolTip(path)
+            action.triggered.connect(
+                lambda checked=False, p=path, n=name: self._open_recent_env(n, p)
+            )
+            self._recent_menu.addAction(action)
+
+        self._recent_menu.addSeparator()
+        clear_action = QAction("🗑️ Clear Recent List", self)
+        clear_action.triggered.connect(self._clear_recent_envs)
+        self._recent_menu.addAction(clear_action)
+
+    def _open_recent_env(self, name: str, path: str):
+        """Select env in table by path; show Packages panel."""
+        import os
+        # Find row in env table matching this path
+        model = self.env_table.model() if hasattr(self, "env_table") else None
+        if model is None:
+            return
+        for row in range(model.rowCount()):
+            idx = model.index(row, 0)
+            item_path = model.data(idx, Qt.UserRole)  # env path stored as UserRole
+            if item_path and os.path.normcase(str(item_path)) == os.path.normcase(path):
+                self.env_table.selectRow(row)
+                self._on_env_selected(row)
+                # Update recency
+                try:
+                    from src.core.recent_envs import RecentEnvsManager
+                    RecentEnvsManager().touch(name, path)
+                    self._populate_recent_menu()
+                except Exception:
+                    pass
+                return
+        # Env not found in table (deleted) — remove from recent list
+        try:
+            from src.core.recent_envs import RecentEnvsManager
+            RecentEnvsManager().remove(path)
+            self._populate_recent_menu()
+        except Exception:
+            pass
+        from PySide6.QtWidgets import QMessageBox
+        QMessageBox.information(
+            self, "Not Found",
+            f"Environment '{name}' could not be found.\n"
+            f"It may have been deleted or moved.\n\n{path}"
+        )
+
+    def _clear_recent_envs(self):
+        """Clear the recent environments list."""
+        try:
+            from src.core.recent_envs import RecentEnvsManager
+            RecentEnvsManager().clear()
+            self._populate_recent_menu()
+        except Exception:
+            pass
+
+    def _track_recent(self, name: str, path: str, env_type: str):
+        """Write recent env entry and refresh menu (called deferred)."""
+        try:
+            from src.core.recent_envs import RecentEnvsManager
+            RecentEnvsManager().touch(name, path, env_type=env_type)
+            if hasattr(self, "_recent_menu"):
+                self._populate_recent_menu()
+        except Exception:
+            pass
 
     def _setup_ui(self):
         central = QWidget()
@@ -964,6 +1066,23 @@ class MainWindow(QMainWindow):
             venv_path = self.venv_manager.base_dir / name
             if venv_path.exists():
                 self.package_panel.set_venv(venv_path)
+                # ── Track in recent envs (deferred — no UI blocking) ─────
+                try:
+                    type_item = self.env_table.item(row, 1)
+                    raw_type = type_item.text().strip() if type_item else "venv"
+                    env_type = "venv"
+                    for k in ("uv", "poetry", "pipx", "conda", "venv"):
+                        if k in raw_type.lower():
+                            env_type = k
+                            break
+                    _vp = str(venv_path)
+                    _nm = name
+                    _et = env_type
+                    from PySide6.QtCore import QTimer
+                    QTimer.singleShot(300, lambda: self._track_recent(_nm, _vp, _et))
+                except Exception:
+                    pass
+                # ─────────────────────────────────────────────────────
 
     def _open_default_env(self):
         """On startup, open default env in Packages if set."""

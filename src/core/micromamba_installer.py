@@ -188,30 +188,63 @@ def create_conda_env(env_path: Path, python_version: str = "",
         specs.append(f"python={python_version}")
     specs.extend(packages)
 
-    channel_args = []
-    for ch in channels:
-        channel_args += ["-c", ch]
+    def _build_args(chs, ssl_verify=True):
+        channel_args = []
+        for ch in chs:
+            channel_args += ["-c", ch]
+        a = [
+            "create",
+            "--prefix", str(env_path),
+            "--yes",
+            "--no-rc",
+            "--override-channels",
+            *channel_args,
+            *specs,
+        ]
+        if not ssl_verify:
+            a.append("--ssl-no-verify")
+        return a
 
-    args = [
-        "create",
-        "--prefix", str(env_path),
-        "--yes",
-        "--no-rc",
-        "--override-channels",
-        *channel_args,
-        *specs,
-    ]
-
+    # Attempt 1: conda-forge with SSL verify
     try:
-        result = _run_micromamba(args, progress_cb, timeout=600)
-        if result.returncode != 0:
-            err = result.stderr[:500] if result.stderr else "Unknown error"
+        result = _run_micromamba(_build_args(channels, ssl_verify=True),
+                                 progress_cb, timeout=600)
+        if result.returncode == 0:
             if progress_cb:
-                progress_cb(f"Error: {err}")
-            return False
+                progress_cb("Conda environment created!")
+            return True
+
+        err = result.stderr or ""
+
+        # Attempt 2: SSL error → retry with --ssl-no-verify
+        if "SSL" in err or "ssl" in err or "certificate" in err.lower():
+            if progress_cb:
+                progress_cb("SSL error detected — retrying with SSL verification disabled...")
+            result = _run_micromamba(_build_args(channels, ssl_verify=False),
+                                     progress_cb, timeout=600)
+            if result.returncode == 0:
+                if progress_cb:
+                    progress_cb("Conda environment created!")
+                return True
+            err = result.stderr or ""
+
+        # Attempt 3: fallback to defaults channel
+        if "conda-forge" in channels:
+            fallback_channels = ["defaults"] + [c for c in channels if c != "conda-forge"]
+            if progress_cb:
+                progress_cb("conda-forge failed — retrying with defaults channel...")
+            result = _run_micromamba(_build_args(fallback_channels, ssl_verify=False),
+                                     progress_cb, timeout=600)
+            if result.returncode == 0:
+                if progress_cb:
+                    progress_cb("Conda environment created!")
+                return True
+            err = result.stderr or ""
+
         if progress_cb:
-            progress_cb(f"Conda environment created!")
-        return True
+            progress_cb(f"Error: {err[:500]}")
+        return False
+
     except subprocess.TimeoutExpired:
         if progress_cb:
             progress_cb("Timed out creating environment")
@@ -227,32 +260,66 @@ def install_conda_packages(env_path: Path, packages: list,
                            progress_cb=None) -> bool:
     """Install packages into an existing conda environment."""
     channels = channels or ["conda-forge"]
-    channel_args = []
-    for ch in channels:
-        channel_args += ["-c", ch]
 
     if progress_cb:
         progress_cb(f"Installing: {', '.join(packages)}...")
 
-    args = [
-        "install",
-        "--prefix", str(env_path),
-        "--yes",
-        "--no-rc",
-        "--override-channels",
-        *channel_args,
-        *packages,
-    ]
+    def _build_args(chs, ssl_verify=True):
+        channel_args = []
+        for ch in chs:
+            channel_args += ["-c", ch]
+        a = [
+            "install",
+            "--prefix", str(env_path),
+            "--yes",
+            "--no-rc",
+            "--override-channels",
+            *channel_args,
+            *packages,
+        ]
+        if not ssl_verify:
+            a.append("--ssl-no-verify")
+        return a
+
     try:
-        result = _run_micromamba(args, progress_cb, timeout=600)
-        if result.returncode != 0:
-            err = result.stderr[:500] if result.stderr else "Unknown error"
+        result = _run_micromamba(_build_args(channels, ssl_verify=True),
+                                 progress_cb, timeout=600)
+        if result.returncode == 0:
             if progress_cb:
-                progress_cb(f"Install failed: {err}")
-            return False
+                progress_cb(f"Installed: {', '.join(packages)}")
+            return True
+
+        err = result.stderr or ""
+
+        # SSL retry
+        if "SSL" in err or "ssl" in err or "certificate" in err.lower():
+            if progress_cb:
+                progress_cb("SSL error — retrying with SSL verification disabled...")
+            result = _run_micromamba(_build_args(channels, ssl_verify=False),
+                                     progress_cb, timeout=600)
+            if result.returncode == 0:
+                if progress_cb:
+                    progress_cb(f"Installed: {', '.join(packages)}")
+                return True
+            err = result.stderr or ""
+
+        # Fallback channel
+        if "conda-forge" in channels:
+            fallback = ["defaults"] + [c for c in channels if c != "conda-forge"]
+            if progress_cb:
+                progress_cb("Retrying with defaults channel...")
+            result = _run_micromamba(_build_args(fallback, ssl_verify=False),
+                                     progress_cb, timeout=600)
+            if result.returncode == 0:
+                if progress_cb:
+                    progress_cb(f"Installed: {', '.join(packages)}")
+                return True
+            err = result.stderr or ""
+
         if progress_cb:
-            progress_cb(f"Installed: {', '.join(packages)}")
-        return True
+            progress_cb(f"Install failed: {err[:500]}")
+        return False
+
     except subprocess.TimeoutExpired:
         if progress_cb:
             progress_cb("Install timed out")

@@ -4144,8 +4144,14 @@ try {{
         ))
 
         grp = QGroupBox()
+        grp.setStyleSheet(
+            f"QGroupBox {{ border: 1px solid {self._c().get('border', '#444')}; "
+            f"border-radius: 6px; padding: 8px; margin-top: 4px; "
+            f"background: {self._c().get('bg_secondary', '#1e1e2e')}; }}"
+        )
         vl = QVBoxLayout(grp)
         vl.setSpacing(8)
+        vl.setContentsMargins(10, 10, 10, 10)
 
         # ── Python selector row ──────────────────────────────────────────
         sel_row = QHBoxLayout()
@@ -4480,12 +4486,22 @@ try {{
             print(f"[TC] _done: {len(rows)} rows loaded for {_py[:40]}")
             from PySide6.QtGui import QColor
             from PySide6.QtWidgets import QTableWidgetItem
+            import os as _os
+            _py_scripts = _os.path.dirname(_py)  # Python's own Scripts/bin dir
             for row, item in enumerate(rows):
                 path, ver = item[0], item[1]
                 ok2 = bool(path)
+                # Detect if tool is global (not in selected Python's Scripts dir)
+                _is_global = (ok2 and
+                    _py_scripts and
+                    not path.lower().startswith(_py_scripts.lower()))
                 # col 1: Status
-                st_text = "✅ Installed" if ok2 else "❌ Not found"
-                st_color = "#a6e3a1" if ok2 else "#f38ba8"
+                if ok2:
+                    st_text = "🌐 Global" if _is_global else "✅ Installed"
+                    st_color = "#89b4fa" if _is_global else "#a6e3a1"
+                else:
+                    st_text = "❌ Not found"
+                    st_color = "#f38ba8"
                 si = QTableWidgetItem(st_text)
                 si.setForeground(QColor(st_color))
                 si.setData(256, path)
@@ -4522,37 +4538,117 @@ try {{
             py_exe = sys.executable
         if si: si.setText("⏳ Installing..."); si.setForeground(QColor("#89b4fa"))
 
-        def _do(callback=None):
-            import subprocess, time
-            if scope=="system" and sys.platform=="win32":
-                try:
-                    import ctypes
-                    ret=ctypes.windll.shell32.ShellExecuteW(
-                        None,"runas",py_exe,f"-m pip install {pkg} -q",None,1)
-                    if ret<=32: return False,f"UAC failed ({ret})"
-                    time.sleep(4)
-                except Exception as e: return False,str(e)
-            elif scope=="system":
-                r=subprocess.run(["sudo",py_exe,"-m","pip","install",pkg,"-q"],
-                    capture_output=True,text=True,timeout=120)
-                if r.returncode!=0: return False,(r.stderr or "failed")[:200]
-            else:
-                r=subprocess.run([py_exe,"-m","pip","install",pkg,"--user","-q"],
-                    capture_output=True,text=True,timeout=120)
-                if r.returncode!=0: return False,(r.stderr or "failed")[:200]
-            if tool=="pipx":
-                try: subprocess.run([py_exe,"-m","pipx","ensurepath"],
-                    capture_output=True,timeout=30)
-                except Exception: pass
-            return True,"ok"
+        # Pre-import subprocess_args outside worker thread
+        try:
+            from src.utils.platform_utils import subprocess_args as _spa_fn
+        except Exception:
+            _spa_fn = lambda: {}
 
-        def _done(ok,res):
+        def _do(callback=None):
+            import subprocess, time, shutil as _sh
+            _spa = _spa_fn
+            _is_win = sys.platform == "win32"
+            _is_linux = sys.platform == "linux"
+            _home = os.path.expanduser("~")
+
+            # Build install command based on tool and scope
+            # uv, poetry, pipx are standalone tools — install via pipx or pip --user
+            _standalone = tool in ("uv", "poetry", "pipx")
+
+            if _is_win:
+                if scope == "system":
+                    try:
+                        import ctypes
+                        ret = ctypes.windll.shell32.ShellExecuteW(
+                            None, "runas", py_exe, f"-m pip install {pkg} -q", None, 1)
+                        if ret <= 32: return False, f"UAC failed ({ret})"
+                        time.sleep(4)
+                    except Exception as e:
+                        return False, str(e)
+                else:
+                    # User install
+                    r = subprocess.run(
+                        [py_exe, "-m", "pip", "install", pkg, "--user", "-q"],
+                        capture_output=True, text=True, timeout=120,
+                        cwd=_home, **_spa())
+                    if r.returncode != 0:
+                        return False, (r.stderr or r.stdout or "failed")[:300]
+            else:
+                # Linux / macOS
+                if scope == "system":
+                    # Try pkexec pip install, then sudo pip install --break-system-packages
+                    _pip_cmd = [py_exe, "-m", "pip", "install", pkg, "-q",
+                                "--break-system-packages"]
+                    _installed = False
+                    for _sudo in (["pkexec"], ["sudo"]):
+                        try:
+                            r = subprocess.run(_sudo + _pip_cmd,
+                                capture_output=True, text=True, timeout=120, cwd=_home)
+                            if r.returncode == 0:
+                                _installed = True
+                                break
+                        except FileNotFoundError:
+                            continue
+                    if not _installed:
+                        return False, "System install failed — try User install instead"
+                else:
+                    # User install — prefer pipx for standalone tools
+                    if _standalone and tool != "pipx":
+                        # Install via pipx if available, else pip --user
+                        _pipx = _sh.which("pipx")
+                        if _pipx:
+                            r = subprocess.run([_pipx, "install", pkg],
+                                capture_output=True, text=True, timeout=120,
+                                cwd=_home, **_spa())
+                        else:
+                            r = subprocess.run(
+                                [py_exe, "-m", "pip", "install", pkg, "--user", "-q"],
+                                capture_output=True, text=True, timeout=120,
+                                cwd=_home, **_spa())
+                        if r.returncode != 0:
+                            return False, (r.stderr or r.stdout or "failed")[:300]
+                    elif tool == "pipx":
+                        r = subprocess.run(
+                            [py_exe, "-m", "pip", "install", "pipx", "--user", "-q"],
+                            capture_output=True, text=True, timeout=120,
+                            cwd=_home, **_spa())
+                        if r.returncode != 0:
+                            return False, (r.stderr or r.stdout or "failed")[:300]
+                    else:
+                        r = subprocess.run(
+                            [py_exe, "-m", "pip", "install", pkg, "--user", "-q"],
+                            capture_output=True, text=True, timeout=120,
+                            cwd=_home, **_spa())
+                        if r.returncode != 0:
+                            return False, (r.stderr or r.stdout or "failed")[:300]
+
+            # Post-install: ensurepath for pipx
+            if tool == "pipx":
+                _pipx2 = _sh.which("pipx") or (py_exe.replace("python", "pipx") if "python" in py_exe else "")
+                if _pipx2:
+                    try:
+                        subprocess.run([_pipx2, "ensurepath"],
+                            capture_output=True, timeout=30, cwd=_home)
+                    except Exception:
+                        pass
+            return True, "ok"
+
+        def _done(ok, res):
             from PySide6.QtCore import QTimer
-            QTimer.singleShot(300,lambda: self._tc_load_table(py_exe))
+            from PySide6.QtGui import QColor
+            from PySide6.QtWidgets import QMessageBox
+            si2 = tbl.item(row, 1)
+            if not ok:
+                if si2:
+                    si2.setText(f"❌ Failed")
+                    si2.setForeground(QColor("#f38ba8"))
+                QMessageBox.warning(None, f"Install Failed — {tool}", str(res))
+                return
+            QTimer.singleShot(500, lambda: self._tc_load_table(py_exe))
 
         from src.gui.package_panel import WorkerThread
-        w=WorkerThread(_do); w.finished.connect(_done); w.start()
-        if not hasattr(self,"_tc_ws"): self._tc_ws=[]
+        w = WorkerThread(_do); w.finished.connect(_done); w.start()
+        if not hasattr(self, "_tc_ws"): self._tc_ws = []
         self._tc_ws.append(w)
 
     def _tc_do_remove(self, tool, pkg, scope, tbl, row):

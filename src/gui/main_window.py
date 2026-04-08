@@ -188,6 +188,8 @@ class MainWindow(QMainWindow):
         self._apply_linux_emoji_fix()
         self._check_linux_venv_module()
         self.venv_manager.sync_cache_with_disk()
+        # Auto-create pipx marker env if pipx is installed
+        self.venv_manager.ensure_pipx_env()
         self._refresh_env_list()
 
         # ── Screen change safety: re-apply theme when moving between monitors ──
@@ -891,7 +893,6 @@ class MainWindow(QMainWindow):
             "venv":         "🐍 venv",
             "uv":           "⚡ uv",
             "poetry":       "📜 Poetry",
-            "rye":          "🌾 Rye",
             "pipx":         "📦 pipx",
             "conda":        "🦎 Conda",
             "system_tools": "🗂 Tools",
@@ -899,7 +900,6 @@ class MainWindow(QMainWindow):
         _type_colors = {
             "uv":           "#f9e2af",
             "poetry":       "#cba6f7",
-            "rye":          "#fab387",
             "pipx":         "#89dceb",
             "conda":        "#a6e3a1",
             "system_tools": None,  # uses accent

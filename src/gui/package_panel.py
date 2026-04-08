@@ -1714,39 +1714,54 @@ class PackagePanel(QWidget):
         # pipx env: find app executable in pipx venv or local bin
         if getattr(self, "_current_env_type", "venv") == "pipx":
             from src.utils.platform_utils import get_pipx_home, get_platform as _gp
-            import os as _os
+            import os as _os, shutil as _sh
             _pipx_home = get_pipx_home()
             _pkg = app_def["package"].lower()
             _app_cmd = app_def.get("command", [])
-            # Derive executable name from command: "-m jupyter lab" -> "jupyter"
-            # or from package name directly
-            _exe_name = None
-            if len(_app_cmd) >= 2 and _app_cmd[0] == "-m":
-                _exe_name = _app_cmd[1].split(".")[0]  # "jupyter.lab" -> "jupyter"
-            if not _exe_name:
-                _exe_name = _pkg
             _is_win = _gp() == "windows"
             _exe_suffix = ".exe" if _is_win else ""
-            # 1. pipx venvs/<pkg>/Scripts/<exe>
+            _scripts_dir = "Scripts" if _is_win else "bin"
+            # Package -> primary executable name mapping
+            _pipx_exe_map = {
+                "jupyterlab":  "jupyter-lab",
+                "notebook":    "jupyter-notebook",
+                "orange3":     "orange-canvas",
+                "spyder":      "spyder",
+                "ipython":     "ipython",
+                "streamlit":   "streamlit",
+                "gradio":      "gradio",
+                "dash":        "dash",
+                "panel":       "panel",
+                "voila":       "voila",
+                "mlflow":      "mlflow",
+                "tensorboard": "tensorboard",
+                "marimo":      "marimo",
+                "datasette":   "datasette",
+            }
+            _exe_name = _pipx_exe_map.get(_pkg)
+            if not _exe_name:
+                # fallback: derive from command "-m jupyter lab" -> "jupyter"
+                if len(_app_cmd) >= 2 and _app_cmd[0] == "-m":
+                    _exe_name = _app_cmd[1].split(".")[0]
+                else:
+                    _exe_name = _pkg
             _exe_path = None
+            # 1. pipx venvs/<pkg>/Scripts/<exe>
             if _pipx_home:
                 _venv_exe = _os.path.join(_pipx_home, "venvs", _pkg,
-                    "Scripts" if _is_win else "bin", _exe_name + _exe_suffix)
+                    _scripts_dir, _exe_name + _exe_suffix)
                 if _os.path.isfile(_venv_exe):
                     _exe_path = _venv_exe
-            # 2. ~/.local/bin/<exe>
+            # 2. ~/.local/bin/<exe> (pipx exposed apps)
             if not _exe_path:
                 _local_bin = _os.path.join(_os.path.expanduser("~"), ".local", "bin", _exe_name + _exe_suffix)
                 if _os.path.isfile(_local_bin):
                     _exe_path = _local_bin
-            # 3. shutil.which
+            # 3. shutil.which (PATH)
             if not _exe_path:
-                import shutil as _sh
                 _exe_path = _sh.which(_exe_name)
             if _exe_path:
-                # Build cmd: executable + remaining args after "-m <module>"
-                _extra = list(_app_cmd[2:]) if len(_app_cmd) > 2 and _app_cmd[0] == "-m" else []
-                cmd = [_exe_path] + _extra
+                cmd = [_exe_path]
             else:
                 # fallback: python -m ...
                 cmd = [str(python_exe)] + _app_cmd
@@ -3042,7 +3057,7 @@ $s.Save()
             except Exception:
                 self.env_disk_label.setText("💾 ?")
 
-        # 4) Backend (pip/uv/conda/poetry/rye/pipx)
+        # 4) Backend (pip/uv/conda/poetry/pipx)
         _env_type = getattr(self, "_current_env_type", "venv")
         _backend_names = {
             "venv": backend.upper() if backend else "PIP",

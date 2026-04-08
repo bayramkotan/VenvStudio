@@ -98,17 +98,23 @@ def get_config_dir() -> Path:
 def get_python_executable(venv_path: Path) -> Path:
     """Return the python executable path inside a venv."""
     import sys as _sys, json as _json
-    # pipx envs: only a marker file exists — use system python
     marker = venv_path / ".venvstudio_env"
     if marker.exists():
         try:
             with open(marker, encoding="utf-8") as _f:
                 _data = _json.load(_f)
-            if _data.get("type") == "pipx":
+            _type = _data.get("type", "")
+            if _type == "pipx":
                 _py = _data.get("python_path", "")
                 if _py and Path(_py).exists():
                     return Path(_py)
                 return Path(_sys.executable)
+            if _type == "poetry":
+                _pvenv = _data.get("poetry_venv_path", "")
+                if _pvenv and Path(_pvenv).exists():
+                    _scripts = "Scripts" if get_platform() == "windows" else "bin"
+                    _exe = "python.exe" if get_platform() == "windows" else "python"
+                    return Path(_pvenv) / _scripts / _exe
         except Exception:
             pass
     if get_platform() == "windows":
@@ -119,13 +125,13 @@ def get_python_executable(venv_path: Path) -> Path:
 def get_pip_executable(venv_path: Path) -> Path:
     """Return the pip executable path inside a venv."""
     import sys as _sys, json as _json
-    # pipx envs: only a marker file exists — use system pip
     marker = venv_path / ".venvstudio_env"
     if marker.exists():
         try:
             with open(marker, encoding="utf-8") as _f:
                 _data = _json.load(_f)
-            if _data.get("type") == "pipx":
+            _type = _data.get("type", "")
+            if _type == "pipx":
                 _py = _data.get("python_path", "") or _sys.executable
                 _py_path = Path(_py)
                 if get_platform() == "windows":
@@ -134,8 +140,13 @@ def get_pip_executable(venv_path: Path) -> Path:
                     _pip = _py_path.parent / "pip"
                 if _pip.exists():
                     return _pip
-                # fallback to parent Scripts dir
                 return _py_path.parent / ("Scripts/pip.exe" if get_platform() == "windows" else "pip")
+            if _type == "poetry":
+                _pvenv = _data.get("poetry_venv_path", "")
+                if _pvenv and Path(_pvenv).exists():
+                    _scripts = "Scripts" if get_platform() == "windows" else "bin"
+                    _exe = "pip.exe" if get_platform() == "windows" else "pip"
+                    return Path(_pvenv) / _scripts / _exe
         except Exception:
             pass
     if get_platform() == "windows":

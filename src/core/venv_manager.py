@@ -138,6 +138,45 @@ class VenvManager:
         self.base_dir = new_dir
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
+    def ensure_pipx_env(self) -> bool:
+        """Auto-create a pipx marker env in base_dir if pipx is installed.
+        Returns True if pipx env exists or was created, False if pipx not found."""
+        import shutil, json as _json, datetime as _dt, sys as _sys
+        from src.utils.platform_utils import get_pipx_executable, get_pipx_home
+        pipx_exe = get_pipx_executable()
+        if not pipx_exe:
+            return False
+        marker_dir = self.base_dir / "pipx"
+        marker_dir.mkdir(parents=True, exist_ok=True)
+        marker = marker_dir / ".venvstudio_env"
+        pipx_home = get_pipx_home() or ""
+        if not marker.exists():
+            try:
+                with open(marker, "w", encoding="utf-8") as _f:
+                    _json.dump({
+                        "type": "pipx",
+                        "name": "pipx",
+                        "pipx_home": str(pipx_home),
+                        "pipx_exe": str(pipx_exe),
+                        "python_path": _sys.executable,
+                        "created": _dt.datetime.now().isoformat(),
+                        "auto_detected": True,
+                    }, _f, indent=2)
+            except Exception:
+                pass
+        else:
+            # Update pipx_home/exe in case they changed
+            try:
+                with open(marker, "r", encoding="utf-8") as _f:
+                    data = _json.load(_f)
+                data["pipx_home"] = str(pipx_home)
+                data["pipx_exe"] = str(pipx_exe)
+                with open(marker, "w", encoding="utf-8") as _f:
+                    _json.dump(data, _f, indent=2)
+            except Exception:
+                pass
+        return True
+
     def create_venv(
         self,
         name: str,

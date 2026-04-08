@@ -197,8 +197,7 @@ class EnvCreateDialog(QDialog):
         self.env_type_combo.addItem("🐍 Python Virtual Environment", "venv")
         self.env_type_combo.addItem("⚡ uv Environment", "uv")
         self.env_type_combo.addItem("📜 Poetry Environment", "poetry")
-        # Rye removed — no longer maintained, users redirected to uv
-        self.env_type_combo.addItem("📦 pipx App", "pipx")
+        # pipx removed from Create dialog — auto-detected and managed automatically
         self.env_type_combo.addItem("🦎 Conda Environment (micromamba)", "conda")
         # Tool Environment removed — system apps accessible from all env types
         self.env_type_combo.setToolTip(
@@ -206,7 +205,7 @@ class EnvCreateDialog(QDialog):
             "uv: fast Rust-powered environment (10-100× faster)\n"
             "Poetry: dependency management with pyproject.toml\n"
             "Conda: micromamba-powered — R, RStudio, scientific packages\n"
-            "pipx: install isolated CLI apps globally"
+            "pipx: auto-detected and shown automatically if installed"
         )
         self.env_type_combo.currentIndexChanged.connect(self._on_env_type_changed)
         form_layout.addRow("Type:", self.env_type_combo)
@@ -775,7 +774,7 @@ class EnvCreateDialog(QDialog):
             return
         # ── conda end ─────────────────────────────────────────────────────
 
-        # ── uv / Poetry / Rye / pipx ──────────────────────────────────────
+        # ── uv / Poetry / pipx ───────────────────────────────────────────
         if env_type in ("uv", "poetry", "pipx"):
             import os, shutil as _shutil
             location = self.location_label.text()
@@ -875,11 +874,12 @@ class EnvCreateDialog(QDialog):
                             return cand
                     return None
 
+                # _find_tool available for all env types
+                def _find_tool(name_):
+                    return _find_tool_registered(name_)
+
                 if _etype == "uv":
                     # ── uv ───────────────────────────────────────────────
-                    def _find_tool(name_):
-                        return _find_tool_registered(name_)
-
                     uv_exe = _find_tool("uv")
                     if not uv_exe:
                         _cb("Installing uv...")
@@ -978,17 +978,43 @@ class EnvCreateDialog(QDialog):
                                        timeout=60, cwd=str(_env_path),
                                        **subprocess_args())
 
-                    # Detect Python version
+                    # Run poetry install to actually create the venv
+                    _cb("Running poetry install to create virtual environment...")
+                    _inst = subprocess.run(
+                        [poetry_exe, "install", "--no-root"],
+                        capture_output=True, text=True, timeout=120,
+                        cwd=str(_env_path), **subprocess_args()
+                    )
+                    if _inst.returncode != 0:
+                        # No packages yet — still ok, venv should be created
+                        _cb("(No packages yet — continuing...)")
+
+                    # Get real venv path via poetry env info --path
+                    _po_venv_path = None
+                    try:
+                        _einfo = subprocess.run(
+                            [poetry_exe, "env", "info", "--path"],
+                            capture_output=True, text=True, timeout=30,
+                            cwd=str(_env_path), **subprocess_args()
+                        )
+                        _einfo_path = _einfo.stdout.strip()
+                        if _einfo_path and Path(_einfo_path).exists():
+                            _po_venv_path = _einfo_path
+                            _cb(f"Poetry venv: {_po_venv_path}")
+                    except Exception:
+                        pass
+
+                    # Detect Python version from real venv
                     _po_pyver = ""
                     try:
-                        if _python:
+                        if _po_venv_path:
+                            _po_py = (Path(_po_venv_path) /
+                                      ("Scripts" if plat == "windows" else "bin") /
+                                      ("python.exe" if plat == "windows" else "python"))
+                        elif _python:
                             _po_py = Path(_python)
                         else:
-                            _po_py = (_env_path / ".venv" / ("Scripts" if plat == "windows" else "bin")
-                                      / ("python.exe" if plat == "windows" else "python"))
-                        if not _po_py.exists():
-                            _po_py_str = shutil.which("python3") or shutil.which("python") or sys.executable
-                            _po_py = Path(_po_py_str)
+                            _po_py = Path(shutil.which("python3") or shutil.which("python") or sys.executable)
                         if _po_py.exists():
                             _vr = subprocess.run(
                                 [str(_po_py), "--version"],
@@ -999,10 +1025,15 @@ class EnvCreateDialog(QDialog):
                                           ).replace("Python ", "")
                     except Exception:
                         pass
+
                     with open(_env_path / ".venvstudio_env", "w") as f:
-                        json.dump({"type": "poetry", "name": _name,
-                                   "python_version": _po_pyver,
-                                   "created": datetime.datetime.now().isoformat()}, f, indent=2)
+                        json.dump({
+                            "type": "poetry",
+                            "name": _name,
+                            "python_version": _po_pyver,
+                            "poetry_venv_path": _po_venv_path or "",
+                            "created": datetime.datetime.now().isoformat()
+                        }, f, indent=2)
                     _cb(f"✅ Poetry environment '{_name}' created!")
                     return True, f"Poetry environment '{_name}' created"
 

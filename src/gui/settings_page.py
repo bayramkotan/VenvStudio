@@ -4162,11 +4162,20 @@ try {{
             lambda on: on and self._tc_load_table(
                 self._tc_py_combo.currentData() or ""))
 
+        # Note + Refresh button row
+        note_row = QHBoxLayout()
         py_note = QLabel("Enable checkbox to select Python and load tool status.")
         py_note.setStyleSheet(
             f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         self._tc_py_note = py_note
-        vl.addWidget(py_note)
+        note_row.addWidget(py_note, 1)
+        refresh_btn = QPushButton("🔄 Refresh")
+        refresh_btn.setFixedWidth(100)
+        refresh_btn.setToolTip("Reload tool status for selected Python")
+        refresh_btn.clicked.connect(lambda: self._tc_load_table(
+            self._tc_py_combo.currentData() or "") if self._tc_py_cb.isChecked() else None)
+        note_row.addWidget(refresh_btn)
+        vl.addLayout(note_row)
 
         # ── Tool table ───────────────────────────────────────────────────
         tbl = QTableWidget(len(self._TC_TOOLS), 5)
@@ -4189,7 +4198,7 @@ try {{
         for row, (tid, pkg, lbl, icon) in enumerate(self._TC_TOOLS):
             tbl.setRowHeight(row, 38)
             name = QTableWidgetItem(f"{icon}  {lbl}")
-            name.setFont(QFont("", -1, QFont.Medium))
+            _f = QFont(); _f.setWeight(QFont.Medium); name.setFont(_f)
             tbl.setItem(row, 0, name)
             for col in (1, 2, 3):
                 ph = QTableWidgetItem("—")
@@ -4547,7 +4556,7 @@ try {{
         self._tc_ws.append(w)
 
     def _tc_do_remove(self, tool, pkg, scope, tbl, row):
-        import sys
+        import sys, shutil as _shutil
         from PySide6.QtGui import QColor
         si = tbl.item(row, 1)
         py_exe = (si.data(257) if si else "") or ""
@@ -4555,15 +4564,51 @@ try {{
             py_exe = self._tc_py_combo.currentData() or sys.executable
         if not py_exe: py_exe = sys.executable
         if si: si.setText("⏳ Removing..."); si.setForeground(QColor("#89b4fa"))
+        _home = __import__("os").path.expanduser("~")
 
         def _do(callback=None):
-            import subprocess
-            cmd = [py_exe, "-m", "pip", "uninstall", pkg, "-y", "-q"]
-            r = subprocess.run(cmd, capture_output=True, text=True, timeout=60, cwd=__import__('os').path.expanduser('~'))
-            return True, ""
+            import subprocess, os
+            from src.utils.platform_utils import subprocess_args
+            # Build correct remove command per tool
+            # Find the tool's own executable first
+            _tool_exe = _shutil.which(tool) or _shutil.which(tool + ".exe")
+            if tool == "uv":
+                if not _tool_exe:
+                    return False, "uv not found in PATH"
+                cmd = [py_exe, "-m", "pip", "uninstall", "uv", "-y", "-q"]
+            elif tool == "pipx":
+                if not _tool_exe:
+                    return False, "pipx not found in PATH"
+                # pipx may be installed via pip or standalone
+                # Try pip uninstall first, then inform user
+                cmd = [py_exe, "-m", "pip", "uninstall", "pipx", "-y", "-q"]
+            elif tool == "poetry":
+                if not _tool_exe:
+                    return False, "poetry not found in PATH"
+                cmd = [py_exe, "-m", "pip", "uninstall", "poetry", "-y", "-q"]
+            elif tool in ("pip", "venv"):
+                return False, f"{tool} cannot be removed — it is a core Python component"
+            elif tool == "micromamba":
+                return False, "micromamba is a standalone binary — delete it manually from its install path"
+            else:
+                cmd = [py_exe, "-m", "pip", "uninstall", pkg, "-y", "-q"]
+            r = subprocess.run(cmd, capture_output=True, text=True, timeout=60,
+                               cwd=_home, **subprocess_args())
+            if r.returncode != 0:
+                return False, (r.stderr or r.stdout)[:200]
+            return True, f"{tool} removed successfully"
 
         def _done(ok, res):
             from PySide6.QtCore import QTimer
+            from PySide6.QtGui import QColor
+            from PySide6.QtWidgets import QMessageBox
+            si2 = tbl.item(row, 1)
+            if not ok:
+                if si2:
+                    si2.setText(f"❌ {res[:40]}")
+                    si2.setForeground(QColor("#f38ba8"))
+                QMessageBox.warning(None, "Remove Failed", res)
+                return
             QTimer.singleShot(300, lambda: self._tc_load_table(py_exe))
 
         from src.gui.package_panel import WorkerThread

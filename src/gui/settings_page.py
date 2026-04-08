@@ -4146,11 +4146,14 @@ try {{
         vl.addWidget(py_note)
 
         # ── Tool table ───────────────────────────────────────────────────
-        tbl = QTableWidget(len(self._TC_TOOLS), 3)
-        tbl.setHorizontalHeaderLabels(["Tool", "Status / Version / Path", "Actions"])
+        tbl = QTableWidget(len(self._TC_TOOLS), 5)
+        tbl.setHorizontalHeaderLabels(["Tool", "Status", "Version", "Path", "Actions"])
         tbl.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        tbl.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        tbl.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         tbl.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        tbl.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        tbl.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        tbl.setColumnWidth(3, 380)
         tbl.verticalHeader().setVisible(False)
         tbl.setEditTriggers(QAbstractItemView.NoEditTriggers)
         tbl.setSelectionMode(QAbstractItemView.NoSelection)
@@ -4165,10 +4168,11 @@ try {{
             name = QTableWidgetItem(f"{icon}  {lbl}")
             name.setFont(QFont("", -1, QFont.Medium))
             tbl.setItem(row, 0, name)
-            info = QTableWidgetItem("—")
-            info.setForeground(QColor(self._c()["fg_muted"]))
-            tbl.setItem(row, 1, info)
-            tbl.setCellWidget(row, 2, self._tc_row_btns(tid, pkg, tbl, row))
+            for col in (1, 2, 3):
+                ph = QTableWidgetItem("—")
+                ph.setForeground(QColor(self._c()["fg_muted"]))
+                tbl.setItem(row, col, ph)
+            tbl.setCellWidget(row, 4, self._tc_row_btns(tid, pkg, tbl, row))
         self._tc_table = tbl
         # Size table to show all rows without scrolling
         row_h = 40
@@ -4195,18 +4199,19 @@ try {{
         QTimer.singleShot(300, _auto_load)
 
     def _tc_row_btns(self, tool, pkg, tbl, row):
-        from PySide6.QtWidgets import QWidget, QHBoxLayout, QPushButton
+        from PySide6.QtWidgets import QWidget, QHBoxLayout, QPushButton, QMenu
+        from PySide6.QtGui import QAction
         from PySide6.QtCore import Qt
         w = QWidget()
         w.setAttribute(Qt.WA_TranslucentBackground)
         hl = QHBoxLayout(w)
         hl.setContentsMargins(2, 1, 2, 1)
-        hl.setSpacing(3)
+        hl.setSpacing(4)
 
         def _b(text, tip="", danger=False, name=""):
             b = QPushButton(text)
-            b.setMinimumHeight(24)
-            b.setMinimumWidth(88)
+            b.setMinimumHeight(26)
+            b.setMinimumWidth(110)
             b.setObjectName("danger" if danger else "secondary")
             b.setToolTip(tip)
             b.setAccessibleName(name)
@@ -4214,48 +4219,76 @@ try {{
             b.setDefault(False); b.setAutoDefault(False)
             return b
 
+        def _ask_scope(parent_btn, cb_user, cb_system):
+            """Show User/System popup menu under button."""
+            menu = QMenu(parent_btn)
+            a_user   = menu.addAction("👤 User  (no admin)")
+            a_system = menu.addAction("🖥 System  (admin/sudo)")
+            chosen = menu.exec(parent_btn.mapToGlobal(
+                parent_btn.rect().bottomLeft()))
+            if chosen == a_user:    cb_user()
+            elif chosen == a_system: cb_system()
+
         if tool == "micromamba":
-            dl  = _b("⬇ Download", "Download micromamba binary", name="install_user")
-            vf  = _b("✓ Verify",   "Check micromamba works",     name="verify")
-            hl.addWidget(dl); hl.addWidget(vf)
-            dl.clicked.connect(lambda: self._tc_download_mamba(tbl, row))
-            vf.clicked.connect(lambda chk=False, t=tool, tb=tbl, r=row: self._tc_do_verify(t, tb, r))
+            # Micromamba: Download only (standalone binary)
+            install_btn = _b("⬇ Install", "Download micromamba binary", name="install_user")
+            install_btn.setVisible(True)
+            upgrade_btn = _b("⬆ Upgrade", "Re-download micromamba",     name="upgrade_user")
+            upgrade_btn.setVisible(False)
+            hl.addWidget(install_btn)
+            hl.addWidget(upgrade_btn)
+            install_btn.clicked.connect(lambda: self._tc_download_mamba(tbl, row))
+            upgrade_btn.clicked.connect(lambda: self._tc_download_mamba(tbl, row))
         else:
-            iu  = _b("⬇ Install (User)",    "Install for current user (no admin)",  name="install_user")
-            is_ = _b("⬇ Install (System)",  "Install system-wide (requires admin)", name="install_sys")
-            uu  = _b("⬆ Upgrade (User)",    "Upgrade — current user",               name="upgrade_user")
-            us_ = _b("⬆ Upgrade (System)",  "Upgrade — system-wide (admin)",        name="upgrade_sys")
-            rmu = _b("🗑 Remove (User)",     "Uninstall user installation",   True,  name="rm_user")
-            rms = _b("🗑 Remove (System)",   "Uninstall system installation", True,  name="rm_sys")
-            vf  = _b("✓ Verify",            "Verify the tool works",               name="verify")
+            install_btn = _b("⬇ Install", "Install this tool",   name="install_user")
+            upgrade_btn = _b("⬆ Upgrade", "Upgrade this tool",   name="upgrade_user")
+            remove_btn  = _b("🗑 Remove",  "Uninstall this tool", True, name="rm_user")
+            upgrade_btn.setVisible(False)
+            remove_btn.setVisible(False)
+            hl.addWidget(install_btn)
+            hl.addWidget(upgrade_btn)
+            hl.addWidget(remove_btn)
 
-            for b in (uu, us_, rmu, rms): b.setVisible(False)
-            for b in (iu, is_, uu, us_, rmu, rms, vf): hl.addWidget(b)
+            if tool in ("pip", "venv"):
+                install_btn.setText("⬆ Upgrade")
+                install_btn.setToolTip("Upgrade pip/venv")
+                install_btn.setAccessibleName("upgrade_user")
+                remove_btn.setVisible(False)
 
-            iu.clicked.connect(  lambda chk=False,t=tool,p=pkg,tb=tbl,r=row: self._tc_do_install(t,p,"user",tb,r))
-            is_.clicked.connect( lambda chk=False,t=tool,p=pkg,tb=tbl,r=row: self._tc_do_install(t,p,"system",tb,r))
-            uu.clicked.connect(  lambda chk=False,t=tool,p=pkg,tb=tbl,r=row: self._tc_do_install(t,p,"user",tb,r))
-            us_.clicked.connect( lambda chk=False,t=tool,p=pkg,tb=tbl,r=row: self._tc_do_install(t,p,"system",tb,r))
-            rmu.clicked.connect( lambda chk=False,t=tool,p=pkg,tb=tbl,r=row: self._tc_do_remove(t,p,"user",tb,r))
-            rms.clicked.connect( lambda chk=False,t=tool,p=pkg,tb=tbl,r=row: self._tc_do_remove(t,p,"system",tb,r))
-            vf.clicked.connect(  lambda chk=False,t=tool,tb=tbl,r=row: self._tc_do_verify(t,tb,r))
+            install_btn.clicked.connect(lambda chk=False, t=tool, p=pkg, tb=tbl, r=row, b=install_btn:
+                _ask_scope(b,
+                    lambda: self._tc_do_install(t, p, "user",   tb, r),
+                    lambda: self._tc_do_install(t, p, "system", tb, r)))
+            upgrade_btn.clicked.connect(lambda chk=False, t=tool, p=pkg, tb=tbl, r=row, b=upgrade_btn:
+                _ask_scope(b,
+                    lambda: self._tc_do_install(t, p, "user",   tb, r),
+                    lambda: self._tc_do_install(t, p, "system", tb, r)))
+            remove_btn.clicked.connect(lambda chk=False, t=tool, p=pkg, tb=tbl, r=row, b=remove_btn:
+                _ask_scope(b,
+                    lambda: self._tc_do_remove(t, p, "user",   tb, r),
+                    lambda: self._tc_do_remove(t, p, "system", tb, r)))
         return w
 
     def _tc_update_row_btns(self, tbl, row, installed: bool):
         """Update button visibility based on install status."""
-        w = tbl.cellWidget(row, 2)
+        w = tbl.cellWidget(row, 4)
         if not w: return
         from PySide6.QtWidgets import QPushButton
         btns = {b.accessibleName(): b for b in w.findChildren(QPushButton)}
-        if installed:
-            for n in ("install_user","install_sys"):
-                if n in btns: btns[n].setVisible(False)
-            for n in ("upgrade_user","upgrade_sys","rm_user","rm_sys","verify"):
+        # pip/venv always show upgrade (install_user repurposed as upgrade)
+        tid = self._TC_TOOLS[row][0] if row < len(self._TC_TOOLS) else ""
+        if tid in ("pip", "venv"):
+            # Always show upgrade only
+            for n in ("install_user", "upgrade_user"): 
+                if n in btns: btns[n].setVisible(True)
+            if "rm_user" in btns: btns["rm_user"].setVisible(False)
+        elif installed:
+            if "install_user" in btns: btns["install_user"].setVisible(False)
+            for n in ("upgrade_user", "rm_user"):
                 if n in btns: btns[n].setVisible(True)
         else:
-            for n in ("install_user","install_sys","verify"):
-                if n in btns: btns[n].setVisible(True)
-            for n in ("upgrade_user","upgrade_sys","rm_user","rm_sys"):
+            if "install_user" in btns: btns["install_user"].setVisible(True)
+            for n in ("upgrade_user", "rm_user"):
                 if n in btns: btns[n].setVisible(False)
 
     def _tc_scan_pythons(self):
@@ -4397,38 +4430,49 @@ try {{
                             if ver == "—": ver = out[:20]
                     except Exception:
                         pass
+                rows.append((path, ver))
             import json
             return True, json.dumps({"py": py_exe, "rows": rows})
 
         def _done(ok, result):
             import json, os
+            if not ok:
+                print(f"[TC] _done called with ok=False, result={result[:120]!r}")
+                return
             try:
                 data = json.loads(result)
                 _py = data["py"]
                 rows = data["rows"]
-            except Exception:
+            except Exception as e:
+                print(f"[TC] JSON parse error: {e!r}, result={result[:120]!r}")
                 return
+            print(f"[TC] _done: {len(rows)} rows loaded for {_py[:40]}")
             from PySide6.QtGui import QColor
             from PySide6.QtWidgets import QTableWidgetItem
             for row, item in enumerate(rows):
                 path, ver = item[0], item[1]
                 ok2 = bool(path)
-                # Combined info in column 1: status + version + path
-                if ok2:
-                    info_text = f"✅  v{ver}   {path}"
-                    info_color = self._c()["fg"]
-                else:
-                    info_text = "❌  Not installed"
-                    info_color = "#f38ba8"
-
-                si = QTableWidgetItem(info_text)
-                si.setForeground(QColor(info_color))
-                si.setData(256, path)   # exe path
-                si.setData(257, _py)    # python exe
-                si.setToolTip(f"Path: {path}\nPython: {_py}")
+                # col 1: Status
+                st_text = "✅ Installed" if ok2 else "❌ Not found"
+                st_color = "#a6e3a1" if ok2 else "#f38ba8"
+                si = QTableWidgetItem(st_text)
+                si.setForeground(QColor(st_color))
+                si.setData(256, path)
+                si.setData(257, _py)
                 tbl.setItem(row, 1, si)
 
-                # Update action buttons (Install vs Upgrade+Uninstall)
+                # col 2: Version
+                vi = QTableWidgetItem(ver if ok2 else "—")
+                vi.setForeground(QColor(self._c()["fg"]))
+                tbl.setItem(row, 2, vi)
+
+                # col 3: Path
+                pi = QTableWidgetItem(path if ok2 else "—")
+                pi.setForeground(QColor(self._c()["fg_muted"]))
+                pi.setToolTip(path)
+                tbl.setItem(row, 3, pi)
+
+                # Update action buttons
                 self._tc_update_row_btns(tbl, row, ok2)
 
         from src.gui.package_panel import WorkerThread
@@ -4601,7 +4645,7 @@ try {{
             from PySide6.QtGui import QColor; from PySide6.QtWidgets import QTableWidgetItem
             if ok:
                 si.setText("✅ Installed"); si.setForeground(QColor("#a6e3a1"))
-                pi=tbl.item(row,1)
+                pi=tbl.item(row,3)
                 if pi: pi.setText(res)
             else:
                 si.setText(f"❌ {res[:40]}"); si.setForeground(QColor("#f38ba8"))

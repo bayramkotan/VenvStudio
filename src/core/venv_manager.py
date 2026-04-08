@@ -509,6 +509,18 @@ class VenvManager:
                                 info.python_version = ""
                         else:
                             info.python_version = ""
+                    # Count packages via pip in the env
+                    _pip_exe = get_pip_executable(item)
+                    if _pip_exe.exists():
+                        try:
+                            _r = _run(
+                                [str(_pip_exe), "list", "--format=json"],
+                                capture_output=True, text=True, timeout=15,
+                            )
+                            if _r.returncode == 0:
+                                info.package_count = len(json.loads(_r.stdout))
+                        except Exception:
+                            pass
 
                 elif env_type == "pipx":
                     # Get Python version — prefer marker, fallback to sys.executable
@@ -694,6 +706,18 @@ class VenvManager:
                                     info.python_version = ""
                             else:
                                 info.python_version = ""
+                        # Count packages via pip executable in the env
+                        _pip_exe = get_pip_executable(item)
+                        if _pip_exe.exists():
+                            try:
+                                _r = _run(
+                                    [str(_pip_exe), "list", "--format=json"],
+                                    capture_output=True, text=True, timeout=15,
+                                )
+                                if _r.returncode == 0:
+                                    info.package_count = len(json.loads(_r.stdout))
+                            except Exception:
+                                pass
                     elif env_type == "pipx":
                         if marker_pyver:
                             info.python_version = marker_pyver

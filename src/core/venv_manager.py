@@ -539,7 +539,10 @@ class VenvManager:
                     # Count installed pipx apps
                     try:
                         import sys as _sys
-                        _r = _run([_sys.executable, "-m", "pipx", "list", "--short"],
+                        from src.utils.platform_utils import get_pipx_executable as _gpx
+                        _pipx_bin = _gpx()
+                        _pipx_cmd = [_pipx_bin, "list", "--short"] if _pipx_bin else [_sys.executable, "-m", "pipx", "list", "--short"]
+                        _r = _run(_pipx_cmd,
                                   capture_output=True, text=True, timeout=15)
                         if _r.returncode == 0:
                             _lines = [l for l in _r.stdout.strip().splitlines() if l.strip()]
@@ -733,7 +736,10 @@ class VenvManager:
                                 info.python_version = ""
                         try:
                             import sys as _sys
-                            _r = _run([_sys.executable, "-m", "pipx", "list", "--short"],
+                            from src.utils.platform_utils import get_pipx_executable as _gpx
+                            _pipx_bin = _gpx()
+                            _pipx_cmd = [_pipx_bin, "list", "--short"] if _pipx_bin else [_sys.executable, "-m", "pipx", "list", "--short"]
+                            _r = _run(_pipx_cmd,
                                       capture_output=True, text=True, timeout=15)
                             if _r.returncode == 0:
                                 _lines = [l for l in _r.stdout.strip().splitlines() if l.strip()]

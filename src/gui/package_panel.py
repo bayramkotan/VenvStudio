@@ -1666,9 +1666,43 @@ class PackagePanel(QWidget):
                 pkgs_to_install = self._get_orange3_packages(python_exe)
             self._set_busy(True)
             self.status_label.setText(f"Installing {', '.join(pkgs_to_install)}...")
-            self.current_worker = WorkerThread(
-                self.pip_manager.install_packages, pkgs_to_install
-            )
+
+            # pipx env: use pipx install instead of pip
+            if getattr(self, "_current_env_type", "venv") == "pipx":
+                import shutil as _shutil
+                _pipx_bin = _shutil.which("pipx")
+                _pipx_python = None
+                if self.pip_manager and self.pip_manager.venv_path:
+                    _marker = self.pip_manager.venv_path / ".venvstudio_env"
+                    if _marker.exists():
+                        try:
+                            import json as _json
+                            with open(_marker) as _mf:
+                                _mdata = _json.load(_mf)
+                            _pipx_python = _mdata.get("python_path", "")
+                        except Exception:
+                            pass
+                def _do_pipx_launch_install(callback=None):
+                    import subprocess, sys
+                    from src.utils.platform_utils import subprocess_args
+                    failed = []
+                    for pkg in pkgs_to_install:
+                        if callback:
+                            callback(f"pipx install {pkg}...")
+                        cmd = [_pipx_bin, "install", pkg] if _pipx_bin else [sys.executable, "-m", "pipx", "install", pkg]
+                        if _pipx_python:
+                            cmd += ["--python", _pipx_python]
+                        r = subprocess.run(cmd, capture_output=True, text=True, timeout=300, **subprocess_args())
+                        if r.returncode != 0:
+                            failed.append(pkg)
+                    if failed:
+                        return (False, f"pipx install failed for: {', '.join(failed)}")
+                    return (True, f"pipx installed: {', '.join(pkgs_to_install)}")
+                self.current_worker = WorkerThread(_do_pipx_launch_install)
+            else:
+                self.current_worker = WorkerThread(
+                    self.pip_manager.install_packages, pkgs_to_install
+                )
             self.current_worker.progress.connect(self._on_progress)
             self.current_worker.finished.connect(
                 lambda ok, msg, a=app_def: self._on_app_install_finished(ok, msg, a)
@@ -1677,7 +1711,47 @@ class PackagePanel(QWidget):
             return
 
         # Launch the app — check console toggle
-        cmd = [str(python_exe)] + app_def["command"]
+        # pipx env: find app executable in pipx venv or local bin
+        if getattr(self, "_current_env_type", "venv") == "pipx":
+            from src.utils.platform_utils import get_pipx_home, get_platform as _gp
+            import os as _os
+            _pipx_home = get_pipx_home()
+            _pkg = app_def["package"].lower()
+            _app_cmd = app_def.get("command", [])
+            # Derive executable name from command: "-m jupyter lab" -> "jupyter"
+            # or from package name directly
+            _exe_name = None
+            if len(_app_cmd) >= 2 and _app_cmd[0] == "-m":
+                _exe_name = _app_cmd[1].split(".")[0]  # "jupyter.lab" -> "jupyter"
+            if not _exe_name:
+                _exe_name = _pkg
+            _is_win = _gp() == "windows"
+            _exe_suffix = ".exe" if _is_win else ""
+            # 1. pipx venvs/<pkg>/Scripts/<exe>
+            _exe_path = None
+            if _pipx_home:
+                _venv_exe = _os.path.join(_pipx_home, "venvs", _pkg,
+                    "Scripts" if _is_win else "bin", _exe_name + _exe_suffix)
+                if _os.path.isfile(_venv_exe):
+                    _exe_path = _venv_exe
+            # 2. ~/.local/bin/<exe>
+            if not _exe_path:
+                _local_bin = _os.path.join(_os.path.expanduser("~"), ".local", "bin", _exe_name + _exe_suffix)
+                if _os.path.isfile(_local_bin):
+                    _exe_path = _local_bin
+            # 3. shutil.which
+            if not _exe_path:
+                import shutil as _sh
+                _exe_path = _sh.which(_exe_name)
+            if _exe_path:
+                # Build cmd: executable + remaining args after "-m <module>"
+                _extra = list(_app_cmd[2:]) if len(_app_cmd) > 2 and _app_cmd[0] == "-m" else []
+                cmd = [_exe_path] + _extra
+            else:
+                # fallback: python -m ...
+                cmd = [str(python_exe)] + _app_cmd
+        else:
+            cmd = [str(python_exe)] + app_def["command"]
 
         # Check if app needs console (e.g. IPython)
         show_console = app_def.get("needs_console", False)
@@ -3083,8 +3157,11 @@ $s.Save()
                                 self.version = version
                         pkgs = []
                         try:
+                            from src.utils.platform_utils import get_pipx_executable as _get_pipx
+                            _pipx_exe = _get_pipx()
+                            _pipx_cmd = [_pipx_exe, "list", "--json"] if _pipx_exe else [sys.executable, "-m", "pipx", "list", "--json"]
                             r = subprocess.run(
-                                [sys.executable, "-m", "pipx", "list", "--json"],
+                                _pipx_cmd,
                                 capture_output=True, text=True, timeout=30,
                                 **subprocess_args()
                             )
@@ -3546,14 +3623,20 @@ $s.Save()
                         pass
 
             def _do_pipx_install(callback=None):
-                import subprocess, sys
+                import subprocess, sys, shutil
                 from src.utils.platform_utils import subprocess_args
+                # Find pipx executable — prefer direct binary over python -m pipx
+                _pipx_bin = shutil.which("pipx")
                 installed = []
                 failed = []
                 for pkg in _pkgs:
                     if callback:
                         callback(f"pipx install {pkg}...")
-                    cmd = [sys.executable, "-m", "pipx", "install", pkg]
+                    if _pipx_bin:
+                        cmd = [_pipx_bin, "install", pkg]
+                    else:
+                        _pipx_exe2 = __import__("shutil").which("pipx")
+                    cmd = [_pipx_exe2, "install", pkg] if _pipx_exe2 else [sys.executable, "-m", "pipx", "install", pkg]
                     if _pipx_python:
                         cmd += ["--python", _pipx_python]
                     r = subprocess.run(

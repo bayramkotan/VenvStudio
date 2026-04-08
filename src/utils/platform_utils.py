@@ -97,6 +97,20 @@ def get_config_dir() -> Path:
 
 def get_python_executable(venv_path: Path) -> Path:
     """Return the python executable path inside a venv."""
+    import sys as _sys, json as _json
+    # pipx envs: only a marker file exists — use system python
+    marker = venv_path / ".venvstudio_env"
+    if marker.exists():
+        try:
+            with open(marker, encoding="utf-8") as _f:
+                _data = _json.load(_f)
+            if _data.get("type") == "pipx":
+                _py = _data.get("python_path", "")
+                if _py and Path(_py).exists():
+                    return Path(_py)
+                return Path(_sys.executable)
+        except Exception:
+            pass
     if get_platform() == "windows":
         return venv_path / "Scripts" / "python.exe"
     return venv_path / "bin" / "python"
@@ -104,9 +118,90 @@ def get_python_executable(venv_path: Path) -> Path:
 
 def get_pip_executable(venv_path: Path) -> Path:
     """Return the pip executable path inside a venv."""
+    import sys as _sys, json as _json
+    # pipx envs: only a marker file exists — use system pip
+    marker = venv_path / ".venvstudio_env"
+    if marker.exists():
+        try:
+            with open(marker, encoding="utf-8") as _f:
+                _data = _json.load(_f)
+            if _data.get("type") == "pipx":
+                _py = _data.get("python_path", "") or _sys.executable
+                _py_path = Path(_py)
+                if get_platform() == "windows":
+                    _pip = _py_path.parent / "Scripts" / "pip.exe"
+                else:
+                    _pip = _py_path.parent / "pip"
+                if _pip.exists():
+                    return _pip
+                # fallback to parent Scripts dir
+                return _py_path.parent / ("Scripts/pip.exe" if get_platform() == "windows" else "pip")
+        except Exception:
+            pass
     if get_platform() == "windows":
         return venv_path / "Scripts" / "pip.exe"
     return venv_path / "bin" / "pip"
+
+def get_pipx_executable() -> Optional[str]:
+    """Find pipx executable — prefer direct binary, fallback sys.executable -m pipx."""
+    import shutil, sys, os
+    is_win = get_platform() == "windows"
+    # 1. Direct binary in PATH
+    found = shutil.which("pipx")
+    if found:
+        return found
+    # 2. User local bin (~/.local/bin/pipx or %USERPROFILE%\.local\bin\pipx.exe)
+    _bin_name = "pipx.exe" if is_win else "pipx"
+    user_local = os.path.join(os.path.expanduser("~"), ".local", "bin", _bin_name)
+    if os.path.isfile(user_local):
+        return user_local
+    # 3. AppData\Roaming\Python scripts (Windows pip install --user pipx)
+    if is_win:
+        appdata = os.environ.get("APPDATA", "")
+        for py_ver in ("Python313", "Python312", "Python311", "Python314", "Python310"):
+            candidate = os.path.join(appdata, "Python", py_ver, "Scripts", "pipx.exe")
+            if os.path.isfile(candidate):
+                return candidate
+    # 4. Python Scripts dir next to sys.executable
+    scripts = os.path.join(os.path.dirname(sys.executable),
+                           "Scripts" if is_win else "bin",
+                           "pipx.exe" if is_win else "pipx")
+    if os.path.isfile(scripts):
+        return scripts
+    return None
+
+
+def get_pipx_home() -> Optional[str]:
+    """Find pipx home directory (where venvs are stored)."""
+    import subprocess, os, sys
+    # 1. Env var override
+    env_home = os.environ.get("PIPX_HOME")
+    if env_home and os.path.isdir(env_home):
+        return env_home
+    pipx_exe = get_pipx_executable()
+    if pipx_exe:
+        try:
+            r = subprocess.run(
+                [pipx_exe, "environment", "--value", "PIPX_HOME"],
+                capture_output=True, text=True, timeout=10
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                p = r.stdout.strip()
+                if os.path.isdir(p):
+                    return p
+        except Exception:
+            pass
+    # 2. Default locations
+    home = os.path.expanduser("~")
+    for candidate in [
+        os.path.join(home, "pipx"),
+        os.path.join(home, ".local", "pipx"),
+        os.path.join(os.environ.get("LOCALAPPDATA", ""), "pipx"),
+        os.path.join(os.environ.get("APPDATA", ""), "pipx"),
+    ]:
+        if os.path.isdir(os.path.join(candidate, "venvs")):
+            return candidate
+    return None
 
 
 def get_activate_command(venv_path: Path) -> str:
@@ -244,8 +339,8 @@ def open_terminal_at(path: Path, terminal_type: str = "",
 
     # ── Build activation command based on env_type ────────────────────────
     def _make_cmd_windows(path: Path, terminal_type: str) -> str:
-        if env_type == "system_tools":
-            # Just cd into the folder
+        if env_type in ("system_tools", "pipx"):
+            # No activate script — just open shell at the folder
             if terminal_type == "wt" and shutil.which("wt"):
                 return f'start wt -d "{path}"'
             elif terminal_type == "git-bash" and shutil.which("bash"):
@@ -298,7 +393,7 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                 return f'start cmd /k "cd /d {path} && {activate_bat}"'
 
     def _make_cmd_posix(path: Path) -> str:
-        if env_type == "system_tools":
+        if env_type in ("system_tools", "pipx"):
             return f"cd '{path}'"
         elif env_type == "conda":
             from src.core.micromamba_installer import get_micromamba_exe

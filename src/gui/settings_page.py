@@ -525,13 +525,21 @@ class SettingsPage(QWidget):
         pkg_mgr_layout.setSpacing(12)
 
         # Default Environment Type
+        default_env_type_row = QHBoxLayout()
+        self.default_env_type_cb = QCheckBox()
+        self.default_env_type_cb.setChecked(False)
+        self.default_env_type_cb.toggled.connect(lambda on: self.default_env_type_combo.setEnabled(on))
+        default_env_type_row.addWidget(self.default_env_type_cb)
+
         self.default_env_type_combo = NoScrollComboBox()
         self.default_env_type_combo.addItem("🐍 Python venv (default)", "venv")
         self.default_env_type_combo.addItem("⚡ uv (fast, Rust-powered)", "uv")
         self.default_env_type_combo.addItem("📜 Poetry (lock file)", "poetry")
         self.default_env_type_combo.addItem("📦 pipx (CLI apps)", "pipx")
         self.default_env_type_combo.addItem("🦎 Conda (micromamba)", "conda")
-        pkg_mgr_layout.addRow("Default Env Type:", self.default_env_type_combo)
+        self.default_env_type_combo.setEnabled(False)
+        default_env_type_row.addWidget(self.default_env_type_combo, 1)
+        pkg_mgr_layout.addRow("Default Env Type:", default_env_type_row)
 
         env_type_note = QLabel(
             "This pre-selects the environment type in the 'New Environment' dialog.\n"
@@ -2127,6 +2135,16 @@ class SettingsPage(QWidget):
             et_idx = self.default_env_type_combo.findData(default_et)
             if et_idx >= 0:
                 self.default_env_type_combo.setCurrentIndex(et_idx)
+            is_custom_et = bool(default_et and default_et != "venv")
+            if hasattr(self, "default_env_type_cb"):
+                self.default_env_type_cb.setChecked(is_custom_et)
+                self.default_env_type_combo.setEnabled(is_custom_et)
+
+        # Toolchain Manager Python checkbox
+        if hasattr(self, "_tc_py_cb") and hasattr(self, "_tc_py_combo"):
+            tc_py_on = self.config.get("tc_py_cb_checked", False)
+            self._tc_py_cb.setChecked(tc_py_on)
+            self._tc_py_combo.setEnabled(tc_py_on)
 
         # Terminal — only enable if explicitly set to non-default
         terminal = self.config.get("default_terminal", "")
@@ -3776,7 +3794,12 @@ try {{
 
         # Default environment type
         if hasattr(self, "default_env_type_combo"):
-            self.config.set("default_env_type", self.default_env_type_combo.currentData() or "venv")
+            cb_et = getattr(self, "default_env_type_cb", None)
+            et_val = self.default_env_type_combo.currentData() if (cb_et and cb_et.isChecked()) else "venv"
+            self.config.set("default_env_type", et_val or "venv")
+        # Toolchain Manager Python checkbox
+        if hasattr(self, "_tc_py_cb"):
+            self.config.set("tc_py_cb_checked", self._tc_py_cb.isChecked())
         if self.terminal_cb.isChecked():
             self.config.set("default_terminal", self.terminal_combo.currentData())
         else:
@@ -4126,16 +4149,16 @@ try {{
 
         # ── Python selector row ──────────────────────────────────────────
         sel_row = QHBoxLayout()
-        py_cb = QCheckBox()
-        py_cb.setChecked(False)
-        sel_row.addWidget(py_cb)
+        self._tc_py_cb = QCheckBox()
+        self._tc_py_cb.setChecked(False)
+        sel_row.addWidget(self._tc_py_cb)
         self._tc_py_combo = QComboBox()
         self._tc_py_combo.setEnabled(False)
         sel_row.addWidget(self._tc_py_combo, 1)
         vl.addLayout(sel_row)
 
-        py_cb.toggled.connect(self._tc_py_combo.setEnabled)
-        py_cb.toggled.connect(
+        self._tc_py_cb.toggled.connect(self._tc_py_combo.setEnabled)
+        self._tc_py_cb.toggled.connect(
             lambda on: on and self._tc_load_table(
                 self._tc_py_combo.currentData() or ""))
 
@@ -4188,13 +4211,12 @@ try {{
 
         # Populate combo from python_table, then auto-load
         self._tc_py_combo.currentIndexChanged.connect(
-            lambda: py_cb.isChecked() and self._tc_load_table(
+            lambda: self._tc_py_cb.isChecked() and self._tc_load_table(
                 self._tc_py_combo.currentData() or ""))
         # Auto-enable and load on startup
         def _auto_load():
             self._tc_scan_pythons()
-            py_cb.setChecked(True)
-            if self._tc_py_combo.count():
+            if self._tc_py_cb.isChecked() and self._tc_py_combo.count():
                 self._tc_load_table(self._tc_py_combo.currentData() or "")
         QTimer.singleShot(300, _auto_load)
 
@@ -4636,7 +4658,7 @@ try {{
         def _do(callback=None):
             try:
                 from src.core.micromamba_installer import download_micromamba
-                p=download_micromamba(progress_cb=cb)
+                p=download_micromamba(progress_cb=callback)
                 return True,str(p)
             except Exception as e: return False,str(e)
         def _done(ok,res):
@@ -6149,6 +6171,16 @@ echo "OK"
             et_idx = self.default_env_type_combo.findData(default_et)
             if et_idx >= 0:
                 self.default_env_type_combo.setCurrentIndex(et_idx)
+            is_custom_et = bool(default_et and default_et != "venv")
+            if hasattr(self, "default_env_type_cb"):
+                self.default_env_type_cb.setChecked(is_custom_et)
+                self.default_env_type_combo.setEnabled(is_custom_et)
+
+        # Toolchain Manager Python checkbox
+        if hasattr(self, "_tc_py_cb") and hasattr(self, "_tc_py_combo"):
+            tc_py_on = self.config.get("tc_py_cb_checked", False)
+            self._tc_py_cb.setChecked(tc_py_on)
+            self._tc_py_combo.setEnabled(tc_py_on)
 
         # Terminal — only enable if explicitly set to non-default
         terminal = self.config.get("default_terminal", "")
@@ -7798,7 +7830,12 @@ try {{
 
         # Default environment type
         if hasattr(self, "default_env_type_combo"):
-            self.config.set("default_env_type", self.default_env_type_combo.currentData() or "venv")
+            cb_et = getattr(self, "default_env_type_cb", None)
+            et_val = self.default_env_type_combo.currentData() if (cb_et and cb_et.isChecked()) else "venv"
+            self.config.set("default_env_type", et_val or "venv")
+        # Toolchain Manager Python checkbox
+        if hasattr(self, "_tc_py_cb"):
+            self.config.set("tc_py_cb_checked", self._tc_py_cb.isChecked())
         if self.terminal_cb.isChecked():
             self.config.set("default_terminal", self.terminal_combo.currentData())
         else:

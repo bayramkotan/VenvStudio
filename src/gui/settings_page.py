@@ -1570,7 +1570,16 @@ class SettingsPage(QWidget):
         version = self.python_table.item(row, 0).text()
         python_path = self.python_table.item(row, 1).text()
         is_windows = get_platform() == "windows"
-        scripts_dir = os.path.join(os.path.dirname(python_path), "Scripts" if is_windows else "bin")
+        if is_windows:
+            scripts_dir = os.path.join(os.path.dirname(python_path), "Scripts")
+        else:
+            # On Linux/macOS, system python is in /usr/bin — scripts are also in /usr/bin
+            # User pip installs go to ~/.local/bin
+            _py_dir = os.path.dirname(python_path)
+            if _py_dir in ("/usr/bin", "/usr/local/bin", "/bin"):
+                scripts_dir = _py_dir  # already in PATH
+            else:
+                scripts_dir = os.path.join(_py_dir, "bin")
 
 
         # ── pip check ──
@@ -2279,7 +2288,12 @@ class SettingsPage(QWidget):
             source_item.setForeground(QColor(c['success']))
             self.python_table.setItem(row, 2, source_item)
             self.default_python_combo.addItem(f"Python {sys_version} (System Default)", os.path.normpath(default_norm))
-            listed_paths.add(default_norm)
+            # Add both normpath and realpath to listed_paths to prevent duplicates
+            listed_paths.add(os.path.normcase(default_norm))
+            try:
+                listed_paths.add(os.path.normcase(os.path.realpath(default_norm)))
+            except Exception:
+                pass
 
         # Resolve symlinks: group by real binary, keep shortest path
         seen_real = {}  # realpath -> (version, norm_path)
@@ -5912,7 +5926,16 @@ echo "OK"
         version = self.python_table.item(row, 0).text()
         python_path = self.python_table.item(row, 1).text()
         is_windows = get_platform() == "windows"
-        scripts_dir = os.path.join(os.path.dirname(python_path), "Scripts" if is_windows else "bin")
+        if is_windows:
+            scripts_dir = os.path.join(os.path.dirname(python_path), "Scripts")
+        else:
+            # On Linux/macOS, system python is in /usr/bin — scripts are also in /usr/bin
+            # User pip installs go to ~/.local/bin
+            _py_dir = os.path.dirname(python_path)
+            if _py_dir in ("/usr/bin", "/usr/local/bin", "/bin"):
+                scripts_dir = _py_dir  # already in PATH
+            else:
+                scripts_dir = os.path.join(_py_dir, "bin")
 
 
         # ── pip check ──
@@ -6621,7 +6644,12 @@ echo "OK"
             source_item.setForeground(QColor(c['success']))
             self.python_table.setItem(row, 2, source_item)
             self.default_python_combo.addItem(f"Python {sys_version} (System Default)", os.path.normpath(default_norm))
-            listed_paths.add(default_norm)
+            # Add both normpath and realpath to listed_paths to prevent duplicates
+            listed_paths.add(os.path.normcase(default_norm))
+            try:
+                listed_paths.add(os.path.normcase(os.path.realpath(default_norm)))
+            except Exception:
+                pass
 
         # Resolve symlinks: group by real binary, keep shortest path
         seen_real = {}  # realpath -> (version, norm_path)

@@ -231,6 +231,25 @@ def _detect_distro() -> str:
     return "unknown"
 
 
+def _ensure_single_instance():
+    """Prevent multiple instances using QLocalServer/QLocalSocket."""
+    from PySide6.QtNetwork import QLocalSocket, QLocalServer
+    socket = QLocalSocket()
+    socket.connectToServer("VenvStudio_SingleInstance")
+    if socket.waitForConnected(500):
+        # Already running — send raise signal and exit
+        socket.write(b"raise")
+        socket.flush()
+        socket.waitForBytesWritten(500)
+        socket.disconnectFromServer()
+        return None  # Signal to exit
+    # Not running — start server
+    server = QLocalServer()
+    QLocalServer.removeServer("VenvStudio_SingleInstance")
+    server.listen("VenvStudio_SingleInstance")
+    return server  # Keep reference alive
+
+
 def main():
     logger = None
     try:
@@ -271,6 +290,7 @@ def main():
             elif mode == QtMsgType.QtFatalMsg:
                 qt_log.critical(f"Qt FATAL: {message}")
 
+        # Install handler early — will be re-installed after QApplication
         qInstallMessageHandler(_qt_message_handler)
 
         # ── Load config and language ──
@@ -285,7 +305,15 @@ def main():
         )
 
         app = QApplication(sys.argv)
+        # Re-install after QApplication so startup font warnings are also suppressed
+        qInstallMessageHandler(_qt_message_handler)
         app.setApplicationName(APP_NAME)
+
+        # ── Single instance check ──
+        _single_instance_server = _ensure_single_instance()
+        if _single_instance_server is None:
+            logger.info("Another instance is already running — exiting")
+            sys.exit(0)
         app.setApplicationVersion(APP_VERSION)
         app.setOrganizationName("VenvStudio")
 
@@ -312,6 +340,17 @@ def main():
 
         window.show()
         logger.info("MainWindow shown — entering event loop")
+
+        # ── Raise window when another instance tries to start ──
+        def _on_new_connection():
+            conn = _single_instance_server.nextPendingConnection()
+            if conn:
+                conn.waitForReadyRead(300)
+                conn.disconnectFromServer()
+            window.setWindowState(window.windowState() & ~Qt.WindowMinimized)
+            window.raise_()
+            window.activateWindow()
+        _single_instance_server.newConnection.connect(_on_new_connection)
 
         exit_code = app.exec()
         logger.info(f"Application exiting with code {exit_code}")

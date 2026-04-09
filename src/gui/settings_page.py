@@ -2285,6 +2285,11 @@ class SettingsPage(QWidget):
             self.python_table.setItem(row, 2, source_item)
             self.default_python_combo.addItem(f"Python {sys_version} (System Default)", _dn_norm)
             listed_paths.add(default_norm)
+            # Also add realpath to prevent symlink duplicates (e.g. python vs python3)
+            try:
+                listed_paths.add(os.path.normcase(os.path.realpath(default_norm)))
+            except Exception:
+                pass
 
         # Resolve symlinks: group by real binary, keep shortest path
         seen_real = {}  # realpath -> (version, norm_path)
@@ -2307,12 +2312,17 @@ class SettingsPage(QWidget):
 
         for _real, (version, norm_path) in seen_real.items():
             norm_case = os.path.normcase(norm_path)
-            if norm_case in listed_paths:
+            # Skip if this realpath was already listed (symlink duplicate)
+            real_norm = os.path.normcase(_real)
+            if norm_case in listed_paths or real_norm in listed_paths:
                 continue
             listed_paths.add(norm_case)
+            listed_paths.add(real_norm)
 
             row = self.python_table.rowCount()
             self.python_table.insertRow(row)
+            if len(norm_path) >= 2 and norm_path[1] == ":":
+                norm_path = norm_path[0].upper() + norm_path[1:]
             if len(norm_path) >= 2 and norm_path[1] == ":":
                 norm_path = norm_path[0].upper() + norm_path[1:]
             self.python_table.setItem(row, 0, QTableWidgetItem(version))
@@ -4504,9 +4514,59 @@ try {{
                     _py_scripts and
                     not path.lower().startswith(_py_scripts.lower()))
                 # col 1: Status
+                _tid = self._TC_TOOLS[row][0] if row < len(self._TC_TOOLS) else ""
+                import os as _os2
+                _home = _os2.path.expanduser("~").lower()
+                _managed_dir = _os2.path.join(_home, ".local", "share", "venvstudio").lower()
+                _managed_dir_win = _os2.path.join(
+                    _os2.environ.get("APPDATA", ""), "VenvStudio"
+                ).lower()
+                _path_lower = path.lower() if path else ""
+                _is_managed = (ok2 and (
+                    _path_lower.startswith(_managed_dir) or
+                    _path_lower.startswith(_managed_dir_win)
+                ))
+                # Python Scripts/bin dir — only match if it's a venv-style path
+                # e.g. /home/user/venv/bin, not /usr/bin
+                _py_scripts_lower = _py_scripts.lower() if _py_scripts else ""
+                _is_system_scripts = any(_py_scripts_lower.startswith(p) for p in (
+                    "/usr/bin", "/usr/local/bin", "/bin",
+                    "c:\\windows", "c:\\program files"
+                ))
+                _is_python_local = (ok2 and not _is_managed and
+                    not _is_system_scripts and
+                    _py_scripts and
+                    path.lower().startswith(_py_scripts_lower))
+                _is_user = (ok2 and not _is_managed and not _is_python_local and (
+                    _path_lower.startswith(_os2.path.join(_home, ".local").lower()) or
+                    _path_lower.startswith(_os2.environ.get("LOCALAPPDATA", "~~~").lower()) or
+                    _path_lower.startswith(_os2.environ.get("APPDATA", "~~~").lower())
+                ))
+                # Global = /usr/bin, /usr/local/bin, C:\Program Files etc.
+                _global_prefixes = ("/usr/bin/", "/usr/local/bin/", "/bin/",
+                    "/opt/homebrew/bin/")
+                _is_global_path = ok2 and any(
+                    path.lower().startswith(p) for p in _global_prefixes
+                )
                 if ok2:
-                    st_text = "🌐 Global" if _is_global else "✅ Installed"
-                    st_color = "#89b4fa" if _is_global else "#a6e3a1"
+                    if _tid in ("pip", "venv"):
+                        st_text = "✅ Built-in"
+                        st_color = "#a6e3a1"
+                    elif _is_managed:
+                        st_text = "📦 Managed"
+                        st_color = "#cba6f7"
+                    elif _is_global_path:
+                        st_text = "🌐 Global"
+                        st_color = "#89b4fa"
+                    elif _is_user:
+                        st_text = "👤 User"
+                        st_color = "#a6e3a1"
+                    elif _is_python_local:
+                        st_text = "🐍 Python"
+                        st_color = "#f9e2af"
+                    else:
+                        st_text = "✅ Installed"
+                        st_color = "#a6e3a1"
                 else:
                     st_text = "❌ Not found"
                     st_color = "#f38ba8"
@@ -6470,6 +6530,11 @@ echo "OK"
             self.python_table.setItem(row, 2, source_item)
             self.default_python_combo.addItem(f"Python {sys_version} (System Default)", _dn_norm)
             listed_paths.add(default_norm)
+            # Also add realpath to prevent symlink duplicates (e.g. python vs python3)
+            try:
+                listed_paths.add(os.path.normcase(os.path.realpath(default_norm)))
+            except Exception:
+                pass
 
         # Resolve symlinks: group by real binary, keep shortest path
         seen_real = {}  # realpath -> (version, norm_path)
@@ -6492,12 +6557,17 @@ echo "OK"
 
         for _real, (version, norm_path) in seen_real.items():
             norm_case = os.path.normcase(norm_path)
-            if norm_case in listed_paths:
+            # Skip if this realpath was already listed (symlink duplicate)
+            real_norm = os.path.normcase(_real)
+            if norm_case in listed_paths or real_norm in listed_paths:
                 continue
             listed_paths.add(norm_case)
+            listed_paths.add(real_norm)
 
             row = self.python_table.rowCount()
             self.python_table.insertRow(row)
+            if len(norm_path) >= 2 and norm_path[1] == ":":
+                norm_path = norm_path[0].upper() + norm_path[1:]
             if len(norm_path) >= 2 and norm_path[1] == ":":
                 norm_path = norm_path[0].upper() + norm_path[1:]
             self.python_table.setItem(row, 0, QTableWidgetItem(version))

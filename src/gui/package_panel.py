@@ -294,7 +294,7 @@ class PackagePanel(QWidget):
 
         # Environment selector at top (2-row bar)
         self.env_bar = QFrame()
-        self.env_bar.setFixedHeight(72)
+        self.env_bar.setFixedHeight(90)
         self.env_bar.setStyleSheet(
             "QFrame { background-color: " + self._c()['sidebar'] + "; "
             "border-bottom: 2px solid #313244; }"
@@ -353,7 +353,7 @@ class PackagePanel(QWidget):
         row1.addWidget(self._env_bar_terminal_btn)
 
         self.env_pkg_count = QLabel("")
-        self.env_pkg_count.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_subheader']}px; font-weight: bold; padding-left: 12px;")
+        self.env_pkg_count.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px; font-weight: bold; padding-left: 12px;")
         row1.addWidget(self.env_pkg_count)
 
         row1.addStretch()
@@ -362,7 +362,8 @@ class PackagePanel(QWidget):
 
         # ── Row 2: Info bar — path | disk size | backend | last used ──
         row2 = QHBoxLayout()
-        row2.setSpacing(16)
+        row2.setSpacing(12)
+        row2.setContentsMargins(0, 2, 0, 2)
 
         info_style = f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;"
         separator_style = f"color: {self._c()['border']}; font-size: {self._c()['fs_tiny']}px;"

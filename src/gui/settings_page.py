@@ -4144,10 +4144,17 @@ try {{
         ))
 
         grp = QGroupBox()
+        _tc_c = self._c()
+        _tc_border = _tc_c.get("border", "#444")
+        _tc_bg = _tc_c.get("card", _tc_c.get("bg", "#1e1e2e"))
+        grp.setObjectName("tc_manager_group")
         grp.setStyleSheet(
-            f"QGroupBox {{ border: 1px solid {self._c().get('border', '#444')}; "
-            f"border-radius: 6px; padding: 8px; margin-top: 4px; "
-            f"background: {self._c().get('bg_secondary', '#1e1e2e')}; }}"
+            f"QGroupBox#tc_manager_group {{ "
+            f"border: 2px solid {_tc_border}; "
+            f"border-radius: 8px; "
+            f"padding: 12px; "
+            f"margin: 4px 0px; "
+            f"background: {_tc_bg}; }}"
         )
         vl = QVBoxLayout(grp)
         vl.setSpacing(8)
@@ -4486,22 +4493,104 @@ try {{
             print(f"[TC] _done: {len(rows)} rows loaded for {_py[:40]}")
             from PySide6.QtGui import QColor
             from PySide6.QtWidgets import QTableWidgetItem
-            import os as _os
-            _py_scripts = _os.path.dirname(_py)  # Python's own Scripts/bin dir
+            import os as _os, sys as _sys
+            _py_scripts = _os.path.normcase(_os.path.dirname(_py))
+            _home_dir = _os.path.normcase(_os.path.expanduser("~"))
+
+            def _get_scope(path):
+                """Return scope: 'builtin', 'global', 'user', 'python', 'custom'"""
+                if not path:
+                    return "notfound"
+                _pd = _os.path.normcase(_os.path.dirname(path))
+                if _sys.platform != "win32":
+                    # System paths → Global
+                    _sys_prefixes = [
+                        "/usr/bin", "/usr/local/bin", "/bin", "/sbin",
+                        "/usr/sbin", "/usr/local/sbin",
+                        "/opt/homebrew/bin",       # macOS Homebrew (Apple Silicon)
+                        "/usr/local/homebrew/bin", # macOS Homebrew (Intel)
+                        "/opt/local/bin",          # macOS MacPorts
+                        "/snap/bin",               # Linux Snap
+                        "/flatpak/exports/bin",    # Linux Flatpak
+                    ]
+                    if any(_pd == _os.path.normcase(p) or
+                           _pd.startswith(_os.path.normcase(p + "/"))
+                           for p in _sys_prefixes):
+                        return "global"
+                    # ~/.local/bin or ~/.*bin → User
+                    _user_prefixes = [
+                        _os.path.join(_home_dir, ".local", "bin"),
+                        _os.path.join(_home_dir, ".cargo", "bin"),
+                        _os.path.join(_home_dir, ".bin"),
+                        _os.path.join(_home_dir, ".poetry", "bin"),   # poetry self-install
+                        _os.path.join(_home_dir, ".pyenv", "bin"),    # pyenv
+                        _os.path.join(_home_dir, ".pyenv", "shims"),  # pyenv shims
+                        _os.path.join(_home_dir, "Library", "Python"), # macOS user pip
+                        _os.path.join(_home_dir, ".rye", "shims"),    # rye shims
+                        _os.path.join(_home_dir, ".uv", "bin"),       # uv self-install
+                    ]
+                    if any(_pd.startswith(p) for p in _user_prefixes):
+                        return "user"
+                    # Selected Python's bin → Python
+                    if _pd == _py_scripts:
+                        return "python"
+                    # VenvStudio managed paths
+                    _vs_prefixes = [
+                        _os.path.join(_home_dir, ".local", "share", "VenvStudio"),
+                        _os.path.join(_home_dir, ".venvstudio"),
+                        _os.path.normcase(_os.environ.get("APPDATA", "")) and
+                            _os.path.join(_os.path.normcase(_os.environ.get("APPDATA", "")), "VenvStudio")
+                        if _sys.platform == "win32" else "",
+                    ]
+                    if any(p and _pd.startswith(_os.path.normcase(p)) for p in _vs_prefixes):
+                        return "managed"
+                    # Anything else under home → User
+                    if _pd.startswith(_home_dir):
+                        return "user"
+                    return "global"
+                else:
+                    # Windows
+                    if _pd == _py_scripts:
+                        return "python"
+                    _prog     = _os.path.normcase(_os.environ.get("PROGRAMFILES", "C:\\Program Files"))
+                    _prog86   = _os.path.normcase(_os.environ.get("PROGRAMFILES(X86)", ""))
+                    _windir   = _os.path.normcase(_os.environ.get("WINDIR", "C:\\Windows"))
+                    _appdata  = _os.path.normcase(_os.environ.get("APPDATA", ""))
+                    _localapp = _os.path.normcase(_os.environ.get("LOCALAPPDATA", ""))
+                    _win_global = [p for p in [_prog, _prog86, _windir] if p]
+                    _win_user   = [p for p in [_appdata, _localapp, _home_dir] if p]
+                    if any(_pd.startswith(p) for p in _win_global):
+                        return "global"
+                    _vs_win = _os.path.normcase(_os.path.join(
+                        _os.environ.get("APPDATA", ""), "VenvStudio"))
+                    if _vs_win and _pd.startswith(_vs_win):
+                        return "managed"
+                    if any(_pd.startswith(p) for p in _win_user):
+                        return "user"
+                    return "global"
+
+            _scope_display = {
+                "builtin":  ("✅ Built-in", "#a6e3a1"),
+                "global":   ("🌐 Global",   "#89b4fa"),
+                "user":     ("👤 User",     "#a6e3a1"),
+                "python":   ("🐍 Python",   "#f9e2af"),
+                "managed":  ("📦 Managed",  "#cba6f7"),
+                "custom":   ("📁 Custom",   "#cba6f7"),
+                "notfound": ("❌ Not found","#f38ba8"),
+            }
+
             for row, item in enumerate(rows):
                 path, ver = item[0], item[1]
                 ok2 = bool(path)
-                # Detect if tool is global (not in selected Python's Scripts dir)
-                _is_global = (ok2 and
-                    _py_scripts and
-                    not path.lower().startswith(_py_scripts.lower()))
-                # col 1: Status
-                if ok2:
-                    st_text = "🌐 Global" if _is_global else "✅ Installed"
-                    st_color = "#89b4fa" if _is_global else "#a6e3a1"
+                _tid = self._TC_TOOLS[row][0] if row < len(self._TC_TOOLS) else ""
+                if _tid in ("pip", "venv"):
+                    _scope = "builtin"
+                elif ok2:
+                    _scope = _get_scope(path)
                 else:
-                    st_text = "❌ Not found"
-                    st_color = "#f38ba8"
+                    _scope = "notfound"
+                # col 1: Status
+                st_text, st_color = _scope_display.get(_scope, ("❓ Unknown", "#cdd6f4"))
                 si = QTableWidgetItem(st_text)
                 si.setForeground(QColor(st_color))
                 si.setData(256, path)
@@ -4576,25 +4665,58 @@ try {{
             else:
                 # Linux / macOS
                 if scope == "system":
-                    # Try pkexec pip install, then sudo pip install --break-system-packages
-                    _pip_cmd = [py_exe, "-m", "pip", "install", pkg, "-q",
-                                "--break-system-packages"]
+                    _bsp = "--break-system-packages"
+                    _pip_cmd = [py_exe, "-m", "pip", "install", pkg, "-q", _bsp]
                     _installed = False
-                    for _sudo in (["pkexec"], ["sudo"]):
+
+                    # 1. Try pkexec with full python path (graphical password prompt)
+                    _pkexec = _sh.which("pkexec")
+                    if _pkexec:
                         try:
-                            r = subprocess.run(_sudo + _pip_cmd,
+                            r = subprocess.run(
+                                [_pkexec, py_exe, "-m", "pip", "install", pkg, "-q", _bsp],
                                 capture_output=True, text=True, timeout=120, cwd=_home)
                             if r.returncode == 0:
                                 _installed = True
-                                break
-                        except FileNotFoundError:
-                            continue
+                        except Exception:
+                            pass
+
+                    # 2. Open terminal with sudo command
                     if not _installed:
-                        return False, "System install failed — try User install instead"
+                        _cmd_str = f"sudo {py_exe} -m pip install {pkg} -q {_bsp}"
+                        _bash_cmd = f"{_cmd_str}; echo; echo 'Done — press Enter to close'; read"
+                        # Terminal candidates: (binary, args_before_command)
+                        _terms = [
+                            ("konsole", ["--noclose", "-e", "bash", "-c"]),
+                            ("gnome-terminal", ["--", "bash", "-c"]),
+                            ("xfce4-terminal", ["--hold", "-e", "bash -c"]),
+                            ("x-terminal-emulator", ["-e", "bash", "-c"]),
+                            ("kitty", ["bash", "-c"]),
+                            ("alacritty", ["-e", "bash", "-c"]),
+                            ("wezterm", ["start", "--", "bash", "-c"]),
+                            ("tilix", ["-e", "bash", "-c"]),
+                            ("xterm", ["-hold", "-e", "bash", "-c"]),
+                            ("lxterminal", ["-e", "bash", "-c"]),
+                            ("mate-terminal", ["-e", "bash -c"]),
+                        ]
+                        for _tname, _targs in _terms:
+                            _t = _sh.which(_tname)
+                            if _t:
+                                try:
+                                    subprocess.Popen([_t] + _targs + [_bash_cmd])
+                                    return True, "terminal_opened"
+                                except Exception:
+                                    continue
+                        return False, (
+                            f"No terminal found. Run manually:\n\n  {_cmd_str}"
+                        )
+
+                    if not _installed:
+                        return False, "System install failed — try User install"
                 else:
-                    # User install — prefer pipx for standalone tools
+                    # User install
                     if _standalone and tool != "pipx":
-                        # Install via pipx if available, else pip --user
+                        # uv, poetry: prefer pipx install, else pip --user --break-system-packages
                         _pipx = _sh.which("pipx")
                         if _pipx:
                             r = subprocess.run([_pipx, "install", pkg],
@@ -4602,21 +4724,25 @@ try {{
                                 cwd=_home, **_spa())
                         else:
                             r = subprocess.run(
-                                [py_exe, "-m", "pip", "install", pkg, "--user", "-q"],
+                                [py_exe, "-m", "pip", "install", pkg,
+                                 "--user", "-q", "--break-system-packages"],
                                 capture_output=True, text=True, timeout=120,
                                 cwd=_home, **_spa())
                         if r.returncode != 0:
-                            return False, (r.stderr or r.stdout or "failed")[:300]
+                            err = (r.stderr or r.stdout or "failed")[:300]
+                            return False, err
                     elif tool == "pipx":
                         r = subprocess.run(
-                            [py_exe, "-m", "pip", "install", "pipx", "--user", "-q"],
+                            [py_exe, "-m", "pip", "install", "pipx",
+                             "--user", "-q", "--break-system-packages"],
                             capture_output=True, text=True, timeout=120,
                             cwd=_home, **_spa())
                         if r.returncode != 0:
                             return False, (r.stderr or r.stdout or "failed")[:300]
                     else:
                         r = subprocess.run(
-                            [py_exe, "-m", "pip", "install", pkg, "--user", "-q"],
+                            [py_exe, "-m", "pip", "install", pkg,
+                             "--user", "-q", "--break-system-packages"],
                             capture_output=True, text=True, timeout=120,
                             cwd=_home, **_spa())
                         if r.returncode != 0:
@@ -4638,9 +4764,16 @@ try {{
             from PySide6.QtGui import QColor
             from PySide6.QtWidgets import QMessageBox
             si2 = tbl.item(row, 1)
+            if res == "terminal_opened":
+                # Terminal opened with sudo command — refresh after delay
+                if si2:
+                    si2.setText("⏳ Installing in terminal...")
+                    si2.setForeground(QColor("#89b4fa"))
+                QTimer.singleShot(8000, lambda: self._tc_load_table(py_exe))
+                return
             if not ok:
                 if si2:
-                    si2.setText(f"❌ Failed")
+                    si2.setText("❌ Failed")
                     si2.setForeground(QColor("#f38ba8"))
                 QMessageBox.warning(None, f"Install Failed — {tool}", str(res))
                 return
@@ -4668,28 +4801,54 @@ try {{
             # Build correct remove command per tool
             # Find the tool's own executable first
             _tool_exe = _shutil.which(tool) or _shutil.which(tool + ".exe")
-            if tool == "uv":
-                if not _tool_exe:
-                    return False, "uv not found in PATH"
-                cmd = [py_exe, "-m", "pip", "uninstall", "uv", "-y", "-q"]
-            elif tool == "pipx":
-                if not _tool_exe:
-                    return False, "pipx not found in PATH"
-                # pipx may be installed via pip or standalone
-                # Try pip uninstall first, then inform user
-                cmd = [py_exe, "-m", "pip", "uninstall", "pipx", "-y", "-q"]
-            elif tool == "poetry":
-                if not _tool_exe:
-                    return False, "poetry not found in PATH"
-                cmd = [py_exe, "-m", "pip", "uninstall", "poetry", "-y", "-q"]
-            elif tool in ("pip", "venv"):
+            if tool in ("pip", "venv"):
                 return False, f"{tool} cannot be removed — it is a core Python component"
             elif tool == "micromamba":
                 return False, "micromamba is a standalone binary — delete it manually from its install path"
-            else:
-                cmd = [py_exe, "-m", "pip", "uninstall", pkg, "-y", "-q"]
+
+            if not _tool_exe:
+                return False, f"{tool} not found in PATH"
+
+            _is_linux = sys.platform == "linux"
+
+            # Build uninstall command
+            cmd = [py_exe, "-m", "pip", "uninstall", pkg, "-y", "-q"]
+
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=60,
                                cwd=_home, **subprocess_args())
+
+            # If externally managed — try with --break-system-packages
+            if r.returncode != 0 and "externally-managed" in (r.stderr or r.stdout):
+                r2 = subprocess.run(
+                    cmd + ["--break-system-packages"],
+                    capture_output=True, text=True, timeout=60, cwd=_home,
+                    **subprocess_args())
+                if r2.returncode == 0:
+                    return True, f"{tool} removed successfully"
+                # Still failed — open terminal with sudo
+                if _is_linux:
+                    _cmd_str = f"sudo {py_exe} -m pip uninstall {pkg} -y --break-system-packages"
+                    _bash_cmd = f"{_cmd_str}; echo; echo 'Done — press Enter to close'; read"
+                    _terms = [
+                        ("konsole", ["--noclose", "-e", "bash", "-c"]),
+                        ("gnome-terminal", ["--", "bash", "-c"]),
+                        ("kitty", ["bash", "-c"]),
+                        ("alacritty", ["-e", "bash", "-c"]),
+                        ("xfce4-terminal", ["--hold", "-e", "bash -c"]),
+                        ("xterm", ["-hold", "-e", "bash", "-c"]),
+                    ]
+                    for _tname, _targs in _terms:
+                        _t = _shutil.which(_tname)
+                        if _t:
+                            try:
+                                subprocess.Popen([_t] + _targs + [_bash_cmd])
+                                return True, "terminal_opened"
+                            except Exception:
+                                continue
+                    return False, (
+                        f"Run manually in terminal:\n\n  {_cmd_str}"
+                    )
+
             if r.returncode != 0:
                 return False, (r.stderr or r.stdout)[:200]
             return True, f"{tool} removed successfully"
@@ -4699,6 +4858,12 @@ try {{
             from PySide6.QtGui import QColor
             from PySide6.QtWidgets import QMessageBox
             si2 = tbl.item(row, 1)
+            if res == "terminal_opened":
+                if si2:
+                    si2.setText("⏳ Removing in terminal...")
+                    si2.setForeground(QColor("#89b4fa"))
+                QTimer.singleShot(8000, lambda: self._tc_load_table(py_exe))
+                return
             if not ok:
                 if si2:
                     si2.setText(f"❌ {res[:40]}")

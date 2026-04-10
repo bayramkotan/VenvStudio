@@ -778,7 +778,24 @@ class EnvCreateDialog(QDialog):
         if env_type in ("uv", "poetry", "pipx"):
             import os, shutil as _shutil
             location = self.location_label.text()
-            env_path = Path(os.path.join(location, name))
+
+            if env_type == "pipx":
+                # pipx uses its own home dir — not the user-selected base dir
+                from src.utils.platform_utils import get_pipx_home
+                _pipx_home = get_pipx_home()
+                if _pipx_home:
+                    env_path = Path(_pipx_home)
+                else:
+                    # Default pipx home locations
+                    if sys.platform == "win32":
+                        _pipx_home = os.path.join(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")), "pipx")
+                    else:
+                        _pipx_home = os.path.join(os.path.expanduser("~"), ".local", "share", "pipx")
+                    env_path = Path(_pipx_home)
+                env_path.mkdir(parents=True, exist_ok=True)
+            else:
+                env_path = Path(os.path.join(location, name))
+
             python_path = self.python_combo.currentData() or None
 
             # ── Pre-check: is the required tool available? ────────────
@@ -1104,7 +1121,7 @@ class EnvCreateDialog(QDialog):
                     except Exception:
                         pass
 
-                    # Create marker folder in venv base dir
+                    # Create marker inside pipx home (not a subdir per name)
                     _env_path.mkdir(parents=True, exist_ok=True)
                     with open(_env_path / ".venvstudio_env", "w") as f:
                         json.dump({
@@ -1115,8 +1132,8 @@ class EnvCreateDialog(QDialog):
                             "created": datetime.datetime.now().isoformat(),
                         }, f, indent=2)
 
-                    _cb(f"✅ pipx environment '{_name}' created!")
-                    return True, f"pipx environment '{_name}' created"
+                    _cb(f"✅ pipx environment ready at {_env_path}")
+                    return True, f"pipx environment '{_name}' ready"
 
                 return False, f"Unknown env type: {_etype}"
 

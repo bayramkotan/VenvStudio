@@ -139,17 +139,26 @@ class VenvManager:
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
     def ensure_pipx_env(self) -> bool:
-        """Auto-create a pipx marker env in base_dir if pipx is installed.
+        """Auto-create a pipx marker env in pipx home dir if pipx is installed.
         Returns True if pipx env exists or was created, False if pipx not found."""
         import shutil, json as _json, datetime as _dt, sys as _sys
         from src.utils.platform_utils import get_pipx_executable, get_pipx_home
         pipx_exe = get_pipx_executable()
         if not pipx_exe:
             return False
-        marker_dir = self.base_dir / "pipx"
+        pipx_home = get_pipx_home() or ""
+        # Use pipx home as the marker dir — not the user venv base dir
+        if pipx_home:
+            marker_dir = Path(pipx_home)
+        else:
+            # Fallback to default pipx home locations
+            import os
+            if sys.platform == "win32":
+                marker_dir = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "pipx"
+            else:
+                marker_dir = Path.home() / ".local" / "share" / "pipx"
         marker_dir.mkdir(parents=True, exist_ok=True)
         marker = marker_dir / ".venvstudio_env"
-        pipx_home = get_pipx_home() or ""
         if not marker.exists():
             try:
                 with open(marker, "w", encoding="utf-8") as _f:
@@ -484,6 +493,48 @@ class VenvManager:
         venvs = []
         if not self.base_dir.exists():
             return venvs
+
+        # ── Include pipx from its own home dir (not base_dir) ────────────
+        try:
+            from src.utils.platform_utils import get_pipx_home, get_pipx_executable
+            _pipx_home = get_pipx_home()
+            if not _pipx_home:
+                import os, sys as _sys
+                if _sys.platform == "win32":
+                    _pipx_home = os.path.join(os.environ.get("LOCALAPPDATA", ""), "pipx")
+                else:
+                    _pipx_home = os.path.join(os.path.expanduser("~"), ".local", "share", "pipx")
+            _pipx_home_path = Path(_pipx_home) if _pipx_home else None
+            if _pipx_home_path and _pipx_home_path.exists():
+                _marker = _pipx_home_path / ".venvstudio_env"
+                if _marker.exists():
+                    try:
+                        with open(_marker) as _f:
+                            _mdata = json.load(_f)
+                    except Exception:
+                        _mdata = {}
+                    _info = VenvInfo(
+                        name=_mdata.get("name", "pipx"),
+                        path=_pipx_home_path,
+                        is_valid=True,
+                        env_type="pipx",
+                    )
+                    _info.python_version = _mdata.get("python_version", "")
+                    # Count installed pipx apps
+                    try:
+                        _pipx_bin = get_pipx_executable()
+                        import sys as _sys
+                        _pipx_cmd = [_pipx_bin, "list", "--short"] if _pipx_bin else [_sys.executable, "-m", "pipx", "list", "--short"]
+                        _r = _run(_pipx_cmd, capture_output=True, text=True, timeout=15)
+                        if _r.returncode == 0:
+                            _lines = [l for l in _r.stdout.strip().splitlines() if l.strip()]
+                            _info.package_count = len(_lines)
+                    except Exception:
+                        _info.package_count = 0
+                    venvs.append(_info)
+        except Exception:
+            pass
+
         for item in sorted(self.base_dir.iterdir()):
             if not item.is_dir():
                 continue

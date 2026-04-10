@@ -2629,9 +2629,11 @@ $s.Save()
             from src.core.config_manager import ConfigManager
             terminal_type = ConfigManager().get("terminal_type", "")
             env_type = getattr(self, "_current_env_type", "venv")
+            print(f"[DEBUG] open_terminal_at path={self._current_venv_path} env_type={env_type}")
             open_terminal_at(self._current_venv_path, terminal_type,
                              env_type=env_type)
         except Exception as e:
+            print(f"[DEBUG] terminal error: {e}")
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "Error", f"Could not open terminal:\n{e}")
 
@@ -2725,7 +2727,7 @@ $s.Save()
             "uv":           {"launcher", "installed", "catalog", "presets", "manual"},
             "poetry":       {"launcher", "installed", "catalog", "presets", "manual"},
             "conda":        {"launcher", "installed", "catalog", "presets", "manual"},
-            "pipx":         {"launcher", "installed", "catalog", "presets", "manual"},
+            "pipx":         {"launcher", "installed", "catalog", "manual"},  # no presets — pipx is for CLI tools only
         }.get(env_type, {"launcher", "installed", "catalog", "presets", "manual"})
 
         # Remember current tab key before we remove tabs
@@ -3651,8 +3653,8 @@ $s.Save()
                     if _pipx_bin:
                         cmd = [_pipx_bin, "install", pkg]
                     else:
-                        _pipx_exe2 = __import__("shutil").which("pipx")
-                    cmd = [_pipx_exe2, "install", pkg] if _pipx_exe2 else [sys.executable, "-m", "pipx", "install", pkg]
+                        _pipx_exe2 = shutil.which("pipx")
+                        cmd = [_pipx_exe2, "install", pkg] if _pipx_exe2 else [sys.executable, "-m", "pipx", "install", pkg]
                     if _pipx_python:
                         cmd += ["--python", _pipx_python]
                     r = subprocess.run(

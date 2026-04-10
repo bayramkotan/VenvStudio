@@ -568,13 +568,15 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.info_label)
 
         self.env_table = QTableWidget()
-        self.env_table.setColumnCount(7)
-        self.env_table.setHorizontalHeaderLabels(["Name", "Type", "Runtime", "Packages", "Size", "Created", "Default"])
-        self.env_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        for col in range(1, 6):
+        self.env_table.setColumnCount(8)
+        self.env_table.setHorizontalHeaderLabels(["Name", "Type", "Path", "Runtime", "Packages", "Size", "Created", "Default"])
+        self.env_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.env_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.env_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        for col in range(3, 7):
             self.env_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeToContents)
-        self.env_table.horizontalHeader().setSectionResizeMode(6, QHeaderView.Fixed)
-        self.env_table.setColumnWidth(6, 70)
+        self.env_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
+        self.env_table.setColumnWidth(7, 70)
         self.env_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.env_table.setSelectionMode(QTableWidget.SingleSelection)
         self.env_table.setAlternatingRowColors(True)
@@ -934,21 +936,39 @@ class MainWindow(QMainWindow):
                 type_item.setForeground(QColor(self._c().get("accent", "#89b4fa")))
             self.env_table.setItem(i, 1, type_item)
 
+            # ── Path column ──
+            _home = str(Path.home())
+            _full_path = str(env.path)
+            # Poetry: show actual venv path from marker
+            if etype == "poetry":
+                try:
+                    import json as _j
+                    _m = env.path / ".venvstudio_env"
+                    if _m.exists():
+                        _pdata = _j.loads(_m.read_text())
+                        _pvenv = _pdata.get("poetry_venv_path", "")
+                        if _pvenv:
+                            _full_path = _pvenv
+                except Exception:
+                    pass
+            _display_path = ("~" + _full_path[len(_home):]) if _full_path.startswith(_home) else _full_path
+            path_item = QTableWidgetItem(f"  {_display_path}")
+            path_item.setToolTip(_full_path)
+            path_item.setForeground(QColor(self._c().get("fg_muted", "#888")))
+            self.env_table.setItem(i, 2, path_item)
+
             # ── Runtime column: Python version or "----" ──
             _rv = str(env.python_version).strip()
             if _rv and _rv not in ("Unknown", "?", "..."):
-                if _rv[0].isdigit():
-                    _runtime_str = f"  Python {_rv}"
-                else:
-                    _runtime_str = f"  Python {_rv}"
+                _runtime_str = f"  Python {_rv}"
             else:
                 _runtime_str = "  ----"
-            self.env_table.setItem(i, 2, QTableWidgetItem(_runtime_str))
+            self.env_table.setItem(i, 3, QTableWidgetItem(_runtime_str))
 
             pkg = str(env.package_count) if env.package_count else "0"
-            self.env_table.setItem(i, 3, QTableWidgetItem(f"  {pkg}"))
+            self.env_table.setItem(i, 4, QTableWidgetItem(f"  {pkg}"))
             _size = env.size if env.size and env.size not in ("N/A", "?", "...") else "0 MB"
-            self.env_table.setItem(i, 4, QTableWidgetItem(f"  {_size}"))
+            self.env_table.setItem(i, 5, QTableWidgetItem(f"  {_size}"))
 
             created_str = ""
             if env.created:
@@ -957,19 +977,19 @@ class MainWindow(QMainWindow):
                     created_str = dt.strftime("%Y-%m-%d %H:%M")
                 except ValueError:
                     created_str = env.created[:16]
-            self.env_table.setItem(i, 5, QTableWidgetItem(f"  {created_str}"))
+            self.env_table.setItem(i, 6, QTableWidgetItem(f"  {created_str}"))
 
             # Default column
             default_env = self.config.get("default_env", "")
             default_item = QTableWidgetItem("⭐" if env.name == default_env else "")
             default_item.setTextAlignment(Qt.AlignCenter)
             default_item.setFlags(default_item.flags() & ~Qt.ItemIsEditable)
-            self.env_table.setItem(i, 6, default_item)
+            self.env_table.setItem(i, 7, default_item)
 
         self._update_info_label_fast(len(envs))
 
         # Update package panel env dropdown
-        env_list = [(e.name, self.venv_manager.base_dir / e.name) for e in envs]
+        env_list = [(e.name, e.path) for e in envs]
         self.package_panel.populate_env_list(env_list)
         self.settings_page.populate_vscode_envs(env_list)
 
@@ -1012,10 +1032,10 @@ class MainWindow(QMainWindow):
                     _runtime_str = f"  Python {_rv}"
             else:
                 _runtime_str = "  ----"
-            self.env_table.setItem(row, 2, QTableWidgetItem(_runtime_str))
-            self.env_table.setItem(row, 3, QTableWidgetItem(f"  {package_count}"))
+            self.env_table.setItem(row, 3, QTableWidgetItem(_runtime_str))
+            self.env_table.setItem(row, 4, QTableWidgetItem(f"  {package_count}"))
             _size = size if size and size not in ("N/A", "?", "...") else "0 MB"
-            self.env_table.setItem(row, 4, QTableWidgetItem(f"  {_size}"))
+            self.env_table.setItem(row, 5, QTableWidgetItem(f"  {_size}"))
 
     def _on_all_details_done(self):
         self.loading_label.setVisible(False)
@@ -1735,8 +1755,34 @@ class MainWindow(QMainWindow):
         if not name:
             return
         venv_path = self.venv_manager.base_dir / name
+        env_type = "venv"
+        # Read env type and actual path from marker
+        _marker = venv_path / ".venvstudio_env"
+        if not _marker.exists():
+            # Check pipx home
+            from src.utils.platform_utils import get_pipx_home
+            _ph = get_pipx_home()
+            if _ph:
+                _pm = Path(_ph) / ".venvstudio_env"
+                if _pm.exists():
+                    try:
+                        import json as _j
+                        _d = _j.loads(_pm.read_text())
+                        if _d.get("name") == name:
+                            venv_path = Path(_ph)
+                            env_type = "pipx"
+                            _marker = _pm
+                    except Exception:
+                        pass
+        if _marker.exists():
+            try:
+                import json as _j
+                _d = _j.loads(_marker.read_text())
+                env_type = _d.get("type", "venv")
+            except Exception:
+                pass
         terminal_type = self.config.get("default_terminal", "")
-        open_terminal_at(venv_path, terminal_type)
+        open_terminal_at(venv_path, terminal_type, env_type=env_type)
         self.statusBar().showMessage(f"Opened terminal for '{name}'")
 
     def _open_settings(self):

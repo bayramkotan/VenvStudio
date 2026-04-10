@@ -102,15 +102,26 @@
 ### 🚀 F70 — Task Runner (pixi run benzeri)
 
 
-### 🔧 Refactor — settings_page.py Bölme (Mixin Pattern)
-- [ ] `settings_page.py` (~8066 satır) → 6 dosyaya bölünecek
-- [ ] `settings_appearance.py` — Tema, font, dil
-- [ ] `settings_python.py` — Python Versions, scan, download, PATH
-- [ ] `settings_toolchain.py` — Toolchain Manager
-- [ ] `settings_catalog.py` — Presets, categories, custom catalog
-- [ ] `settings_advanced.py` — Export/import, diagnostics, update, VS Code, CLI tools
-- [ ] Mixin pattern: Her dosya bir mixin sınıfı, `SettingsPage` hepsini miras alır
-- [ ] Hedef: ~800 satır üst sınır per dosya
+### 🔧 Refactor — Büyük Dosyaları Bölme (Mixin Pattern)
+
+#### ✅ settings_page.py — TAMAMLANDI (v1.4.49)
+- [x] `settings_page.py` (8000+ satır) → 7 dosyaya bölündü
+- [x] `settings_appearance.py` (924 satır) — Tema, font, CLI tools, terminals
+- [x] `settings_python.py` (815 satır) — Python Versions, scan, download, PATH
+- [x] `settings_toolchain.py` (991 satır) — Toolchain Manager
+- [x] `settings_catalog.py` (632 satır) — Presets, categories, custom catalog
+- [x] `settings_advanced.py` (444 satır) — Export/import, update, save, reset
+- [x] `settings_python_download.py` (570 satır) — Download dialog & workers
+
+#### 🔴 main_window.py — BEKLIYOR (2041 satır)
+- [ ] `main_window.py` — MainWindow base + __init__ + _setup_ui + _setup_menubar
+- [ ] `main_window_env.py` — Env ops: create, delete, clone, rename, context menu, export
+- [ ] `main_window_ql.py` — Quick Launch: _ql_load_env_packages, _rebuild_ql_buttons, _sync_ql_selector
+
+#### 🔴 package_panel.py — BEKLIYOR (~2900 satır)
+- [ ] `package_panel.py` — PackagePanel base + __init__
+- [ ] `package_launcher.py` — Launch tab: _launch_app, _launch_script, _launch_system_app, _update_launcher_status
+- [ ] `package_list.py` — Packages tab: install, uninstall, search, info
 
 ### 🗄️ Cache Performance Refactoring
 - [ ] In-memory cache dict, tek VenvManager/ConfigManager instance
@@ -160,6 +171,7 @@
 | B103 | v1.4.45 | Linux'ta Scripts in PATH yanlış hesaplanıyordu |
 | B104 | v1.4.48 | Scripts in PATH yanlış pozitif — which python/python3 karşılaştırması |
 | B105 | v1.4.48 | Quick Launch terminal açılmıyordu — launch_in_terminal() eklendi |
+| Refactor | v1.4.49 | settings_page.py → 7 dosyaya bölündü (mixin pattern) |
 | — | v1.4.48 | Font satırı hizalama: setFixedHeight(32) tüm widget'lara eklendi |
 | B103 | v1.4.45 | Linux scripts_dir yanlış hesaplama (usr/bin/bin) düzeltildi |
 | UI | v1.4.45 | Package Manager & Defaults bölümü (Default Env Type + pip Backend) kaldırıldı |

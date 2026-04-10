@@ -130,7 +130,7 @@ def find_system_pythons() -> List[Tuple[str, str]]:
     return pythons
 
 
-def open_terminal_at(path: Path, terminal_type: str = "") -> None:
+def open_terminal_at(path: Path, terminal_type: str = "", env_type: str = "") -> None:
     """Open a terminal/console at the given path with the venv activated."""
     system = get_platform()
 
@@ -191,9 +191,15 @@ def open_terminal_at(path: Path, terminal_type: str = "") -> None:
                      f"Set-Location '{path}'; & '{activate_ps1}'"],
                     creationflags=subprocess.CREATE_NEW_CONSOLE,
                 )
-            else:
+            elif activate_bat.exists():
                 subprocess.Popen(
                     ["cmd", "/k", f"cd /d {path} && {activate_bat}"],
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
+                )
+            else:
+                # pipx or other env types without activate script — just open terminal at path
+                subprocess.Popen(
+                    ["powershell", "-NoExit", "-Command", f"Set-Location '{path}'"],
                     creationflags=subprocess.CREATE_NEW_CONSOLE,
                 )
 
@@ -212,8 +218,53 @@ def open_terminal_at(path: Path, terminal_type: str = "") -> None:
             subprocess.Popen(["osascript", "-e", script])
 
         else:  # linux
+            # Detect env type from marker — always read marker, env_type is just a hint
+            _marker = path / ".venvstudio_env"
+            _env_type = "venv"
+            if _marker.exists():
+                try:
+                    import json as _json
+                    with open(_marker) as _mf:
+                        _env_type = _json.load(_mf).get("type", env_type or "venv")
+                except Exception:
+                    pass
+            elif env_type:
+                _env_type = env_type
+
             activate = path / "bin" / "activate"
-            bash_cmd = f"cd '{path}' && source '{activate}' && exec bash"
+
+            if _env_type == "pipx":
+                # pipx has no activate — just open terminal at pipx home
+                bash_cmd = f"cd '{path}' && exec bash"
+            elif _env_type == "poetry":
+                # Poetry stores actual venv in ~/.cache/pypoetry/virtualenvs/
+                _poetry_venv = None
+                try:
+                    import json as _json2
+                    with open(_marker) as _mf2:
+                        _poetry_venv = _json2.load(_mf2).get("poetry_venv_path", "")
+                except Exception:
+                    pass
+                if _poetry_venv and Path(_poetry_venv).exists():
+                    _pa = Path(_poetry_venv) / "bin" / "activate"
+                    bash_cmd = f"cd '{_poetry_venv}' && source '{_pa}' && exec bash"
+                else:
+                    bash_cmd = f"cd '{path}' && exec bash"
+            elif _env_type == "conda":
+                # conda activate via micromamba or conda
+                _mamba = shutil.which("micromamba") or shutil.which("conda")
+                if _mamba:
+                    bash_cmd = (
+                        f"cd '{path}' && "
+                        f"{_mamba} activate '{path}' 2>/dev/null; "
+                        f"exec bash"
+                    )
+                else:
+                    bash_cmd = f"cd '{path}' && exec bash"
+            elif activate.exists():
+                bash_cmd = f"cd '{path}' && source '{activate}' && exec bash"
+            else:
+                bash_cmd = f"cd '{path}' && exec bash"
 
             def _launch_linux_terminal(term: str) -> bool:
                 """Try to launch a specific terminal. Returns True on success."""

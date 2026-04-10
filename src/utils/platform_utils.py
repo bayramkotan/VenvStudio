@@ -406,14 +406,30 @@ def open_terminal_at(path: Path, terminal_type: str = "",
     def _make_cmd_posix(path: Path) -> str:
         if env_type in ("system_tools", "pipx"):
             return f"cd '{path}'"
+        elif env_type == "poetry":
+            # Poetry venv is in ~/.cache/pypoetry/virtualenvs/
+            import json as _j
+            _marker = path / ".venvstudio_env"
+            _poetry_venv = ""
+            if _marker.exists():
+                try:
+                    _poetry_venv = _j.loads(_marker.read_text()).get("poetry_venv_path", "")
+                except Exception:
+                    pass
+            if _poetry_venv and Path(_poetry_venv).exists():
+                _pa = Path(_poetry_venv) / "bin" / "activate"
+                return f"cd '{_poetry_venv}' && source '{_pa}'"
+            return f"cd '{path}'"
         elif env_type == "conda":
-            from src.core.micromamba_installer import get_micromamba_exe
-            mamba = get_micromamba_exe()
-            if mamba:
-                return f'eval "$("{mamba}" shell hook -s posix)" && micromamba activate "{path}"'
-            return f"conda activate '{path}'"
+            _mamba = shutil.which("micromamba") or shutil.which("conda")
+            if _mamba:
+                return f"cd '{path}' && {_mamba} activate '{path}' 2>/dev/null || true"
+            return f"cd '{path}'"
         else:
-            return f"cd '{path}' && source '{path}/bin/activate'"
+            activate = path / "bin" / "activate"
+            if activate.exists():
+                return f"cd '{path}' && source '{activate}'"
+            return f"cd '{path}'"
 
     try:
         if system == "windows":

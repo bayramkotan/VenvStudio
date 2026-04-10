@@ -101,6 +101,17 @@
 ### 📊 F69 — Bağımlılık Ağacı Görselleştirme
 ### 🚀 F70 — Task Runner (pixi run benzeri)
 
+
+### 🔧 Refactor — settings_page.py Bölme (Mixin Pattern)
+- [ ] `settings_page.py` (~8066 satır) → 6 dosyaya bölünecek
+- [ ] `settings_appearance.py` — Tema, font, dil
+- [ ] `settings_python.py` — Python Versions, scan, download, PATH
+- [ ] `settings_toolchain.py` — Toolchain Manager
+- [ ] `settings_catalog.py` — Presets, categories, custom catalog
+- [ ] `settings_advanced.py` — Export/import, diagnostics, update, VS Code, CLI tools
+- [ ] Mixin pattern: Her dosya bir mixin sınıfı, `SettingsPage` hepsini miras alır
+- [ ] Hedef: ~800 satır üst sınır per dosya
+
 ### 🗄️ Cache Performance Refactoring
 - [ ] In-memory cache dict, tek VenvManager/ConfigManager instance
 - [ ] Env geçişlerinde cache'den servis
@@ -146,6 +157,10 @@
 | B100 | v1.4.45 | Toolchain status labels: Built-in/Global/User/Python/Managed |
 | B101 | v1.4.45 | pip/venv çift Upgrade butonu giderildi |
 | B102 | v1.4.45 | python/python3 symlink duplikasyonu giderildi |
+| B103 | v1.4.45 | Linux'ta Scripts in PATH yanlış hesaplanıyordu |
+| B104 | v1.4.48 | Scripts in PATH yanlış pozitif — which python/python3 karşılaştırması |
+| B105 | v1.4.48 | Quick Launch terminal açılmıyordu — launch_in_terminal() eklendi |
+| — | v1.4.48 | Font satırı hizalama: setFixedHeight(32) tüm widget'lara eklendi |
 | B103 | v1.4.45 | Linux scripts_dir yanlış hesaplama (usr/bin/bin) düzeltildi |
 | UI | v1.4.45 | Package Manager & Defaults bölümü (Default Env Type + pip Backend) kaldırıldı |
 | B59 | v1.4.27+ | AppImage Orange3: _APPIMAGE_VARS genişletildi, pip env temizliği güçlendirildi, post-install import doğrulaması eklendi |

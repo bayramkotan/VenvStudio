@@ -15,6 +15,8 @@ from src.utils.i18n import tr
 import os, subprocess, shutil
 from pathlib import Path
 
+from .settings_python_download import _UpdateCheckWorker
+
 
 class AdvancedMixin:
     """Mixin for SettingsPage."""

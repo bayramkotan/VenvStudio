@@ -46,6 +46,19 @@ def _https_get(host: str, path: str) -> str:
     return raw
 
 
+def _https_get_urllib(host: str, path: str) -> str:
+    """Fallback: fetch via urllib (works better in frozen EXE environments)."""
+    import urllib.request
+    url = f"https://{host}{path}"
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": f"VenvStudio/{APP_VERSION}"}
+    )
+    ctx = ssl.create_default_context()
+    with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+        return resp.read().decode("utf-8", errors="replace")
+
+
 def check_for_update() -> dict:
     result = {
         "update_available": False,
@@ -56,8 +69,28 @@ def check_for_update() -> dict:
         "error": None,
     }
 
+    body = None
+    last_error = None
+
+    # Attempt 1: raw socket (original method)
     try:
         body = _https_get(PYPI_HOST, PYPI_PATH)
+    except Exception as e:
+        last_error = str(e)
+
+    # Attempt 2: urllib fallback (better for frozen EXE / Windows)
+    if body is None:
+        try:
+            body = _https_get_urllib(PYPI_HOST, PYPI_PATH)
+            last_error = None
+        except Exception as e:
+            last_error = str(e)
+
+    if body is None:
+        result["error"] = last_error or "Network error"
+        return result
+
+    try:
         data = json.loads(body)
         latest = data.get("info", {}).get("version", APP_VERSION)
         result["latest_version"] = latest

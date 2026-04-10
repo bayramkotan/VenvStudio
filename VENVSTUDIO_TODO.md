@@ -139,6 +139,15 @@
 | F53 ℹ️ | v1.4.27+ | Her section'a ℹ️ ikonu + Appearance/Language/General Sıfırla butonları |
 | B58 | v1.4.27+ | Python Sources label düzeltildi: System/User Install/Custom doğru ayrımı |
 | B60 | v1.4.27+ | Cache log path separator: Windows'ta artık ters slash ile gösteriliyor |
+| B96 | v1.4.45 | Terminal flash: PowerShell subprocess'lere CREATE_NO_WINDOW eklendi |
+| B97 | v1.4.45 | Drive letter normalization: Python path'lerinde C büyük harf |
+| B98 | v1.4.45 | Frozen exe: VenvStudio.exe Toolchain combo'da görünmüyor |
+| B99 | v1.4.45 | Duplicate helper classes kaldırıldı (466 satır) |
+| B100 | v1.4.45 | Toolchain status labels: Built-in/Global/User/Python/Managed |
+| B101 | v1.4.45 | pip/venv çift Upgrade butonu giderildi |
+| B102 | v1.4.45 | python/python3 symlink duplikasyonu giderildi |
+| B103 | v1.4.45 | Linux scripts_dir yanlış hesaplama (usr/bin/bin) düzeltildi |
+| UI | v1.4.45 | Package Manager & Defaults bölümü (Default Env Type + pip Backend) kaldırıldı |
 | B59 | v1.4.27+ | AppImage Orange3: _APPIMAGE_VARS genişletildi, pip env temizliği güçlendirildi, post-install import doğrulaması eklendi |
 
 ---

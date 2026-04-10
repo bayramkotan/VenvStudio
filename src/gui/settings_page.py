@@ -512,69 +512,6 @@ class SettingsPage(QWidget):
         paths_group.setLayout(paths_layout)
         layout.addWidget(paths_group)
 
-        # ── 5. PACKAGE MANAGER & ENVIRONMENT DEFAULTS ──
-        layout.addWidget(self._make_group_title_row(
-            "📦 Package Manager & Defaults",
-            "Configure the default environment type and package backend.\n"
-            "• Default env type: Pre-selects the environment type when creating new environments\n"
-            "• pip backend: Override pip with uv for faster installs (applies to venv type)\n"
-            "• uv is auto-installed if not present on your system",
-        ))
-        pkg_mgr_group = QGroupBox()
-        pkg_mgr_layout = QFormLayout()
-        pkg_mgr_layout.setSpacing(12)
-
-        # Default Environment Type
-        default_env_type_row = QHBoxLayout()
-        self.default_env_type_cb = QCheckBox()
-        self.default_env_type_cb.setChecked(False)
-        self.default_env_type_cb.toggled.connect(lambda on: self.default_env_type_combo.setEnabled(on))
-        default_env_type_row.addWidget(self.default_env_type_cb)
-
-        self.default_env_type_combo = NoScrollComboBox()
-        self.default_env_type_combo.addItem("🐍 Python venv (default)", "venv")
-        self.default_env_type_combo.addItem("⚡ uv (fast, Rust-powered)", "uv")
-        self.default_env_type_combo.addItem("📜 Poetry (lock file)", "poetry")
-        self.default_env_type_combo.addItem("📦 pipx (CLI apps)", "pipx")
-        self.default_env_type_combo.addItem("🦎 Conda (micromamba)", "conda")
-        self.default_env_type_combo.setEnabled(False)
-        default_env_type_row.addWidget(self.default_env_type_combo, 1)
-        pkg_mgr_layout.addRow("Default Env Type:", default_env_type_row)
-
-        env_type_note = QLabel(
-            "This pre-selects the environment type in the 'New Environment' dialog.\n"
-            "You can always change it when creating a new environment."
-        )
-        env_type_note.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
-        env_type_note.setWordWrap(True)
-        pkg_mgr_layout.addRow("", env_type_note)
-
-        # pip/uv backend override (for venv type)
-        pkg_mgr_row = QHBoxLayout()
-        self.pkg_mgr_cb = QCheckBox()
-        self.pkg_mgr_cb.setChecked(False)
-        self.pkg_mgr_cb.toggled.connect(lambda on: self.pkg_manager_combo.setEnabled(on))
-        pkg_mgr_row.addWidget(self.pkg_mgr_cb)
-
-        self.pkg_manager_combo = NoScrollComboBox()
-        self.pkg_manager_combo.setEnabled(False)
-        self.pkg_manager_combo.addItem("pip (default)", "pip")
-        self.pkg_manager_combo.addItem("uv (fast, pip-compatible)", "uv")
-        pkg_mgr_row.addWidget(self.pkg_manager_combo, 1)
-        pkg_mgr_layout.addRow("pip Backend:", pkg_mgr_row)
-
-        # uv auto-install info
-        uv_note = QLabel(
-            "Override pip with uv for venv environments (10-100× faster).\n"
-            "Note: uv environments always use uv regardless of this setting."
-        )
-        uv_note.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
-        uv_note.setWordWrap(True)
-        pkg_mgr_layout.addRow("", uv_note)
-
-        pkg_mgr_group.setLayout(pkg_mgr_layout)
-        layout.addWidget(pkg_mgr_group)
-
         # ── 5b. TOOLCHAIN MANAGER ──────────────────────────────────────────
         if not hasattr(self, "_tc_built"):
             self._tc_built = True
@@ -1570,7 +1507,11 @@ class SettingsPage(QWidget):
         version = self.python_table.item(row, 0).text()
         python_path = self.python_table.item(row, 1).text()
         is_windows = get_platform() == "windows"
-        scripts_dir = os.path.join(os.path.dirname(python_path), "Scripts" if is_windows else "bin")
+        if is_windows:
+            scripts_dir = os.path.join(os.path.dirname(python_path), "Scripts")
+        else:
+            # On Linux/macOS, python is already in /usr/bin or similar — no "bin" subdir
+            scripts_dir = os.path.dirname(python_path)
 
 
         # ── pip check ──
@@ -2118,27 +2059,7 @@ class SettingsPage(QWidget):
         self.save_window_cb.setChecked(self.config.get("save_window_geometry", True))
 
         # Package manager
-        pkg_mgr = self.config.get("package_manager", "pip")
-        idx = self.pkg_manager_combo.findData(pkg_mgr)
-        if idx >= 0:
-            self.pkg_manager_combo.setCurrentIndex(idx)
-        if pkg_mgr != "pip":
-            self.pkg_mgr_cb.setChecked(True)
-            self.pkg_manager_combo.setEnabled(True)
-        else:
-            self.pkg_mgr_cb.setChecked(False)
-            self.pkg_manager_combo.setEnabled(False)
 
-        # Default environment type
-        if hasattr(self, "default_env_type_combo"):
-            default_et = self.config.get("default_env_type", "venv")
-            et_idx = self.default_env_type_combo.findData(default_et)
-            if et_idx >= 0:
-                self.default_env_type_combo.setCurrentIndex(et_idx)
-            is_custom_et = bool(default_et and default_et != "venv")
-            if hasattr(self, "default_env_type_cb"):
-                self.default_env_type_cb.setChecked(is_custom_et)
-                self.default_env_type_combo.setEnabled(is_custom_et)
 
         # Toolchain Manager Python checkbox
         if hasattr(self, "_tc_py_cb") and hasattr(self, "_tc_py_combo"):
@@ -3803,17 +3724,11 @@ try {{
         self.config.set("save_window_geometry", self.save_window_cb.isChecked())
 
         # Package manager — only save if checkbox is enabled
-        if self.pkg_mgr_cb.isChecked():
-            self.config.set("package_manager", self.pkg_manager_combo.currentData() or "pip")
-        else:
-            self.config.set("package_manager", "pip")
+        self.config.set("package_manager", "pip")
         # Default Terminal — only save if checkbox is enabled
 
         # Default environment type
-        if hasattr(self, "default_env_type_combo"):
-            cb_et = getattr(self, "default_env_type_cb", None)
-            et_val = self.default_env_type_combo.currentData() if (cb_et and cb_et.isChecked()) else "venv"
-            self.config.set("default_env_type", et_val or "venv")
+
         # Toolchain Manager Python checkbox
         if hasattr(self, "_tc_py_cb"):
             self.config.set("tc_py_cb_checked", self._tc_py_cb.isChecked())
@@ -4332,9 +4247,9 @@ try {{
         # pip/venv always show upgrade (install_user repurposed as upgrade)
         tid = self._TC_TOOLS[row][0] if row < len(self._TC_TOOLS) else ""
         if tid in ("pip", "venv"):
-            # Always show upgrade only
-            for n in ("install_user", "upgrade_user"): 
-                if n in btns: btns[n].setVisible(True)
+            # pip/venv: install_user is repurposed as Upgrade — hide upgrade_user
+            if "install_user" in btns: btns["install_user"].setVisible(True)
+            if "upgrade_user" in btns: btns["upgrade_user"].setVisible(False)
             if "rm_user" in btns: btns["rm_user"].setVisible(False)
         elif installed:
             if "install_user" in btns: btns["install_user"].setVisible(False)
@@ -5815,7 +5730,11 @@ echo "OK"
         version = self.python_table.item(row, 0).text()
         python_path = self.python_table.item(row, 1).text()
         is_windows = get_platform() == "windows"
-        scripts_dir = os.path.join(os.path.dirname(python_path), "Scripts" if is_windows else "bin")
+        if is_windows:
+            scripts_dir = os.path.join(os.path.dirname(python_path), "Scripts")
+        else:
+            # On Linux/macOS, python is already in /usr/bin or similar — no "bin" subdir
+            scripts_dir = os.path.dirname(python_path)
 
 
         # ── pip check ──
@@ -6363,27 +6282,7 @@ echo "OK"
         self.save_window_cb.setChecked(self.config.get("save_window_geometry", True))
 
         # Package manager
-        pkg_mgr = self.config.get("package_manager", "pip")
-        idx = self.pkg_manager_combo.findData(pkg_mgr)
-        if idx >= 0:
-            self.pkg_manager_combo.setCurrentIndex(idx)
-        if pkg_mgr != "pip":
-            self.pkg_mgr_cb.setChecked(True)
-            self.pkg_manager_combo.setEnabled(True)
-        else:
-            self.pkg_mgr_cb.setChecked(False)
-            self.pkg_manager_combo.setEnabled(False)
 
-        # Default environment type
-        if hasattr(self, "default_env_type_combo"):
-            default_et = self.config.get("default_env_type", "venv")
-            et_idx = self.default_env_type_combo.findData(default_et)
-            if et_idx >= 0:
-                self.default_env_type_combo.setCurrentIndex(et_idx)
-            is_custom_et = bool(default_et and default_et != "venv")
-            if hasattr(self, "default_env_type_cb"):
-                self.default_env_type_cb.setChecked(is_custom_et)
-                self.default_env_type_combo.setEnabled(is_custom_et)
 
         # Toolchain Manager Python checkbox
         if hasattr(self, "_tc_py_cb") and hasattr(self, "_tc_py_combo"):
@@ -8048,17 +7947,11 @@ try {{
         self.config.set("save_window_geometry", self.save_window_cb.isChecked())
 
         # Package manager — only save if checkbox is enabled
-        if self.pkg_mgr_cb.isChecked():
-            self.config.set("package_manager", self.pkg_manager_combo.currentData() or "pip")
-        else:
-            self.config.set("package_manager", "pip")
+        self.config.set("package_manager", "pip")
         # Default Terminal — only save if checkbox is enabled
 
         # Default environment type
-        if hasattr(self, "default_env_type_combo"):
-            cb_et = getattr(self, "default_env_type_cb", None)
-            et_val = self.default_env_type_combo.currentData() if (cb_et and cb_et.isChecked()) else "venv"
-            self.config.set("default_env_type", et_val or "venv")
+
         # Toolchain Manager Python checkbox
         if hasattr(self, "_tc_py_cb"):
             self.config.set("tc_py_cb_checked", self._tc_py_cb.isChecked())

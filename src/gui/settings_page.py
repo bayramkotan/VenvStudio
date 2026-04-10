@@ -1540,8 +1540,31 @@ class SettingsPage(QWidget):
         except Exception:
             pass
 
-        current_path = os.environ.get("PATH", "")
-        scripts_in_path = scripts_dir.lower() in current_path.lower()
+        # Check if selected python is the system default (which python / which python3)
+        scripts_in_path = False
+        if is_windows:
+            current_path = os.environ.get("PATH", "")
+            path_sep = ";"
+            scripts_in_path = scripts_dir.lower().rstrip("/\\") in [
+                p.lower().rstrip("/\\") for p in current_path.split(path_sep)
+            ]
+        else:
+            try:
+                real_selected = os.path.realpath(python_path)
+                default_in_path = False
+                for cmd in ["python", "python3"]:
+                    result = subprocess.run(
+                        ["which", cmd],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    if result.returncode == 0:
+                        which_path = result.stdout.strip()
+                        if os.path.realpath(which_path) == real_selected:
+                            default_in_path = True
+                            break
+                scripts_in_path = default_in_path
+            except Exception:
+                pass
 
         pip_status = "✅ Working" if pip_runnable else "❌ Not working"
         venv_status = "✅ Available" if venv_available else "❌ Not available"
@@ -5763,8 +5786,31 @@ echo "OK"
         except Exception:
             pass
 
-        current_path = os.environ.get("PATH", "")
-        scripts_in_path = scripts_dir.lower() in current_path.lower()
+        # Check if selected python is the system default (which python / which python3)
+        scripts_in_path = False
+        if is_windows:
+            current_path = os.environ.get("PATH", "")
+            path_sep = ";"
+            scripts_in_path = scripts_dir.lower().rstrip("/\\") in [
+                p.lower().rstrip("/\\") for p in current_path.split(path_sep)
+            ]
+        else:
+            try:
+                real_selected = os.path.realpath(python_path)
+                default_in_path = False
+                for cmd in ["python", "python3"]:
+                    result = subprocess.run(
+                        ["which", cmd],
+                        capture_output=True, text=True, timeout=5
+                    )
+                    if result.returncode == 0:
+                        which_path = result.stdout.strip()
+                        if os.path.realpath(which_path) == real_selected:
+                            default_in_path = True
+                            break
+                scripts_in_path = default_in_path
+            except Exception:
+                pass
 
         pip_status = "✅ Working" if pip_runnable else "❌ Not working"
         venv_status = "✅ Available" if venv_available else "❌ Not available"

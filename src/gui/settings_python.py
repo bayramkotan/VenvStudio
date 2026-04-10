@@ -447,7 +447,7 @@ class PythonMixin:
         try:
             result = subprocess.run(
                 [filepath, "--version"],
-                **sp_args(capture_output=True, text=True, timeout=5)
+                **subprocess_args(capture_output=True, text=True, timeout=5)
             )
             if result.returncode != 0:
                 QMessageBox.critical(self, "Error", f"Not a valid Python executable:\n{filepath}")

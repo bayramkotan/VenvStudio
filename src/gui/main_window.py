@@ -730,10 +730,11 @@ class MainWindow(QMainWindow):
             def run(self):
                 try:
                     import subprocess, sys
+                    from src.utils.platform_utils import subprocess_args
                     python = self._vp / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
                     r = subprocess.run(
                         [str(python), "-m", "pip", "list", "--format=json"],
-                        capture_output=True, text=True, timeout=30
+                        **subprocess_args(capture_output=True, text=True, timeout=30)
                     )
                     if r.returncode == 0:
                         pkgs = json.loads(r.stdout)
@@ -1840,11 +1841,12 @@ class MainWindow(QMainWindow):
             return
 
         import subprocess
+        from src.utils.platform_utils import subprocess_args
         # Check if venv module works
         try:
             result = subprocess.run(
                 ["python3", "-m", "venv", "--help"],
-                capture_output=True, text=True, timeout=5
+                **subprocess_args(capture_output=True, text=True, timeout=5)
             )
             if result.returncode == 0:
                 return  # Already installed
@@ -1872,7 +1874,7 @@ class MainWindow(QMainWindow):
             try:
                 r = subprocess.run(
                     sudo_cmd + ["apt-get", "install", "-y", "python3-venv"],
-                    timeout=120
+                    **subprocess_args(timeout=120)
                 )
                 if r.returncode == 0:
                     QMessageBox.information(
@@ -1902,11 +1904,12 @@ class MainWindow(QMainWindow):
 
 
         import shutil, subprocess
+        from src.utils.platform_utils import subprocess_args
         # Check if Noto Color Emoji is installed, offer to install if missing
         try:
             result = subprocess.run(
                 ["fc-list", ":family=Noto Color Emoji"],
-                capture_output=True, text=True, timeout=5
+                **subprocess_args(capture_output=True, text=True, timeout=5)
             )
             emoji_available = bool(result.stdout.strip())
         except Exception:
@@ -1926,11 +1929,11 @@ class MainWindow(QMainWindow):
                     try:
                         r = subprocess.run(
                             sudo + ["apt-get", "install", "-y", "fonts-noto-color-emoji"],
-                            capture_output=True, text=True, timeout=120
+                            **subprocess_args(capture_output=True, text=True, timeout=120)
                         )
                         if r.returncode == 0:
                             # Rebuild font cache
-                            subprocess.run(["fc-cache", "-f"], timeout=30)
+                            subprocess.run(["fc-cache", "-f"], **subprocess_args(timeout=30))
                             emoji_available = True
                             break
                     except (FileNotFoundError, subprocess.TimeoutExpired):

@@ -139,13 +139,13 @@ class ToolchainMixin:
                 except Exception as e:
                     return False, f"UAC error: {e}"
             elif scope == "system":
-                r = subprocess.run(["sudo", sys.executable, "-m", "pip", "install", pkg, "-q"], capture_output=True, text=True, timeout=120)
+                r = subprocess.run(["sudo", sys.executable, "-m", "pip", "install", pkg, "-q"], **subprocess_args(capture_output=True, text=True, timeout=120))
                 if r.returncode != 0: return False, (r.stderr or "failed")[:200]
             else:
-                r = subprocess.run([sys.executable, "-m", "pip", "install", pkg, "--user", "-q"], capture_output=True, text=True, timeout=120)
+                r = subprocess.run([sys.executable, "-m", "pip", "install", pkg, "--user", "-q"], **subprocess_args(capture_output=True, text=True, timeout=120))
                 if r.returncode != 0: return False, (r.stderr or "failed")[:200]
             if tool == "pipx":
-                try: subprocess.run([sys.executable, "-m", "pipx", "ensurepath"], capture_output=True, timeout=30)
+                try: subprocess.run([sys.executable, "-m", "pipx", "ensurepath"], **subprocess_args(capture_output=True, timeout=30))
                 except Exception: pass
             candidates = []
             for n in (tool, tool + ".exe"):
@@ -192,7 +192,7 @@ class ToolchainMixin:
     def _pm_uninstall_tool(self, tool, pkg, status_label, btn):
         import sys, subprocess
         btn.setEnabled(False)
-        r = subprocess.run([sys.executable, "-m", "pip", "uninstall", pkg, "-y", "-q"], capture_output=True, text=True, timeout=60)
+        r = subprocess.run([sys.executable, "-m", "pip", "uninstall", pkg, "-y", "-q"], **subprocess_args(capture_output=True, text=True, timeout=60))
         if r.returncode == 0:
             status_label.setText("❌ Not installed")
             status_label.setStyleSheet("font-size: 11px; color: #f38ba8;")
@@ -555,11 +555,11 @@ class ToolchainMixin:
                             # venv has no --version; check if module exists
                             r = subprocess.run(
                                 [py_exe, "-c", "import venv; print(venv.__version__ if hasattr(venv,'__version__') else 'ok')"],
-                                capture_output=True, text=True, timeout=5, cwd=__import__('os').path.expanduser('~'))
+                                **subprocess_args(capture_output=True, text=True, timeout=5), cwd=__import__('os').path.expanduser('~'))
                             path = py_exe if r.returncode == 0 else ""
                         else:
                             r = subprocess.run([py_exe, "-m", tid, "--version"],
-                                capture_output=True, text=True, timeout=5, cwd=__import__('os').path.expanduser('~'))
+                                **subprocess_args(capture_output=True, text=True, timeout=5), cwd=__import__('os').path.expanduser('~'))
                             path = py_exe if r.returncode == 0 else ""
                     except Exception: path = ""
                 else:
@@ -570,18 +570,18 @@ class ToolchainMixin:
                     try:
                         if tid == "venv":
                             r = subprocess.run([py_exe, "--version"],
-                                capture_output=True, text=True, timeout=5, cwd=__import__('os').path.expanduser('~'))
+                                **subprocess_args(capture_output=True, text=True, timeout=5), cwd=__import__('os').path.expanduser('~'))
                             ver = (r.stdout or r.stderr).strip().replace("Python ", "")
                         elif tid == "pip":
                             r = subprocess.run([py_exe, "-m", "pip", "--version"],
-                                capture_output=True, text=True, timeout=5, cwd=__import__('os').path.expanduser('~'))
+                                **subprocess_args(capture_output=True, text=True, timeout=5), cwd=__import__('os').path.expanduser('~'))
                             out = (r.stdout or r.stderr).strip()
                             for p in out.split():
                                 if p and p[0].isdigit():
                                     ver = p.rstrip(","); break
                         else:
                             r = subprocess.run([path, "--version"],
-                                capture_output=True, text=True, timeout=5, cwd=__import__('os').path.expanduser('~'))
+                                **subprocess_args(capture_output=True, text=True, timeout=5), cwd=__import__('os').path.expanduser('~'))
                             out = (r.stdout or r.stderr).strip()
                             for p in out.split():
                                 if p and p[0].isdigit():
@@ -741,7 +741,7 @@ class ToolchainMixin:
                     # User install
                     r = subprocess.run(
                         [py_exe, "-m", "pip", "install", pkg, "--user", "-q"],
-                        capture_output=True, text=True, timeout=120,
+                        **subprocess_args(capture_output=True, text=True, timeout=120),
                         cwd=_home, **_spa())
                     if r.returncode != 0:
                         return False, (r.stderr or r.stdout or "failed")[:300]
@@ -755,7 +755,7 @@ class ToolchainMixin:
                     for _sudo in (["pkexec"], ["sudo"]):
                         try:
                             r = subprocess.run(_sudo + _pip_cmd,
-                                capture_output=True, text=True, timeout=120, cwd=_home)
+                                **subprocess_args(capture_output=True, text=True, timeout=120), cwd=_home)
                             if r.returncode == 0:
                                 _installed = True
                                 break
@@ -770,26 +770,26 @@ class ToolchainMixin:
                         _pipx = _sh.which("pipx")
                         if _pipx:
                             r = subprocess.run([_pipx, "install", pkg],
-                                capture_output=True, text=True, timeout=120,
+                                **subprocess_args(capture_output=True, text=True, timeout=120),
                                 cwd=_home, **_spa())
                         else:
                             r = subprocess.run(
                                 [py_exe, "-m", "pip", "install", pkg, "--user", "-q"],
-                                capture_output=True, text=True, timeout=120,
+                                **subprocess_args(capture_output=True, text=True, timeout=120),
                                 cwd=_home, **_spa())
                         if r.returncode != 0:
                             return False, (r.stderr or r.stdout or "failed")[:300]
                     elif tool == "pipx":
                         r = subprocess.run(
                             [py_exe, "-m", "pip", "install", "pipx", "--user", "-q"],
-                            capture_output=True, text=True, timeout=120,
+                            **subprocess_args(capture_output=True, text=True, timeout=120),
                             cwd=_home, **_spa())
                         if r.returncode != 0:
                             return False, (r.stderr or r.stdout or "failed")[:300]
                     else:
                         r = subprocess.run(
                             [py_exe, "-m", "pip", "install", pkg, "--user", "-q"],
-                            capture_output=True, text=True, timeout=120,
+                            **subprocess_args(capture_output=True, text=True, timeout=120),
                             cwd=_home, **_spa())
                         if r.returncode != 0:
                             return False, (r.stderr or r.stdout or "failed")[:300]
@@ -800,7 +800,7 @@ class ToolchainMixin:
                 if _pipx2:
                     try:
                         subprocess.run([_pipx2, "ensurepath"],
-                            capture_output=True, timeout=30, cwd=_home)
+                            **subprocess_args(capture_output=True, timeout=30), cwd=_home)
                     except Exception:
                         pass
             return True, "ok"
@@ -894,10 +894,10 @@ class ToolchainMixin:
             if tool == "venv":
                 r = subprocess.run(
                     [py, "-c", "import venv, sys; print('venv OK - Python', sys.version.split()[0])"],
-                    capture_output=True, text=True, timeout=8, cwd=__import__('os').path.expanduser('~'))
+                    **subprocess_args(capture_output=True, text=True, timeout=8), cwd=__import__('os').path.expanduser('~'))
             elif tool == "pip":
                 r = subprocess.run([py, "-m", "pip", "--version"],
-                    capture_output=True, text=True, timeout=8, cwd=__import__('os').path.expanduser('~'))
+                    **subprocess_args(capture_output=True, text=True, timeout=8), cwd=__import__('os').path.expanduser('~'))
             elif tool == "micromamba":
                 # micromamba is a standalone binary, not a Python module
                 mamba_exe = exe
@@ -909,17 +909,17 @@ class ToolchainMixin:
                         pass
                 if mamba_exe:
                     r = subprocess.run([mamba_exe, "--version"],
-                        capture_output=True, text=True, timeout=8, cwd=__import__('os').path.expanduser('~'))
+                        **subprocess_args(capture_output=True, text=True, timeout=8), cwd=__import__('os').path.expanduser('~'))
                 else:
                     from PySide6.QtWidgets import QMessageBox
                     QMessageBox.warning(None, "Not Found", "micromamba not installed. Use Download.")
                     return
             elif exe:
                 r = subprocess.run([exe, "--version"],
-                    capture_output=True, text=True, timeout=8, cwd=__import__('os').path.expanduser('~'))
+                    **subprocess_args(capture_output=True, text=True, timeout=8), cwd=__import__('os').path.expanduser('~'))
             else:
                 r = subprocess.run([py, "-m", tool, "--version"],
-                    capture_output=True, text=True, timeout=8, cwd=__import__('os').path.expanduser('~'))
+                    **subprocess_args(capture_output=True, text=True, timeout=8), cwd=__import__('os').path.expanduser('~'))
             out = (r.stdout or r.stderr).strip()
             if r.returncode == 0:
                 QMessageBox.information(None, f"\u2705 {tool} OK",

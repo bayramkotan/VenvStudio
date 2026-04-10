@@ -59,6 +59,29 @@ def _https_get_urllib(host: str, path: str) -> str:
         return resp.read().decode("utf-8", errors="replace")
 
 
+def _make_ssl_ctx(verify: bool = True) -> ssl.SSLContext:
+    """Create SSL context, optionally skipping verification (AppImage/EXE fallback)."""
+    if verify:
+        ctx = ssl.create_default_context()
+        # Try system cert bundles (important for AppImage on Linux)
+        import os
+        for cert_path in (
+            "/etc/ssl/certs/ca-certificates.crt",
+            "/etc/pki/tls/certs/ca-bundle.crt",
+            "/etc/ssl/ca-bundle.pem",
+            "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+        ):
+            if os.path.isfile(cert_path):
+                ctx.load_verify_locations(cert_path)
+                break
+        return ctx
+    else:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return ctx
+
+
 def check_for_update() -> dict:
     result = {
         "update_available": False,
@@ -72,16 +95,31 @@ def check_for_update() -> dict:
     body = None
     last_error = None
 
-    # Attempt 1: raw socket (original method)
+    # Attempt 1: raw socket with system certs
     try:
         body = _https_get(PYPI_HOST, PYPI_PATH)
     except Exception as e:
         last_error = str(e)
 
-    # Attempt 2: urllib fallback (better for frozen EXE / Windows)
+    # Attempt 2: urllib with system certs
     if body is None:
         try:
             body = _https_get_urllib(PYPI_HOST, PYPI_PATH)
+            last_error = None
+        except Exception as e:
+            last_error = str(e)
+
+    # Attempt 3: urllib without SSL verification (AppImage/EXE fallback)
+    if body is None:
+        try:
+            import urllib.request
+            url = f"https://{PYPI_HOST}{PYPI_PATH}"
+            req = urllib.request.Request(
+                url, headers={"User-Agent": f"VenvStudio/{APP_VERSION}"}
+            )
+            ctx = _make_ssl_ctx(verify=False)
+            with urllib.request.urlopen(req, timeout=10, context=ctx) as resp:
+                body = resp.read().decode("utf-8", errors="replace")
             last_error = None
         except Exception as e:
             last_error = str(e)

@@ -257,6 +257,80 @@ def open_terminal_at(path: Path, terminal_type: str = "") -> None:
         print(f"Could not open terminal: {e}")
 
 
+def launch_in_terminal(cmd: list, cwd: str = "", terminal_type: str = "") -> bool:
+    """Launch a command in a new terminal window (for console apps like IPython).
+    Uses the same terminal auto-detection as open_terminal_at.
+    Returns True if launched successfully.
+    """
+    system = get_platform()
+    cmd_str = " ".join(f'"{c}"' for c in cmd)
+    bash_cmd = f"{cmd_str}; echo ''; read -p 'Press Enter to close...'"
+
+    if system == "windows":
+        try:
+            subprocess.Popen(
+                cmd,
+                cwd=cwd or None,
+                creationflags=subprocess.CREATE_NEW_CONSOLE,
+            )
+            return True
+        except Exception:
+            return False
+
+    elif system == "macos":
+        try:
+            script = f'tell application "Terminal" to do script "cd \'{cwd}\' && {cmd_str}"'
+            subprocess.Popen(["osascript", "-e", script])
+            return True
+        except Exception:
+            return False
+
+    else:  # linux
+        def _try_term(term: str) -> bool:
+            if not shutil.which(term):
+                return False
+            try:
+                if term == "gnome-terminal":
+                    subprocess.Popen([term, "--", "bash", "-c", bash_cmd], cwd=cwd or None)
+                elif term in ("konsole", "yakuake"):
+                    subprocess.Popen([term, "--noclose", "-e", "bash", "-c", bash_cmd], cwd=cwd or None)
+                elif term in ("xfce4-terminal", "mate-terminal", "lxterminal", "tilix"):
+                    subprocess.Popen([term, "-e", f"bash -c '{bash_cmd}'"], cwd=cwd or None)
+                elif term == "kitty":
+                    subprocess.Popen([term, "bash", "-c", bash_cmd], cwd=cwd or None)
+                elif term == "alacritty":
+                    subprocess.Popen([term, "-e", "bash", "-c", bash_cmd], cwd=cwd or None)
+                elif term == "wezterm":
+                    subprocess.Popen([term, "start", "--", "bash", "-c", bash_cmd], cwd=cwd or None)
+                else:
+                    subprocess.Popen([term, "-e", f"bash -c '{bash_cmd}'"], cwd=cwd or None)
+                return True
+            except Exception:
+                return False
+
+        # Try explicit terminal first
+        if terminal_type and terminal_type not in ("", "default"):
+            if _try_term(terminal_type):
+                return True
+
+        # Auto-detect
+        auto_order = [
+            "gnome-terminal", "konsole", "xfce4-terminal",
+            "tilix", "mate-terminal", "alacritty", "kitty",
+            "wezterm", "lxterminal", "xterm", "x-terminal-emulator",
+        ]
+        for term in auto_order:
+            if _try_term(term):
+                return True
+
+        # Last resort: run in-place (blocks but better than nothing)
+        try:
+            subprocess.Popen(cmd, cwd=cwd or None)
+            return True
+        except Exception:
+            return False
+
+
 def get_venv_size(venv_path: Path) -> str:
     """Calculate and return human-readable size of a venv directory."""
     total = 0

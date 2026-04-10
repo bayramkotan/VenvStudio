@@ -489,6 +489,7 @@ class PackagePanel(QWidget):
                 "package": "jupyterlab",
                 "command": ["-m", "jupyter", "lab"],
                 "desc": "Next-generation notebook interface for interactive computing",
+                "needs_console": True,
             },
             {
                 "name": "Jupyter Notebook",
@@ -498,6 +499,7 @@ class PackagePanel(QWidget):
                 "package": "notebook",
                 "command": ["-m", "jupyter", "notebook"],
                 "desc": "Classic Jupyter Notebook — simple, document-centric interface",
+                "needs_console": True,
             },
             {
                 "name": "Orange Data Mining",
@@ -1436,9 +1438,15 @@ class PackagePanel(QWidget):
                                      stdout=subprocess.DEVNULL,
                                      stderr=subprocess.DEVNULL)
             else:
-                subprocess.Popen(cmd, cwd=work_dir,
-                                 stdout=subprocess.DEVNULL,
-                                 stderr=subprocess.DEVNULL)
+                if show_console:
+                    from src.gui.platform_utils import launch_in_terminal
+                    terminal_type = self.config.get("terminal_type", "") if hasattr(self, "config") and self.config else ""
+                    launch_in_terminal(cmd, cwd=work_dir, terminal_type=terminal_type)
+                else:
+                    subprocess.Popen(cmd, cwd=work_dir,
+                                     stdout=subprocess.DEVNULL,
+                                     stderr=subprocess.DEVNULL,
+                                     start_new_session=True)
             self.status_label.setText(f"✅ {name} launched")
             url = app_def.get("open_browser")
             if url:
@@ -1555,11 +1563,9 @@ class PackagePanel(QWidget):
             if get_platform() == "windows":
                 subprocess.Popen(cmd, cwd=work_dir, creationflags=subprocess.CREATE_NEW_CONSOLE)
             else:
-                cmd_str = " ".join(f'"{c}"' for c in cmd)
-                try:
-                    subprocess.Popen(["x-terminal-emulator", "-e", f"bash -c '{cmd_str}; read -p Press_Enter'"], cwd=work_dir)
-                except FileNotFoundError:
-                    subprocess.Popen(cmd, cwd=work_dir)
+                from src.gui.platform_utils import launch_in_terminal
+                terminal_type = self.config.get("terminal_type", "") if hasattr(self, "config") and self.config else ""
+                launch_in_terminal(cmd, cwd=work_dir, terminal_type=terminal_type)
 
             self.status_label.setText(f"🚀 Running {os.path.basename(filepath)}")
 
@@ -1811,15 +1817,9 @@ class PackagePanel(QWidget):
                     )
             else:
                 if show_console:
-                    # Open in terminal
-                    cmd_str = " ".join(f'"{c}"' for c in cmd)
-                    try:
-                        subprocess.Popen(
-                            ["x-terminal-emulator", "-e", f"bash -c '{cmd_str}; read -p Press_Enter'"],
-                            cwd=work_dir,
-                        )
-                    except FileNotFoundError:
-                        subprocess.Popen(cmd, cwd=work_dir)
+                    from src.gui.platform_utils import launch_in_terminal
+                    terminal_type = self.config.get("terminal_type", "") if hasattr(self, "config") and self.config else ""
+                    launch_in_terminal(cmd, cwd=work_dir, terminal_type=terminal_type)
                 else:
                     subprocess.Popen(
                         cmd, cwd=work_dir,

@@ -283,17 +283,21 @@ class SettingsPage(QWidget):
             ("secondary", "🔡 UI & Menus", "Buttons, menus, tables, inputs, normal text", 13),
             ("tertiary", "🔹 Details", "Info labels, hints, status text, tooltips", 11),
         ]
+        ROW_H = 32  # fixed height for all font row widgets
         for level_id, label, hint, default_size in font_levels:
             row = QHBoxLayout()
             row.setSpacing(6)
+            row.setContentsMargins(0, 0, 0, 0)
 
             cb = QCheckBox()
             cb.setChecked(False)
+            cb.setFixedHeight(ROW_H)
             row.addWidget(cb)
 
             font_combo = QFontComboBox()
             font_combo.setEnabled(False)
             font_combo.setFocusPolicy(Qt.StrongFocus)
+            font_combo.setFixedHeight(ROW_H)
             cb.toggled.connect(font_combo.setEnabled)
             row.addWidget(font_combo, 1)
 
@@ -302,13 +306,16 @@ class SettingsPage(QWidget):
             size_spin.setValue(default_size)
             size_spin.setSuffix(" px")
             size_spin.setEnabled(False)
-            size_spin.setMinimumWidth(80)
+            size_spin.setFixedWidth(80)
+            size_spin.setFixedHeight(ROW_H)
             cb.toggled.connect(size_spin.setEnabled)
             row.addWidget(size_spin)
 
             hint_lbl = QLabel(hint)
             hint_lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px; font-style: italic;")
             hint_lbl.setMinimumWidth(200)
+            hint_lbl.setFixedHeight(ROW_H)
+            hint_lbl.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
             row.addWidget(hint_lbl)
 
             # Store references

@@ -2667,10 +2667,23 @@ $s.Save()
                 self._current_env_type = _m.get("type", "system_tools")
             except Exception:
                 self._current_env_type = "system_tools"
+        else:
+            # No marker — check if this is a poetry venv (inside pypoetry cache)
+            _vp_str = str(venv_path)
+            if "pypoetry" in _vp_str and "virtualenvs" in _vp_str:
+                self._current_env_type = "poetry"
+            elif "pipx" in _vp_str:
+                self._current_env_type = "pipx"
 
         # Override backend based on env type
         if self._current_env_type == "uv":
             backend = "uv"
+        elif self._current_env_type == "poetry":
+            backend = "poetry"
+        elif self._current_env_type == "conda":
+            backend = "conda"
+        elif self._current_env_type == "pipx":
+            backend = "pipx"
 
         self.pip_manager = PipManager(venv_path, backend=backend)
         self._current_venv_path = venv_path
@@ -2939,10 +2952,22 @@ $s.Save()
                     self._current_env_type = _m.get("type", "system_tools")
                 except Exception:
                     self._current_env_type = "system_tools"
+            else:
+                _vp_str = str(venv_path)
+                if "pypoetry" in _vp_str and "virtualenvs" in _vp_str:
+                    self._current_env_type = "poetry"
+                elif "pipx" in _vp_str:
+                    self._current_env_type = "pipx"
 
             # Override backend based on env type
             if self._current_env_type == "uv":
                 backend = "uv"
+            elif self._current_env_type == "poetry":
+                backend = "poetry"
+            elif self._current_env_type == "conda":
+                backend = "conda"
+            elif self._current_env_type == "pipx":
+                backend = "pipx"
 
             self.pip_manager = PipManager(venv_path, backend=backend)
 
@@ -3091,8 +3116,34 @@ $s.Save()
                 dt = datetime.fromtimestamp(latest_mtime)
                 self.env_last_used_label.setText(f"🕐 {dt.strftime('%Y-%m-%d %H:%M')}")
             else:
-                self.env_last_used_label.setText("")
-                self._info_sep3.setVisible(False)
+                # Fallback: use marker created date (e.g. pipx has no activate/pyvenv.cfg)
+                _marker = venv_path / ".venvstudio_env"
+                _created = ""
+                if _marker.exists():
+                    try:
+                        import json as _j
+                        _created = _j.loads(_marker.read_text()).get("created", "")
+                    except Exception:
+                        pass
+                if not _created:
+                    # For poetry venvs, use dir ctime
+                    try:
+                        from datetime import datetime
+                        _created = datetime.fromtimestamp(venv_path.stat().st_ctime).strftime("%Y-%m-%d %H:%M")
+                    except Exception:
+                        pass
+                if _created:
+                    try:
+                        from datetime import datetime
+                        if "T" in _created:
+                            dt = datetime.fromisoformat(_created)
+                            _created = dt.strftime("%Y-%m-%d %H:%M")
+                    except Exception:
+                        pass
+                    self.env_last_used_label.setText(f"🕐 {_created}")
+                else:
+                    self.env_last_used_label.setText("")
+                    self._info_sep3.setVisible(False)
         except Exception:
             self.env_last_used_label.setText("")
             self._info_sep3.setVisible(False)

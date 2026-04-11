@@ -519,6 +519,7 @@ class VenvManager:
                         is_valid=True,
                         env_type="pipx",
                     )
+                    _info.created = _mdata.get("created", "")
                     # Python version from marker or system python
                     _pyver = _mdata.get("python_version", "")
                     if not _pyver:
@@ -529,7 +530,6 @@ class VenvManager:
                             _pyver = (_r.stdout.strip() or _r.stderr.strip()).replace("Python ", "")
                         except Exception:
                             pass
-                    _info.created = _mdata.get("created", "")
                     _info.python_version = _pyver
                     # Count installed pipx apps
                     try:
@@ -586,13 +586,16 @@ class VenvManager:
         except Exception:
             import traceback; traceback.print_exc()
 
-        # ── Include poetry envs from ~/.cache/pypoetry/virtualenvs/ ─────
+        # ── Include poetry envs from platform-specific poetry virtualenvs dir ─
         try:
             import sys as _sys
-            _poetry_base = Path.home() / ".cache" / "pypoetry" / "virtualenvs"
-            if _sys.platform == "win32":
-                import os as _os
-                _poetry_base = Path(_os.environ.get("APPDATA", "")) / "pypoetry" / "virtualenvs"
+            _plat = _sys.platform
+            if _plat == "win32":
+                _poetry_base = Path(os.environ.get("APPDATA", "")) / "pypoetry" / "virtualenvs"
+            elif _plat == "darwin":
+                _poetry_base = Path.home() / "Library" / "Caches" / "pypoetry" / "virtualenvs"
+            else:  # linux
+                _poetry_base = Path.home() / ".cache" / "pypoetry" / "virtualenvs"
             if _poetry_base.exists():
                 for _penv in sorted(_poetry_base.iterdir()):
                     if not _penv.is_dir():
@@ -606,8 +609,17 @@ class VenvManager:
                     if _pycfg.exists():
                         try:
                             for _line in _pycfg.read_text().splitlines():
-                                if _line.startswith("version"):
-                                    _pinfo.python_version = _line.split("=", 1)[1].strip()
+                                if _line.strip().startswith("version"):
+                                    _ver = _line.split("=", 1)[1].strip()
+                                    # Clean: "3.14.3.final.0" → "3.14.3"
+                                    _ver_parts = _ver.split(".")
+                                    _clean = []
+                                    for _p in _ver_parts:
+                                        if _p.isdigit():
+                                            _clean.append(_p)
+                                        else:
+                                            break
+                                    _pinfo.python_version = ".".join(_clean) if _clean else _ver
                                     break
                         except Exception:
                             pass
@@ -792,15 +804,28 @@ class VenvManager:
                         info.size = "..."
                         venvs.append(info)
                         continue
-                    try:
-                        result = _run(
-                            [str(python_exe), "--version"],
-                            capture_output=True, text=True, timeout=5,
-                        )
-                        ver = result.stdout.strip() or result.stderr.strip()
-                        info.python_version = ver.replace("Python ", "")
-                    except Exception:
-                        info.python_version = "?"
+                    # Try pyvenv.cfg first (no subprocess needed)
+                    _pycfg = item / "pyvenv.cfg"
+                    if _pycfg.exists():
+                        try:
+                            for _line in _pycfg.read_text().splitlines():
+                                if _line.strip().startswith("version"):
+                                    _v = _line.split("=", 1)[1].strip()
+                                    _parts = [p for p in _v.split(".") if p.isdigit()]
+                                    info.python_version = ".".join(_parts) if _parts else _v
+                                    break
+                        except Exception:
+                            pass
+                    if not info.python_version:
+                        try:
+                            result = _run(
+                                [str(python_exe), "--version"],
+                                capture_output=True, text=True, timeout=5,
+                            )
+                            ver = result.stdout.strip() or result.stderr.strip()
+                            info.python_version = ver.replace("Python ", "")
+                        except Exception:
+                            info.python_version = "?"
 
                     info.size = get_venv_size(item)
 

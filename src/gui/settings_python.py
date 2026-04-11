@@ -14,6 +14,7 @@ from src.utils.constants import APP_NAME, APP_VERSION
 from src.utils.i18n import tr
 import os, subprocess, shutil
 from pathlib import Path
+from src.gui.settings_python_download import PythonDownloadDialog
 
 
 class PythonMixin:

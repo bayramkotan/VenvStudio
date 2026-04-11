@@ -38,6 +38,43 @@
 
 ---
 
+## 🔴 v1.4.53 Sonrası Buglar
+
+### B115 — Windows/macOS Poetry Path Yanlış
+- Windows: `%APPDATA%\pypoetry\virtualenvs\` taranmalı
+- macOS: `~/Library/Caches/pypoetry/virtualenvs/` taranmalı
+- `list_venvs_fast`'ta platform kontrolü eklenmeli
+- `venv_manager.py` → poetry discovery bloğu platform'a göre path seçmeli
+
+### B116 — Windows pipx Path Yanlış
+- Windows'ta `~\pipx` gösteriyor, `%LOCALAPPDATA%\pipx\` veya `%USERPROFILE%\pipx\` olmalı
+- `get_pipx_home()` Windows'ta doğru path dönmüyor
+
+### B117 — Settings > Remove All Data — WinError 32
+- `venvstudio.log` dosyası açık olduğu için silinemiyor
+- Log dosyasını kapatıp sonra silmeli, ya da log handler'ı release etmeli
+- `settings_advanced.py` → `_clear_all_data()` içinde log handler kapatılmalı
+
+### B118 — Settings > Download Python Çalışmıyor
+- `settings_python.py` satır 799: `PythonDownloadDialog` tanımsız
+- `from src.gui.settings_python_download import PythonDownloadDialog` import eksik
+- `settings_python.py` → `_download_python()` metoduna import ekle
+
+### B119 — Poetry Settings'te Kurulum Sonrası Refresh Yok
+- Poetry kurulduktan sonra env listesi otomatik refresh edilmiyor
+- `env_dialog.py` veya `settings_toolchain.py` → kurulum callback'ine `_refresh_env_list()` ekle
+
+### B120 — pipx Delete Aktif Olmamalı
+- Environments tablosunda pipx satırı seçilince Delete butonu aktif oluyor
+- pipx silinmemeli — Settings > Toolchain Manager > Uninstall kullanılmalı
+- `main_window.py` → `_on_env_selected()` içinde pipx için Delete butonunu disable et
+- Sağ tık menüsünde de Delete gizlenmeli, yerine "Use Toolchain Manager to uninstall" mesajı
+
+### B121 — Yüksek DPI / Ölçek > 100% Form Elemanları Sağa Kayıyor
+- Create Environment dialog ve diğer formlarda scroll bar yok
+- `env_dialog.py` → form container'a `QScrollArea` ekle
+- Settings sayfalarına da scroll ekle
+
 ## 🔴 YENİ BUGLAR & FEATURE'LAR (Bu Oturumdan)
 
 ### 🔴 B110 — AppImage Quick Launch Uygulamalar Çalışmıyor

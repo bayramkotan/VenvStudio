@@ -580,6 +580,8 @@ class MainWindow(QMainWindow):
         self.env_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.env_table.setSelectionMode(QTableWidget.SingleSelection)
         self.env_table.setAlternatingRowColors(True)
+        self.env_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.env_table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.env_table.verticalHeader().setVisible(False)
         self.env_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.env_table.verticalHeader().setDefaultSectionSize(38)
@@ -862,8 +864,8 @@ class MainWindow(QMainWindow):
             from PySide6.QtWidgets import QApplication
             QApplication.processEvents()
 
-        # Fast load — skip_calc=True when force so no subprocess on main thread
-        envs = self.venv_manager.list_venvs_fast(skip_calc=force)
+        # Fast load — never skip_calc (pyvenv.cfg reading is fast, no subprocess)
+        envs = self.venv_manager.list_venvs_fast(skip_calc=False)
         # Sort: base_dir envs first (alphabetic), then poetry (alphabetic), then pipx
         def _env_sort_key(e):
             if e.env_type == "pipx":
@@ -1006,11 +1008,13 @@ class MainWindow(QMainWindow):
             return "?"
 
         parts = []
+        _total_all = _fmt_size(envs)
         parts.append(f"📂 {self.venv_manager.base_dir}  •  {len(_base_envs)} env(s)  •  {_fmt_size(_base_envs)}")
         if _poetry_envs:
             parts.append(f"📜 poetry  •  {len(_poetry_envs)} env(s)  •  {_fmt_size(_poetry_envs)}")
         if _pipx_envs:
             parts.append(f"📦 pipx  •  {len(_pipx_envs)} env(s)  •  {_fmt_size(_pipx_envs)}")
+        parts.append(f"🗂 total  •  {_total_all}")
         self.info_label.setText("        ".join(parts))
 
         # Update package panel env dropdown
@@ -1091,7 +1095,15 @@ class MainWindow(QMainWindow):
         self.btn_rename.setEnabled(has_selection)
         if hasattr(self, "btn_rename_full"):
             self.btn_rename_full.setEnabled(has_selection)
-        self.btn_delete.setEnabled(has_selection)
+        # pipx cannot be deleted — must use Toolchain Manager
+        _sel_type = ""
+        if has_selection:
+            _rows = self.env_table.selectionModel().selectedRows()
+            if _rows:
+                _ti = self.env_table.item(_rows[0].row(), 1)
+                if _ti:
+                    _sel_type = _ti.text().strip().lower()
+        self.btn_delete.setEnabled(has_selection and "pipx" not in _sel_type)
         self.btn_export.setEnabled(has_selection)
         if hasattr(self, "btn_make_default"):
             self.btn_make_default.setEnabled(has_selection)

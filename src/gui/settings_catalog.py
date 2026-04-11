@@ -600,9 +600,36 @@ class CatalogMixin:
 
         config_dir = self.config.config_file_path.parent
         try:
+            # Close all logging handlers first (prevents WinError 32 on Windows)
+            import logging
+            root_logger = logging.getLogger()
+            for handler in root_logger.handlers[:]:
+                try:
+                    handler.close()
+                    root_logger.removeHandler(handler)
+                except Exception:
+                    pass
+            # Also close any module-level loggers
+            for name in list(logging.Logger.manager.loggerDict.keys()):
+                lgr = logging.getLogger(name)
+                for h in lgr.handlers[:]:
+                    try:
+                        h.close()
+                        lgr.removeHandler(h)
+                    except Exception:
+                        pass
             # Remove config directory
             if config_dir.exists():
-                shutil.rmtree(str(config_dir))
+                # On Windows, retry with onerror handler for locked files
+                import sys as _sys
+                if _sys.platform == "win32":
+                    import stat
+                    def _remove_readonly(func, path, _):
+                        os.chmod(path, stat.S_IWRITE)
+                        func(path)
+                    shutil.rmtree(str(config_dir), onerror=_remove_readonly)
+                else:
+                    shutil.rmtree(str(config_dir))
             QMessageBox.information(
                 self, "Done",
                 f"All data removed from:\n{config_dir}\n\nApplication will now close."

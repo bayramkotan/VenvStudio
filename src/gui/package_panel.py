@@ -2727,7 +2727,7 @@ $s.Save()
             "uv":           {"launcher", "installed", "catalog", "presets", "manual"},
             "poetry":       {"launcher", "installed", "catalog", "presets", "manual"},
             "conda":        {"launcher", "installed", "catalog", "presets", "manual"},
-            "pipx":         {"launcher", "installed", "catalog", "manual"},  # no presets — pipx is for CLI tools only
+            "pipx":         {"launcher", "installed", "catalog", "presets", "manual"},
         }.get(env_type, {"launcher", "installed", "catalog", "presets", "manual"})
 
         # Remember current tab key before we remove tabs

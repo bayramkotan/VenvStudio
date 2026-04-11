@@ -497,9 +497,9 @@ class VenvManager:
         # ── Include pipx from its own home dir (not base_dir) ────────────
         try:
             from src.utils.platform_utils import get_pipx_home, get_pipx_executable
+            import sys as _sys
             _pipx_home = get_pipx_home()
             if not _pipx_home:
-                import os, sys as _sys
                 if _sys.platform == "win32":
                     _pipx_home = os.path.join(os.environ.get("LOCALAPPDATA", ""), "pipx")
                 else:
@@ -519,7 +519,18 @@ class VenvManager:
                         is_valid=True,
                         env_type="pipx",
                     )
-                    _info.python_version = _mdata.get("python_version", "")
+                    # Python version from marker or system python
+                    _pyver = _mdata.get("python_version", "")
+                    if not _pyver:
+                        try:
+                            import sys as _sys
+                            _r = _run([_sys.executable, "--version"],
+                                      capture_output=True, text=True, timeout=5)
+                            _pyver = (_r.stdout.strip() or _r.stderr.strip()).replace("Python ", "")
+                        except Exception:
+                            pass
+                    _info.created = _mdata.get("created", "")
+                    _info.python_version = _pyver
                     # Count installed pipx apps
                     try:
                         _pipx_bin = get_pipx_executable()
@@ -531,9 +542,96 @@ class VenvManager:
                             _info.package_count = len(_lines)
                     except Exception:
                         _info.package_count = 0
+                    # Size: scan pipx venvs directory
+                    try:
+                        _venvs_dir = _pipx_home_path / "venvs"
+                        if _venvs_dir.exists():
+                            _total = 0
+                            for _dp, _dns, _fns in os.walk(str(_venvs_dir)):
+                                for _fn in _fns:
+                                    _fp = os.path.join(_dp, _fn)
+                                    if not os.path.islink(_fp):
+                                        _total += os.path.getsize(_fp)
+                            # Format size
+                            for _unit in ["B", "KB", "MB", "GB"]:
+                                if _total < 1024:
+                                    _info.size = f"{_total:.1f} {_unit}"
+                                    break
+                                _total /= 1024
+                            else:
+                                _info.size = f"{_total:.1f} TB"
+                    except Exception:
+                        pass
+                    # Size: scan pipx venvs directory
+                    _venvs_dir = _pipx_home_path / "venvs"
+                    if _venvs_dir.exists():
+                        _total = 0
+                        for _dp, _dns, _fns in os.walk(str(_venvs_dir)):
+                            for _fn in _fns:
+                                _fp = os.path.join(_dp, _fn)
+                                try:
+                                    if not os.path.islink(_fp):
+                                        _total += os.path.getsize(_fp)
+                                except OSError:
+                                    pass
+                        _sz = _total
+                        for _unit in ["B", "KB", "MB", "GB"]:
+                            if _sz < 1024:
+                                _info.size = f"{_sz:.1f} {_unit}"
+                                break
+                            _sz /= 1024
+                        else:
+                            _info.size = f"{_sz:.1f} TB"
                     venvs.append(_info)
         except Exception:
-            pass
+            import traceback; traceback.print_exc()
+
+        # ── Include poetry envs from ~/.cache/pypoetry/virtualenvs/ ─────
+        try:
+            import sys as _sys
+            _poetry_base = Path.home() / ".cache" / "pypoetry" / "virtualenvs"
+            if _sys.platform == "win32":
+                import os as _os
+                _poetry_base = Path(_os.environ.get("APPDATA", "")) / "pypoetry" / "virtualenvs"
+            if _poetry_base.exists():
+                for _penv in sorted(_poetry_base.iterdir()):
+                    if not _penv.is_dir():
+                        continue
+                    # Name: strip hash suffix e.g. poetryenv-0KHIYmlT-py3.14 → poetryenv
+                    _parts = _penv.name.rsplit("-", 2)
+                    _pname = _parts[0] if len(_parts) >= 3 else _penv.name
+                    _pinfo = VenvInfo(name=_pname, path=_penv, is_valid=True, env_type="poetry")
+                    # Python version from pyvenv.cfg
+                    _pycfg = _penv / "pyvenv.cfg"
+                    if _pycfg.exists():
+                        try:
+                            for _line in _pycfg.read_text().splitlines():
+                                if _line.startswith("version"):
+                                    _pinfo.python_version = _line.split("=", 1)[1].strip()
+                                    break
+                        except Exception:
+                            pass
+                    # Package count
+                    _pip_exe = get_pip_executable(_penv)
+                    if _pip_exe.exists():
+                        try:
+                            _r = _run([str(_pip_exe), "list", "--format=json"],
+                                      capture_output=True, text=True, timeout=15)
+                            if _r.returncode == 0:
+                                _pinfo.package_count = len(json.loads(_r.stdout))
+                        except Exception:
+                            pass
+                    # Size
+                    _pinfo.size = get_venv_size(_penv)
+                    # Created from pyvenv.cfg or dir stat
+                    try:
+                        from datetime import datetime as _dt
+                        _pinfo.created = _dt.fromtimestamp(_penv.stat().st_ctime).isoformat()
+                    except Exception:
+                        pass
+                    venvs.append(_pinfo)
+        except Exception:
+            import traceback; traceback.print_exc()
 
         for item in sorted(self.base_dir.iterdir()):
             if not item.is_dir():
@@ -547,6 +645,9 @@ class VenvManager:
                 except Exception:
                     marker_data = {}
                 env_type = marker_data.get("type", "system_tools")
+                # Skip pipx marker in base_dir — pipx is listed from its own home
+                if env_type == "pipx":
+                    continue
                 info = VenvInfo(name=item.name, path=item, is_valid=True,
                                 env_type=env_type)
 

@@ -699,9 +699,9 @@ class MainWindow(QMainWindow):
         if not venv_name:
             self._rebuild_ql_buttons(set())
             return
-        venv_path = self.venv_manager.base_dir / venv_name
-        if not venv_path.exists():
-            return
+        venv_path = self._get_env_path(venv_name) or self.venv_manager.base_dir / venv_name
+        if not venv_path.exists() and not (venv_path.parent / ".venvstudio_env").exists():
+            pass  # pipx path may not have standard structure
         # Env tablosunda ilgili satırı seç
         for row in range(self.env_table.rowCount()):
             item = self.env_table.item(row, 0)
@@ -720,9 +720,9 @@ class MainWindow(QMainWindow):
         from src.core.venv_manager import VenvManager
         import json
 
-        venv_path = self.venv_manager.base_dir / venv_name
-        if not venv_path.exists():
-            return
+        venv_path = self._get_env_path(venv_name) or self.venv_manager.base_dir / venv_name
+        if not venv_path.exists() and not (venv_path.parent / ".venvstudio_env").exists():
+            pass  # pipx path may not have standard structure
 
         class _QLWorker(QThread):
             done = Signal(str, list)
@@ -732,11 +732,10 @@ class MainWindow(QMainWindow):
             def run(self):
                 try:
                     import subprocess, sys
-                    from src.utils.platform_utils import subprocess_args
                     python = self._vp / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
                     r = subprocess.run(
                         [str(python), "-m", "pip", "list", "--format=json"],
-                        **subprocess_args(capture_output=True, text=True, timeout=30)
+                        capture_output=True, text=True, timeout=30
                     )
                     if r.returncode == 0:
                         pkgs = json.loads(r.stdout)
@@ -865,6 +864,15 @@ class MainWindow(QMainWindow):
 
         # Fast load — skip_calc=True when force so no subprocess on main thread
         envs = self.venv_manager.list_venvs_fast(skip_calc=force)
+        # Sort: base_dir envs first (alphabetic), then poetry (alphabetic), then pipx
+        def _env_sort_key(e):
+            if e.env_type == "pipx":
+                return (2, e.name.lower())
+            elif e.env_type == "poetry":
+                return (1, e.name.lower())
+            else:
+                return (0, e.name.lower())
+        envs = sorted(envs, key=_env_sort_key)
 
         # Also show loading if some envs are missing cache in normal load
         has_missing_cache = any(e.python_version == "..." for e in envs)
@@ -938,19 +946,7 @@ class MainWindow(QMainWindow):
 
             # ── Path column ──
             _home = str(Path.home())
-            _full_path = str(env.path)
-            # Poetry: show actual venv path from marker
-            if etype == "poetry":
-                try:
-                    import json as _j
-                    _m = env.path / ".venvstudio_env"
-                    if _m.exists():
-                        _pdata = _j.loads(_m.read_text())
-                        _pvenv = _pdata.get("poetry_venv_path", "")
-                        if _pvenv:
-                            _full_path = _pvenv
-                except Exception:
-                    pass
+            _full_path = str(env.path)  # poetry: already ~/.cache/pypoetry/...
             _display_path = ("~" + _full_path[len(_home):]) if _full_path.startswith(_home) else _full_path
             path_item = QTableWidgetItem(f"  {_display_path}")
             path_item.setToolTip(_full_path)
@@ -959,10 +955,7 @@ class MainWindow(QMainWindow):
 
             # ── Runtime column: Python version or "----" ──
             _rv = str(env.python_version).strip()
-            if _rv and _rv not in ("Unknown", "?", "..."):
-                _runtime_str = f"  Python {_rv}"
-            else:
-                _runtime_str = "  ----"
+            _runtime_str = f"  Python {_rv}" if (_rv and _rv not in ("Unknown", "?", "...")) else "  ----"
             self.env_table.setItem(i, 3, QTableWidgetItem(_runtime_str))
 
             pkg = str(env.package_count) if env.package_count else "0"
@@ -986,7 +979,39 @@ class MainWindow(QMainWindow):
             default_item.setFlags(default_item.flags() & ~Qt.ItemIsEditable)
             self.env_table.setItem(i, 7, default_item)
 
-        self._update_info_label_fast(len(envs))
+        # Group envs by location
+        _base_dir = str(self.venv_manager.base_dir)
+        _home = str(Path.home())
+        _base_envs = [e for e in envs if str(e.path).startswith(_base_dir)]
+        _poetry_envs = [e for e in envs if e.env_type == "poetry"]
+        _pipx_envs = [e for e in envs if e.env_type == "pipx"]
+        # Remove poetry and pipx from base count (they have their own paths)
+        _base_envs = [e for e in _base_envs if e.env_type not in ("poetry", "pipx")]
+
+        def _fmt_size(envs_list):
+            total = 0
+            for e in envs_list:
+                s = e.size or "0 MB"
+                try:
+                    n, u = s.strip().split()
+                    n = float(n)
+                    mult = {"B":1,"KB":1024,"MB":1024**2,"GB":1024**3,"TB":1024**4}.get(u,1)
+                    total += n * mult
+                except Exception:
+                    pass
+            for unit in ["B","KB","MB","GB","TB"]:
+                if total < 1024:
+                    return f"{total:.1f} {unit}"
+                total /= 1024
+            return "?"
+
+        parts = []
+        parts.append(f"📂 {self.venv_manager.base_dir}  •  {len(_base_envs)} env(s)  •  {_fmt_size(_base_envs)}")
+        if _poetry_envs:
+            parts.append(f"📜 poetry  •  {len(_poetry_envs)} env(s)  •  {_fmt_size(_poetry_envs)}")
+        if _pipx_envs:
+            parts.append(f"📦 pipx  •  {len(_pipx_envs)} env(s)  •  {_fmt_size(_pipx_envs)}")
+        self.info_label.setText("        ".join(parts))
 
         # Update package panel env dropdown
         env_list = [(e.name, e.path) for e in envs]
@@ -1083,8 +1108,8 @@ class MainWindow(QMainWindow):
                     self.ql_env_selector.blockSignals(True)
                     self.ql_env_selector.setCurrentIndex(idx)
                     self.ql_env_selector.blockSignals(False)
-            # Sync package_panel
-            venv_path = self.venv_manager.base_dir / name
+            # Sync package_panel — use actual path (handles pipx, poetry etc.)
+            venv_path = self._get_env_path(name) or self.venv_manager.base_dir / name
             if venv_path.exists():
                 self.package_panel.set_venv(venv_path)
                 # ── Track in recent envs (deferred — no UI blocking) ─────
@@ -1224,6 +1249,25 @@ class MainWindow(QMainWindow):
 
     def _on_env_double_click(self):
         self._open_package_manager()
+
+    def _get_env_path(self, name: str) -> "Path | None":
+        """Return actual path for env — handles pipx, poetry etc."""
+        # 1. Check table Path column tooltip (fast)
+        for row in range(self.env_table.rowCount()):
+            item = self.env_table.item(row, 0)
+            if item and item.text().strip() == name:
+                path_item = self.env_table.item(row, 2)
+                if path_item and path_item.toolTip():
+                    return Path(path_item.toolTip())
+                break
+        # 2. Fallback: scan venv list (handles pipx home)
+        try:
+            for env in self.venv_manager.list_venvs_fast(skip_calc=True):
+                if env.name == name:
+                    return env.path
+        except Exception:
+            pass
+        return self.venv_manager.base_dir / name
 
     def _get_selected_env_name(self):
         rows = self.env_table.selectionModel().selectedRows()
@@ -1754,35 +1798,8 @@ class MainWindow(QMainWindow):
         name = self._get_selected_env_name()
         if not name:
             return
-        venv_path = self.venv_manager.base_dir / name
-        env_type = "venv"
-        # Read env type and actual path from marker
-        _marker = venv_path / ".venvstudio_env"
-        if not _marker.exists():
-            # Check pipx home
-            from src.utils.platform_utils import get_pipx_home
-            _ph = get_pipx_home()
-            if _ph:
-                _pm = Path(_ph) / ".venvstudio_env"
-                if _pm.exists():
-                    try:
-                        import json as _j
-                        _d = _j.loads(_pm.read_text())
-                        if _d.get("name") == name:
-                            venv_path = Path(_ph)
-                            env_type = "pipx"
-                            _marker = _pm
-                    except Exception:
-                        pass
-        if _marker.exists():
-            try:
-                import json as _j
-                _d = _j.loads(_marker.read_text())
-                env_type = _d.get("type", "venv")
-            except Exception:
-                pass
-        terminal_type = self.config.get("default_terminal", "")
-        open_terminal_at(venv_path, terminal_type, env_type=env_type)
+        # Delegate to package_panel which handles all env types correctly
+        self.package_panel._open_terminal_here()
         self.statusBar().showMessage(f"Opened terminal for '{name}'")
 
     def _open_settings(self):
@@ -1887,12 +1904,11 @@ class MainWindow(QMainWindow):
             return
 
         import subprocess
-        from src.utils.platform_utils import subprocess_args
         # Check if venv module works
         try:
             result = subprocess.run(
                 ["python3", "-m", "venv", "--help"],
-                **subprocess_args(capture_output=True, text=True, timeout=5)
+                capture_output=True, text=True, timeout=5
             )
             if result.returncode == 0:
                 return  # Already installed
@@ -1920,7 +1936,7 @@ class MainWindow(QMainWindow):
             try:
                 r = subprocess.run(
                     sudo_cmd + ["apt-get", "install", "-y", "python3-venv"],
-                    **subprocess_args(timeout=120)
+                    timeout=120
                 )
                 if r.returncode == 0:
                     QMessageBox.information(
@@ -1950,12 +1966,11 @@ class MainWindow(QMainWindow):
 
 
         import shutil, subprocess
-        from src.utils.platform_utils import subprocess_args
         # Check if Noto Color Emoji is installed, offer to install if missing
         try:
             result = subprocess.run(
                 ["fc-list", ":family=Noto Color Emoji"],
-                **subprocess_args(capture_output=True, text=True, timeout=5)
+                capture_output=True, text=True, timeout=5
             )
             emoji_available = bool(result.stdout.strip())
         except Exception:
@@ -1975,11 +1990,11 @@ class MainWindow(QMainWindow):
                     try:
                         r = subprocess.run(
                             sudo + ["apt-get", "install", "-y", "fonts-noto-color-emoji"],
-                            **subprocess_args(capture_output=True, text=True, timeout=120)
+                            capture_output=True, text=True, timeout=120
                         )
                         if r.returncode == 0:
                             # Rebuild font cache
-                            subprocess.run(["fc-cache", "-f"], **subprocess_args(timeout=30))
+                            subprocess.run(["fc-cache", "-f"], timeout=30)
                             emoji_available = True
                             break
                     except (FileNotFoundError, subprocess.TimeoutExpired):

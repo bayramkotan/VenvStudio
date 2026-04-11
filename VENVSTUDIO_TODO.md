@@ -36,6 +36,60 @@
 
 ---
 
+---
+
+## 🔴 YENİ BUGLAR & FEATURE'LAR (Bu Oturumdan)
+
+### 🔴 B110 — AppImage Quick Launch Uygulamalar Çalışmıyor
+- AppImage'da Quick Launch'taki uygulamalar (Jupyter, IPython vb.) çalışmıyor
+- Linux AppImage ortamında `launch_in_terminal` veya subprocess env sorunu olabilir
+
+### 🔴 B111 — Toolchain Manager Remove Çalışmıyor
+- pipx kaldırılamıyor Toolchain Manager'dan
+- Kaldırınca Environments altındaki pipx env kaybolacak mı? Test edilmedi
+- Refresh yapıldığında pipx env yoksa otomatik yeniden oluşturulsun
+
+### 🔴 B112 — Conda Installed Tab Yanlış Gösteriyor
+- Micromamba env'lerde Installed kısmında kurulu olmayan paketler kurulu gösteriliyor
+- Sağ tık → "Yükle" diyor ama zaten kurulu değil mi?
+
+### 🔴 B113 — pip Dışı Env'lerde Python Versiyonu Yanlış
+- uv env Python 3.14 ile yapıldı ama Python 3.12 gösteriyor
+- Create Environments ekranında pip dışı env'ler için Python seçimi gereksiz
+- uv/conda/pipx kendi Python'larını kullanıyor, seçim ignore ediliyor
+
+### 🔴 B114 — pip Dışı Env'lerde Clone/Rename Hata
+- uv, poetry, conda, pipx env'lerinde clone ve rename başarısız
+- B82 ile aynı sorun — her env tipi için özel strateji gerekiyor
+
+### 🟡 F111 — Sağ Tık Menüsü Genişletme (Environments)
+- Copy Path, Runtime bilgisi kopyalama
+- Run Command → her env tipine özel en sık kullanılan 10-15 komut
+  - pipx: `pipx list`, `pipx install <pkg>`, `pipx upgrade <pkg>`, `pipx uninstall <pkg>`...
+  - poetry: `poetry add <pkg>`, `poetry show`, `poetry update`, `poetry shell`...
+  - conda: `conda list`, `conda install <pkg>`, `conda update`...
+  - venv/uv: `pip list`, `pip show <pkg>`, `pip install <pkg>`...
+
+### 🟡 F112 — Manual Install Geçmişi
+- Her env için ayrı manual install geçmişi (300-500 satır veya 5-10 action)
+
+### 🟡 F113 — İlk Çalıştırma Deneyimi
+- Hiç env yokken Environments'a yönlendir veya Create Env sihirbazı başlatsın
+
+### 🟡 F114 — Settings > Install VenvStudio
+- AppImage/EXE'den çalışıyorsa `pip install venvstudio` komutu göster
+- CLI/komut satırı için path ayarı veya kurulum rehberi
+
+### 🟡 F115 — TUI/CLI Tools Bölümü Kompakt Hale Getirme
+- Şu an çok yer kaplıyor
+- Dropdown'dan seçince yandaki menü değişsin (Starship/OhMyPosh vb.)
+
+### 🟡 F116 — Refresh'te pipx Env Otomatik Oluşturma
+- Refresh yapıldığında pipx kuruluysa ama env yoksa otomatik marker oluştursun
+
+### 🟡 F117 — Settings > pip Backend Kaldırılacak
+- Settings altındaki pip Backend seçeneği gereksiz — kaldırılacak
+
 ## 🔴 KRİTİK BUGLAR
 
 - **B42** — Python yükleyici güvenlik kontrolleri (en sona alındı)
@@ -172,6 +226,11 @@
 | B104 | v1.4.48 | Scripts in PATH yanlış pozitif — which python/python3 karşılaştırması |
 | B105 | v1.4.48 | Quick Launch terminal açılmıyordu — launch_in_terminal() eklendi |
 | Refactor | v1.4.49 | settings_page.py → 7 dosyaya bölündü (mixin pattern) |
+| B108 | v1.4.52 | pipx/conda/poetry terminal — src/utils/platform_utils.py fix |
+| B109 | v1.4.52 | pipx yanlış path — ~/.local/share/pipx/ kullanılıyor |
+| F110 | v1.4.52 | Environments tablosuna Path kolonu eklendi |
+| B106 | v1.4.50 | Check for Updates — urllib fallback + SSL fix |
+| B107 | v1.4.51 | Windows subprocess CREATE_NO_WINDOW |
 | — | v1.4.48 | Font satırı hizalama: setFixedHeight(32) tüm widget'lara eklendi |
 | B103 | v1.4.45 | Linux scripts_dir yanlış hesaplama (usr/bin/bin) düzeltildi |
 | UI | v1.4.45 | Package Manager & Defaults bölümü (Default Env Type + pip Backend) kaldırıldı |

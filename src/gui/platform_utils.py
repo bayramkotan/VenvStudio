@@ -337,24 +337,32 @@ def launch_in_terminal(cmd: list, cwd: str = "", terminal_type: str = "") -> boo
             return False
 
     else:  # linux
+        # Clean AppImage env vars so terminal processes don't inherit LD_LIBRARY_PATH etc.
+        try:
+            from src.utils.platform_utils import appimage_clean_env as _ace
+            _term_env = _ace()
+        except Exception:
+            _term_env = None
+        _term_kw = {"env": _term_env} if _term_env is not None else {}
+
         def _try_term(term: str) -> bool:
             if not shutil.which(term):
                 return False
             try:
                 if term == "gnome-terminal":
-                    subprocess.Popen([term, "--", "bash", "-c", bash_cmd], cwd=cwd or None)
+                    subprocess.Popen([term, "--", "bash", "-c", bash_cmd], cwd=cwd or None, **_term_kw)
                 elif term in ("konsole", "yakuake"):
-                    subprocess.Popen([term, "--noclose", "-e", "bash", "-c", bash_cmd], cwd=cwd or None)
+                    subprocess.Popen([term, "--noclose", "-e", "bash", "-c", bash_cmd], cwd=cwd or None, **_term_kw)
                 elif term in ("xfce4-terminal", "mate-terminal", "lxterminal", "tilix"):
-                    subprocess.Popen([term, "-e", f"bash -c '{bash_cmd}'"], cwd=cwd or None)
+                    subprocess.Popen([term, "-e", f"bash -c '{bash_cmd}'"], cwd=cwd or None, **_term_kw)
                 elif term == "kitty":
-                    subprocess.Popen([term, "bash", "-c", bash_cmd], cwd=cwd or None)
+                    subprocess.Popen([term, "bash", "-c", bash_cmd], cwd=cwd or None, **_term_kw)
                 elif term == "alacritty":
-                    subprocess.Popen([term, "-e", "bash", "-c", bash_cmd], cwd=cwd or None)
+                    subprocess.Popen([term, "-e", "bash", "-c", bash_cmd], cwd=cwd or None, **_term_kw)
                 elif term == "wezterm":
-                    subprocess.Popen([term, "start", "--", "bash", "-c", bash_cmd], cwd=cwd or None)
+                    subprocess.Popen([term, "start", "--", "bash", "-c", bash_cmd], cwd=cwd or None, **_term_kw)
                 else:
-                    subprocess.Popen([term, "-e", f"bash -c '{bash_cmd}'"], cwd=cwd or None)
+                    subprocess.Popen([term, "-e", f"bash -c '{bash_cmd}'"], cwd=cwd or None, **_term_kw)
                 return True
             except Exception:
                 return False

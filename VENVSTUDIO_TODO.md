@@ -97,7 +97,7 @@
 - poetry için: gerçek venv path'ini aç (`%LOCALAPPDATA%\pypoetry\Cache\virtualenvs\...`)
 
 
-### 🔴 B110 — AppImage Quick Launch Uygulamalar Çalışmıyor
+### ✅ B110 — AppImage Quick Launch Uygulamalar Çalışmıyor (v1.4.56)
 - AppImage'da Quick Launch'taki uygulamalar (Jupyter, IPython vb.) çalışmıyor
 - Linux AppImage ortamında `launch_in_terminal` veya subprocess env sorunu olabilir
 

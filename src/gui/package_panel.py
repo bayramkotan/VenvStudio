@@ -1443,10 +1443,13 @@ class PackagePanel(QWidget):
                     terminal_type = self.config.get("terminal_type", "") if hasattr(self, "config") and self.config else ""
                     launch_in_terminal(cmd, cwd=work_dir, terminal_type=terminal_type)
                 else:
-                    subprocess.Popen(cmd, cwd=work_dir,
-                                     stdout=subprocess.DEVNULL,
-                                     stderr=subprocess.DEVNULL,
-                                     start_new_session=True)
+                    from src.utils.platform_utils import appimage_clean_env
+                    _ai_env = appimage_clean_env()
+                    _popen_kw2 = dict(cwd=work_dir, stdout=subprocess.DEVNULL,
+                                      stderr=subprocess.DEVNULL, start_new_session=True)
+                    if _ai_env is not None:
+                        _popen_kw2["env"] = _ai_env
+                    subprocess.Popen(cmd, **_popen_kw2)
             self.status_label.setText(f"✅ {name} launched")
             url = app_def.get("open_browser")
             if url:
@@ -1821,13 +1824,18 @@ class PackagePanel(QWidget):
                     terminal_type = self.config.get("terminal_type", "") if hasattr(self, "config") and self.config else ""
                     launch_in_terminal(cmd, cwd=work_dir, terminal_type=terminal_type)
                 else:
-                    subprocess.Popen(
-                        cmd, cwd=work_dir,
+                    from src.utils.platform_utils import appimage_clean_env
+                    _ai_env = appimage_clean_env()
+                    _popen_kw = dict(
+                        cwd=work_dir,
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
                         stdin=subprocess.DEVNULL,
                         start_new_session=True,
                     )
+                    if _ai_env is not None:
+                        _popen_kw["env"] = _ai_env
+                    subprocess.Popen(cmd, **_popen_kw)
 
             self.status_label.setText(f"🚀 Launched {app_def['name']}")
 

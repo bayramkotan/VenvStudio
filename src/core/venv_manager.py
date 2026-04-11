@@ -453,14 +453,38 @@ class VenvManager:
 
     # ── Delete ─────────────────────────────────────────────────────────────
 
-    def delete_venv(self, name: str, callback=None) -> tuple[bool, str]:
-        venv_path = self.base_dir / name
+    def delete_venv(self, name: str, callback=None, env_path=None, env_type: str = "venv") -> tuple[bool, str]:
+        """Delete a virtual environment.
+        For poetry envs: deletes both the project marker dir (base_dir/name) AND the real venv (env_path).
+        For other envs: deletes base_dir/name or env_path if given.
+        """
+        venv_path = Path(env_path) if env_path else self.base_dir / name
         if not venv_path.exists():
-            return False, f"Environment '{name}' not found"
+            # For poetry, try base_dir / name as project dir
+            alt = self.base_dir / name
+            if alt.exists():
+                venv_path = alt
+            else:
+                return False, f"Environment '{name}' not found"
         try:
             if callback:
                 callback(f"Deleting {name}...")
             shutil.rmtree(venv_path)
+            # For poetry: also delete the project marker dir in base_dir if different
+            if env_type == "poetry" and env_path:
+                for _item in self.base_dir.iterdir():
+                    if not _item.is_dir():
+                        continue
+                    _marker = _item / ".venvstudio_env"
+                    if _marker.exists():
+                        try:
+                            import json as _json
+                            _data = _json.loads(_marker.read_text())
+                            if _data.get("poetry_venv_path", "") == str(env_path):
+                                shutil.rmtree(_item, ignore_errors=True)
+                                break
+                        except Exception:
+                            pass
             if callback:
                 callback(f"Deleted {name} successfully.")
             return True, f"Environment '{name}' deleted successfully"
@@ -591,7 +615,7 @@ class VenvManager:
             import sys as _sys
             _plat = _sys.platform
             if _plat == "win32":
-                _poetry_base = Path(os.environ.get("APPDATA", "")) / "pypoetry" / "virtualenvs"
+                _poetry_base = Path(os.environ.get("LOCALAPPDATA", os.environ.get("APPDATA", ""))) / "pypoetry" / "Cache" / "virtualenvs"
             elif _plat == "darwin":
                 _poetry_base = Path.home() / "Library" / "Caches" / "pypoetry" / "virtualenvs"
             else:  # linux
@@ -657,8 +681,12 @@ class VenvManager:
                 except Exception:
                     marker_data = {}
                 env_type = marker_data.get("type", "system_tools")
-                # Skip pipx marker in base_dir — pipx is listed from its own home
+                # Skip pipx marker in base_dir — listed from its own home
                 if env_type == "pipx":
+                    continue
+                # Skip poetry marker in base_dir — listed from APPDATA/pypoetry/Cache/virtualenvs
+                # (marker has poetry_venv_path pointing to real venv; avoid duplicate)
+                if env_type == "poetry":
                     continue
                 info = VenvInfo(name=item.name, path=item, is_valid=True,
                                 env_type=env_type)
@@ -689,41 +717,82 @@ class VenvManager:
                         except Exception:
                             pass
                     info.python_version = _conda_pyver or marker_pyver or ""
+                    # Count conda packages from conda-meta (most reliable, no subprocess needed)
                     try:
-                        from src.core.micromamba_installer import list_conda_packages
-                        info.package_count = len(list_conda_packages(item))
+                        _cmeta = item / "conda-meta"
+                        if _cmeta.exists():
+                            info.package_count = len([
+                                f for f in _cmeta.iterdir()
+                                if f.suffix == ".json" and f.name != "history"
+                            ])
+                        else:
+                            info.package_count = 0
                     except Exception:
                         info.package_count = 0
 
                 elif env_type in ("uv", "poetry"):
-                    # These create standard venvs — try reading Python version
+                    # For poetry: real venv is at poetry_venv_path in marker
+                    # For uv: venv is at item itself
+                    if env_type == "poetry":
+                        _venv_path_str = marker_data.get("poetry_venv_path", "")
+                        _venv_dir = Path(_venv_path_str) if _venv_path_str else item
+                        if _venv_dir != item and _venv_dir.exists():
+                            info.path = _venv_dir
+                            info.size = get_venv_size(_venv_dir)
+                    else:
+                        _venv_dir = item
+                    # Python version from marker or pyvenv.cfg or binary
                     if marker_pyver:
                         info.python_version = marker_pyver
                     else:
-                        _py = get_python_executable(item)
-                        if _py.exists():
+                        _pycfg = _venv_dir / "pyvenv.cfg"
+                        if _pycfg.exists():
                             try:
-                                _r = _run([str(_py), "--version"],
-                                          capture_output=True, text=True, timeout=5)
-                                _v = (_r.stdout.strip() or _r.stderr.strip()
-                                       ).replace("Python ", "")
-                                info.python_version = _v
+                                for _line in _pycfg.read_text().splitlines():
+                                    if _line.strip().startswith("version"):
+                                        info.python_version = _line.split("=", 1)[1].strip()
+                                        break
                             except Exception:
-                                info.python_version = ""
-                        else:
-                            info.python_version = ""
-                    # Count packages via pip in the env
-                    _pip_exe = get_pip_executable(item)
-                    if _pip_exe.exists():
+                                pass
+                        if not info.python_version:
+                            _py = get_python_executable(_venv_dir)
+                            if _py.exists():
+                                try:
+                                    _r = _run([str(_py), "--version"],
+                                              capture_output=True, text=True, timeout=5)
+                                    info.python_version = (
+                                        _r.stdout.strip() or _r.stderr.strip()
+                                    ).replace("Python ", "")
+                                except Exception:
+                                    pass
+                    # Count packages
+                    # uv envs: no pip.exe, no pip module — use "uv pip list"
+                    # poetry/venv envs: pip.exe exists
+                    _counted = False
+                    if env_type == "uv":
                         try:
-                            _r = _run(
-                                [str(_pip_exe), "list", "--format=json"],
-                                capture_output=True, text=True, timeout=15,
-                            )
-                            if _r.returncode == 0:
-                                info.package_count = len(json.loads(_r.stdout))
+                            from src.utils.platform_utils import get_pipx_executable as _dummy
+                            import shutil as _shutil
+                            _uv_bin = _shutil.which("uv")
+                            if _uv_bin:
+                                _r = _run([_uv_bin, "pip", "list", "--format=json",
+                                           "--python", str(get_python_executable(_venv_dir))],
+                                          capture_output=True, text=True, timeout=15)
+                                if _r.returncode == 0:
+                                    info.package_count = len(json.loads(_r.stdout))
+                                    _counted = True
                         except Exception:
                             pass
+                    if not _counted:
+                        _pip_exe = get_pip_executable(_venv_dir)
+                        if _pip_exe.exists():
+                            try:
+                                _r = _run([str(_pip_exe), "list", "--format=json"],
+                                          capture_output=True, text=True, timeout=15)
+                                if _r.returncode == 0:
+                                    info.package_count = len(json.loads(_r.stdout))
+                            except Exception:
+                                pass
 
                 elif env_type == "pipx":
                     # Get Python version — prefer marker, fallback to sys.executable

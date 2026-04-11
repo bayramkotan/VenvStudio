@@ -121,13 +121,18 @@ class DeleteWorker(QThread):
     progress = Signal(str)
     finished = Signal(bool, str)
 
-    def __init__(self, venv_manager, name):
+    def __init__(self, venv_manager, name, env_path=None, env_type="venv"):
         super().__init__()
         self.venv_manager = venv_manager
         self.name = name
+        self.env_path = env_path
+        self.env_type = env_type
 
     def run(self):
-        success, msg = self.venv_manager.delete_venv(self.name, callback=self.progress.emit)
+        success, msg = self.venv_manager.delete_venv(
+            self.name, callback=self.progress.emit,
+            env_path=self.env_path, env_type=self.env_type
+        )
         self.finished.emit(success, msg)
 
 
@@ -940,6 +945,7 @@ class MainWindow(QMainWindow):
 
             # ── Type column ──
             type_item = QTableWidgetItem(f"  {_type_labels.get(etype, '🐍 venv')}")
+            type_item.setData(Qt.UserRole, etype)  # store raw env_type for deletion etc.
             if _color:
                 type_item.setForeground(QColor(_color))
             elif etype == "system_tools":
@@ -947,9 +953,8 @@ class MainWindow(QMainWindow):
             self.env_table.setItem(i, 1, type_item)
 
             # ── Path column ──
-            _home = str(Path.home())
-            _full_path = str(env.path)  # poetry: already ~/.cache/pypoetry/...
-            _display_path = ("~" + _full_path[len(_home):]) if _full_path.startswith(_home) else _full_path
+            _full_path = str(env.path)
+            _display_path = _full_path
             path_item = QTableWidgetItem(f"  {_display_path}")
             path_item.setToolTip(_full_path)
             path_item.setForeground(QColor(self._c().get("fg_muted", "#888")))
@@ -1401,7 +1406,18 @@ class MainWindow(QMainWindow):
             self.delete_progress.show()
 
             self._deleting_env_name = name
-            self._delete_worker = DeleteWorker(self.venv_manager, name)
+            # Get env path and type from table for proper deletion (poetry needs real venv path)
+            _env_path = None
+            _env_type = "venv"
+            _sel_row = self.env_table.currentRow()
+            if _sel_row >= 0:
+                _path_item = self.env_table.item(_sel_row, 2)
+                _type_item = self.env_table.item(_sel_row, 1)
+                if _path_item:
+                    _env_path = _path_item.toolTip() or _path_item.text().strip()
+                if _type_item:
+                    _env_type = _type_item.data(Qt.UserRole) or "venv"
+            self._delete_worker = DeleteWorker(self.venv_manager, name, env_path=_env_path, env_type=_env_type)
             self._delete_worker.progress.connect(
                 lambda msg: self.delete_progress.setLabelText(f"⏳ {msg}")
             )

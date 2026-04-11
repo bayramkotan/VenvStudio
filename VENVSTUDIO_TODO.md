@@ -40,6 +40,18 @@
 
 ## 🔴 v1.4.53 Sonrası Buglar
 
+### ✅ B122–B129 — Cross-Platform Fix'ler (v1.4.55)
+- B122: Windows poetry path `%LOCALAPPDATA%\pypoetry\Cache\virtualenvs\` düzeltildi
+- B123: Poetry env duplicate sorunu giderildi (base_dir marker skip)
+- B124: Poetry env path/size/packages gerçek venv'den okunuyor
+- B125: uv Packages 0 sorunu — `uv pip list` kullanılıyor
+- B126: conda Packages 0 sorunu — `conda-meta/*.json` sayılıyor
+- B127: Poetry env delete çalışıyor — `env_path` + `env_type` ile
+- B128: pipx tam path gösteriliyor (tilde kısaltma kaldırıldı)
+- B129: `get_pipx_home()` tilde expand eklendi
+
+
+
 ### ✅ B115 — Windows/macOS Poetry Path Yanlış (v1.4.53)
 - Windows: `%APPDATA%\pypoetry\virtualenvs\` taranmalı
 - macOS: `~/Library/Caches/pypoetry/virtualenvs/` taranmalı
@@ -76,6 +88,14 @@
 - Settings sayfalarına da scroll ekle
 
 ## 🔴 YENİ BUGLAR & FEATURE'LAR (Bu Oturumdan)
+
+### 🟡 F118 — Open Folder Butonu ve Sağ Tık Menüsü
+- Environments tablosunda sağ tık menüsüne "Open Folder" ekle (Open Terminal'ın altına)
+- Package panel üst bar'a "Open Folder" butonu ekle (Open Terminal butonunun yanına)
+- Windows: `explorer <path>`, Linux: `xdg-open <path>`, macOS: `open <path>`
+- pipx için: `pipx_home/venvs/` klasörünü aç
+- poetry için: gerçek venv path'ini aç (`%LOCALAPPDATA%\pypoetry\Cache\virtualenvs\...`)
+
 
 ### 🔴 B110 — AppImage Quick Launch Uygulamalar Çalışmıyor
 - AppImage'da Quick Launch'taki uygulamalar (Jupyter, IPython vb.) çalışmıyor

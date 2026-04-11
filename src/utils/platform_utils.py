@@ -197,7 +197,7 @@ def get_pipx_home() -> Optional[str]:
                 capture_output=True, text=True, timeout=10
             )
             if r.returncode == 0 and r.stdout.strip():
-                p = r.stdout.strip()
+                p = os.path.expanduser(r.stdout.strip())
                 if os.path.isdir(p):
                     return p
         except Exception:

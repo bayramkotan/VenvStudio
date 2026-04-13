@@ -576,6 +576,24 @@ class EnvCreateDialog(QDialog):
                     for n in (tool, tool + ".exe"):
                         candidates.append(os.path.join(s, n))
 
+        # 6. Poetry official installer location (~/.local/share/pypoetry/bin/)
+        if tool == "poetry":
+            candidates.append(os.path.join(os.path.expanduser("~"),
+                ".local", "share", "pypoetry", "bin", "poetry"))
+            # Windows: %APPDATA%\pypoetry\bin\poetry.exe
+            if sys.platform == "win32":
+                candidates.append(os.path.join(
+                    os.environ.get("APPDATA", ""), "pypoetry", "bin", "poetry.exe"))
+
+        # 7. ~/.local/bin (common for curl-based installers on Linux)
+        if sys.platform != "win32":
+            candidates.append(os.path.join(
+                os.path.expanduser("~"), ".local", "bin", tool))
+
+        # 8. Cargo/rustup bin (~/.cargo/bin) — for tools installed via cargo
+        candidates.append(os.path.join(
+            os.path.expanduser("~"), ".cargo", "bin", tool))
+
         return next((c for c in candidates if c and os.path.isfile(c)), "")
 
     def _install_tool(self, scope: str = "user"):

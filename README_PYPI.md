@@ -139,6 +139,31 @@ pip install PySide6
 python main.py
 ```
 
+### Linux — System Dependencies
+
+Before running VenvStudio on Linux, install the required Qt/XCB libraries:
+
+**Debian / Ubuntu / Pardus / Linux Mint:**
+```bash
+sudo apt update
+sudo apt install libxcb-xinerama0 libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
+                 libxcb-keysyms1 libxcb-render-util0 libxcb-shape0 libxkbcommon-x11-0
+```
+
+**Arch Linux / CachyOS / Manjaro:**
+```bash
+sudo pacman -S xcb-util-cursor xcb-util-icccm xcb-util-image \
+               xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11
+```
+
+**Fedora / RHEL / CentOS:**
+```bash
+sudo dnf install libxcb xcb-util-cursor xcb-util-icccm xcb-util-image \
+                 xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11
+```
+
+> **Note:** If the AppImage fails with `Could not load the Qt platform plugin "xcb"`, installing these packages will fix it.
+
 ### CLI
 
 ```bash

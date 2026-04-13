@@ -305,7 +305,7 @@ sudo dnf install libxcb xcb-util-cursor xcb-util-icccm xcb-util-image \
 **openSUSE Leap / Tumbleweed:**
 ```bash
 sudo zypper install libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
-                    libxcb-keysyms1 libxcb-render-util0 libxkbcommon-x11-0
+                    libxcb-keysyms1 libxcb-render-util0 libxkbcommon-x11-0 libgthread-2_0-0
 ```
 
 > **Note:** If the AppImage fails with `Could not load the Qt platform plugin "xcb"`, installing these packages will fix it.

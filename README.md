@@ -302,11 +302,19 @@ sudo dnf install libxcb xcb-util-cursor xcb-util-icccm xcb-util-image \
                  xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11
 ```
 
-**openSUSE Leap / Tumbleweed:**
+**openSUSE Tumbleweed:**
 ```bash
-sudo zypper install libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
-                    libxcb-keysyms1 libxcb-render-util0 libxkbcommon-x11-0
+sudo zypper install libxcb-cursor1 xcb-util-icccm xcb-util-image \
+                    xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11-0
 ```
+
+**openSUSE Leap 15.x:**
+```bash
+sudo zypper install xcb-util-cursor xcb-util-icccm xcb-util-image \
+                    xcb-util-keysyms xcb-util-renderutil libxkbcommon-x11-0
+```
+> ⚠️ If `xcb-util-cursor` is not found on Leap, add the X11:XOrg repository first:
+> `sudo zypper addrepo https://download.opensuse.org/repositories/X11:XOrg/openSUSE_Leap_15.6/X11:XOrg.repo && sudo zypper refresh`
 
 > **Note:** If the AppImage fails with `Could not load the Qt platform plugin "xcb"`, installing these packages will fix it.
 

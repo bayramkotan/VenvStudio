@@ -601,6 +601,61 @@ class EnvCreateDialog(QDialog):
         def _do_install(callback=None):
             import subprocess, shutil, os, site
 
+            # ── Platform-aware install strategy ──────────────────────────
+            # On Linux with PEP 668 (Debian/Ubuntu/Pardus), pip install is
+            # blocked for system Python. Use official installers instead.
+            def _is_externally_managed():
+                try:
+                    import sysconfig
+                    stdlib = sysconfig.get_path("stdlib")
+                    if stdlib and os.path.exists(os.path.join(stdlib, "EXTERNALLY-MANAGED")):
+                        return True
+                except Exception:
+                    pass
+                return False
+
+            def _install_uv_linux(user_scope: bool):
+                """Install uv via official shell installer (recommended)."""
+                try:
+                    r = subprocess.run(
+                        ["sh", "-c", "curl -LsSf https://astral.sh/uv/install.sh | sh"],
+                        capture_output=True, text=True, timeout=120)
+                    if r.returncode == 0:
+                        return True, ""
+                    return False, r.stderr[:300]
+                except Exception as e:
+                    return False, str(e)
+
+            def _install_poetry_linux(user_scope: bool):
+                """Install poetry via official installer (recommended)."""
+                try:
+                    r = subprocess.run(
+                        ["sh", "-c", "curl -sSL https://install.python-poetry.org | python3 -"],
+                        capture_output=True, text=True, timeout=180,
+                        env={**os.environ, "POETRY_HOME": os.path.expanduser("~/.local/share/pypoetry")}
+                    )
+                    if r.returncode == 0:
+                        return True, ""
+                    return False, r.stderr[:300]
+                except Exception as e:
+                    return False, str(e)
+
+            def _install_pipx_linux(user_scope: bool):
+                """Install pipx via apt if available, else pip --break-system-packages."""
+                if shutil.which("apt"):
+                    r = subprocess.run(
+                        ["sudo", "apt", "install", "-y", "pipx"],
+                        capture_output=True, text=True, timeout=120)
+                    if r.returncode == 0:
+                        return True, ""
+                # Fallback: pip with --break-system-packages
+                cmd = [python_path, "-m", "pip", "install", "pipx",
+                       "--break-system-packages", "--user", "-q"]
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+                if r.returncode == 0:
+                    return True, ""
+                return False, r.stderr[:300]
+
             if scope == "system":
                 if sys.platform == "win32":
                     try:
@@ -614,17 +669,63 @@ class EnvCreateDialog(QDialog):
                     except Exception as e:
                         return False, f"UAC error: {e}"
                 else:
+                    # Linux/macOS system install
+                    if _is_externally_managed():
+                        # PEP 668 — use official installers
+                        if env_type == "uv":
+                            ok, err = _install_uv_linux(False)
+                            if not ok:
+                                return False, f"uv install failed: {err}"
+                        elif env_type == "poetry":
+                            ok, err = _install_poetry_linux(False)
+                            if not ok:
+                                return False, f"poetry install failed: {err}"
+                        elif env_type == "pipx":
+                            ok, err = _install_pipx_linux(False)
+                            if not ok:
+                                return False, f"pipx install failed: {err}"
+                        else:
+                            r = subprocess.run(
+                                ["sudo", python_path, "-m", "pip", "install", pkg,
+                                 "--break-system-packages", "-q"],
+                                capture_output=True, text=True, timeout=120)
+                            if r.returncode != 0:
+                                return False, (r.stderr or r.stdout or "install failed")[:200]
+                    else:
+                        r = subprocess.run(
+                            ["sudo", python_path, "-m", "pip", "install", pkg, "-q"],
+                            capture_output=True, text=True, timeout=120)
+                        if r.returncode != 0:
+                            return False, (r.stderr or r.stdout or "sudo install failed")[:200]
+            else:
+                # User install
+                if sys.platform != "win32" and _is_externally_managed():
+                    # PEP 668 — use official installers
+                    if env_type == "uv":
+                        ok, err = _install_uv_linux(True)
+                        if not ok:
+                            return False, f"uv install failed: {err}"
+                    elif env_type == "poetry":
+                        ok, err = _install_poetry_linux(True)
+                        if not ok:
+                            return False, f"poetry install failed: {err}"
+                    elif env_type == "pipx":
+                        ok, err = _install_pipx_linux(True)
+                        if not ok:
+                            return False, f"pipx install failed: {err}"
+                    else:
+                        r = subprocess.run(
+                            [python_path, "-m", "pip", "install", pkg,
+                             "--break-system-packages", "--user", "-q"],
+                            capture_output=True, text=True, timeout=120)
+                        if r.returncode != 0:
+                            return False, (r.stderr or r.stdout or "pip install failed")[:200]
+                else:
                     r = subprocess.run(
-                        ["sudo", python_path, "-m", "pip", "install", pkg, "-q"],
+                        [python_path, "-m", "pip", "install", pkg, "--user", "-q"],
                         capture_output=True, text=True, timeout=120)
                     if r.returncode != 0:
-                        return False, (r.stderr or r.stdout or "sudo install failed")[:200]
-            else:
-                r = subprocess.run(
-                    [python_path, "-m", "pip", "install", pkg, "--user", "-q"],
-                    capture_output=True, text=True, timeout=120)
-                if r.returncode != 0:
-                    return False, (r.stderr or r.stdout or "pip install failed")[:200]
+                        return False, (r.stderr or r.stdout or "pip install failed")[:200]
 
             # For pipx: run ensurepath to register Scripts dir
             if env_type == "pipx":

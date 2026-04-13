@@ -147,6 +147,96 @@
 ### 🟡 F117 — Settings > pip Backend Kaldırılacak
 - Settings altındaki pip Backend seçeneği gereksiz — kaldırılacak
 
+### 🟡 F119 — Klavye Kısayolları (Keyboard Shortcuts)
+- Tüm ana işlemler için klavye kısayolları eklenecek
+- **Navigasyon:**
+  - `Ctrl+1` → Packages sayfasına git
+  - `Ctrl+2` → Environments sayfasına git
+  - `Ctrl+3` → Settings sayfasına git
+- **Environment işlemleri:**
+  - `Ctrl+N` → New Environment dialog'u aç
+  - `Delete` → Seçili env'i sil (onay ile)
+  - `F2` → Seçili env'i rename (Name Only)
+  - `Ctrl+F2` → Seçili env'i rename (Full)
+  - `Ctrl+D` → Seçili env'i duplicate/clone
+  - `Ctrl+R` veya `F5` → Refresh env listesi
+  - `Ctrl+T` → Seçili env için Open Terminal
+  - `Ctrl+Shift+F` → Seçili env klasörünü aç (Open Folder — F118 ile bağlantılı)
+- **Paket işlemleri:**
+  - `Ctrl+I` → Install package (paket arama kutusuna odaklan)
+  - `Ctrl+U` → Outdated paketleri güncelle
+  - `Ctrl+E` → Export requirements
+- **Genel:**
+  - `Ctrl+,` → Settings sayfasına git
+  - `Ctrl+Q` → Uygulamayı kapat
+  - `Ctrl+F` → Env listesinde arama/filtre
+  - `Escape` → Açık dialog'u kapat / arama kutusunu temizle
+- **Uygulama:**
+  - `main_window.py` → `QShortcut` veya `QAction` ile tanımlanacak
+  - Kısayollar `Help > Keyboard Shortcuts` menüsünde listelenecek
+  - Tüm kısayollar platform uyumlu (Windows/Linux/macOS)
+
+
+### 🔴 B130 — Poetry Open Terminal Yanlış Path
+- Poetry env'e Open Terminal yapıldığında yanlış path açılıyor (Linux'ta test edildi, Windows'ta bilinmiyor)
+- Neden: `open_terminal_at` poetry için proje klasörünü kullanıyor, gerçek venv path'ini (`%LOCALAPPDATA%\pypoetry\Cache\virtualenvs\...`) değil
+- Fix: `platform_utils.py` → `open_terminal_at` içinde poetry env için marker'daki `poetry_venv_path` okunmalı
+- **Her iki platformda da test edilmeli (Windows + Linux)**
+
+### 🔴 B131 — Remove All Data Sonrası Config Hatası
+- Settings > Remove All Data'ya tıklanınca `settings.json` siliniyor
+- Uygulama terminal'den çalışıyorsa sonraki kaydetme işleminde hata veriyor:
+  `Error saving config: [Errno 2] No such file or directory: '~/.config/VenvStudio/settings.json'`
+- Fix: `config_manager.py` → `save()` içinde dosya yoksa önce dizini ve dosyayı oluştur (`os.makedirs` + yeni boş config yaz)
+
+### 🔴 B132 — Eski/Bozuk JSON'da Clean Start
+- Eğer `settings.json` içindeki versiyon çalışan uygulama versiyonundan düşükse (ya da JSON bozuksa) tüm config silinip sıfırdan oluşturulmalı
+- Şu an bozuk JSON varsa uygulama hata veriyor
+- Fix: `config_manager.py` → `load()` içinde versiyon kontrolü ekle; eski/bozuk JSON → yedekle (`settings.json.bak`) + sıfırdan oluştur
+
+### 🔴 B133 — pipx Env Silme Akışı Yanlış
+- Environments tablosunda pipx seçilip Delete'e basıldığında direkt silmeye çalışıyor
+- Doğru akış:
+  1. Önce uyarı: "pipx kaldırılmadan önce Settings > Toolchain Manager > Uninstall yapın veya `pipx uninstall-all` çalıştırın"
+  2. Eğer pipx executable yoksa (zaten kaldırılmışsa): klasörü tamamen sil
+  3. Eğer pipx hâlâ kuruluysa: silmeyi engelle, kullanıcıyı yönlendir
+- `main_window.py` → `_delete_env()` içinde pipx için özel akış
+
+### 🟡 B134 — Default Python Mantığı (Settings > Python Versions)
+- "Default Python for new environments" ayarı sistem default dışında bir Python seçilince otomatik set edilmeli
+- Şu an kullanıcı her seferinde manuel seçiyor
+- Fix: `env_dialog.py` → Create Environment'ta Python seçilince bu seçim default olarak kaydedilsin (isteğe bağlı checkbox ile)
+
+### 🔴 B135 — Export — pip Dışı Env'lerde Çalışmıyor
+- uv, poetry, conda, pipx env'lerinde Export işlemi başarısız veya boş çıktı veriyor
+- Neden: export kodu `pip freeze` / `pip list` kullanıyor, pip dışı env'lerde pip yok
+- Fix: her env tipine özel export stratejisi:
+  - **uv:** `uv pip freeze`
+  - **poetry:** `poetry export -f requirements.txt` veya `pyproject.toml`
+  - **conda:** `conda list --export` veya `environment.yml`
+  - **pipx:** `pipx list --json`
+- `settings_advanced.py` → `_export_env_requirements()` ve ilgili metodlar
+
+### 🟡 F120 — Export'ta Podman Desteği
+- Export > Dockerfile yanına Podman desteği ekle (Podman uyumlu Containerfile)
+- Podman rootless çalıştığı için `USER` direktifi farklı olabilir
+- `settings_advanced.py` → export dialog'a "Podman (Containerfile)" seçeneği ekle
+
+### 🟡 F121 — Tools > Create Necessary Shortcuts
+- AppImage / EXE / pip kurulumunda masaüstü ve uygulama menüsüne kısayol oluşturma
+- **Linux:** `.desktop` dosyası oluştur → `~/.local/share/applications/`
+- **Windows:** Başlat Menüsü + Masaüstü `.lnk` kısayolu
+- **macOS:** `/Applications/` altına `.app` bundle veya Dock kısayolu
+- Settings veya Tools menüsü altında "Create Desktop Shortcut" butonu
+- pip install ile kurulanlar için de geçerli (`venvstudio` CLI entry point üzerinden)
+
+### 🟡 F122 — Tools > Install VS Code CLI (User / Global)
+- Settings'teki mevcut VS Code CLI toggle'ı genişletilecek
+- **User kurulum:** `%APPDATA%\Code\User\` (Windows) / `~/.config/Code/User/` (Linux) altına
+- **Global kurulum:** `C:\ProgramData\` (Windows) / `/usr/local/` (Linux) altına (sudo gerekir)
+- Seçim dialog'u: "Install for current user" vs "Install for all users (admin/sudo required)"
+- `settings_catalog.py` → `_toggle_vs_cli()` genişletilecek
+
 ## 🔴 KRİTİK BUGLAR
 
 - **B42** — Python yükleyici güvenlik kontrolleri (en sona alındı)
@@ -449,8 +539,20 @@ Olması gereken fark:
     - `snapcraft` ile build → Snap Store'a yükle
     - Sonuç: `sudo snap install venvstudio`
   - **flatpak:** Flathub'a gönder
-    - `com.github.bayramkotan.VenvStudio.yml` manifest hazırla
-    - Flathub repo'suna PR aç
+    - [ ] `com.github.bayramkotan.VenvStudio.yml` manifest hazırla
+      - Runtime: `org.freedesktop.Platform` veya `org.kde.Platform`
+      - Build sistemi: pip tabanlı — tüm PySide6 + bağımlılık wheel'ları tanımlanacak
+      - İzinler: `--filesystem=home`, `--share=network`, `--talk-name=org.freedesktop.Notifications`
+      - Sandbox kısıtı: `uv`, `pipx`, `poetry` gibi sistem araçlarına erişim için `--filesystem=host` gerekebilir
+    - [ ] Yerel test:
+      ```bash
+      flatpak-builder build-dir com.github.bayramkotan.VenvStudio.yml --force-clean
+      flatpak-builder --run build-dir com.github.bayramkotan.VenvStudio.yml venvstudio
+      ```
+    - [ ] `flathub/flathub` GitHub repo'sunu fork et
+    - [ ] `com.github.bayramkotan.VenvStudio/` klasörü oluştur, manifest ekle
+    - [ ] PR aç → Flathub ekibi review (~1-2 hafta)
+    - ⚠️ **Zorluklar:** PySide6 büyük bağımlılık; sandbox subprocess kısıtları; AppImage zaten çalışıyor
     - Sonuç: `flatpak install flathub com.github.bayramkotan.VenvStudio`
   - **AUR (Arch Linux):** PKGBUILD hazırla
     - `PKGBUILD` dosyası yaz → AUR'a yükle

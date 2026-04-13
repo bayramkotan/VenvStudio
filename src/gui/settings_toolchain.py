@@ -545,10 +545,19 @@ class ToolchainMixin:
             rows = []
             for tid, pkg, lbl, icon in self._TC_TOOLS:
                 if tid == "micromamba":
-                    try:
-                        from src.core.micromamba_installer import get_micromamba_exe
-                        path = str(get_micromamba_exe() or "")
-                    except Exception: path = ""
+                    # Prefer system conda/mamba/micromamba if available (shows as Global/User)
+                    # Fall back to VenvStudio-managed micromamba (shows as Managed)
+                    import shutil as _shutil
+                    _sys_conda = (_shutil.which("conda") or
+                                  _shutil.which("mamba") or
+                                  _shutil.which("micromamba"))
+                    if _sys_conda:
+                        path = _sys_conda
+                    else:
+                        try:
+                            from src.core.micromamba_installer import get_micromamba_exe
+                            path = str(get_micromamba_exe() or "")
+                        except Exception: path = ""
                 elif tid in ("pip", "venv"):
                     try:
                         if tid == "venv":
@@ -643,6 +652,7 @@ class ToolchainMixin:
                     path.lower().startswith(_py_scripts_lower))
                 _is_user = (ok2 and not _is_managed and not _is_python_local and (
                     _path_lower.startswith(_os2.path.join(_home, ".local").lower()) or
+                    _path_lower.startswith(_os2.path.join(_home, ".cargo").lower()) or
                     _path_lower.startswith(_os2.environ.get("LOCALAPPDATA", "~~~").lower()) or
                     _path_lower.startswith(_os2.environ.get("APPDATA", "~~~").lower())
                 ))

@@ -184,6 +184,22 @@ def open_terminal_at(path: Path, terminal_type: str = "", env_type: str = "") ->
                     return
                 # Git Bash not found, fall through to PowerShell
 
+            # Conda on Windows: use micromamba run (no shell init needed)
+            if env_type == "conda":
+                _mamba = shutil.which("micromamba") or shutil.which("conda")
+                if _mamba:
+                    subprocess.Popen(
+                        ["powershell", "-NoExit", "-Command",
+                         f"& '{_mamba}' run -p '{path}' powershell -NoExit"],
+                        creationflags=subprocess.CREATE_NEW_CONSOLE,
+                    )
+                else:
+                    subprocess.Popen(
+                        ["powershell", "-NoExit", "-Command", f"Set-Location '{path}'"],
+                        creationflags=subprocess.CREATE_NEW_CONSOLE,
+                    )
+                return
+
             # Default: PowerShell
             if activate_ps1.exists():
                 subprocess.Popen(

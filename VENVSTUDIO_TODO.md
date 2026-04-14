@@ -82,7 +82,7 @@
 - `main_window.py` → `_on_env_selected()` içinde pipx için Delete butonunu disable et
 - Sağ tık menüsünde de Delete gizlenmeli, yerine "Use Toolchain Manager to uninstall" mesajı
 
-### B121 — Yüksek DPI / Ölçek > 100% Form Elemanları Sağa Kayıyor
+### ✅ B121 — Yüksek DPI / Ölçek > 100% Form Elemanları Sağa Kayıyor (v1.4.57)
 - Create Environment dialog ve diğer formlarda scroll bar yok
 - `env_dialog.py` → form container'a `QScrollArea` ekle
 - Settings sayfalarına da scroll ekle
@@ -177,19 +177,24 @@
   - Tüm kısayollar platform uyumlu (Windows/Linux/macOS)
 
 
-### 🔴 B130 — Poetry Open Terminal Yanlış Path
+### ✅ B130 — Poetry Open Terminal Yanlış Path (v1.4.57)
 - Poetry env'e Open Terminal yapıldığında yanlış path açılıyor (Linux'ta test edildi, Windows'ta bilinmiyor)
 - Neden: `open_terminal_at` poetry için proje klasörünü kullanıyor, gerçek venv path'ini (`%LOCALAPPDATA%\pypoetry\Cache\virtualenvs\...`) değil
 - Fix: `platform_utils.py` → `open_terminal_at` içinde poetry env için marker'daki `poetry_venv_path` okunmalı
 - **Her iki platformda da test edilmeli (Windows + Linux)**
 
-### 🔴 B131 — Remove All Data Sonrası Config Hatası
+
+### ✅ B136 — PEP 668 Toolchain Uninstall Hatası (v1.4.57)
+- uv/poetry/pipx kaldırılırken "externally-managed-environment" hatası alınıyordu
+- Fix: binary direkt siliniyor (`~/.local/bin/`, `~/.cargo/bin/`), fallback: `--break-system-packages`
+
+### ✅ B131 — Remove All Data Sonrası Config Hatası (v1.4.57)
 - Settings > Remove All Data'ya tıklanınca `settings.json` siliniyor
 - Uygulama terminal'den çalışıyorsa sonraki kaydetme işleminde hata veriyor:
   `Error saving config: [Errno 2] No such file or directory: '~/.config/VenvStudio/settings.json'`
 - Fix: `config_manager.py` → `save()` içinde dosya yoksa önce dizini ve dosyayı oluştur (`os.makedirs` + yeni boş config yaz)
 
-### 🔴 B132 — Eski/Bozuk JSON'da Clean Start
+### ✅ B132 — Eski/Bozuk JSON'da Clean Start (v1.4.57)
 - Eğer `settings.json` içindeki versiyon çalışan uygulama versiyonundan düşükse (ya da JSON bozuksa) tüm config silinip sıfırdan oluşturulmalı
 - Şu an bozuk JSON varsa uygulama hata veriyor
 - Fix: `config_manager.py` → `load()` içinde versiyon kontrolü ekle; eski/bozuk JSON → yedekle (`settings.json.bak`) + sıfırdan oluştur
@@ -236,6 +241,54 @@
 - **Global kurulum:** `C:\ProgramData\` (Windows) / `/usr/local/` (Linux) altına (sudo gerekir)
 - Seçim dialog'u: "Install for current user" vs "Install for all users (admin/sudo required)"
 - `settings_catalog.py` → `_toggle_vs_cli()` genişletilecek
+
+### 🟡 F123 — Python Download Kaynakları (Mirror Seçimi)
+- Settings > Python Versions > Download Python bölümüne kaynak seçimi ekle
+- **Yerleşik kaynaklar:**
+  - 🚀 **Astral CDN** (varsayılan) — `https://downloads.astral.sh/` — hızlı CDN
+  - 🐙 **GitHub Releases** — `https://github.com/astral-sh/python-build-standalone/releases` — her zaman güncel
+  - 🐍 **python.org** — `https://www.python.org/ftp/python/` — sadece Windows/macOS (MSI/PKG)
+  - 📦 **SourceForge Mirror** — `https://sourceforge.net/projects/python-standalone.mirror/` — resmi olmayan kopya
+- **Özel URL desteği:**
+  - Kullanıcı kendi mirror URL'sini girebilir (şirket içi mirror, hava boşluklu ağ vb.)
+  - Opsiyonel parametreler eklenebilir (auth header, proxy vb.)
+  - URL doğrulama: bağlantı testi butonu
+- **Uygulama:**
+  - `settings_python.py` → Download Python bölümüne kaynak combo + custom URL input ekle
+  - `src/core/python_downloader.py` → indirme URL'si seçilen kaynaktan oluşturulsun
+  - Seçim `config` altında `python_download_source` ve `python_download_custom_url` olarak saklanır
+  - python.org seçilince format uyarısı göster (portable değil, installer format)
+
+### 🟡 F124 — Catalog Paket Bilgilerini Düzenleme (Settings)
+- Settings > Catalog bölümüne mevcut catalog paketlerini düzenleme imkânı ekle
+- **Özellikler:**
+  - Mevcut paketleri listele (tüm kategoriler)
+  - Her paket için düzenlenebilir alanlar:
+    - `desc` — açıklama
+    - `links` — PyPI, Docs, GitHub, YouTube linkleri
+    - `category` — kategori değiştirme
+  - **Override sistemi:** `constants.py`'deki orijinal veri değişmez, kullanıcı overrideleri `config`'e kaydedilir (`catalog_overrides` dict)
+  - Orijinal değere sıfırlama butonu (her satırda)
+  - Tüm overrideleri sıfırlama butonu
+  - Arama/filtre
+- **Uygulama:**
+  - `settings_catalog.py` → yeni "Edit Catalog" bölümü
+  - `package_panel.py` → `_populate_catalog()` önce `catalog_overrides`'a bakıp override varsa onu kullansın
+  - Override format: `{"numpy": {"desc": "...", "links": {...}}, ...}`
+  - `config_manager.py` → `catalog_overrides` key'i
+
+### 🟡 F125 — Emoji/İkon Desteği (openSUSE, Fedora)
+- openSUSE ve Fedora'da emoji ikonlar görünmüyor (🐍 ⚡ 📦 🦎 vb.)
+- Neden: Bu distrolarda `fonts-noto-color-emoji` veya eşdeğeri kurulu değil
+- **Settings > Appearance** altına "Install Emoji Font" butonu ekle:
+  - **Debian/Ubuntu/Pardus:** `sudo apt install fonts-noto-color-emoji`
+  - **Arch/CachyOS:** `sudo pacman -S noto-fonts-emoji`
+  - **Fedora:** `sudo dnf install google-noto-emoji-fonts`
+  - **openSUSE:** `sudo zypper install noto-coloremoji-fonts`
+  - pkexec ile grafik şifre dialog'u
+- Kurulum sonrası uygulama yeniden başlatma önerisi
+- Zaten kuruluysa buton "✅ Emoji font installed" göstersin
+- `settings_appearance.py` → `_install_nerd_font` benzeri yapı
 
 ## 🔴 KRİTİK BUGLAR
 

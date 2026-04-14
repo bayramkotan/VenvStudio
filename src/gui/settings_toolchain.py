@@ -660,7 +660,20 @@ class ToolchainMixin:
                 for sub in os.listdir(pa):
                     sc = os.path.join(pa,sub,"Scripts")
                     for n in (tool,tool+".exe"): cands.append(os.path.join(sc,n))
-        return next((c for c in cands if c and os.path.isfile(c)),"")
+        found = next((c for c in cands if c and os.path.isfile(c)), "")
+        if found:
+            return found
+        # Fallback: check if tool is available as python module (e.g. python3 -m pipx)
+        try:
+            import subprocess
+            r = subprocess.run([py_exe, "-m", tool, "--version"],
+                               capture_output=True, text=True, timeout=5)
+            if r.returncode == 0:
+                return py_exe  # signals "available as module"
+        except Exception:
+            pass
+        return ""
+
 
     def _tc_load_table(self, py_exe):
         """Reload table rows for the selected Python."""
@@ -826,8 +839,12 @@ class ToolchainMixin:
                 vi.setForeground(QColor(self._c()["fg"]))
                 tbl.setItem(row, 2, vi)
 
-                # col 3: Path
-                pi = QTableWidgetItem(path if ok2 else "—")
+                # col 3: Path — if path == py_exe, tool is module-only
+                import os as _os2
+                _display_path = path
+                if ok2 and _os2.path.normpath(path) == _os2.path.normpath(_py):
+                    _display_path = f"python -m {_tid}"
+                pi = QTableWidgetItem(_display_path if ok2 else "—")
                 pi.setForeground(QColor(self._c()["fg_muted"]))
                 pi.setToolTip(path)
                 tbl.setItem(row, 3, pi)

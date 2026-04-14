@@ -677,7 +677,8 @@ class EnvCreateDialog(QDialog):
                 return False, r.stderr[:300]
 
             def _detect_pkg_manager():
-                """Detect system package manager."""                for pm in ("apt", "pacman", "dnf", "zypper", "emerge"):
+                """Detect system package manager."""
+                for pm in ("apt", "pacman", "dnf", "zypper", "emerge"):
                     if shutil.which(pm):
                         return pm
                 return None

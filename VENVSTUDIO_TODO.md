@@ -290,6 +290,29 @@
 - Zaten kuruluysa buton "✅ Emoji font installed" göstersin
 - `settings_appearance.py` → `_install_nerd_font` benzeri yapı
 
+### 🟡 F74b — Launch Kartları Linkleri Tamamlama
+- Kalan tüm uygulamalara YouTube/Docs/Site/GitHub linkleri ekle:
+  - TensorBoard, MLflow, Voilà, Panel, Spyder, RStudio, QGIS, vb.
+  - Tüm system_app'ler dahil
+- Link butonlarının görünümü iyileştir (ikon boyutu, hover efekti)
+- GitHub linki de ekle ilgili uygulamalar için
+
+### 🟡 F52b — Learn Sayfası Geliştirme
+- **Tasarım:** Daha iyi görsel tasarım — kart hover animasyonları, kategori renkleri
+- **Syntax Highlight:** Kod snippet'lerinde syntax highlighting (Pygments veya basit regex)
+- **Arama/Filtre:** Tüm topic'lerde arama yapabilme
+- **Daha fazla içerik:**
+  - Django, SQLAlchemy, Celery (Web kategorisi)
+  - NumPy, Polars, Plotly (Data Science)
+  - TensorFlow, Keras, ONNX (ML/DL)
+  - Click, Typer, Rich (CLI Tools)
+  - Docker, Git, SSH (DevOps)
+  - asyncio, threading, multiprocessing (Concurrency)
+- **"Install & Try" butonu** → direkt aktif env'e kur, terminal aç
+- **Bookmark/Favori** sistemi — beğenilen topic'leri kaydet
+- **Progress tracking** — hangi topic'leri okuduğunu işaretle
+- **Arama** — topic başlığı ve içeriğinde full-text search
+
 ## 🔴 KRİTİK BUGLAR
 
 - **B42** — Python yükleyici güvenlik kontrolleri (en sona alındı)

@@ -1001,6 +1001,37 @@ class ToolchainMixin:
             # Build correct remove command per tool
             # Find the tool's own executable first
             _tool_exe = _shutil.which(tool) or _shutil.which(tool + ".exe")
+            # If tool is only available as module (python -m tool), handle specially
+            if not _tool_exe:
+                import subprocess as _sp2
+                r2 = _sp2.run([py_exe, "-m", tool, "--version"],
+                              capture_output=True, text=True, timeout=5)
+                if r2.returncode == 0:
+                    # Module-only install — find via pip show
+                    _loc_r = _sp2.run([py_exe, "-m", "pip", "show", tool],
+                                      capture_output=True, text=True, timeout=10)
+                    _loc = next((l.split(":", 1)[1].strip()
+                                 for l in _loc_r.stdout.splitlines()
+                                 if l.startswith("Location:")), "")
+                    _pm = _detect_pm() if hasattr(_shutil, 'which') else None
+                    _pacman_map = {"pipx": "python-pipx", "uv": "uv", "poetry": "python-poetry"}
+                    if _pm == "pacman" and tool in _pacman_map:
+                        _pkexec = _shutil.which("pkexec") or ""
+                        _cmd = ([_pkexec] if _pkexec else ["sudo"]) + [
+                            "pacman", "-R", "--noconfirm", _pacman_map[tool]]
+                        try:
+                            r3 = _sp2.run(_cmd, capture_output=True, text=True, timeout=60)
+                            if r3.returncode == 0:
+                                return True, f"{tool} removed via pacman"
+                        except Exception:
+                            pass
+                    return False, (
+                        f"{tool} is installed as a Python module.\n\n"
+                        f"Run in terminal to remove:\n"
+                        + (f"  sudo pacman -R {_pacman_map.get(tool, tool)}"
+                           if _pm == "pacman" else
+                           f"  pip uninstall {tool} --break-system-packages")
+                    )
             if tool in ("pip", "venv"):
                 return False, f"{tool} cannot be removed — it is a core Python component"
             elif tool == "micromamba":

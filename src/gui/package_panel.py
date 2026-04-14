@@ -3286,14 +3286,24 @@ $s.Save()
 
 
     def _get_catalog_lookup(self) -> dict:
-        """Build a {pkg_name_lower: (description, category)} lookup from PACKAGE_CATALOG."""
+        """Build a {pkg_name_lower: (description, category)} lookup from PACKAGE_CATALOG.
+        PACKAGE_CATALOG structure: {cat_name: {"packages": [{"name": ..., "desc": ...}]}}
+        """
         lookup = {}
-        for cat_name, pkgs in PACKAGE_CATALOG.items():
-            for pkg_name, pkg_info in pkgs.items():
-                desc = pkg_info.get("description", "") if isinstance(pkg_info, dict) else ""
-                lookup[pkg_name.lower()] = (desc, cat_name)
-                lookup[pkg_name.lower().replace("-", "_")] = (desc, cat_name)
-                lookup[pkg_name.lower().replace("_", "-")] = (desc, cat_name)
+        for cat_name, cat_data in PACKAGE_CATALOG.items():
+            if not isinstance(cat_data, dict):
+                continue
+            for pkg in cat_data.get("packages", []):
+                if not isinstance(pkg, dict):
+                    continue
+                name = pkg.get("name", "")
+                desc = pkg.get("desc", "")
+                if not name:
+                    continue
+                for key in (name.lower(),
+                            name.lower().replace("-", "_"),
+                            name.lower().replace("_", "-")):
+                    lookup[key] = (desc, cat_name)
         return lookup
 
     def _on_packages_loaded(self, packages):

@@ -253,23 +253,39 @@ class MainWindow(QMainWindow):
 
     def _setup_window(self):
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
-        width = self.config.get("window_width", 1100)
-        height = self.config.get("window_height", 700)
-
-        # Clamp to screen size
-        screen = QApplication.primaryScreen()
-        if screen:
-            avail = screen.availableGeometry()
-            width = min(width, avail.width() - 80)
-            height = min(height, avail.height() - 80)
-
-        self.resize(width, height)
         self.setMinimumSize(900, 600)
 
-        # Center on screen
-        if screen:
-            avail = screen.availableGeometry()
-            x = avail.x() + (avail.width() - width) // 2
+        width  = self.config.get("window_width",  1100)
+        height = self.config.get("window_height", 700)
+        saved_x = self.config.get("window_x", None)
+        saved_y = self.config.get("window_y", None)
+
+        # Find the screen that contains the saved position, fallback to primary
+        target_screen = None
+        if saved_x is not None and saved_y is not None:
+            for scr in QApplication.screens():
+                if scr.geometry().contains(saved_x + width // 2, saved_y + height // 2):
+                    target_screen = scr
+                    break
+
+        if target_screen is None:
+            target_screen = QApplication.primaryScreen()
+
+        avail = target_screen.availableGeometry()
+
+        # Clamp size to available screen
+        width  = min(width,  avail.width()  - 40)
+        height = min(height, avail.height() - 40)
+        self.resize(width, height)
+
+        if saved_x is not None and saved_y is not None:
+            # Clamp position so window is fully on screen
+            x = max(avail.x(), min(saved_x, avail.x() + avail.width()  - width))
+            y = max(avail.y(), min(saved_y, avail.y() + avail.height() - height))
+            self.move(x, y)
+        else:
+            # First run — center on primary screen
+            x = avail.x() + (avail.width()  - width)  // 2
             y = avail.y() + (avail.height() - height) // 2
             self.move(x, y)
 
@@ -2108,8 +2124,10 @@ class MainWindow(QMainWindow):
             )
 
     def closeEvent(self, event):
-        self.config.set("window_width", self.width())
+        self.config.set("window_width",  self.width())
         self.config.set("window_height", self.height())
+        self.config.set("window_x", self.x())
+        self.config.set("window_y", self.y())
 
         # B45 fix: wait for ALL background workers before closing
         workers = []

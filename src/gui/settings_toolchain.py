@@ -1033,22 +1033,22 @@ class ToolchainMixin:
                                  if l.startswith("Location:")), "")
                     _pm = next((p for p in ("apt","pacman","dnf","zypper") if _shutil.which(p)), None)
                     _pacman_map = {"pipx": "python-pipx", "uv": "uv", "poetry": "python-poetry"}
-                    if _pm == "pacman" and tool in _pacman_map:
-                        _pkexec = _shutil.which("pkexec") or ""
-                        _cmd = ([_pkexec] if _pkexec else ["sudo"]) + [
-                            "pacman", "-R", "--noconfirm", _pacman_map[tool]]
-                        try:
-                            r3 = _sp2.run(_cmd, capture_output=True, text=True, timeout=60)
-                            if r3.returncode == 0:
-                                return True, f"{tool} removed via pacman"
-                        except Exception:
-                            pass
+                    # Try pkexec pip uninstall (graphical auth, works on all distros)
+                    _pkexec2 = _shutil.which("pkexec") or ""
+                    _uninstall_cmd = ([_pkexec2] if _pkexec2 else ["sudo"]) + [
+                        py_exe, "-m", "pip", "uninstall", tool,
+                        "--break-system-packages", "-y"
+                    ]
+                    try:
+                        r3 = _sp2.run(_uninstall_cmd, capture_output=True, text=True, timeout=60)
+                        if r3.returncode == 0:
+                            return True, f"{tool} removed successfully"
+                    except Exception:
+                        pass
                     return False, (
                         f"{tool} is installed as a Python module.\n\n"
                         f"Run in terminal to remove:\n"
-                        + (f"  sudo pacman -R {_pacman_map.get(tool, tool)}"
-                           if _pm == "pacman" else
-                           f"  pip uninstall {tool} --break-system-packages")
+                        f"  sudo pip uninstall {tool} --break-system-packages"
                     )
             if tool in ("pip", "venv"):
                 return False, f"{tool} cannot be removed — it is a core Python component"

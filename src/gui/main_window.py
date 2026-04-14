@@ -22,6 +22,7 @@ from src.core.config_manager import ConfigManager
 from src.gui.env_dialog import EnvCreateDialog
 from src.gui.package_panel import PackagePanel
 from src.gui.settings_page import SettingsPage
+from src.gui.learn_page import LearnPage
 from src.gui.styles import get_theme
 from src.utils.platform_utils import (
     get_activate_command, open_terminal_at, get_platform,
@@ -491,6 +492,12 @@ class MainWindow(QMainWindow):
         sidebar_layout.addWidget(self.btn_settings)
         self.nav_buttons.append(self.btn_settings)
 
+        self.btn_learn = SidebarButton("Learn", "📚")
+        self.btn_learn.setToolTip("Browse tutorials, code snippets, and learning resources")
+        self.btn_learn.clicked.connect(lambda: self._switch_page(3))
+        sidebar_layout.addWidget(self.btn_learn)
+        self.nav_buttons.append(self.btn_learn)
+
         # ── Quick Launch section (visible only on Packages page) ──
         self.quick_launch_frame = QFrame()
         self.quick_launch_frame.setVisible(True)
@@ -551,6 +558,11 @@ class MainWindow(QMainWindow):
         self.settings_page.font_changed.connect(self._on_font_changed)
         self.settings_page.settings_saved.connect(self._on_settings_saved)
         self.stack.addWidget(self.settings_page)             # Page 2
+
+        # Learn page
+        self.learn_page = LearnPage(self._c)
+        self.learn_page.install_packages_requested.connect(self._on_learn_install)
+        self.stack.addWidget(self.learn_page)               # Page 3
 
         main_layout.addWidget(self.stack, 1)
 
@@ -708,14 +720,30 @@ class MainWindow(QMainWindow):
         return page
 
     def _switch_page(self, index):
-        page_names = {0: "Packages", 1: "Environments", 2: "Settings"}
+        page_names = {0: "Packages", 1: "Environments", 2: "Settings", 3: "Learn"}
         self._log.debug(f"_switch_page → {page_names.get(index, index)}")
         self.stack.setCurrentIndex(index)
         for i, btn in enumerate(self.nav_buttons):
             btn.setChecked(i == index)
-        # Quick launch always visible (not on Settings page)
+        # Quick launch only on Packages page
         if hasattr(self, "quick_launch_frame"):
-            self.quick_launch_frame.setVisible(index != 2)
+            self.quick_launch_frame.setVisible(index == 0)
+
+    def _on_learn_install(self, packages: list):
+        """Called when Learn page requests package install — switch to Packages tab."""
+        from PySide6.QtWidgets import QMessageBox
+        if not packages:
+            return
+        pkg_str = ", ".join(packages)
+        reply = QMessageBox.question(
+            self, "Install Packages",
+            f"Install the following packages into the current environment?\n\n{pkg_str}",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            self._switch_page(0)
+            if hasattr(self, "package_panel"):
+                QTimer.singleShot(300, lambda: self.package_panel._install_packages_by_name(packages))
 
     def _on_ql_env_changed(self, idx):
         """Sol sidebar QL dropdown değişti — her şeyi sync et."""

@@ -1031,7 +1031,7 @@ class ToolchainMixin:
                     _loc = next((l.split(":", 1)[1].strip()
                                  for l in _loc_r.stdout.splitlines()
                                  if l.startswith("Location:")), "")
-                    _pm = _detect_pm() if hasattr(_shutil, 'which') else None
+                    _pm = next((p for p in ("apt","pacman","dnf","zypper") if _shutil.which(p)), None)
                     _pacman_map = {"pipx": "python-pipx", "uv": "uv", "poetry": "python-poetry"}
                     if _pm == "pacman" and tool in _pacman_map:
                         _pkexec = _shutil.which("pkexec") or ""

@@ -347,31 +347,52 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
             "Reset Appearance", self._reset_appearance,
         ))
         appearance_group = QGroupBox()
-        appearance_layout = QFormLayout()
-        appearance_layout.setSpacing(12)
+        appearance_layout = QVBoxLayout()
+        appearance_layout.setSpacing(10)
+        appearance_layout.setContentsMargins(8, 8, 8, 8)
 
-        # Theme — protected by checkbox
+        LABEL_W = 110  # fixed label width for alignment
+        ROW_H   = 32   # fixed height for all row widgets
+
+        def _make_row(label_text, widget_layout):
+            """Create a labeled row without QFormLayout (no platform divider line)."""
+            row_w = QWidget()
+            row_h = QHBoxLayout(row_w)
+            row_h.setContentsMargins(0, 0, 0, 0)
+            row_h.setSpacing(8)
+            lbl = QLabel(label_text)
+            lbl.setFixedWidth(LABEL_W)
+            lbl.setFixedHeight(ROW_H)
+            lbl.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
+            lbl.setStyleSheet(f"color: {self._c()['fg']}; font-size: {self._c()['fs_base']}px;")
+            row_h.addWidget(lbl)
+            row_h.addLayout(widget_layout)
+            return row_w
+
+        # Theme row
         theme_row = QHBoxLayout()
+        theme_row.setSpacing(6)
         self.theme_cb = QCheckBox()
         self.theme_cb.setChecked(False)
+        self.theme_cb.setFixedHeight(ROW_H)
         self.theme_cb.toggled.connect(lambda on: self._on_theme_cb_toggled(on))
         theme_row.addWidget(self.theme_cb)
         self.theme_combo = NoScrollComboBox()
+        self.theme_combo.setFixedHeight(ROW_H)
         from src.gui.styles import THEME_OPTIONS
         for theme_id, theme_label in THEME_OPTIONS:
             self.theme_combo.addItem(theme_label, theme_id)
         self.theme_combo.setEnabled(False)
         self.theme_combo.currentIndexChanged.connect(self._on_theme_live_preview)
         theme_row.addWidget(self.theme_combo, 1)
-        appearance_layout.addRow(f"{tr('theme')}", theme_row)
+        appearance_layout.addWidget(_make_row(f"{tr('theme')}:", theme_row))
 
         # ── 3-Level Font System ──
         font_levels = [
-            ("primary", "🔤 Headings", "Page titles, section headers, group labels", 22),
-            ("secondary", "🔡 UI & Menus", "Buttons, menus, tables, inputs, normal text", 13),
-            ("tertiary", "🔹 Details", "Info labels, hints, status text, tooltips", 11),
+            ("primary",   "🔤 Headings",   "Page titles, section headers, group labels",        22),
+            ("secondary", "🔡 UI & Menus",  "Buttons, menus, tables, inputs, normal text",       13),
+            ("tertiary",  "🔹 Details",     "Info labels, hints, status text, tooltips",         11),
         ]
-        ROW_H = 32  # fixed height for all font row widgets
         for level_id, label, hint, default_size in font_levels:
             row = QHBoxLayout()
             row.setSpacing(6)
@@ -380,6 +401,7 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
             cb = QCheckBox()
             cb.setChecked(False)
             cb.setFixedHeight(ROW_H)
+            cb.setFixedWidth(20)
             row.addWidget(cb)
 
             font_combo = QFontComboBox()
@@ -394,39 +416,37 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
             size_spin.setValue(default_size)
             size_spin.setSuffix(" px")
             size_spin.setEnabled(False)
-            size_spin.setFixedWidth(80)
+            size_spin.setFixedWidth(75)
             size_spin.setFixedHeight(ROW_H)
             cb.toggled.connect(size_spin.setEnabled)
             row.addWidget(size_spin)
 
             hint_lbl = QLabel(hint)
             hint_lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px; font-style: italic;")
-            hint_lbl.setMinimumWidth(200)
             hint_lbl.setFixedHeight(ROW_H)
             hint_lbl.setAlignment(Qt.AlignVCenter | Qt.AlignLeft)
-            row.addWidget(hint_lbl)
+            row.addWidget(hint_lbl, 1)
 
-            # Store references
             setattr(self, f"font_{level_id}_cb", cb)
             setattr(self, f"font_{level_id}_combo", font_combo)
             setattr(self, f"font_{level_id}_size", size_spin)
 
-            appearance_layout.addRow(label, row)
+            appearance_layout.addWidget(_make_row(label + ":", row))
 
         # Reset Fonts button
-        reset_font_row = QHBoxLayout()
+        reset_row = QHBoxLayout()
         reset_font_btn = QPushButton("↩️ Reset Fonts to Default")
         reset_font_btn.setObjectName("secondary")
         reset_font_btn.setToolTip("Reset all font settings to system defaults")
         reset_font_btn.clicked.connect(self._reset_fonts)
-        reset_font_row.addWidget(reset_font_btn)
-        reset_font_row.addStretch()
-        appearance_layout.addRow("", reset_font_row)
+        reset_row.addWidget(reset_font_btn)
+        reset_row.addStretch()
+        appearance_layout.addLayout(reset_row)
 
         # UI Scale info
         scale_label = QLabel("UI scaling follows your system display settings.")
         scale_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
-        appearance_layout.addRow("", scale_label)
+        appearance_layout.addWidget(scale_label)
 
         appearance_group.setLayout(appearance_layout)
         layout.addWidget(appearance_group)

@@ -130,6 +130,19 @@ class ToolchainMixin:
         status_label.setStyleSheet("font-size: 11px; color: #89b4fa;")
         def _do(callback=None):
             import subprocess, shutil, os, site
+
+            def _detect_pm():
+                for pm in ("apt", "pacman", "dnf", "zypper"):
+                    if shutil.which(pm): return pm
+                return None
+
+            def _is_ext_managed():
+                try:
+                    import sysconfig
+                    stdlib = sysconfig.get_path("stdlib")
+                    return bool(stdlib and os.path.exists(os.path.join(stdlib, "EXTERNALLY-MANAGED")))
+                except Exception: return False
+
             if scope == "system" and sys.platform == "win32":
                 try:
                     import ctypes
@@ -138,11 +151,49 @@ class ToolchainMixin:
                     import time; time.sleep(4)
                 except Exception as e:
                     return False, f"UAC error: {e}"
+            elif sys.platform != "win32" and _is_ext_managed():
+                # PEP 668 — use platform package manager or official installers
+                pm = _detect_pm()
+                if tool == "uv":
+                    r = subprocess.run(["sh", "-c", "curl -LsSf https://astral.sh/uv/install.sh | sh"],
+                                       capture_output=True, text=True, timeout=120)
+                    if r.returncode != 0: return False, r.stderr[:200]
+                elif tool == "poetry":
+                    r = subprocess.run(["sh", "-c", "curl -sSL https://install.python-poetry.org | python3 -"],
+                                       capture_output=True, text=True, timeout=180,
+                                       env={**os.environ, "POETRY_HOME": os.path.expanduser("~/.local/share/pypoetry")})
+                    if r.returncode != 0: return False, r.stderr[:200]
+                elif tool == "pipx":
+                    installed = False
+                    if pm == "apt":
+                        r = subprocess.run(["sudo", "apt", "install", "-y", "pipx"], capture_output=True, text=True, timeout=120)
+                        installed = r.returncode == 0
+                    elif pm == "pacman":
+                        r = subprocess.run(["sudo", "pacman", "-S", "--noconfirm", "python-pipx"], capture_output=True, text=True, timeout=120)
+                        installed = r.returncode == 0
+                    elif pm == "dnf":
+                        r = subprocess.run(["sudo", "dnf", "install", "-y", "pipx"], capture_output=True, text=True, timeout=120)
+                        installed = r.returncode == 0
+                    elif pm == "zypper":
+                        r = subprocess.run(["sudo", "zypper", "install", "-y", "python3-pipx"], capture_output=True, text=True, timeout=120)
+                        installed = r.returncode == 0
+                    if not installed:
+                        r = subprocess.run([sys.executable, "-m", "pip", "install", "pipx",
+                                            "--break-system-packages", "--user", "-q"],
+                                           capture_output=True, text=True, timeout=120)
+                        if r.returncode != 0: return False, r.stderr[:200]
+                else:
+                    r = subprocess.run([sys.executable, "-m", "pip", "install", pkg,
+                                        "--break-system-packages", "--user", "-q"],
+                                       capture_output=True, text=True, timeout=120)
+                    if r.returncode != 0: return False, r.stderr[:200]
             elif scope == "system":
-                r = subprocess.run(["sudo", sys.executable, "-m", "pip", "install", pkg, "-q"], **subprocess_args(capture_output=True, text=True, timeout=120))
+                r = subprocess.run(["sudo", sys.executable, "-m", "pip", "install", pkg, "-q"],
+                                   **subprocess_args(capture_output=True, text=True, timeout=120))
                 if r.returncode != 0: return False, (r.stderr or "failed")[:200]
             else:
-                r = subprocess.run([sys.executable, "-m", "pip", "install", pkg, "--user", "-q"], **subprocess_args(capture_output=True, text=True, timeout=120))
+                r = subprocess.run([sys.executable, "-m", "pip", "install", pkg, "--user", "-q"],
+                                   **subprocess_args(capture_output=True, text=True, timeout=120))
                 if r.returncode != 0: return False, (r.stderr or "failed")[:200]
             if tool == "pipx":
                 try: subprocess.run([sys.executable, "-m", "pipx", "ensurepath"], **subprocess_args(capture_output=True, timeout=30))

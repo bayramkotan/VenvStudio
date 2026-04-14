@@ -645,7 +645,8 @@ class EnvCreateDialog(QDialog):
                     return False, str(e)
 
             def _install_poetry_linux(user_scope: bool):
-                """Install poetry via official installer (recommended)."""
+                """Install poetry via official installer, fallback to pipx install poetry."""
+                # Official installer works on all distros including Arch
                 try:
                     r = subprocess.run(
                         ["sh", "-c", "curl -sSL https://install.python-poetry.org | python3 -"],
@@ -654,24 +655,58 @@ class EnvCreateDialog(QDialog):
                     )
                     if r.returncode == 0:
                         return True, ""
-                    return False, r.stderr[:300]
-                except Exception as e:
-                    return False, str(e)
+                except Exception:
+                    pass
+                # Fallback: pipx install poetry (if pipx available)
+                _pipx = shutil.which("pipx")
+                if _pipx:
+                    try:
+                        r = subprocess.run([_pipx, "install", "poetry"],
+                                           capture_output=True, text=True, timeout=180)
+                        if r.returncode == 0:
+                            return True, ""
+                    except Exception:
+                        pass
+                # Last resort: pip --break-system-packages
+                r = subprocess.run(
+                    [python_path, "-m", "pip", "install", "poetry",
+                     "--break-system-packages", "--user", "-q"],
+                    capture_output=True, text=True, timeout=180)
+                if r.returncode == 0:
+                    return True, ""
+                return False, r.stderr[:300]
+
+            def _detect_pkg_manager():
+                """Detect system package manager."""                for pm in ("apt", "pacman", "dnf", "zypper", "emerge"):
+                    if shutil.which(pm):
+                        return pm
+                return None
 
             def _install_pipx_linux(user_scope: bool):
-                """Install pipx via apt if available, else pip --break-system-packages."""
-                if shutil.which("apt"):
-                    r = subprocess.run(
-                        ["sudo", "apt", "install", "-y", "pipx"],
-                        capture_output=True, text=True, timeout=120)
-                    if r.returncode == 0:
-                        return True, ""
+                """Install pipx via system package manager or pip --break-system-packages."""
+                pm = _detect_pkg_manager()
+                if pm == "apt":
+                    r = subprocess.run(["sudo", "apt", "install", "-y", "pipx"],
+                                       capture_output=True, text=True, timeout=120)
+                    if r.returncode == 0: return True, ""
+                elif pm == "pacman":
+                    # Arch/CachyOS/Manjaro — python-pipx is in official repos
+                    r = subprocess.run(["sudo", "pacman", "-S", "--noconfirm", "python-pipx"],
+                                       capture_output=True, text=True, timeout=120)
+                    if r.returncode == 0: return True, ""
+                elif pm == "dnf":
+                    r = subprocess.run(["sudo", "dnf", "install", "-y", "pipx"],
+                                       capture_output=True, text=True, timeout=120)
+                    if r.returncode == 0: return True, ""
+                elif pm == "zypper":
+                    r = subprocess.run(["sudo", "zypper", "install", "-y", "python3-pipx"],
+                                       capture_output=True, text=True, timeout=120)
+                    if r.returncode == 0: return True, ""
                 # Fallback: pip with --break-system-packages
                 cmd = [python_path, "-m", "pip", "install", "pipx",
                        "--break-system-packages", "--user", "-q"]
                 r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
-                if r.returncode == 0:
-                    return True, ""
+                if r.returncode == 0: return True, ""
                 return False, r.stderr[:300]
 
             if scope == "system":

@@ -575,17 +575,7 @@ class ToolchainMixin:
         elif installed:
             if "install_user" in btns: btns["install_user"].setVisible(False)
             if "upgrade_user" in btns: btns["upgrade_user"].setVisible(True)
-            # Hide Remove for system-wide (global) installs — can't remove without sudo
-            _path_item = tbl.item(row, 3) if tbl.columnCount() > 3 else None
-            _tool_path = _path_item.text() if _path_item else ""
-            _is_global = any(_tool_path.startswith(p) for p in (
-                "/usr/bin/", "/usr/local/bin/", "/bin/", "/opt/",
-            )) if _tool_path else False
-            if "rm_user" in btns:
-                if _is_global:
-                    btns["rm_user"].setVisible(False)
-                else:
-                    btns["rm_user"].setVisible(True)
+            if "rm_user" in btns: btns["rm_user"].setVisible(True)
         else:
             if "install_user" in btns: btns["install_user"].setVisible(True)
             for n in ("upgrade_user", "rm_user"):
@@ -1081,10 +1071,11 @@ class ToolchainMixin:
             from PySide6.QtWidgets import QMessageBox
             si2 = tbl.item(row, 1)
             if not ok:
+                # Restore original status instead of showing error in status col
                 if si2:
-                    si2.setText(f"❌ {res[:40]}")
-                    si2.setForeground(QColor("#f38ba8"))
-                QMessageBox.warning(None, "Remove Failed", res)
+                    si2.setText("🌐 Global")
+                    si2.setForeground(QColor("#89b4fa"))
+                QMessageBox.information(None, "Cannot Remove Automatically", res)
                 return
             QTimer.singleShot(300, lambda: self._tc_load_table(py_exe))
 

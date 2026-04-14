@@ -179,7 +179,31 @@ def get_pipx_executable() -> Optional[str]:
                            "pipx.exe" if is_win else "pipx")
     if os.path.isfile(scripts):
         return scripts
+    # 5. Check if pipx is available as a module (python3 -m pipx)
+    try:
+        import subprocess
+        r = subprocess.run([sys.executable, "-m", "pipx", "--version"],
+                           capture_output=True, text=True, timeout=5)
+        if r.returncode == 0:
+            return sys.executable  # caller should use [exe, "-m", "pipx", ...]
+    except Exception:
+        pass
     return None
+
+
+def get_pipx_cmd() -> list:
+    """Return the command list to invoke pipx.
+    Returns ['pipx'] if binary found, or [sys.executable, '-m', 'pipx'] as fallback.
+    """
+    import sys as _sys
+    exe = get_pipx_executable()
+    if exe is None:
+        return []
+    # If exe == sys.executable, pipx is only available as a module
+    import os as _os
+    if _os.path.normpath(exe) == _os.path.normpath(_sys.executable):
+        return [exe, "-m", "pipx"]
+    return [exe]
 
 
 def get_pipx_home() -> Optional[str]:

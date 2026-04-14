@@ -155,10 +155,12 @@ class ToolchainMixin:
                 # PEP 668 — use platform package manager or official installers
                 pm = _detect_pm()
                 if tool == "uv":
-                    # Try pacman first on Arch, else pip --break-system-packages, else curl
+                    # Try pacman first on Arch (with pkexec for graphical auth)
                     _installed_uv = False
                     if pm == "pacman" and shutil.which("pacman"):
-                        r = subprocess.run(["sudo", "pacman", "-S", "--noconfirm", "uv"],
+                        _pkexec_uv = shutil.which("pkexec") or ""
+                        _uv_cmd = ([_pkexec_uv] if _pkexec_uv else ["sudo"]) + ["pacman", "-S", "--noconfirm", "uv"]
+                        r = subprocess.run(_uv_cmd,
                                            capture_output=True, text=True, timeout=120)
                         _installed_uv = r.returncode == 0
                     if not _installed_uv:
@@ -183,20 +185,21 @@ class ToolchainMixin:
                                            env={**os.environ, "POETRY_HOME": os.path.expanduser("~/.local/share/pypoetry")})
                         if r.returncode != 0: return False, r.stderr[:200]
                 elif tool == "pipx":
+                    # Use pkexec for graphical auth, fallback to pip --user
                     installed = False
-                    if pm == "apt":
-                        r = subprocess.run(["sudo", "apt", "install", "-y", "pipx"], capture_output=True, text=True, timeout=120)
-                        installed = r.returncode == 0
-                    elif pm == "pacman":
-                        r = subprocess.run(["sudo", "pacman", "-S", "--noconfirm", "python-pipx"], capture_output=True, text=True, timeout=120)
-                        installed = r.returncode == 0
-                    elif pm == "dnf":
-                        r = subprocess.run(["sudo", "dnf", "install", "-y", "pipx"], capture_output=True, text=True, timeout=120)
-                        installed = r.returncode == 0
-                    elif pm == "zypper":
-                        r = subprocess.run(["sudo", "zypper", "install", "-y", "python3-pipx"], capture_output=True, text=True, timeout=120)
+                    _pkexec = shutil.which("pkexec") or ""
+                    _pkg_cmds = {
+                        "apt":    ["apt", "install", "-y", "pipx"],
+                        "pacman": ["pacman", "-S", "--noconfirm", "python-pipx"],
+                        "dnf":    ["dnf", "install", "-y", "pipx"],
+                        "zypper": ["zypper", "install", "-y", "python3-pipx"],
+                    }
+                    if pm in _pkg_cmds:
+                        _cmd = ([_pkexec] if _pkexec else ["sudo"]) + _pkg_cmds[pm]
+                        r = subprocess.run(_cmd, capture_output=True, text=True, timeout=120)
                         installed = r.returncode == 0
                     if not installed:
+                        # Fallback: pip install --user --break-system-packages
                         r = subprocess.run([sys.executable, "-m", "pip", "install", "pipx",
                                             "--break-system-packages", "--user", "-q"],
                                            capture_output=True, text=True, timeout=120)

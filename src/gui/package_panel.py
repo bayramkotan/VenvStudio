@@ -2203,16 +2203,18 @@ $s.Save()
 
         self.packages_table = QTableWidget()
         self.packages_table.setColumnCount(5)
-        self.packages_table.setHorizontalHeaderLabels(["Package", "Version", "Description", "Category", ""])
-        self.packages_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Interactive)
-        self.packages_table.setColumnWidth(0, 180)
+        self.packages_table.setHorizontalHeaderLabels(["☐", "Package", "Version", "Description", "Category"])
+        # col 0: checkbox (fixed narrow)
+        self.packages_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
+        self.packages_table.setColumnWidth(0, 36)
+        # col 1: package name
         self.packages_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self.packages_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Interactive)
-        self.packages_table.setColumnWidth(2, 280)
-        self.packages_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Interactive)
-        self.packages_table.setColumnWidth(3, 160)
-        self.packages_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Fixed)
-        self.packages_table.setColumnWidth(4, 40)
+        # col 2: version
+        self.packages_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        # col 3: description (stretch)
+        self.packages_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        # col 4: category
+        self.packages_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
         self.packages_table.horizontalHeader().setStretchLastSection(False)
         self.packages_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.packages_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -3325,32 +3327,36 @@ $s.Save()
         _cat_lookup = self._get_catalog_lookup()
         self.packages_table.setRowCount(len(packages))
         for i, pkg in enumerate(packages):
-            name_item = QTableWidgetItem(pkg.name)
-            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
-            self.packages_table.setItem(i, 0, name_item)
-
-            ver_item = QTableWidgetItem(pkg.version)
-            ver_item.setFlags(ver_item.flags() & ~Qt.ItemIsEditable)
-            self.packages_table.setItem(i, 1, ver_item)
-
-            _desc, _cat = _cat_lookup.get(pkg.name.lower(), ("", ""))
-            desc_item = QTableWidgetItem(_desc)
-            desc_item.setFlags(desc_item.flags() & ~Qt.ItemIsEditable)
-            desc_item.setForeground(QColor(self._c().get("fg_muted", "#888")))
-            self.packages_table.setItem(i, 2, desc_item)
-
-            cat_item = QTableWidgetItem(_cat)
-            cat_item.setFlags(cat_item.flags() & ~Qt.ItemIsEditable)
-            cat_item.setForeground(QColor(self._c().get("fg_muted", "#888")))
-            self.packages_table.setItem(i, 3, cat_item)
-
+            # col 0: checkbox
             cb = QCheckBox()
             cb_widget = QWidget()
             cb_layout = QHBoxLayout(cb_widget)
             cb_layout.addWidget(cb)
             cb_layout.setAlignment(Qt.AlignCenter)
             cb_layout.setContentsMargins(0, 0, 0, 0)
-            self.packages_table.setCellWidget(i, 4, cb_widget)
+            self.packages_table.setCellWidget(i, 0, cb_widget)
+
+            # col 1: package name
+            name_item = QTableWidgetItem(pkg.name)
+            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
+            self.packages_table.setItem(i, 1, name_item)
+
+            # col 2: version
+            ver_item = QTableWidgetItem(pkg.version)
+            ver_item.setFlags(ver_item.flags() & ~Qt.ItemIsEditable)
+            self.packages_table.setItem(i, 2, ver_item)
+
+            # col 3: description, col 4: category (from catalog)
+            _desc, _cat = _cat_lookup.get(pkg.name.lower(), ("", ""))
+            desc_item = QTableWidgetItem(_desc)
+            desc_item.setFlags(desc_item.flags() & ~Qt.ItemIsEditable)
+            desc_item.setForeground(QColor(self._c().get("fg_muted", "#888")))
+            self.packages_table.setItem(i, 3, desc_item)
+
+            cat_item = QTableWidgetItem(_cat)
+            cat_item.setFlags(cat_item.flags() & ~Qt.ItemIsEditable)
+            cat_item.setForeground(QColor(self._c().get("fg_muted", "#888")))
+            self.packages_table.setItem(i, 4, cat_item)
 
         count = len(packages)
         self.pkg_count_label.setText(f"{count} packages")
@@ -3389,32 +3395,36 @@ $s.Save()
         _cat_lookup = self._get_catalog_lookup()
         self.packages_table.setRowCount(len(packages))
         for i, pkg in enumerate(packages):
-            name_item = QTableWidgetItem(pkg.name)
-            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
-            self.packages_table.setItem(i, 0, name_item)
-
-            ver_item = QTableWidgetItem(pkg.version)
-            ver_item.setFlags(ver_item.flags() & ~Qt.ItemIsEditable)
-            self.packages_table.setItem(i, 1, ver_item)
-
-            _desc, _cat = _cat_lookup.get(pkg.name.lower(), ("", ""))
-            desc_item = QTableWidgetItem(_desc)
-            desc_item.setFlags(desc_item.flags() & ~Qt.ItemIsEditable)
-            desc_item.setForeground(QColor(self._c().get("fg_muted", "#888")))
-            self.packages_table.setItem(i, 2, desc_item)
-
-            cat_item = QTableWidgetItem(_cat)
-            cat_item.setFlags(cat_item.flags() & ~Qt.ItemIsEditable)
-            cat_item.setForeground(QColor(self._c().get("fg_muted", "#888")))
-            self.packages_table.setItem(i, 3, cat_item)
-
+            # col 0: checkbox
             cb = QCheckBox()
             cb_widget = QWidget()
             cb_layout = QHBoxLayout(cb_widget)
             cb_layout.addWidget(cb)
             cb_layout.setAlignment(Qt.AlignCenter)
             cb_layout.setContentsMargins(0, 0, 0, 0)
-            self.packages_table.setCellWidget(i, 4, cb_widget)
+            self.packages_table.setCellWidget(i, 0, cb_widget)
+
+            # col 1: package name
+            name_item = QTableWidgetItem(pkg.name)
+            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
+            self.packages_table.setItem(i, 1, name_item)
+
+            # col 2: version
+            ver_item = QTableWidgetItem(pkg.version)
+            ver_item.setFlags(ver_item.flags() & ~Qt.ItemIsEditable)
+            self.packages_table.setItem(i, 2, ver_item)
+
+            # col 3: description, col 4: category (from catalog)
+            _desc, _cat = _cat_lookup.get(pkg.name.lower(), ("", ""))
+            desc_item = QTableWidgetItem(_desc)
+            desc_item.setFlags(desc_item.flags() & ~Qt.ItemIsEditable)
+            desc_item.setForeground(QColor(self._c().get("fg_muted", "#888")))
+            self.packages_table.setItem(i, 3, desc_item)
+
+            cat_item = QTableWidgetItem(_cat)
+            cat_item.setFlags(cat_item.flags() & ~Qt.ItemIsEditable)
+            cat_item.setForeground(QColor(self._c().get("fg_muted", "#888")))
+            self.packages_table.setItem(i, 4, cat_item)
 
         count = len(packages)
         self.pkg_count_label.setText(f"{count} packages")
@@ -3943,11 +3953,11 @@ $s.Save()
 
         packages = []
         for row in range(self.packages_table.rowCount()):
-            cb_widget = self.packages_table.cellWidget(row, 4)
+            cb_widget = self.packages_table.cellWidget(row, 0)
             if cb_widget:
                 cb = cb_widget.findChild(QCheckBox)
                 if cb and cb.isChecked():
-                    item = self.packages_table.item(row, 0)
+                    item = self.packages_table.item(row, 1)
                     if item:
                         packages.append(item.text())
 
@@ -4274,8 +4284,8 @@ dependencies:
         # Gather selected package names
         selected_pkgs = []
         for idx in rows:
-            item = self.packages_table.item(idx.row(), 0)
-            ver_item = self.packages_table.item(idx.row(), 1)
+            item = self.packages_table.item(idx.row(), 1)
+            ver_item = self.packages_table.item(idx.row(), 2)
             if item:
                 pkg = item.text().strip()
                 ver = ver_item.text().strip() if ver_item else ""
@@ -4498,7 +4508,7 @@ dependencies:
 
     def _filter_installed(self, text: str):
         for row in range(self.packages_table.rowCount()):
-            item = self.packages_table.item(row, 0)
+            item = self.packages_table.item(row, 1)
             if item:
                 match = text.lower() in item.text().lower()
                 self.packages_table.setRowHidden(row, not match)

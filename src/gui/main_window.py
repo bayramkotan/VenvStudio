@@ -575,13 +575,18 @@ class MainWindow(QMainWindow):
         self.env_table = QTableWidget()
         self.env_table.setColumnCount(8)
         self.env_table.setHorizontalHeaderLabels(["Name", "Type", "Path", "Runtime", "Packages", "Size", "Created", "Default"])
+        # Column resize modes — Interactive+minWidth instead of Stretch
+        # so horizontal scrollbar works properly at low resolutions
         self.env_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.env_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self.env_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self.env_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Interactive)
+        self.env_table.setColumnWidth(2, 280)
+        self.env_table.horizontalHeader().setMinimumSectionSize(60)
         for col in range(3, 7):
             self.env_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeToContents)
         self.env_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
         self.env_table.setColumnWidth(7, 70)
+        self.env_table.horizontalHeader().setStretchLastSection(False)
         self.env_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.env_table.setSelectionMode(QTableWidget.SingleSelection)
         self.env_table.setAlternatingRowColors(True)

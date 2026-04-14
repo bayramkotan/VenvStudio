@@ -294,7 +294,8 @@ class PackagePanel(QWidget):
 
         # Environment selector at top (2-row bar)
         self.env_bar = QFrame()
-        self.env_bar.setFixedHeight(90)
+        self.env_bar.setMinimumHeight(90)
+        self.env_bar.setMaximumHeight(90)
         self.env_bar.setStyleSheet(
             "QFrame { background-color: " + self._c()['sidebar'] + "; "
             "border-bottom: 2px solid #313244; }"
@@ -312,9 +313,13 @@ class PackagePanel(QWidget):
         row1.addWidget(env_lbl)
 
         self.env_selector = QComboBox()
-        self.env_selector.setMinimumWidth(280)
+        self.env_selector.setMinimumWidth(120)
         self.env_selector.setMaximumWidth(500)
         self.env_selector.setFixedHeight(34)
+        self.env_selector.setSizePolicy(
+            self.env_selector.sizePolicy().horizontalPolicy(),
+            self.env_selector.sizePolicy().verticalPolicy()
+        )
         # Disable mouse wheel scrolling on env selector to prevent accidental switches
         # wheelEvent enabled — scroll to switch environments
         self.env_selector.setStyleSheet(
@@ -409,7 +414,16 @@ class PackagePanel(QWidget):
 
         env_bar_outer.addLayout(row2)
 
-        layout.addWidget(self.env_bar)
+        # Wrap env_bar in scroll area for low-resolution / small window support
+        from PySide6.QtWidgets import QScrollArea as _QSA
+        _env_bar_scroll = _QSA()
+        _env_bar_scroll.setWidget(self.env_bar)
+        _env_bar_scroll.setWidgetResizable(True)
+        _env_bar_scroll.setFixedHeight(96)
+        _env_bar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        _env_bar_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        _env_bar_scroll.setFrameShape(QFrame.NoFrame)
+        layout.addWidget(_env_bar_scroll)
 
         self.tabs = QTabWidget()
         self.tabs.setUsesScrollButtons(False)  # No < > scroll buttons

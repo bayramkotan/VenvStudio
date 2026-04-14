@@ -301,7 +301,7 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         self._setup_launch_section(layout)
 
         scroll.setWidget(container)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
 
         # Main layout
         main_layout = QVBoxLayout(self)

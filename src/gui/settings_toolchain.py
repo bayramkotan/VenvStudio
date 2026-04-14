@@ -1002,17 +1002,35 @@ class ToolchainMixin:
                     os.path.join(_home, ".local", "bin", "pipx"),
                 ],
             }
-            # Try removing binary directly if it's in a user-owned location
+            # 1. Try direct binary removal for user-installed tools
             for _cand in _local_bin_candidates.get(tool, []):
                 if _tool_exe and os.path.normpath(_tool_exe) == os.path.normpath(_cand):
                     if os.path.isfile(_cand):
                         try:
                             os.remove(_cand)
+                            # Also remove poetry home dir if it exists
+                            if tool == "poetry":
+                                import shutil as _sh
+                                _poetry_home = os.path.join(_home, ".local", "share", "pypoetry")
+                                if os.path.isdir(_poetry_home):
+                                    _sh.rmtree(_poetry_home, ignore_errors=True)
                             return True, f"{tool} removed successfully"
                         except Exception as _e:
                             pass
 
-            # Fallback: pip uninstall, with --break-system-packages if needed
+            # 2. If tool is in a global/system path — use sudo rm
+            _global_prefixes = ("/usr/bin/", "/usr/local/bin/", "/bin/", "/opt/")
+            if _tool_exe and any(_tool_exe.startswith(p) for p in _global_prefixes):
+                try:
+                    r = subprocess.run(["sudo", "rm", "-f", _tool_exe],
+                                       capture_output=True, text=True, timeout=30)
+                    if r.returncode == 0:
+                        return True, f"{tool} removed from {_tool_exe}"
+                    return False, f"sudo rm failed: {r.stderr[:100]}\nTry manually: sudo rm {_tool_exe}"
+                except Exception as _e:
+                    return False, f"Cannot remove system binary: {_tool_exe}\nRun manually: sudo rm {_tool_exe}"
+
+            # 3. Fallback: pip uninstall with --break-system-packages
             cmd = [py_exe, "-m", "pip", "uninstall", pkg, "-y", "-q"]
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=60,
                                cwd=_home, **subprocess_args())

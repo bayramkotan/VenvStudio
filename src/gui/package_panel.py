@@ -504,6 +504,11 @@ class PackagePanel(QWidget):
                 "command": ["-m", "jupyter", "lab"],
                 "desc": "Next-generation notebook interface for interactive computing",
                 "needs_console": True,
+                "links": {
+                    "youtube": "https://www.youtube.com/results?search_query=jupyterlab+tutorial",
+                    "docs": "https://jupyterlab.readthedocs.io",
+                    "site": "https://jupyter.org",
+                },
             },
             {
                 "name": "Jupyter Notebook",
@@ -514,6 +519,11 @@ class PackagePanel(QWidget):
                 "command": ["-m", "jupyter", "notebook"],
                 "desc": "Classic Jupyter Notebook — simple, document-centric interface",
                 "needs_console": True,
+                "links": {
+                    "youtube": "https://www.youtube.com/results?search_query=jupyter+notebook+tutorial",
+                    "docs": "https://jupyter-notebook.readthedocs.io",
+                    "site": "https://jupyter.org",
+                },
             },
             {
                 "name": "Orange Data Mining",
@@ -524,6 +534,11 @@ class PackagePanel(QWidget):
                 "command": ["-m", "Orange.canvas"],
                 "desc": "Visual programming for data mining and machine learning",
                 "note": "Installs PyQt5 + orange3. chardet<4.0 applied automatically.",
+                "links": {
+                    "youtube": "https://www.youtube.com/results?search_query=orange+data+mining+tutorial",
+                    "docs": "https://orangedatamining.com/docs/",
+                    "site": "https://orangedatamining.com",
+                },
             },
             {
                 "name": "Spyder IDE",
@@ -533,6 +548,11 @@ class PackagePanel(QWidget):
                 "package": "spyder",
                 "command": ["-m", "spyder.app.start"],
                 "desc": "Scientific Python development environment",
+                "links": {
+                    "youtube": "https://www.youtube.com/results?search_query=spyder+ide+tutorial",
+                    "docs": "https://docs.spyder-ide.org",
+                    "site": "https://www.spyder-ide.org",
+                },
             },
             {
                 "name": "IPython",
@@ -543,6 +563,11 @@ class PackagePanel(QWidget):
                 "command": ["-m", "IPython"],
                 "desc": "Enhanced interactive Python shell",
                 "needs_console": True,
+                "links": {
+                    "youtube": "https://www.youtube.com/results?search_query=ipython+tutorial",
+                    "docs": "https://ipython.readthedocs.io",
+                    "site": "https://ipython.org",
+                },
             },
             {
                 "name": "Streamlit",
@@ -555,6 +580,11 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:8501",
                 "browser_delay": 3,
+                "links": {
+                    "youtube": "https://www.youtube.com/results?search_query=streamlit+tutorial",
+                    "docs": "https://docs.streamlit.io",
+                    "site": "https://streamlit.io",
+                },
             },
             {
                 "name": "Gradio",
@@ -567,6 +597,11 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:7860",
                 "browser_delay": 4,
+                "links": {
+                    "youtube": "https://www.youtube.com/results?search_query=gradio+tutorial",
+                    "docs": "https://www.gradio.app/docs",
+                    "site": "https://www.gradio.app",
+                },
             },
             {
                 "name": "Dash",
@@ -579,6 +614,11 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:8050",
                 "browser_delay": 3,
+                "links": {
+                    "youtube": "https://www.youtube.com/results?search_query=plotly+dash+tutorial",
+                    "docs": "https://dash.plotly.com",
+                    "site": "https://plotly.com/dash",
+                },
             },
             {
                 "name": "Panel",
@@ -589,6 +629,11 @@ class PackagePanel(QWidget):
                 "command": ["-m", "panel", "serve", "--show"],
                 "desc": "HoloViz dashboards & data apps",
                 "needs_console": True,
+                "links": {
+                    "youtube": "https://www.youtube.com/results?search_query=panel+holoviz+tutorial",
+                    "docs": "https://panel.holoviz.org",
+                    "site": "https://panel.holoviz.org",
+                },
             },
             {
                 "name": "Voilà",
@@ -601,6 +646,11 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:8866",
                 "browser_delay": 3,
+                "links": {
+                    "youtube": "https://www.youtube.com/results?search_query=voila+jupyter+tutorial",
+                    "docs": "https://voila.readthedocs.io",
+                    "site": "https://voila.readthedocs.io",
+                },
             },
             {
                 "name": "MLflow UI",
@@ -613,6 +663,11 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:5000",
                 "browser_delay": 3,
+                "links": {
+                    "youtube": "https://www.youtube.com/results?search_query=mlflow+tutorial",
+                    "docs": "https://mlflow.org/docs/latest/index.html",
+                    "site": "https://mlflow.org",
+                },
             },
             {
                 "name": "TensorBoard",
@@ -865,6 +920,35 @@ class PackagePanel(QWidget):
         desc.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         desc.setToolTip(tooltip_text)
         layout.addWidget(desc)
+
+        # Links row (YouTube, Docs, Site)
+        _links = app_def.get("links", {})
+        if _links:
+            links_row = QHBoxLayout()
+            links_row.setSpacing(4)
+            links_row.setContentsMargins(0, 0, 0, 0)
+            _link_defs = [
+                ("youtube", "▶ YouTube", "#f38ba8"),
+                ("docs",    "📖 Docs",   "#89b4fa"),
+                ("site",    "🌐 Site",   "#a6e3a1"),
+                ("github",  "🐙 GitHub", "#cba6f7"),
+            ]
+            for key, label, color in _link_defs:
+                url = _links.get(key)
+                if not url:
+                    continue
+                lb = QPushButton(label)
+                lb.setFixedHeight(20)
+                lb.setStyleSheet(
+                    f"QPushButton {{ background: transparent; color: {color}; "
+                    f"border: none; font-size: 11px; padding: 0 4px; text-decoration: underline; }}"
+                    f"QPushButton:hover {{ color: white; }}"
+                )
+                lb.setCursor(Qt.PointingHandCursor)
+                lb.clicked.connect(lambda _, u=url: __import__('webbrowser').open(u))
+                links_row.addWidget(lb)
+            links_row.addStretch()
+            layout.addLayout(links_row)
 
         # Set card-level tooltip too
         card.setToolTip(tooltip_text)

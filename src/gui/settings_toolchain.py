@@ -574,8 +574,18 @@ class ToolchainMixin:
             if "rm_user" in btns: btns["rm_user"].setVisible(False)
         elif installed:
             if "install_user" in btns: btns["install_user"].setVisible(False)
-            for n in ("upgrade_user", "rm_user"):
-                if n in btns: btns[n].setVisible(True)
+            if "upgrade_user" in btns: btns["upgrade_user"].setVisible(True)
+            # Hide Remove for system-wide (global) installs — can't remove without sudo
+            _path_item = tbl.item(row, 3) if tbl.columnCount() > 3 else None
+            _tool_path = _path_item.text() if _path_item else ""
+            _is_global = any(_tool_path.startswith(p) for p in (
+                "/usr/bin/", "/usr/local/bin/", "/bin/", "/opt/",
+            )) if _tool_path else False
+            if "rm_user" in btns:
+                if _is_global:
+                    btns["rm_user"].setVisible(False)
+                else:
+                    btns["rm_user"].setVisible(True)
         else:
             if "install_user" in btns: btns["install_user"].setVisible(True)
             for n in ("upgrade_user", "rm_user"):

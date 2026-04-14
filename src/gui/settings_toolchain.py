@@ -190,16 +190,78 @@ class ToolchainMixin:
         self._pm_worker = w
 
     def _pm_uninstall_tool(self, tool, pkg, status_label, btn):
-        import sys, subprocess
+        import sys, subprocess, shutil, os
         btn.setEnabled(False)
-        r = subprocess.run([sys.executable, "-m", "pip", "uninstall", pkg, "-y", "-q"], **subprocess_args(capture_output=True, text=True, timeout=60))
-        if r.returncode == 0:
+        status_label.setText(f"⏳ Removing {tool}...")
+        status_label.setStyleSheet("font-size: 11px; color: #89b4fa;")
+
+        def _do_remove():
+            # uv: prefer self-uninstall or delete binary
+            if tool == "uv":
+                _uv = shutil.which("uv")
+                if _uv and os.path.isfile(_uv):
+                    # curl-installed uv → delete binary
+                    _local_bins = [
+                        os.path.join(os.path.expanduser("~"), ".local", "bin", "uv"),
+                        os.path.join(os.path.expanduser("~"), ".cargo", "bin", "uv"),
+                    ]
+                    if any(_uv == p for p in _local_bins):
+                        try:
+                            os.remove(_uv)
+                            return True
+                        except Exception:
+                            pass
+                # fallback: pip uninstall --break-system-packages
+                r = subprocess.run(
+                    [sys.executable, "-m", "pip", "uninstall", pkg, "-y", "-q",
+                     "--break-system-packages"],
+                    **subprocess_args(capture_output=True, text=True, timeout=60))
+                return r.returncode == 0
+
+            # poetry: use official uninstaller if available
+            if tool == "poetry":
+                _poetry_uninstall = os.path.join(
+                    os.path.expanduser("~"), ".local", "share", "pypoetry",
+                    "venv", "bin", "poetry")
+                if os.path.exists(_poetry_uninstall):
+                    r = subprocess.run(
+                        ["python3", "-", "--uninstall"],
+                        input=subprocess.run(
+                            ["curl", "-sSL", "https://install.python-poetry.org"],
+                            capture_output=True, timeout=30).stdout,
+                        capture_output=True, text=True, timeout=60)
+                    if r.returncode == 0:
+                        return True
+                # fallback: pip uninstall
+                r = subprocess.run(
+                    [sys.executable, "-m", "pip", "uninstall", pkg, "-y", "-q",
+                     "--break-system-packages"],
+                    **subprocess_args(capture_output=True, text=True, timeout=60))
+                return r.returncode == 0
+
+            # Default: pip uninstall with --break-system-packages fallback
+            r = subprocess.run(
+                [sys.executable, "-m", "pip", "uninstall", pkg, "-y", "-q"],
+                **subprocess_args(capture_output=True, text=True, timeout=60))
+            if r.returncode != 0 and "externally-managed" in (r.stderr or r.stdout):
+                r = subprocess.run(
+                    [sys.executable, "-m", "pip", "uninstall", pkg, "-y", "-q",
+                     "--break-system-packages"],
+                    **subprocess_args(capture_output=True, text=True, timeout=60))
+            return r.returncode == 0
+
+        success = _do_remove()
+        if success:
             status_label.setText("❌ Not installed")
             status_label.setStyleSheet("font-size: 11px; color: #f38ba8;")
             try:
                 from src.core.tool_registry import ToolRegistry
                 ToolRegistry().remove(tool)
-            except Exception: pass
+            except Exception:
+                pass
+        else:
+            status_label.setText(f"❌ Remove failed")
+            status_label.setStyleSheet("font-size: 11px; color: #f38ba8;")
         btn.setEnabled(True)
 
     def _pm_download_micromamba(self, status_label, btn):
@@ -850,28 +912,44 @@ class ToolchainMixin:
             # Build correct remove command per tool
             # Find the tool's own executable first
             _tool_exe = _shutil.which(tool) or _shutil.which(tool + ".exe")
-            if tool == "uv":
-                if not _tool_exe:
-                    return False, "uv not found in PATH"
-                cmd = [py_exe, "-m", "pip", "uninstall", "uv", "-y", "-q"]
-            elif tool == "pipx":
-                if not _tool_exe:
-                    return False, "pipx not found in PATH"
-                # pipx may be installed via pip or standalone
-                # Try pip uninstall first, then inform user
-                cmd = [py_exe, "-m", "pip", "uninstall", "pipx", "-y", "-q"]
-            elif tool == "poetry":
-                if not _tool_exe:
-                    return False, "poetry not found in PATH"
-                cmd = [py_exe, "-m", "pip", "uninstall", "poetry", "-y", "-q"]
-            elif tool in ("pip", "venv"):
+            if tool in ("pip", "venv"):
                 return False, f"{tool} cannot be removed — it is a core Python component"
             elif tool == "micromamba":
                 return False, "micromamba is a standalone binary — delete it manually from its install path"
-            else:
-                cmd = [py_exe, "-m", "pip", "uninstall", pkg, "-y", "-q"]
+
+            # For uv/poetry/pipx: try direct binary removal first (curl-installed)
+            # then fall back to pip uninstall --break-system-packages
+            _local_bin_candidates = {
+                "uv": [
+                    os.path.join(_home, ".local", "bin", "uv"),
+                    os.path.join(_home, ".cargo", "bin", "uv"),
+                ],
+                "poetry": [
+                    os.path.join(_home, ".local", "share", "pypoetry", "bin", "poetry"),
+                    os.path.join(_home, ".local", "bin", "poetry"),
+                ],
+                "pipx": [
+                    os.path.join(_home, ".local", "bin", "pipx"),
+                ],
+            }
+            # Try removing binary directly if it's in a user-owned location
+            for _cand in _local_bin_candidates.get(tool, []):
+                if _tool_exe and os.path.normpath(_tool_exe) == os.path.normpath(_cand):
+                    if os.path.isfile(_cand):
+                        try:
+                            os.remove(_cand)
+                            return True, f"{tool} removed successfully"
+                        except Exception as _e:
+                            pass
+
+            # Fallback: pip uninstall, with --break-system-packages if needed
+            cmd = [py_exe, "-m", "pip", "uninstall", pkg, "-y", "-q"]
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=60,
                                cwd=_home, **subprocess_args())
+            if r.returncode != 0 and "externally-managed" in (r.stderr or r.stdout or ""):
+                cmd += ["--break-system-packages"]
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=60,
+                                   cwd=_home, **subprocess_args())
             if r.returncode != 0:
                 return False, (r.stderr or r.stdout)[:200]
             return True, f"{tool} removed successfully"

@@ -152,63 +152,59 @@ class ToolchainMixin:
                 except Exception as e:
                     return False, f"UAC error: {e}"
             elif sys.platform != "win32" and _is_ext_managed():
-                # PEP 668 — use platform package manager or official installers
+                # PEP 668 system — strategy depends on scope
                 pm = _detect_pm()
-                if tool == "uv":
-                    # Try pacman first on Arch (with pkexec for graphical auth)
-                    _installed_uv = False
-                    if pm == "pacman" and shutil.which("pacman"):
-                        _pkexec_uv = shutil.which("pkexec") or ""
-                        _uv_cmd = ([_pkexec_uv] if _pkexec_uv else ["sudo"]) + ["pacman", "-S", "--noconfirm", "uv"]
-                        r = subprocess.run(_uv_cmd,
-                                           capture_output=True, text=True, timeout=120)
-                        _installed_uv = r.returncode == 0
-                    if not _installed_uv:
+                if scope == "user":
+                    # USER install — never use sudo/pkexec, just pip --user or official installer
+                    if tool == "uv":
                         r = subprocess.run([sys.executable, "-m", "pip", "install", "uv",
                                             "--break-system-packages", "--user", "-q"],
                                            capture_output=True, text=True, timeout=120)
-                        _installed_uv = r.returncode == 0
-                    if not _installed_uv:
-                        r = subprocess.run(["sh", "-c", "curl -LsSf https://astral.sh/uv/install.sh | sh"],
-                                           capture_output=True, text=True, timeout=120)
-                        if r.returncode != 0: return False, r.stderr[:200]
-                elif tool == "poetry":
-                    _installed_poetry = False
-                    _pipx = shutil.which("pipx")
-                    if _pipx:
-                        r = subprocess.run([_pipx, "install", "poetry"],
-                                           capture_output=True, text=True, timeout=180)
-                        _installed_poetry = r.returncode == 0
-                    if not _installed_poetry:
-                        r = subprocess.run(["sh", "-c", "curl -sSL https://install.python-poetry.org | python3 -"],
-                                           capture_output=True, text=True, timeout=180,
-                                           env={**os.environ, "POETRY_HOME": os.path.expanduser("~/.local/share/pypoetry")})
-                        if r.returncode != 0: return False, r.stderr[:200]
-                elif tool == "pipx":
-                    # Use pkexec for graphical auth, fallback to pip --user
-                    installed = False
-                    _pkexec = shutil.which("pkexec") or ""
-                    _pkg_cmds = {
-                        "apt":    ["apt", "install", "-y", "pipx"],
-                        "pacman": ["pacman", "-S", "--noconfirm", "python-pipx"],
-                        "dnf":    ["dnf", "install", "-y", "pipx"],
-                        "zypper": ["zypper", "install", "-y", "python3-pipx"],
-                    }
-                    if pm in _pkg_cmds:
-                        _cmd = ([_pkexec] if _pkexec else ["sudo"]) + _pkg_cmds[pm]
-                        r = subprocess.run(_cmd, capture_output=True, text=True, timeout=120)
-                        installed = r.returncode == 0
-                    if not installed:
-                        # Fallback: pip install --user --break-system-packages
+                        if r.returncode != 0:
+                            r = subprocess.run(["sh", "-c", "curl -LsSf https://astral.sh/uv/install.sh | sh"],
+                                               capture_output=True, text=True, timeout=120)
+                            if r.returncode != 0: return False, r.stderr[:200]
+                    elif tool == "poetry":
+                        _pipx = shutil.which("pipx")
+                        _done_poetry = False
+                        if _pipx:
+                            r = subprocess.run([_pipx, "install", "poetry"],
+                                               capture_output=True, text=True, timeout=180)
+                            _done_poetry = r.returncode == 0
+                        if not _done_poetry:
+                            r = subprocess.run(["sh", "-c", "curl -sSL https://install.python-poetry.org | python3 -"],
+                                               capture_output=True, text=True, timeout=180,
+                                               env={**os.environ, "POETRY_HOME": os.path.expanduser("~/.local/share/pypoetry")})
+                            if r.returncode != 0: return False, r.stderr[:200]
+                    elif tool == "pipx":
                         r = subprocess.run([sys.executable, "-m", "pip", "install", "pipx",
                                             "--break-system-packages", "--user", "-q"],
                                            capture_output=True, text=True, timeout=120)
                         if r.returncode != 0: return False, r.stderr[:200]
+                    else:
+                        r = subprocess.run([sys.executable, "-m", "pip", "install", pkg,
+                                            "--break-system-packages", "--user", "-q"],
+                                           capture_output=True, text=True, timeout=120)
+                        if r.returncode != 0: return False, r.stderr[:200]
                 else:
-                    r = subprocess.run([sys.executable, "-m", "pip", "install", pkg,
-                                        "--break-system-packages", "--user", "-q"],
-                                       capture_output=True, text=True, timeout=120)
-                    if r.returncode != 0: return False, r.stderr[:200]
+                    # SYSTEM install — use pkexec/pacman
+                    _pkexec = shutil.which("pkexec") or ""
+                    _pkg_cmds = {
+                        "apt":    ["apt", "install", "-y", pkg],
+                        "pacman": ["pacman", "-S", "--noconfirm",
+                                   {"pipx": "python-pipx", "poetry": "python-poetry"}.get(tool, tool)],
+                        "dnf":    ["dnf", "install", "-y", pkg],
+                        "zypper": ["zypper", "install", "-y", pkg],
+                    }
+                    if pm in _pkg_cmds:
+                        _cmd = ([_pkexec] if _pkexec else ["sudo"]) + _pkg_cmds[pm]
+                        r = subprocess.run(_cmd, capture_output=True, text=True, timeout=120)
+                        if r.returncode != 0: return False, r.stderr[:200]
+                    else:
+                        r = subprocess.run([sys.executable, "-m", "pip", "install", pkg,
+                                            "--break-system-packages", "-q"],
+                                           capture_output=True, text=True, timeout=120)
+                        if r.returncode != 0: return False, r.stderr[:200]
             elif scope == "system":
                 r = subprocess.run(["sudo", sys.executable, "-m", "pip", "install", pkg, "-q"],
                                    **subprocess_args(capture_output=True, text=True, timeout=120))

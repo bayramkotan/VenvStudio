@@ -914,22 +914,25 @@ class ToolchainMixin:
                                 **subprocess_args(capture_output=True, text=True, timeout=120),
                                 cwd=_home, **_spa())
                         else:
+                            _bsp3 = ["--break-system-packages"] if _is_linux else []
                             r = subprocess.run(
-                                [py_exe, "-m", "pip", "install", pkg, "--user", "-q"],
+                                [py_exe, "-m", "pip", "install", pkg, "--user", "-q"] + _bsp3,
                                 **subprocess_args(capture_output=True, text=True, timeout=120),
                                 cwd=_home, **_spa())
                         if r.returncode != 0:
                             return False, (r.stderr or r.stdout or "failed")[:300]
                     elif tool == "pipx":
+                        _bsp = ["--break-system-packages"] if _is_linux else []
                         r = subprocess.run(
-                            [py_exe, "-m", "pip", "install", "pipx", "--user", "-q"],
+                            [py_exe, "-m", "pip", "install", "pipx", "--user", "-q"] + _bsp,
                             **subprocess_args(capture_output=True, text=True, timeout=120),
                             cwd=_home, **_spa())
                         if r.returncode != 0:
                             return False, (r.stderr or r.stdout or "failed")[:300]
                     else:
+                        _bsp2 = ["--break-system-packages"] if _is_linux else []
                         r = subprocess.run(
-                            [py_exe, "-m", "pip", "install", pkg, "--user", "-q"],
+                            [py_exe, "-m", "pip", "install", pkg, "--user", "-q"] + _bsp2,
                             **subprocess_args(capture_output=True, text=True, timeout=120),
                             cwd=_home, **_spa())
                         if r.returncode != 0:

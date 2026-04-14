@@ -1037,11 +1037,40 @@ class ToolchainMixin:
                         except Exception as _e:
                             pass
 
-            # 2. If tool is in a global/system path — try pkexec/pacman, else show message
-            _global_prefixes = ("/usr/bin/", "/usr/local/bin/", "/bin/", "/opt/")
-            if _tool_exe and any(_tool_exe.startswith(p) for p in _global_prefixes):
+            # 2. If tool is in a global/system path — try elevated removal
+            _win_global = sys.platform == "win32" and any(
+                _tool_exe.lower().startswith(p.lower()) for p in (
+                    os.environ.get("ProgramFiles", "C:\\Program Files"),
+                    os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)"),
+                    os.environ.get("ProgramData", "C:\\ProgramData"),
+                    os.environ.get("SystemRoot", "C:\\Windows"),
+                )
+            ) if _tool_exe else False
+            _linux_global = sys.platform != "win32" and _tool_exe and any(
+                _tool_exe.startswith(p) for p in ("/usr/bin/", "/usr/local/bin/", "/bin/", "/opt/")
+            )
+            if _win_global or _linux_global:
                 _pacman_pkgs = {"uv": "uv", "poetry": "python-poetry", "pipx": "python-pipx"}
-                # On Arch/CachyOS: try pkexec pacman -R (graphical auth)
+                if _win_global:
+                    # Windows: UAC elevation via PowerShell RunAs
+                    try:
+                        import ctypes
+                        _ps_cmd = f'Remove-Item -Force "{_tool_exe}"'
+                        ret = ctypes.windll.shell32.ShellExecuteW(
+                            None, "runas", "powershell.exe",
+                            f'-NoProfile -Command "{_ps_cmd}"', None, 1)
+                        if ret > 32:
+                            import time; time.sleep(2)
+                            if not os.path.isfile(_tool_exe):
+                                return True, f"{tool} removed from {_tool_exe}"
+                    except Exception:
+                        pass
+                    return False, (
+                        f"{tool} is system-installed at {_tool_exe}\n\n"
+                        f"Run in PowerShell (as Administrator):\n"
+                        f'  Remove-Item -Force "{_tool_exe}"'
+                    )
+                # Linux global
                 if _shutil.which("pacman") and tool in _pacman_pkgs:
                     _pkexec = _shutil.which("pkexec") or ""
                     _rm_cmd = (
@@ -1055,7 +1084,6 @@ class ToolchainMixin:
                             return True, f"{tool} removed via pacman"
                     except Exception:
                         pass
-                # Try pkexec rm (graphical sudo)
                 if _shutil.which("pkexec"):
                     try:
                         r = subprocess.run(["pkexec", "rm", "-f", _tool_exe],
@@ -1064,7 +1092,6 @@ class ToolchainMixin:
                             return True, f"{tool} removed from {_tool_exe}"
                     except Exception:
                         pass
-                # Cannot remove without auth — tell user
                 _ph = f"  sudo pacman -R {_pacman_pkgs.get(tool, tool)}" if _shutil.which("pacman") else ""
                 return False, (
                     f"{tool} is system-installed at {_tool_exe}\n\n"

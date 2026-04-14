@@ -3287,6 +3287,48 @@ $s.Save()
         self._pkg_loader.start()
 
 
+    def _get_pkg_metadata_batch(self, packages) -> dict:
+        """Fetch Summary + top-level category for all packages at once using importlib.metadata.
+        Returns {pkg_name_lower: (summary, category)} dict.
+        Runs a single subprocess — much faster than one pip show per package.
+        Falls back to catalog lookup for missing entries.
+        """
+        import json as _json
+        lookup = {}
+        if not self.pip_manager:
+            return lookup
+        try:
+            python_exe = get_python_executable(self.pip_manager.venv_path)
+            if not python_exe.exists():
+                return lookup
+            names = [pkg.name for pkg in packages]
+            script = (
+                "import importlib.metadata, json, sys\n"
+                "result = {}\n"
+                "for name in " + _json.dumps(names) + ":\n"
+                "    try:\n"
+                "        meta = importlib.metadata.metadata(name)\n"
+                "        result[name.lower()] = [meta.get('Summary',''), meta.get('Classifier','')]\n"
+                "    except Exception:\n"
+                "        result[name.lower()] = ['', '']\n"
+                "print(json.dumps(result))\n"
+            )
+            from src.utils.platform_utils import subprocess_args
+            import subprocess
+            r = subprocess.run(
+                [str(python_exe), "-c", script],
+                capture_output=True, text=True, timeout=30,
+                **subprocess_args()
+            )
+            if r.returncode == 0 and r.stdout.strip():
+                raw = _json.loads(r.stdout.strip())
+                for k, v in raw.items():
+                    summary = v[0] if v[0] else ""
+                    lookup[k] = summary
+        except Exception:
+            pass
+        return lookup
+
     def _get_catalog_lookup(self) -> dict:
         """Build a {pkg_name_lower: (description, category)} lookup from PACKAGE_CATALOG.
         PACKAGE_CATALOG structure: {cat_name: {"packages": [{"name": ..., "desc": ...}]}}
@@ -3325,6 +3367,8 @@ $s.Save()
             self.installed_package_names.add(n.replace("_", "-"))
 
         _cat_lookup = self._get_catalog_lookup()
+        # Fetch real descriptions from importlib.metadata (single subprocess, fast)
+        _meta_lookup = self._get_pkg_metadata_batch(packages)
         self.packages_table.setRowCount(len(packages))
         for i, pkg in enumerate(packages):
             # col 0: checkbox
@@ -3346,13 +3390,17 @@ $s.Save()
             ver_item.setFlags(ver_item.flags() & ~Qt.ItemIsEditable)
             self.packages_table.setItem(i, 2, ver_item)
 
-            # col 3: description, col 4: category (from catalog)
-            _desc, _cat = _cat_lookup.get(pkg.name.lower(), ("", ""))
+            # col 3: description — real metadata first, catalog fallback
+            _pkg_key = pkg.name.lower()
+            _real_desc = _meta_lookup.get(_pkg_key, "")
+            _catalog_desc, _cat = _cat_lookup.get(_pkg_key, ("", ""))
+            _desc = _real_desc or _catalog_desc
             desc_item = QTableWidgetItem(_desc)
             desc_item.setFlags(desc_item.flags() & ~Qt.ItemIsEditable)
             desc_item.setForeground(QColor(self._c().get("fg_muted", "#888")))
             self.packages_table.setItem(i, 3, desc_item)
 
+            # col 4: category from catalog
             cat_item = QTableWidgetItem(_cat)
             cat_item.setFlags(cat_item.flags() & ~Qt.ItemIsEditable)
             cat_item.setForeground(QColor(self._c().get("fg_muted", "#888")))
@@ -3393,6 +3441,8 @@ $s.Save()
             self.installed_package_names.add(n.replace("_", "-"))
 
         _cat_lookup = self._get_catalog_lookup()
+        # Fetch real descriptions from importlib.metadata (single subprocess, fast)
+        _meta_lookup = self._get_pkg_metadata_batch(packages)
         self.packages_table.setRowCount(len(packages))
         for i, pkg in enumerate(packages):
             # col 0: checkbox
@@ -3414,13 +3464,17 @@ $s.Save()
             ver_item.setFlags(ver_item.flags() & ~Qt.ItemIsEditable)
             self.packages_table.setItem(i, 2, ver_item)
 
-            # col 3: description, col 4: category (from catalog)
-            _desc, _cat = _cat_lookup.get(pkg.name.lower(), ("", ""))
+            # col 3: description — real metadata first, catalog fallback
+            _pkg_key = pkg.name.lower()
+            _real_desc = _meta_lookup.get(_pkg_key, "")
+            _catalog_desc, _cat = _cat_lookup.get(_pkg_key, ("", ""))
+            _desc = _real_desc or _catalog_desc
             desc_item = QTableWidgetItem(_desc)
             desc_item.setFlags(desc_item.flags() & ~Qt.ItemIsEditable)
             desc_item.setForeground(QColor(self._c().get("fg_muted", "#888")))
             self.packages_table.setItem(i, 3, desc_item)
 
+            # col 4: category from catalog
             cat_item = QTableWidgetItem(_cat)
             cat_item.setFlags(cat_item.flags() & ~Qt.ItemIsEditable)
             cat_item.setForeground(QColor(self._c().get("fg_muted", "#888")))

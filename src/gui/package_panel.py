@@ -3289,23 +3289,19 @@ $s.Save()
 
 
     def _get_catalog_lookup(self) -> dict:
-        """Build {pkg_name_lower: (desc, category)} from PACKAGE_CATALOG."""
+        """Build {pkg_name_lower: (desc, category)} from PACKAGE_CATALOG.
+        Uses EXACTLY the same iteration as _populate_catalog.
+        """
         lookup = {}
         for cat_name, cat_data in PACKAGE_CATALOG.items():
-            # Only dict-format categories have package dicts with desc
-            if not isinstance(cat_data, dict):
+            if not cat_data:
                 continue
             for pkg in cat_data.get("packages", []):
-                if not isinstance(pkg, dict):
-                    continue
-                name = pkg.get("name", "")
-                desc = pkg.get("desc", "")
-                if not name:
-                    continue
-                for key in (name.lower(),
-                            name.lower().replace("-", "_"),
-                            name.lower().replace("_", "-")):
-                    lookup[key] = (desc, cat_name)
+                name = pkg["name"]
+                desc = pkg["desc"]
+                lookup[name.lower()] = (desc, cat_name)
+                lookup[name.lower().replace("-", "_")] = (desc, cat_name)
+                lookup[name.lower().replace("_", "-")] = (desc, cat_name)
         return lookup
 
     def _on_packages_loaded(self, packages):

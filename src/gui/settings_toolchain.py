@@ -1018,17 +1018,40 @@ class ToolchainMixin:
                         except Exception as _e:
                             pass
 
-            # 2. If tool is in a global/system path — use sudo rm
+            # 2. If tool is in a global/system path — try pkexec/pacman, else show message
             _global_prefixes = ("/usr/bin/", "/usr/local/bin/", "/bin/", "/opt/")
             if _tool_exe and any(_tool_exe.startswith(p) for p in _global_prefixes):
-                try:
-                    r = subprocess.run(["sudo", "rm", "-f", _tool_exe],
-                                       capture_output=True, text=True, timeout=30)
-                    if r.returncode == 0:
-                        return True, f"{tool} removed from {_tool_exe}"
-                    return False, f"sudo rm failed: {r.stderr[:100]}\nTry manually: sudo rm {_tool_exe}"
-                except Exception as _e:
-                    return False, f"Cannot remove system binary: {_tool_exe}\nRun manually: sudo rm {_tool_exe}"
+                _pacman_pkgs = {"uv": "uv", "poetry": "python-poetry", "pipx": "python-pipx"}
+                # On Arch/CachyOS: try pkexec pacman -R (graphical auth)
+                if _shutil.which("pacman") and tool in _pacman_pkgs:
+                    _pkexec = _shutil.which("pkexec") or ""
+                    _rm_cmd = (
+                        [_pkexec, "pacman", "-R", "--noconfirm", _pacman_pkgs[tool]]
+                        if _pkexec else
+                        ["sudo", "pacman", "-R", "--noconfirm", _pacman_pkgs[tool]]
+                    )
+                    try:
+                        r = subprocess.run(_rm_cmd, capture_output=True, text=True, timeout=60)
+                        if r.returncode == 0:
+                            return True, f"{tool} removed via pacman"
+                    except Exception:
+                        pass
+                # Try pkexec rm (graphical sudo)
+                if _shutil.which("pkexec"):
+                    try:
+                        r = subprocess.run(["pkexec", "rm", "-f", _tool_exe],
+                                           capture_output=True, text=True, timeout=60)
+                        if r.returncode == 0:
+                            return True, f"{tool} removed from {_tool_exe}"
+                    except Exception:
+                        pass
+                # Cannot remove without auth — tell user
+                _ph = f"  sudo pacman -R {_pacman_pkgs.get(tool, tool)}" if _shutil.which("pacman") else ""
+                return False, (
+                    f"{tool} is system-installed at {_tool_exe}\n\n"
+                    f"Run in terminal:\n  sudo rm {_tool_exe}"
+                    + (f"\n{_ph}" if _ph else "")
+                )
 
             # 3. Fallback: pip uninstall with --break-system-packages
             cmd = [py_exe, "-m", "pip", "uninstall", pkg, "-y", "-q"]

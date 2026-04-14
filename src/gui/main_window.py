@@ -579,9 +579,7 @@ class MainWindow(QMainWindow):
         # so horizontal scrollbar works properly at low resolutions
         self.env_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
         self.env_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self.env_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Interactive)
-        self.env_table.setColumnWidth(2, 280)
-        self.env_table.horizontalHeader().setMinimumSectionSize(60)
+        self.env_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         for col in range(3, 7):
             self.env_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeToContents)
         self.env_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)

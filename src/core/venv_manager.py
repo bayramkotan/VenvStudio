@@ -142,7 +142,7 @@ class VenvManager:
         """Auto-create a pipx marker env in pipx home dir if pipx is installed.
         Returns True if pipx env exists or was created, False if pipx not found."""
         import shutil, json as _json, datetime as _dt, sys as _sys
-        from src.utils.platform_utils import get_pipx_executable, get_pipx_home
+        from src.utils.platform_utils import get_pipx_executable, get_pipx_home, get_pipx_cmd
         pipx_exe = get_pipx_executable()
         if not pipx_exe:
             return False
@@ -520,7 +520,7 @@ class VenvManager:
 
         # ── Include pipx from its own home dir (not base_dir) ────────────
         try:
-            from src.utils.platform_utils import get_pipx_home, get_pipx_executable
+            from src.utils.platform_utils import get_pipx_home, get_pipx_executable, get_pipx_cmd
             import sys as _sys
             _pipx_home = get_pipx_home()
             if not _pipx_home:
@@ -557,9 +557,9 @@ class VenvManager:
                     _info.python_version = _pyver
                     # Count installed pipx apps
                     try:
-                        _pipx_bin = get_pipx_executable()
                         import sys as _sys
-                        _pipx_cmd = [_pipx_bin, "list", "--short"] if _pipx_bin else [_sys.executable, "-m", "pipx", "list", "--short"]
+                        from src.utils.platform_utils import get_pipx_cmd as _gpc3
+                        _pipx_cmd = (_gpc3() or [_sys.executable, "-m", "pipx"]) + ["list", "--short"]
                         _r = _run(_pipx_cmd, capture_output=True, text=True, timeout=15)
                         if _r.returncode == 0:
                             _lines = [l for l in _r.stdout.strip().splitlines() if l.strip()]
@@ -812,8 +812,7 @@ class VenvManager:
                     try:
                         import sys as _sys
                         from src.utils.platform_utils import get_pipx_executable as _gpx
-                        _pipx_bin = _gpx()
-                        _pipx_cmd = [_pipx_bin, "list", "--short"] if _pipx_bin else [_sys.executable, "-m", "pipx", "list", "--short"]
+                        _pipx_cmd = (get_pipx_cmd() or [_sys.executable, "-m", "pipx"]) + ["list", "--short"]
                         _r = _run(_pipx_cmd,
                                   capture_output=True, text=True, timeout=15)
                         if _r.returncode == 0:
@@ -1021,9 +1020,8 @@ class VenvManager:
                                 info.python_version = ""
                         try:
                             import sys as _sys
-                            from src.utils.platform_utils import get_pipx_executable as _gpx
-                            _pipx_bin = _gpx()
-                            _pipx_cmd = [_pipx_bin, "list", "--short"] if _pipx_bin else [_sys.executable, "-m", "pipx", "list", "--short"]
+                            from src.utils.platform_utils import get_pipx_cmd as _gpc2
+                            _pipx_cmd = (_gpc2() or [_sys.executable, "-m", "pipx"]) + ["list", "--short"]
                             _r = _run(_pipx_cmd,
                                       capture_output=True, text=True, timeout=15)
                             if _r.returncode == 0:

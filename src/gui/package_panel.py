@@ -294,7 +294,8 @@ class PackagePanel(QWidget):
 
         # Environment selector at top (2-row bar)
         self.env_bar = QFrame()
-        self.env_bar.setFixedHeight(90)
+        self.env_bar.setMinimumHeight(90)
+        self.env_bar.setMaximumHeight(90)
         self.env_bar.setStyleSheet(
             "QFrame { background-color: " + self._c()['sidebar'] + "; "
             "border-bottom: 2px solid #313244; }"
@@ -312,9 +313,13 @@ class PackagePanel(QWidget):
         row1.addWidget(env_lbl)
 
         self.env_selector = QComboBox()
-        self.env_selector.setMinimumWidth(280)
+        self.env_selector.setMinimumWidth(120)
         self.env_selector.setMaximumWidth(500)
         self.env_selector.setFixedHeight(34)
+        self.env_selector.setSizePolicy(
+            self.env_selector.sizePolicy().horizontalPolicy(),
+            self.env_selector.sizePolicy().verticalPolicy()
+        )
         # Disable mouse wheel scrolling on env selector to prevent accidental switches
         # wheelEvent enabled — scroll to switch environments
         self.env_selector.setStyleSheet(
@@ -409,7 +414,16 @@ class PackagePanel(QWidget):
 
         env_bar_outer.addLayout(row2)
 
-        layout.addWidget(self.env_bar)
+        # Wrap env_bar in scroll area for low-resolution / small window support
+        from PySide6.QtWidgets import QScrollArea as _QSA
+        _env_bar_scroll = _QSA()
+        _env_bar_scroll.setWidget(self.env_bar)
+        _env_bar_scroll.setWidgetResizable(True)
+        _env_bar_scroll.setFixedHeight(96)
+        _env_bar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        _env_bar_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        _env_bar_scroll.setFrameShape(QFrame.NoFrame)
+        layout.addWidget(_env_bar_scroll)
 
         self.tabs = QTabWidget()
         self.tabs.setUsesScrollButtons(False)  # No < > scroll buttons
@@ -2194,6 +2208,8 @@ $s.Save()
         self.packages_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.packages_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
         self.packages_table.setColumnWidth(2, 40)
+        self.packages_table.horizontalHeader().setStretchLastSection(False)
+        self.packages_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.packages_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.packages_table.setAlternatingRowColors(True)
         self.packages_table.verticalHeader().setVisible(False)
@@ -2258,12 +2274,14 @@ $s.Save()
         self.catalog_table.setColumnCount(5)
         self.catalog_table.setHorizontalHeaderLabels(["Install", "Package", "Description", "Category", "Links"])
         self.catalog_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
-        self.catalog_table.setColumnWidth(0, 55)
+        self.catalog_table.setColumnWidth(0, 28)
         self.catalog_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.catalog_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         self.catalog_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         self.catalog_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Fixed)
         self.catalog_table.setColumnWidth(4, 80)
+        self.catalog_table.horizontalHeader().setStretchLastSection(False)
+        self.catalog_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.catalog_table.setAlternatingRowColors(True)
         self.catalog_table.verticalHeader().setVisible(False)
         self.catalog_table.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -3260,6 +3278,23 @@ $s.Save()
         self._pkg_loader = PkgLoader(pip_mgr_snapshot, _env_type, _venv_path, parent=self)
         self._pkg_loader.done.connect(self._on_packages_loaded)
         self._pkg_loader.start()
+
+
+    def _get_catalog_lookup(self) -> dict:
+        """Build {pkg_name_lower: (desc, category)} from PACKAGE_CATALOG.
+        Uses EXACTLY the same iteration as _populate_catalog.
+        """
+        lookup = {}
+        for cat_name, cat_data in PACKAGE_CATALOG.items():
+            if not cat_data:
+                continue
+            for pkg in cat_data.get("packages", []):
+                name = pkg["name"]
+                desc = pkg["desc"]
+                lookup[name.lower()] = (desc, cat_name)
+                lookup[name.lower().replace("-", "_")] = (desc, cat_name)
+                lookup[name.lower().replace("_", "-")] = (desc, cat_name)
+        return lookup
 
     def _on_packages_loaded(self, packages):
         """Called when async package loading finishes."""

@@ -130,6 +130,19 @@ class ToolchainMixin:
         status_label.setStyleSheet("font-size: 11px; color: #89b4fa;")
         def _do(callback=None):
             import subprocess, shutil, os, site
+
+            def _detect_pm():
+                for pm in ("apt", "pacman", "dnf", "zypper"):
+                    if shutil.which(pm): return pm
+                return None
+
+            def _is_ext_managed():
+                try:
+                    import sysconfig
+                    stdlib = sysconfig.get_path("stdlib")
+                    return bool(stdlib and os.path.exists(os.path.join(stdlib, "EXTERNALLY-MANAGED")))
+                except Exception: return False
+
             if scope == "system" and sys.platform == "win32":
                 try:
                     import ctypes
@@ -138,11 +151,67 @@ class ToolchainMixin:
                     import time; time.sleep(4)
                 except Exception as e:
                     return False, f"UAC error: {e}"
+            elif sys.platform != "win32" and _is_ext_managed():
+                # PEP 668 system — strategy depends on scope
+                pm = _detect_pm()
+                if scope == "user":
+                    # USER install — never use sudo/pkexec, just pip --user or official installer
+                    if tool == "uv":
+                        r = subprocess.run([sys.executable, "-m", "pip", "install", "uv",
+                                            "--break-system-packages", "--user", "-q"],
+                                           capture_output=True, text=True, timeout=120)
+                        if r.returncode != 0:
+                            r = subprocess.run(["sh", "-c", "curl -LsSf https://astral.sh/uv/install.sh | sh"],
+                                               capture_output=True, text=True, timeout=120)
+                            if r.returncode != 0: return False, r.stderr[:200]
+                    elif tool == "poetry":
+                        _pipx = shutil.which("pipx")
+                        _done_poetry = False
+                        if _pipx:
+                            r = subprocess.run([_pipx, "install", "poetry"],
+                                               capture_output=True, text=True, timeout=180)
+                            _done_poetry = r.returncode == 0
+                        if not _done_poetry:
+                            r = subprocess.run(["sh", "-c", "curl -sSL https://install.python-poetry.org | python3 -"],
+                                               capture_output=True, text=True, timeout=180,
+                                               env={**os.environ, "POETRY_HOME": os.path.expanduser("~/.local/share/pypoetry")})
+                            if r.returncode != 0: return False, r.stderr[:200]
+                    elif tool == "pipx":
+                        r = subprocess.run([sys.executable, "-m", "pip", "install", "pipx",
+                                            "--break-system-packages", "--user", "-q"],
+                                           capture_output=True, text=True, timeout=120)
+                        if r.returncode != 0: return False, r.stderr[:200]
+                    else:
+                        r = subprocess.run([sys.executable, "-m", "pip", "install", pkg,
+                                            "--break-system-packages", "--user", "-q"],
+                                           capture_output=True, text=True, timeout=120)
+                        if r.returncode != 0: return False, r.stderr[:200]
+                else:
+                    # SYSTEM install — use pkexec/pacman
+                    _pkexec = shutil.which("pkexec") or ""
+                    _pkg_cmds = {
+                        "apt":    ["apt", "install", "-y", pkg],
+                        "pacman": ["pacman", "-S", "--noconfirm",
+                                   {"pipx": "python-pipx", "poetry": "python-poetry"}.get(tool, tool)],
+                        "dnf":    ["dnf", "install", "-y", pkg],
+                        "zypper": ["zypper", "install", "-y", pkg],
+                    }
+                    if pm in _pkg_cmds:
+                        _cmd = ([_pkexec] if _pkexec else ["sudo"]) + _pkg_cmds[pm]
+                        r = subprocess.run(_cmd, capture_output=True, text=True, timeout=120)
+                        if r.returncode != 0: return False, r.stderr[:200]
+                    else:
+                        r = subprocess.run([sys.executable, "-m", "pip", "install", pkg,
+                                            "--break-system-packages", "-q"],
+                                           capture_output=True, text=True, timeout=120)
+                        if r.returncode != 0: return False, r.stderr[:200]
             elif scope == "system":
-                r = subprocess.run(["sudo", sys.executable, "-m", "pip", "install", pkg, "-q"], **subprocess_args(capture_output=True, text=True, timeout=120))
+                r = subprocess.run(["sudo", sys.executable, "-m", "pip", "install", pkg, "-q"],
+                                   **subprocess_args(capture_output=True, text=True, timeout=120))
                 if r.returncode != 0: return False, (r.stderr or "failed")[:200]
             else:
-                r = subprocess.run([sys.executable, "-m", "pip", "install", pkg, "--user", "-q"], **subprocess_args(capture_output=True, text=True, timeout=120))
+                r = subprocess.run([sys.executable, "-m", "pip", "install", pkg, "--user", "-q"],
+                                   **subprocess_args(capture_output=True, text=True, timeout=120))
                 if r.returncode != 0: return False, (r.stderr or "failed")[:200]
             if tool == "pipx":
                 try: subprocess.run([sys.executable, "-m", "pipx", "ensurepath"], **subprocess_args(capture_output=True, timeout=30))
@@ -190,16 +259,78 @@ class ToolchainMixin:
         self._pm_worker = w
 
     def _pm_uninstall_tool(self, tool, pkg, status_label, btn):
-        import sys, subprocess
+        import sys, subprocess, shutil, os
         btn.setEnabled(False)
-        r = subprocess.run([sys.executable, "-m", "pip", "uninstall", pkg, "-y", "-q"], **subprocess_args(capture_output=True, text=True, timeout=60))
-        if r.returncode == 0:
+        status_label.setText(f"⏳ Removing {tool}...")
+        status_label.setStyleSheet("font-size: 11px; color: #89b4fa;")
+
+        def _do_remove():
+            # uv: prefer self-uninstall or delete binary
+            if tool == "uv":
+                _uv = shutil.which("uv")
+                if _uv and os.path.isfile(_uv):
+                    # curl-installed uv → delete binary
+                    _local_bins = [
+                        os.path.join(os.path.expanduser("~"), ".local", "bin", "uv"),
+                        os.path.join(os.path.expanduser("~"), ".cargo", "bin", "uv"),
+                    ]
+                    if any(_uv == p for p in _local_bins):
+                        try:
+                            os.remove(_uv)
+                            return True
+                        except Exception:
+                            pass
+                # fallback: pip uninstall --break-system-packages
+                r = subprocess.run(
+                    [sys.executable, "-m", "pip", "uninstall", pkg, "-y", "-q",
+                     "--break-system-packages"],
+                    **subprocess_args(capture_output=True, text=True, timeout=60))
+                return r.returncode == 0
+
+            # poetry: use official uninstaller if available
+            if tool == "poetry":
+                _poetry_uninstall = os.path.join(
+                    os.path.expanduser("~"), ".local", "share", "pypoetry",
+                    "venv", "bin", "poetry")
+                if os.path.exists(_poetry_uninstall):
+                    r = subprocess.run(
+                        ["python3", "-", "--uninstall"],
+                        input=subprocess.run(
+                            ["curl", "-sSL", "https://install.python-poetry.org"],
+                            capture_output=True, timeout=30).stdout,
+                        capture_output=True, text=True, timeout=60)
+                    if r.returncode == 0:
+                        return True
+                # fallback: pip uninstall
+                r = subprocess.run(
+                    [sys.executable, "-m", "pip", "uninstall", pkg, "-y", "-q",
+                     "--break-system-packages"],
+                    **subprocess_args(capture_output=True, text=True, timeout=60))
+                return r.returncode == 0
+
+            # Default: pip uninstall with --break-system-packages fallback
+            r = subprocess.run(
+                [sys.executable, "-m", "pip", "uninstall", pkg, "-y", "-q"],
+                **subprocess_args(capture_output=True, text=True, timeout=60))
+            if r.returncode != 0 and "externally-managed" in (r.stderr or r.stdout):
+                r = subprocess.run(
+                    [sys.executable, "-m", "pip", "uninstall", pkg, "-y", "-q",
+                     "--break-system-packages"],
+                    **subprocess_args(capture_output=True, text=True, timeout=60))
+            return r.returncode == 0
+
+        success = _do_remove()
+        if success:
             status_label.setText("❌ Not installed")
             status_label.setStyleSheet("font-size: 11px; color: #f38ba8;")
             try:
                 from src.core.tool_registry import ToolRegistry
                 ToolRegistry().remove(tool)
-            except Exception: pass
+            except Exception:
+                pass
+        else:
+            status_label.setText(f"❌ Remove failed")
+            status_label.setStyleSheet("font-size: 11px; color: #f38ba8;")
         btn.setEnabled(True)
 
     def _pm_download_micromamba(self, status_label, btn):
@@ -442,8 +573,8 @@ class ToolchainMixin:
             if "rm_user" in btns: btns["rm_user"].setVisible(False)
         elif installed:
             if "install_user" in btns: btns["install_user"].setVisible(False)
-            for n in ("upgrade_user", "rm_user"):
-                if n in btns: btns[n].setVisible(True)
+            if "upgrade_user" in btns: btns["upgrade_user"].setVisible(True)
+            if "rm_user" in btns: btns["rm_user"].setVisible(True)
         else:
             if "install_user" in btns: btns["install_user"].setVisible(True)
             for n in ("upgrade_user", "rm_user"):
@@ -529,7 +660,20 @@ class ToolchainMixin:
                 for sub in os.listdir(pa):
                     sc = os.path.join(pa,sub,"Scripts")
                     for n in (tool,tool+".exe"): cands.append(os.path.join(sc,n))
-        return next((c for c in cands if c and os.path.isfile(c)),"")
+        found = next((c for c in cands if c and os.path.isfile(c)), "")
+        if found:
+            return found
+        # Fallback: check if tool is available as python module (e.g. python3 -m pipx)
+        try:
+            import subprocess
+            r = subprocess.run([py_exe, "-m", tool, "--version"],
+                               capture_output=True, text=True, timeout=5)
+            if r.returncode == 0:
+                return py_exe  # signals "available as module"
+        except Exception:
+            pass
+        return ""
+
 
     def _tc_load_table(self, py_exe):
         """Reload table rows for the selected Python."""
@@ -695,8 +839,30 @@ class ToolchainMixin:
                 vi.setForeground(QColor(self._c()["fg"]))
                 tbl.setItem(row, 2, vi)
 
-                # col 3: Path
-                pi = QTableWidgetItem(path if ok2 else "—")
+                # col 3: Path — if path == py_exe, tool is module-only, show real module path
+                import os as _os2
+                _display_path = path
+                if ok2 and _os2.path.normpath(path) == _os2.path.normpath(_py):
+                    # Get real location via pip show
+                    try:
+                        import subprocess as _sp_path
+                        _pr = _sp_path.run([_py, "-m", "pip", "show", _tid],
+                                           capture_output=True, text=True, timeout=5)
+                        _loc = next((l.split(":", 1)[1].strip()
+                                     for l in _pr.stdout.splitlines()
+                                     if l.startswith("Location:")), "")
+                        if _loc:
+                            import importlib.util as _iu
+                            _spec = _iu.find_spec(_tid.replace("-", "_"))
+                            if _spec and _spec.origin:
+                                _display_path = _os2.path.dirname(_spec.origin)
+                            else:
+                                _display_path = _os2.path.join(_loc, _tid)
+                        else:
+                            _display_path = path
+                    except Exception:
+                        _display_path = path
+                pi = QTableWidgetItem(_display_path if ok2 else "—")
                 pi.setForeground(QColor(self._c()["fg_muted"]))
                 pi.setToolTip(path)
                 tbl.setItem(row, 3, pi)
@@ -783,22 +949,25 @@ class ToolchainMixin:
                                 **subprocess_args(capture_output=True, text=True, timeout=120),
                                 cwd=_home, **_spa())
                         else:
+                            _bsp3 = ["--break-system-packages"] if _is_linux else []
                             r = subprocess.run(
-                                [py_exe, "-m", "pip", "install", pkg, "--user", "-q"],
+                                [py_exe, "-m", "pip", "install", pkg, "--user", "-q"] + _bsp3,
                                 **subprocess_args(capture_output=True, text=True, timeout=120),
                                 cwd=_home, **_spa())
                         if r.returncode != 0:
                             return False, (r.stderr or r.stdout or "failed")[:300]
                     elif tool == "pipx":
+                        _bsp = ["--break-system-packages"] if _is_linux else []
                         r = subprocess.run(
-                            [py_exe, "-m", "pip", "install", "pipx", "--user", "-q"],
+                            [py_exe, "-m", "pip", "install", "pipx", "--user", "-q"] + _bsp,
                             **subprocess_args(capture_output=True, text=True, timeout=120),
                             cwd=_home, **_spa())
                         if r.returncode != 0:
                             return False, (r.stderr or r.stdout or "failed")[:300]
                     else:
+                        _bsp2 = ["--break-system-packages"] if _is_linux else []
                         r = subprocess.run(
-                            [py_exe, "-m", "pip", "install", pkg, "--user", "-q"],
+                            [py_exe, "-m", "pip", "install", pkg, "--user", "-q"] + _bsp2,
                             **subprocess_args(capture_output=True, text=True, timeout=120),
                             cwd=_home, **_spa())
                         if r.returncode != 0:
@@ -850,28 +1019,143 @@ class ToolchainMixin:
             # Build correct remove command per tool
             # Find the tool's own executable first
             _tool_exe = _shutil.which(tool) or _shutil.which(tool + ".exe")
-            if tool == "uv":
-                if not _tool_exe:
-                    return False, "uv not found in PATH"
-                cmd = [py_exe, "-m", "pip", "uninstall", "uv", "-y", "-q"]
-            elif tool == "pipx":
-                if not _tool_exe:
-                    return False, "pipx not found in PATH"
-                # pipx may be installed via pip or standalone
-                # Try pip uninstall first, then inform user
-                cmd = [py_exe, "-m", "pip", "uninstall", "pipx", "-y", "-q"]
-            elif tool == "poetry":
-                if not _tool_exe:
-                    return False, "poetry not found in PATH"
-                cmd = [py_exe, "-m", "pip", "uninstall", "poetry", "-y", "-q"]
-            elif tool in ("pip", "venv"):
+            # If tool is only available as module (python -m tool), handle specially
+            if not _tool_exe:
+                import subprocess as _sp2
+                r2 = _sp2.run([py_exe, "-m", tool, "--version"],
+                              capture_output=True, text=True, timeout=5)
+                if r2.returncode == 0:
+                    # Module-only install — find via pip show
+                    _loc_r = _sp2.run([py_exe, "-m", "pip", "show", tool],
+                                      capture_output=True, text=True, timeout=10)
+                    _loc = next((l.split(":", 1)[1].strip()
+                                 for l in _loc_r.stdout.splitlines()
+                                 if l.startswith("Location:")), "")
+                    _pm = next((p for p in ("apt","pacman","dnf","zypper") if _shutil.which(p)), None)
+                    _pacman_map = {"pipx": "python-pipx", "uv": "uv", "poetry": "python-poetry"}
+                    # Try pkexec pip uninstall (graphical auth, works on all distros)
+                    _pkexec2 = _shutil.which("pkexec") or ""
+                    _uninstall_cmd = ([_pkexec2] if _pkexec2 else ["sudo"]) + [
+                        py_exe, "-m", "pip", "uninstall", tool,
+                        "--break-system-packages", "-y"
+                    ]
+                    try:
+                        r3 = _sp2.run(_uninstall_cmd, capture_output=True, text=True, timeout=60)
+                        if r3.returncode == 0:
+                            return True, f"{tool} removed successfully"
+                    except Exception:
+                        pass
+                    return False, (
+                        f"{tool} is installed as a Python module.\n\n"
+                        f"Run in terminal to remove:\n"
+                        f"  sudo pip uninstall {tool} --break-system-packages"
+                    )
+            if tool in ("pip", "venv"):
                 return False, f"{tool} cannot be removed — it is a core Python component"
             elif tool == "micromamba":
                 return False, "micromamba is a standalone binary — delete it manually from its install path"
-            else:
-                cmd = [py_exe, "-m", "pip", "uninstall", pkg, "-y", "-q"]
+
+            # For uv/poetry/pipx: try direct binary removal first (curl-installed)
+            # then fall back to pip uninstall --break-system-packages
+            _local_bin_candidates = {
+                "uv": [
+                    os.path.join(_home, ".local", "bin", "uv"),
+                    os.path.join(_home, ".cargo", "bin", "uv"),
+                ],
+                "poetry": [
+                    os.path.join(_home, ".local", "share", "pypoetry", "bin", "poetry"),
+                    os.path.join(_home, ".local", "bin", "poetry"),
+                ],
+                "pipx": [
+                    os.path.join(_home, ".local", "bin", "pipx"),
+                ],
+            }
+            # 1. Try direct binary removal for user-installed tools
+            for _cand in _local_bin_candidates.get(tool, []):
+                if _tool_exe and os.path.normpath(_tool_exe) == os.path.normpath(_cand):
+                    if os.path.isfile(_cand):
+                        try:
+                            os.remove(_cand)
+                            # Also remove poetry home dir if it exists
+                            if tool == "poetry":
+                                import shutil as _sh
+                                _poetry_home = os.path.join(_home, ".local", "share", "pypoetry")
+                                if os.path.isdir(_poetry_home):
+                                    _sh.rmtree(_poetry_home, ignore_errors=True)
+                            return True, f"{tool} removed successfully"
+                        except Exception as _e:
+                            pass
+
+            # 2. If tool is in a global/system path — try elevated removal
+            _win_global = sys.platform == "win32" and any(
+                _tool_exe.lower().startswith(p.lower()) for p in (
+                    os.environ.get("ProgramFiles", "C:\\Program Files"),
+                    os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)"),
+                    os.environ.get("ProgramData", "C:\\ProgramData"),
+                    os.environ.get("SystemRoot", "C:\\Windows"),
+                )
+            ) if _tool_exe else False
+            _linux_global = sys.platform != "win32" and _tool_exe and any(
+                _tool_exe.startswith(p) for p in ("/usr/bin/", "/usr/local/bin/", "/bin/", "/opt/")
+            )
+            if _win_global or _linux_global:
+                _pacman_pkgs = {"uv": "uv", "poetry": "python-poetry", "pipx": "python-pipx"}
+                if _win_global:
+                    # Windows: UAC elevation via PowerShell RunAs
+                    try:
+                        import ctypes
+                        _ps_cmd = f'Remove-Item -Force "{_tool_exe}"'
+                        ret = ctypes.windll.shell32.ShellExecuteW(
+                            None, "runas", "powershell.exe",
+                            f'-NoProfile -Command "{_ps_cmd}"', None, 1)
+                        if ret > 32:
+                            import time; time.sleep(2)
+                            if not os.path.isfile(_tool_exe):
+                                return True, f"{tool} removed from {_tool_exe}"
+                    except Exception:
+                        pass
+                    return False, (
+                        f"{tool} is system-installed at {_tool_exe}\n\n"
+                        f"Run in PowerShell (as Administrator):\n"
+                        f'  Remove-Item -Force "{_tool_exe}"'
+                    )
+                # Linux global
+                if _shutil.which("pacman") and tool in _pacman_pkgs:
+                    _pkexec = _shutil.which("pkexec") or ""
+                    _rm_cmd = (
+                        [_pkexec, "pacman", "-R", "--noconfirm", _pacman_pkgs[tool]]
+                        if _pkexec else
+                        ["sudo", "pacman", "-R", "--noconfirm", _pacman_pkgs[tool]]
+                    )
+                    try:
+                        r = subprocess.run(_rm_cmd, capture_output=True, text=True, timeout=60)
+                        if r.returncode == 0:
+                            return True, f"{tool} removed via pacman"
+                    except Exception:
+                        pass
+                if _shutil.which("pkexec"):
+                    try:
+                        r = subprocess.run(["pkexec", "rm", "-f", _tool_exe],
+                                           capture_output=True, text=True, timeout=60)
+                        if r.returncode == 0:
+                            return True, f"{tool} removed from {_tool_exe}"
+                    except Exception:
+                        pass
+                _ph = f"  sudo pacman -R {_pacman_pkgs.get(tool, tool)}" if _shutil.which("pacman") else ""
+                return False, (
+                    f"{tool} is system-installed at {_tool_exe}\n\n"
+                    f"Run in terminal:\n  sudo rm {_tool_exe}"
+                    + (f"\n{_ph}" if _ph else "")
+                )
+
+            # 3. Fallback: pip uninstall with --break-system-packages
+            cmd = [py_exe, "-m", "pip", "uninstall", pkg, "-y", "-q"]
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=60,
                                cwd=_home, **subprocess_args())
+            if r.returncode != 0 and "externally-managed" in (r.stderr or r.stdout or ""):
+                cmd += ["--break-system-packages"]
+                r = subprocess.run(cmd, capture_output=True, text=True, timeout=60,
+                                   cwd=_home, **subprocess_args())
             if r.returncode != 0:
                 return False, (r.stderr or r.stdout)[:200]
             return True, f"{tool} removed successfully"
@@ -882,10 +1166,11 @@ class ToolchainMixin:
             from PySide6.QtWidgets import QMessageBox
             si2 = tbl.item(row, 1)
             if not ok:
+                # Restore original status instead of showing error in status col
                 if si2:
-                    si2.setText(f"❌ {res[:40]}")
-                    si2.setForeground(QColor("#f38ba8"))
-                QMessageBox.warning(None, "Remove Failed", res)
+                    si2.setText("🌐 Global")
+                    si2.setForeground(QColor("#89b4fa"))
+                QMessageBox.information(None, "Cannot Remove Automatically", res)
                 return
             QTimer.singleShot(300, lambda: self._tc_load_table(py_exe))
 

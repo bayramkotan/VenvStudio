@@ -38,20 +38,31 @@ class ConfigManager:
         if self._config_file.exists():
             try:
                 with open(self._config_file, "r", encoding="utf-8") as f:
-                    self._settings = json.load(f)
+                    loaded = json.load(f)
+                if not isinstance(loaded, dict):
+                    raise ValueError("Invalid config format")
+                self._settings = loaded
                 # Merge any new default keys
                 for key, value in DEFAULT_SETTINGS.items():
                     if key not in self._settings:
                         self._settings[key] = value
-            except (json.JSONDecodeError, IOError):
+            except (json.JSONDecodeError, IOError, ValueError):
+                # Bozuk veya geçersiz JSON — yedekle ve sıfırla
+                try:
+                    import shutil
+                    _bak = self._config_file.with_suffix(".json.bak")
+                    shutil.copy2(self._config_file, _bak)
+                except Exception:
+                    pass
                 self._settings = DEFAULT_SETTINGS.copy()
         else:
             self._settings = DEFAULT_SETTINGS.copy()
         self.save()
 
     def save(self) -> None:
-        """Save current settings to file."""
+        """Save current settings to file. Re-creates dir/file if deleted (e.g. after Remove All Data)."""
         try:
+            self._config_file.parent.mkdir(parents=True, exist_ok=True)
             with open(self._config_file, "w", encoding="utf-8") as f:
                 json.dump(self._settings, f, indent=2, ensure_ascii=False)
         except IOError as e:

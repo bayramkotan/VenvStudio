@@ -2206,15 +2206,16 @@ $s.Save()
         self.packages_table.setHorizontalHeaderLabels(["☐", "Package", "Version", "Description", "Category"])
         # col 0: checkbox (fixed narrow)
         self.packages_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
-        self.packages_table.setColumnWidth(0, 36)
+        self.packages_table.setColumnWidth(0, 28)
         # col 1: package name
         self.packages_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         # col 2: version
         self.packages_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        # col 3: description (stretch)
+        # col 3: description (stretch - fills remaining space)
         self.packages_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
-        # col 4: category
-        self.packages_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        # col 4: category (fixed right side)
+        self.packages_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Fixed)
+        self.packages_table.setColumnWidth(4, 220)
         self.packages_table.horizontalHeader().setStretchLastSection(False)
         self.packages_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.packages_table.setSelectionBehavior(QTableWidget.SelectRows)
@@ -2281,7 +2282,7 @@ $s.Save()
         self.catalog_table.setColumnCount(5)
         self.catalog_table.setHorizontalHeaderLabels(["Install", "Package", "Description", "Category", "Links"])
         self.catalog_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
-        self.catalog_table.setColumnWidth(0, 36)
+        self.catalog_table.setColumnWidth(0, 28)
         self.catalog_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.catalog_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         self.catalog_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
@@ -3305,7 +3306,6 @@ $s.Save()
                             name.lower().replace("-", "_"),
                             name.lower().replace("_", "-")):
                     lookup[key] = (desc, cat_name)
-        print(f"[DEBUG] catalog lookup built: {len(lookup)} entries, sample: {list(lookup.items())[:3]}")
         return lookup
 
     def _on_packages_loaded(self, packages):

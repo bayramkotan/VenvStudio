@@ -839,11 +839,29 @@ class ToolchainMixin:
                 vi.setForeground(QColor(self._c()["fg"]))
                 tbl.setItem(row, 2, vi)
 
-                # col 3: Path — if path == py_exe, tool is module-only
+                # col 3: Path — if path == py_exe, tool is module-only, show real module path
                 import os as _os2
                 _display_path = path
                 if ok2 and _os2.path.normpath(path) == _os2.path.normpath(_py):
-                    _display_path = f"python -m {_tid}"
+                    # Get real location via pip show
+                    try:
+                        import subprocess as _sp_path
+                        _pr = _sp_path.run([_py, "-m", "pip", "show", _tid],
+                                           capture_output=True, text=True, timeout=5)
+                        _loc = next((l.split(":", 1)[1].strip()
+                                     for l in _pr.stdout.splitlines()
+                                     if l.startswith("Location:")), "")
+                        if _loc:
+                            import importlib.util as _iu
+                            _spec = _iu.find_spec(_tid.replace("-", "_"))
+                            if _spec and _spec.origin:
+                                _display_path = _os2.path.dirname(_spec.origin)
+                            else:
+                                _display_path = _os2.path.join(_loc, _tid)
+                        else:
+                            _display_path = path
+                    except Exception:
+                        _display_path = path
                 pi = QTableWidgetItem(_display_path if ok2 else "—")
                 pi.setForeground(QColor(self._c()["fg_muted"]))
                 pi.setToolTip(path)

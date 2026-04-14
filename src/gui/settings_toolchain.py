@@ -155,14 +155,33 @@ class ToolchainMixin:
                 # PEP 668 — use platform package manager or official installers
                 pm = _detect_pm()
                 if tool == "uv":
-                    r = subprocess.run(["sh", "-c", "curl -LsSf https://astral.sh/uv/install.sh | sh"],
-                                       capture_output=True, text=True, timeout=120)
-                    if r.returncode != 0: return False, r.stderr[:200]
+                    # Try pacman first on Arch, else pip --break-system-packages, else curl
+                    _installed_uv = False
+                    if pm == "pacman" and shutil.which("pacman"):
+                        r = subprocess.run(["sudo", "pacman", "-S", "--noconfirm", "uv"],
+                                           capture_output=True, text=True, timeout=120)
+                        _installed_uv = r.returncode == 0
+                    if not _installed_uv:
+                        r = subprocess.run([sys.executable, "-m", "pip", "install", "uv",
+                                            "--break-system-packages", "--user", "-q"],
+                                           capture_output=True, text=True, timeout=120)
+                        _installed_uv = r.returncode == 0
+                    if not _installed_uv:
+                        r = subprocess.run(["sh", "-c", "curl -LsSf https://astral.sh/uv/install.sh | sh"],
+                                           capture_output=True, text=True, timeout=120)
+                        if r.returncode != 0: return False, r.stderr[:200]
                 elif tool == "poetry":
-                    r = subprocess.run(["sh", "-c", "curl -sSL https://install.python-poetry.org | python3 -"],
-                                       capture_output=True, text=True, timeout=180,
-                                       env={**os.environ, "POETRY_HOME": os.path.expanduser("~/.local/share/pypoetry")})
-                    if r.returncode != 0: return False, r.stderr[:200]
+                    _installed_poetry = False
+                    _pipx = shutil.which("pipx")
+                    if _pipx:
+                        r = subprocess.run([_pipx, "install", "poetry"],
+                                           capture_output=True, text=True, timeout=180)
+                        _installed_poetry = r.returncode == 0
+                    if not _installed_poetry:
+                        r = subprocess.run(["sh", "-c", "curl -sSL https://install.python-poetry.org | python3 -"],
+                                           capture_output=True, text=True, timeout=180,
+                                           env={**os.environ, "POETRY_HOME": os.path.expanduser("~/.local/share/pypoetry")})
+                        if r.returncode != 0: return False, r.stderr[:200]
                 elif tool == "pipx":
                     installed = False
                     if pm == "apt":

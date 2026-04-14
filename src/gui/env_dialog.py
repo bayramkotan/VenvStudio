@@ -633,13 +633,24 @@ class EnvCreateDialog(QDialog):
                 return False
 
             def _install_uv_linux(user_scope: bool):
-                """Install uv via official shell installer (recommended)."""
+                """Install uv: pacman → pip --break-system-packages → curl installer."""
+                pm = _detect_pkg_manager() if '_detect_pkg_manager' in dir() else None
+                # 1. pacman (Arch/CachyOS) — avoids cross-device move error
+                if shutil.which("pacman"):
+                    r = subprocess.run(["sudo", "pacman", "-S", "--noconfirm", "uv"],
+                                       capture_output=True, text=True, timeout=120)
+                    if r.returncode == 0: return True, ""
+                # 2. pip --break-system-packages
+                r = subprocess.run([python_path, "-m", "pip", "install", "uv",
+                                    "--break-system-packages", "--user", "-q"],
+                                   capture_output=True, text=True, timeout=120)
+                if r.returncode == 0: return True, ""
+                # 3. curl official installer (last resort)
                 try:
                     r = subprocess.run(
                         ["sh", "-c", "curl -LsSf https://astral.sh/uv/install.sh | sh"],
                         capture_output=True, text=True, timeout=120)
-                    if r.returncode == 0:
-                        return True, ""
+                    if r.returncode == 0: return True, ""
                     return False, r.stderr[:300]
                 except Exception as e:
                     return False, str(e)

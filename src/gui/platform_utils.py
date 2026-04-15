@@ -153,15 +153,24 @@ def open_terminal_at(path: Path, terminal_type: str = "", env_type: str = "") ->
                     _mamba = shutil.which("conda")
                 if _mamba:
                     _pwsh = shutil.which("pwsh") or shutil.which("powershell")
-                    if _pwsh:
-                        _cmd_arg = f"& \"{_mamba}\" run -p \"{path}\" pwsh -NoExit"
+                    _wt   = shutil.which("wt")
+                    if _wt and _pwsh:
+                        # Windows Terminal + PowerShell profile
                         subprocess.Popen(
-                            [str(_pwsh), "-NoExit", "-Command", _cmd_arg],
+                            [_wt, "new-tab", _pwsh, "-NoExit", "-Command",
+                             f"& '{_mamba}' run -p '{path}' pwsh -NoExit"],
+                        )
+                    elif _pwsh:
+                        # PowerShell directly (no Windows Terminal)
+                        subprocess.Popen(
+                            [str(_pwsh), "-NoExit", "-Command",
+                             f"& '{_mamba}' run -p '{path}' pwsh -NoExit"],
                             creationflags=subprocess.CREATE_NEW_CONSOLE,
                         )
                     else:
+                        # cmd fallback
                         subprocess.Popen(
-                            ["cmd", "/k", f'\"{_mamba}\" run -p \"{path}\" cmd /k'],
+                            ["cmd", "/k", f'"{_mamba}" run -p "{path}" cmd /k'],
                             creationflags=subprocess.CREATE_NEW_CONSOLE,
                         )
                 else:

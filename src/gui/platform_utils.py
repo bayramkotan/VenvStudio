@@ -199,23 +199,37 @@ def open_terminal_at(path: Path, terminal_type: str = "", env_type: str = "") ->
                 if not _mamba:
                     _mamba = shutil.which("conda")
                 if _mamba:
-                    subprocess.Popen(
-                        ["cmd", "/k",
-                         f'"{_mamba}" run -p "{path}" cmd /k'],
-                        creationflags=subprocess.CREATE_NEW_CONSOLE,
-                    )
+                    # Detect preferred terminal (PowerShell > cmd)
+                    _pwsh = shutil.which("pwsh") or shutil.which("powershell")
+                    if _pwsh:
+                        # PowerShell: micromamba run + pwsh
+                        subprocess.Popen(
+                            [_pwsh, "-NoExit", "-Command",
+                             f'& "{_mamba}" run -p "{path}" pwsh -NoExit'],
+                            creationflags=subprocess.CREATE_NEW_CONSOLE,
+                        )
+                    else:
+                        # cmd fallback
+                        subprocess.Popen(
+                            ["cmd", "/k",
+                             f'"{_mamba}" run -p "{path}" cmd /k'],
+                            creationflags=subprocess.CREATE_NEW_CONSOLE,
+                        )
                 else:
-                    # Fallback: just inject PATH
+                    # No mamba found: inject PATH into PowerShell/cmd
                     _scripts = str(path / "Scripts")
                     _lib_bin = str(path / "Library" / "bin")
                     _new_path = f"{_scripts};{_lib_bin};{os.environ.get('PATH', '')}"
                     _env = {**os.environ, "PATH": _new_path,
                             "CONDA_PREFIX": str(path), "CONDA_DEFAULT_ENV": path.name}
-                    subprocess.Popen(
-                        ["cmd", "/k", f"echo Conda env: {path.name}"],
-                        creationflags=subprocess.CREATE_NEW_CONSOLE,
-                        env=_env,
-                    )
+                    _pwsh = shutil.which("pwsh") or shutil.which("powershell")
+                    if _pwsh:
+                        _shell = [_pwsh, "-NoExit", "-Command",
+                                  f"Set-Location '{path}'"]
+                    else:
+                        _shell = ["cmd", "/k", f'cd /d "{path}"']
+                    subprocess.Popen(_shell,
+                        creationflags=subprocess.CREATE_NEW_CONSOLE, env=_env)
                 return
 
             # Default: PowerShell

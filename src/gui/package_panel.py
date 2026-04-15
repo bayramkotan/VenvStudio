@@ -20,6 +20,18 @@ from src.utils.constants import (
     PRESET_DESCRIPTIONS, LAUNCHER_TOOLTIPS, UI_TOOLTIPS,
 )
 
+# ── Launcher Links — loaded from launcher_links.json ──────────────────────────
+def _load_launcher_links() -> dict:
+    import json as _json, os as _os
+    _p = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "launcher_links.json")
+    try:
+        with open(_p, "r", encoding="utf-8") as _f:
+            return _json.load(_f)
+    except Exception:
+        return {}
+
+LAUNCHER_LINKS: dict = _load_launcher_links()
+
 # Docs URLs for popular packages
 _PACKAGE_DOCS = {
     "numpy": "https://numpy.org/doc/",

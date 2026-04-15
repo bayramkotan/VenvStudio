@@ -139,6 +139,42 @@ def open_terminal_at(path: Path, terminal_type: str = "", env_type: str = "") ->
             activate_bat = path / "Scripts" / "activate.bat"
             activate_ps1 = path / "Scripts" / "Activate.ps1"
 
+            # ── Conda: handle FIRST regardless of terminal_type ──────────
+            if env_type == "conda":
+                _mamba = shutil.which("micromamba")
+                if not _mamba:
+                    _vs_mamba = os.path.join(
+                        os.environ.get("APPDATA", ""),
+                        "VenvStudio", "micromamba", "micromamba.exe"
+                    )
+                    if os.path.isfile(_vs_mamba):
+                        _mamba = _vs_mamba
+                if not _mamba:
+                    _mamba = shutil.which("conda")
+                if _mamba:
+                    _pwsh = shutil.which("pwsh") or shutil.which("powershell")
+                    if _pwsh:
+                        _cmd_arg = f"& \"{_mamba}\" run -p \"{path}\" pwsh -NoExit"
+                        subprocess.Popen(
+                            [str(_pwsh), "-NoExit", "-Command", _cmd_arg],
+                            creationflags=subprocess.CREATE_NEW_CONSOLE,
+                        )
+                    else:
+                        subprocess.Popen(
+                            ["cmd", "/k", f'\"{_mamba}\" run -p \"{path}\" cmd /k'],
+                            creationflags=subprocess.CREATE_NEW_CONSOLE,
+                        )
+                else:
+                    # No mamba: inject PATH
+                    _env = {**os.environ,
+                            "PATH": str(path / "Scripts") + ";" + str(path / "Library" / "bin") + ";" + os.environ.get("PATH", ""),
+                            "CONDA_PREFIX": str(path), "CONDA_DEFAULT_ENV": path.name}
+                    subprocess.Popen(
+                        ["cmd", "/k", f"cd /d \"{path}\""],
+                        creationflags=subprocess.CREATE_NEW_CONSOLE, env=_env)
+                return
+            # ─────────────────────────────────────────────────────────────
+
             if terminal_type == "cmd":
                 subprocess.Popen(
                     ["cmd", "/k", f"cd /d {path} && {activate_bat}"],
@@ -184,53 +220,6 @@ def open_terminal_at(path: Path, terminal_type: str = "", env_type: str = "") ->
                     return
                 # Git Bash not found, fall through to PowerShell
 
-            # Conda on Windows: use micromamba run (no shell init needed)
-            if env_type == "conda":
-                _mamba = shutil.which("micromamba")
-                # Also check VenvStudio-managed micromamba
-                if not _mamba:
-                    import os as _os2
-                    _vs_mamba = _os2.path.join(
-                        _os2.environ.get("APPDATA", ""),
-                        "VenvStudio", "micromamba", "micromamba.exe"
-                    )
-                    if _os2.path.isfile(_vs_mamba):
-                        _mamba = _vs_mamba
-                if not _mamba:
-                    _mamba = shutil.which("conda")
-                if _mamba:
-                    # Detect preferred terminal (PowerShell > cmd)
-                    _pwsh = shutil.which("pwsh") or shutil.which("powershell")
-                    if _pwsh:
-                        # Spawn pwsh directly using list - avoids quoting issues
-                        subprocess.Popen(
-                            [str(_pwsh), "-NoExit", "-Command",
-                             f"& \"{_mamba}\" run -p \"{path}\" pwsh -NoExit"],
-                            creationflags=subprocess.CREATE_NEW_CONSOLE,
-                        )
-                    else:
-                        # cmd fallback
-                        subprocess.Popen(
-                            f'cmd /k "\"{_mamba}\" run -p \"{path}\" cmd /k"',
-                            creationflags=subprocess.CREATE_NEW_CONSOLE,
-                            shell=True,
-                        )
-                else:
-                    # No mamba found: inject PATH into PowerShell/cmd
-                    _scripts = str(path / "Scripts")
-                    _lib_bin = str(path / "Library" / "bin")
-                    _new_path = f"{_scripts};{_lib_bin};{os.environ.get('PATH', '')}"
-                    _env = {**os.environ, "PATH": _new_path,
-                            "CONDA_PREFIX": str(path), "CONDA_DEFAULT_ENV": path.name}
-                    _pwsh = shutil.which("pwsh") or shutil.which("powershell")
-                    if _pwsh:
-                        _shell = [_pwsh, "-NoExit", "-Command",
-                                  f"Set-Location '{path}'"]
-                    else:
-                        _shell = ["cmd", "/k", f'cd /d "{path}"']
-                    subprocess.Popen(_shell,
-                        creationflags=subprocess.CREATE_NEW_CONSOLE, env=_env)
-                return
 
             # Default: PowerShell
             if activate_ps1.exists():

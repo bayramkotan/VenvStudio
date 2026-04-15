@@ -277,8 +277,6 @@
   - Override format: `{"numpy": {"desc": "...", "links": {...}}, ...}`
   - `config_manager.py` → `catalog_overrides` key'i
 
-<<<<<<< HEAD
-=======
 ### 🟡 F125 — Emoji/İkon Desteği (openSUSE, Fedora)
 - openSUSE ve Fedora'da emoji ikonlar görünmüyor (🐍 ⚡ 📦 🦎 vb.)
 - Neden: Bu distrolarda `fonts-noto-color-emoji` veya eşdeğeri kurulu değil
@@ -315,7 +313,6 @@
 - **Progress tracking** — hangi topic'leri okuduğunu işaretle
 - **Arama** — topic başlığı ve içeriğinde full-text search
 
->>>>>>> 74229cdda952e6adae95a4c177c68e136379c790
 ## 🔴 KRİTİK BUGLAR
 
 - **B42** — Python yükleyici güvenlik kontrolleri (en sona alındı)

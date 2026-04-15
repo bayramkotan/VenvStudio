@@ -250,6 +250,109 @@ def _ensure_single_instance():
     return server  # Keep reference alive
 
 
+def _check_qt_xcb_deps():
+    """Check and install Qt xcb platform plugin dependencies on Linux."""
+    import subprocess, shutil
+
+    if sys.platform != "linux":
+        return
+
+    # Quick test: can Qt load xcb platform?
+    try:
+        result = subprocess.run(
+            [sys.executable, "-c",
+             "from PySide6.QtWidgets import QApplication; "
+             "import sys; sys.argv=['t']; "
+             "a=QApplication.instance() or QApplication(sys.argv)"],
+            capture_output=True, text=True, timeout=10,
+            env={**os.environ, "QT_QPA_PLATFORM": "xcb",
+                 "DISPLAY": os.environ.get("DISPLAY", ":0")}
+        )
+        if result.returncode == 0:
+            return  # Qt xcb works fine
+        # Check if it's actually an xcb error
+        err = result.stderr + result.stdout
+        if "xcb" not in err.lower() and "platform plugin" not in err.lower():
+            return
+    except Exception:
+        return
+
+    # Detect distro and build package list
+    distro = _detect_distro()
+    pkg_map = {
+        "debian": [
+            "libxcb-xinerama0", "libxcb-cursor0", "libxcb-icccm4",
+            "libxcb-image0", "libxcb-keysyms1", "libxcb-render-util0",
+            "libxcb-shape0", "libxkbcommon-x11-0",
+        ],
+        "arch": [
+            "xcb-util-cursor", "xcb-util-icccm", "xcb-util-image",
+            "xcb-util-keysyms", "xcb-util-renderutil", "libxkbcommon-x11",
+        ],
+        "fedora": [
+            "libxcb", "xcb-util-cursor", "xcb-util-icccm", "xcb-util-image",
+            "xcb-util-keysyms", "xcb-util-renderutil", "libxkbcommon-x11",
+        ],
+        "suse": [
+            "libxcb-cursor0", "libxcb-icccm4", "libxcb-image0",
+            "libxcb-keysyms1", "libxcb-render-util0", "libxkbcommon-x11-0",
+        ],
+    }
+    install_cmd_map = {
+        "debian": ["apt", "install", "-y"],
+        "arch":   ["pacman", "-S", "--noconfirm", "--needed"],
+        "fedora": ["dnf", "install", "-y"],
+        "suse":   ["zypper", "--non-interactive", "install"],
+    }
+
+    packages = pkg_map.get(distro)
+    base_cmd = install_cmd_map.get(distro)
+    if not packages or not base_cmd:
+        return
+
+    # Try to show a dialog — if Qt can't start, fall back to terminal prompt
+    pkg_str = "  " + "\n  ".join(packages)
+    try:
+        from PySide6.QtWidgets import QApplication, QMessageBox
+        _app = QApplication.instance() or QApplication(sys.argv)
+        reply = QMessageBox.question(
+            None,
+            "VenvStudio — Missing Qt Dependencies",
+            f"VenvStudio needs system libraries to display its window:\n\n"
+            f"{pkg_str}\n\n"
+            f"Install now? (admin password required)",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+    except Exception:
+        # Qt can't even show a dialog — ask in terminal
+        print("\nVenvStudio needs Qt xcb libraries:")
+        print(pkg_str)
+        ans = input("\nInstall now? [Y/n]: ").strip().lower()
+        if ans not in ("", "y", "yes"):
+            return
+
+    # Install via pkexec or sudo
+    full_cmd = base_cmd + packages
+    for prefix in (["pkexec"], ["sudo"]):
+        try:
+            r = subprocess.run(prefix + full_cmd,
+                               capture_output=True, text=True, timeout=180)
+            if r.returncode == 0:
+                print("✅ Qt dependencies installed. Restarting VenvStudio...")
+                # Restart
+                os.execv(sys.executable, [sys.executable] + sys.argv)
+                return
+        except FileNotFoundError:
+            continue
+        except Exception:
+            continue
+
+    print("Could not install automatically. Run manually:")
+    print(f"  sudo {' '.join(full_cmd)}")
+
+
 def main():
     logger = None
     try:
@@ -298,6 +401,10 @@ def main():
         lang = config.get("language", "en")
         set_language(lang)
         logger.info(f"Language: {lang}")
+
+        # ── Linux: check Qt xcb dependencies before creating QApplication ──
+        if sys.platform == "linux":
+            _check_qt_xcb_deps()
 
         # ── High DPI support ──
         QApplication.setHighDpiScaleFactorRoundingPolicy(

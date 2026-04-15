@@ -202,17 +202,20 @@ def open_terminal_at(path: Path, terminal_type: str = "", env_type: str = "") ->
                     # Detect preferred terminal (PowerShell > cmd)
                     _pwsh = shutil.which("pwsh") or shutil.which("powershell")
                     if _pwsh:
-                        # PowerShell: micromamba run + pwsh
+                        # PowerShell: micromamba run, suppress libmamba warnings, set location
+                        _ps_cmd = (
+                            f"& \"{_mamba}\" run -p \"{path}\" "
+                            f"pwsh -NoExit -Command \"Set-Location '{path}\""
+                        )
                         subprocess.Popen(
-                            [_pwsh, "-NoExit", "-Command",
-                             f'& "{_mamba}" run -p "{path}" pwsh -NoExit'],
+                            [_pwsh, "-NoExit", "-Command", _ps_cmd],
                             creationflags=subprocess.CREATE_NEW_CONSOLE,
                         )
                     else:
                         # cmd fallback
                         subprocess.Popen(
                             ["cmd", "/k",
-                             f'"{_mamba}" run -p "{path}" cmd /k'],
+                             f'"{_mamba}" run -p "{path}" cmd /k /C "cd /d "{path}""'],
                             creationflags=subprocess.CREATE_NEW_CONSOLE,
                         )
                 else:

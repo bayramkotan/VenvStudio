@@ -184,20 +184,19 @@ def open_terminal_at(path: Path, terminal_type: str = "", env_type: str = "") ->
                     return
                 # Git Bash not found, fall through to PowerShell
 
-            # Conda on Windows: use micromamba run (no shell init needed)
+            # Conda on Windows: add env Scripts to PATH, no shell init needed
             if env_type == "conda":
-                _mamba = shutil.which("micromamba") or shutil.which("conda")
-                if _mamba:
-                    subprocess.Popen(
-                        ["powershell", "-NoExit", "-Command",
-                         f"& '{_mamba}' run -p '{path}' powershell -NoExit"],
-                        creationflags=subprocess.CREATE_NEW_CONSOLE,
-                    )
-                else:
-                    subprocess.Popen(
-                        ["powershell", "-NoExit", "-Command", f"Set-Location '{path}'"],
-                        creationflags=subprocess.CREATE_NEW_CONSOLE,
-                    )
+                # Prepend conda env's Scripts/bin to PATH so conda packages work
+                _scripts = str(path / "Scripts")
+                _lib_bin = str(path / "Library" / "bin")
+                _new_path = f"{_scripts};{_lib_bin};{os.environ.get('PATH', '')}"
+                _env = {**os.environ, "PATH": _new_path, "CONDA_PREFIX": str(path),
+                        "CONDA_DEFAULT_ENV": path.name}
+                subprocess.Popen(
+                    ["cmd", "/k", f'cd /d "{path}" && echo Conda env: {path.name} activated'],
+                    creationflags=subprocess.CREATE_NEW_CONSOLE,
+                    env=_env,
+                )
                 return
 
             # Default: PowerShell

@@ -202,21 +202,26 @@ def open_terminal_at(path: Path, terminal_type: str = "", env_type: str = "") ->
                     # Detect preferred terminal (PowerShell > cmd)
                     _pwsh = shutil.which("pwsh") or shutil.which("powershell")
                     if _pwsh:
-                        # PowerShell: micromamba run, suppress libmamba warnings, set location
-                        _ps_cmd = (
-                            f"& \"{_mamba}\" run -p \"{path}\" "
-                            f"pwsh -NoExit -Command \"Set-Location '{path}\""
+                        # Use shell=True so PowerShell & operator works correctly
+                        # Build cmd string for Windows shell
+                        _mamba_q = str(_mamba).replace("\\", "\\\\")
+                        _path_q = str(path).replace("\\", "\\\\")
+                        _cmd_str = (
+                            f'"{_pwsh}" -NoExit -Command '
+                            f'"& \"{_mamba_q}\" run -p \"{_path_q}\" '
+                            f'pwsh -NoExit"'
                         )
                         subprocess.Popen(
-                            [_pwsh, "-NoExit", "-Command", _ps_cmd],
+                            _cmd_str,
                             creationflags=subprocess.CREATE_NEW_CONSOLE,
+                            shell=True,
                         )
                     else:
                         # cmd fallback
                         subprocess.Popen(
-                            ["cmd", "/k",
-                             f'"{_mamba}" run -p "{path}" cmd /k /C "cd /d "{path}""'],
+                            f'cmd /k "\"{_mamba}\" run -p \"{path}\" cmd /k"',
                             creationflags=subprocess.CREATE_NEW_CONSOLE,
+                            shell=True,
                         )
                 else:
                     # No mamba found: inject PATH into PowerShell/cmd

@@ -504,11 +504,10 @@ class PackagePanel(QWidget):
                 "command": ["-m", "jupyter", "lab"],
                 "desc": "Next-generation notebook interface for interactive computing",
                 "needs_console": True,
-                "links": {
+                                "links": {
                     "site": "https://jupyter.org",
                     "docs": "https://jupyterlab.readthedocs.io",
                     "github": "https://github.com/jupyterlab/jupyterlab",
-                    "youtube": "https://www.youtube.com/@ProjectJupyter",
                     "twitter": "https://twitter.com/ProjectJupyter",
                     "pypi": "https://pypi.org/project/jupyterlab/",
                 },
@@ -522,11 +521,10 @@ class PackagePanel(QWidget):
                 "command": ["-m", "jupyter", "notebook"],
                 "desc": "Classic Jupyter Notebook — simple, document-centric interface",
                 "needs_console": True,
-                "links": {
+                                "links": {
                     "site": "https://jupyter.org",
                     "docs": "https://jupyter-notebook.readthedocs.io",
                     "github": "https://github.com/jupyter/notebook",
-                    "youtube": "https://www.youtube.com/@ProjectJupyter",
                     "twitter": "https://twitter.com/ProjectJupyter",
                     "pypi": "https://pypi.org/project/notebook/",
                 },
@@ -540,11 +538,11 @@ class PackagePanel(QWidget):
                 "command": ["-m", "Orange.canvas"],
                 "desc": "Visual programming for data mining and machine learning",
                 "note": "Installs PyQt5 + orange3. chardet<4.0 applied automatically.",
-                "links": {
+                                "links": {
                     "site": "https://orangedatamining.com",
                     "docs": "https://orangedatamining.com/docs/",
                     "github": "https://github.com/biolab/orange3",
-                    "youtube": "https://www.youtube.com/@orangedatamining",
+                    "youtube": "https://www.youtube.com/channel/UClKKWBe2SCAEyv7ZNGhIe4g",
                     "twitter": "https://twitter.com/orangedatamining",
                     "pypi": "https://pypi.org/project/orange3/",
                 },
@@ -557,11 +555,10 @@ class PackagePanel(QWidget):
                 "package": "spyder",
                 "command": ["-m", "spyder.app.start"],
                 "desc": "Scientific Python development environment",
-                "links": {
+                                "links": {
                     "site": "https://www.spyder-ide.org",
                     "docs": "https://docs.spyder-ide.org",
                     "github": "https://github.com/spyder-ide/spyder",
-                    "youtube": "https://www.youtube.com/@spyderide",
                     "twitter": "https://twitter.com/spyder_ide",
                     "pypi": "https://pypi.org/project/spyder/",
                 },
@@ -575,11 +572,10 @@ class PackagePanel(QWidget):
                 "command": ["-m", "IPython"],
                 "desc": "Enhanced interactive Python shell",
                 "needs_console": True,
-                "links": {
+                                "links": {
                     "site": "https://ipython.org",
                     "docs": "https://ipython.readthedocs.io",
                     "github": "https://github.com/ipython/ipython",
-                    "twitter": "https://twitter.com/IPythonDev",
                     "pypi": "https://pypi.org/project/ipython/",
                 },
             },
@@ -594,11 +590,10 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:8501",
                 "browser_delay": 3,
-                "links": {
+                                "links": {
                     "site": "https://streamlit.io",
                     "docs": "https://docs.streamlit.io",
                     "github": "https://github.com/streamlit/streamlit",
-                    "youtube": "https://www.youtube.com/@streamlitofficial",
                     "twitter": "https://twitter.com/streamlit",
                     "linkedin": "https://www.linkedin.com/company/streamlit/",
                     "discord": "https://discord.gg/streamlit",
@@ -616,11 +611,10 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:7860",
                 "browser_delay": 4,
-                "links": {
+                                "links": {
                     "site": "https://www.gradio.app",
                     "docs": "https://www.gradio.app/docs",
                     "github": "https://github.com/gradio-app/gradio",
-                    "youtube": "https://www.youtube.com/@Gradio",
                     "twitter": "https://twitter.com/Gradio",
                     "discord": "https://discord.gg/feTf9x3ZSB",
                     "pypi": "https://pypi.org/project/gradio/",
@@ -637,11 +631,11 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:8050",
                 "browser_delay": 3,
-                "links": {
+                                "links": {
                     "site": "https://plotly.com/dash",
                     "docs": "https://dash.plotly.com",
                     "github": "https://github.com/plotly/dash",
-                    "youtube": "https://www.youtube.com/@plotly",
+                    "youtube": "https://www.youtube.com/c/plotly",
                     "twitter": "https://twitter.com/plotlygraphs",
                     "linkedin": "https://www.linkedin.com/company/plotly/",
                     "discord": "https://discord.gg/ATTkeutMuT",
@@ -657,7 +651,7 @@ class PackagePanel(QWidget):
                 "command": ["-m", "panel", "serve", "--show"],
                 "desc": "HoloViz dashboards & data apps",
                 "needs_console": True,
-                "links": {
+                                "links": {
                     "site": "https://panel.holoviz.org",
                     "docs": "https://panel.holoviz.org/reference/index.html",
                     "github": "https://github.com/holoviz/panel",
@@ -677,7 +671,7 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:8866",
                 "browser_delay": 3,
-                "links": {
+                                "links": {
                     "site": "https://voila.readthedocs.io",
                     "docs": "https://voila.readthedocs.io/en/stable/",
                     "github": "https://github.com/voila-dashboards/voila",
@@ -695,14 +689,12 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:5000",
                 "browser_delay": 3,
-                "links": {
+                                "links": {
                     "site": "https://mlflow.org",
                     "docs": "https://mlflow.org/docs/latest/index.html",
                     "github": "https://github.com/mlflow/mlflow",
-                    "youtube": "https://www.youtube.com/@mlflow-org",
                     "twitter": "https://twitter.com/mlflow",
                     "linkedin": "https://www.linkedin.com/company/mlflow-org/",
-                    "discord": "https://discord.gg/QNAzvfYHXU",
                     "pypi": "https://pypi.org/project/mlflow/",
                 },
             },
@@ -719,11 +711,11 @@ class PackagePanel(QWidget):
                 "open_browser": "http://localhost:6006",
                 "browser_delay": 6,
                 "pick_logdir": True,
-                "links": {
+                                "links": {
                     "site": "https://www.tensorflow.org/tensorboard",
                     "docs": "https://www.tensorflow.org/tensorboard/get_started",
                     "github": "https://github.com/tensorflow/tensorboard",
-                    "youtube": "https://www.youtube.com/@TensorFlow",
+                    "youtube": "https://www.youtube.com/tensorflow",
                     "twitter": "https://twitter.com/TensorFlow",
                     "pypi": "https://pypi.org/project/tensorboard/",
                 },
@@ -738,11 +730,10 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:8000/docs",
                 "browser_delay": 3,
-                "links": {
+                                "links": {
                     "site": "https://fastapi.tiangolo.com",
                     "docs": "https://fastapi.tiangolo.com/tutorial/",
                     "github": "https://github.com/fastapi/fastapi",
-                    "youtube": "https://www.youtube.com/@tiangolo",
                     "twitter": "https://twitter.com/tiangolo",
                     "discord": "https://discord.gg/VQjSZaeJmf",
                     "pypi": "https://pypi.org/project/fastapi/",
@@ -758,7 +749,7 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:8001",
                 "browser_delay": 3,
-                "links": {
+                                "links": {
                     "site": "https://datasette.io",
                     "docs": "https://docs.datasette.io",
                     "github": "https://github.com/simonw/datasette",
@@ -778,11 +769,10 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:2718",
                 "browser_delay": 3,
-                "links": {
+                                "links": {
                     "site": "https://marimo.io",
                     "docs": "https://docs.marimo.io",
                     "github": "https://github.com/marimo-team/marimo",
-                    "youtube": "https://www.youtube.com/@marimo-team",
                     "twitter": "https://twitter.com/marimo_io",
                     "discord": "https://discord.gg/JE7nhX6mD8",
                     "pypi": "https://pypi.org/project/marimo/",
@@ -814,10 +804,10 @@ class PackagePanel(QWidget):
                 },
                 "desc": "R statistical computing language — open R console",
                 "needs_console": True,
-                "links": {
+                                "links": {
                     "site": "https://www.r-project.org",
                     "docs": "https://cran.r-project.org/manuals.html",
-                    "youtube": "https://www.youtube.com/@RConsortium",
+                    "youtube": "https://www.youtube.com/user/TheRFoundation",
                     "twitter": "https://twitter.com/_R_Foundation",
                 },
             },
@@ -847,11 +837,11 @@ class PackagePanel(QWidget):
                     ],
                 },
                 "desc": "RStudio IDE — full R development environment",
-                "links": {
+                                "links": {
                     "site": "https://posit.co/products/open-source/rstudio/",
                     "docs": "https://docs.posit.co/ide/user/",
                     "github": "https://github.com/rstudio/rstudio",
-                    "youtube": "https://www.youtube.com/@PositPBC",
+                    "youtube": "https://www.youtube.com/c/PositPBC",
                     "twitter": "https://twitter.com/posit_pbc",
                     "linkedin": "https://www.linkedin.com/company/posit-pbc/",
                 },
@@ -872,11 +862,10 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:11434",
                 "browser_delay": 3,
-                "links": {
+                                "links": {
                     "site": "https://ollama.com",
                     "docs": "https://github.com/ollama/ollama/tree/main/docs",
                     "github": "https://github.com/ollama/ollama",
-                    "youtube": "https://www.youtube.com/@OllamaAI",
                     "twitter": "https://twitter.com/ollama",
                     "discord": "https://discord.gg/ollama",
                 },
@@ -907,11 +896,11 @@ class PackagePanel(QWidget):
                     ],
                 },
                 "desc": "Universal database manager — explore SQLite, PostgreSQL, MySQL…",
-                "links": {
+                                "links": {
                     "site": "https://dbeaver.io",
                     "docs": "https://dbeaver.com/docs/dbeaver/",
                     "github": "https://github.com/dbeaver/dbeaver",
-                    "youtube": "https://www.youtube.com/@DBeaverChannel",
+                    "youtube": "https://www.youtube.com/c/DBeaverSQL",
                     "twitter": "https://twitter.com/dbeaver_news",
                     "linkedin": "https://www.linkedin.com/company/dbeaver-corp/",
                 },
@@ -926,11 +915,10 @@ class PackagePanel(QWidget):
                 "desc": "Publish documents, reports & dashboards from Python/R notebooks",
                 "needs_console": True,
                 "note": "Installs Quarto binary inside the environment (~100MB). No system install needed.",
-                "links": {
+                                "links": {
                     "site": "https://quarto.org",
                     "docs": "https://quarto.org/docs/guide/",
                     "github": "https://github.com/quarto-dev/quarto-cli",
-                    "youtube": "https://www.youtube.com/@QuartoPub",
                     "twitter": "https://twitter.com/quarto_pub",
                     "discord": "https://discord.gg/9z9GgCHXAR",
                 },
@@ -950,11 +938,11 @@ class PackagePanel(QWidget):
                     "macos":   ["open", "-a", "jamovi"],
                 },
                 "desc": "Point-and-click statistics — SPSS alternative, free & open source",
-                "links": {
+                                "links": {
                     "site": "https://www.jamovi.org",
                     "docs": "https://www.jamovi.org/user-manual.html",
                     "github": "https://github.com/jamovi/jamovi",
-                    "youtube": "https://www.youtube.com/@jamovistats",
+                    "youtube": "https://www.youtube.com/c/jamovistats",
                     "twitter": "https://twitter.com/jamovistats",
                 },
             },
@@ -973,11 +961,11 @@ class PackagePanel(QWidget):
                     "macos":   ["open", "-a", "JASP"],
                 },
                 "desc": "Bayesian & frequentist statistics — beautiful, free, open source",
-                "links": {
+                                "links": {
                     "site": "https://jasp-stats.org",
                     "docs": "https://jasp-stats.org/support/",
                     "github": "https://github.com/jasp-stats/jasp-desktop",
-                    "youtube": "https://www.youtube.com/@JASPStatistics",
+                    "youtube": "https://www.youtube.com/c/JASPStatistics",
                     "twitter": "https://twitter.com/JASPStats",
                 },
             },

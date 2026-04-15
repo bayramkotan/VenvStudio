@@ -504,6 +504,14 @@ class PackagePanel(QWidget):
                 "command": ["-m", "jupyter", "lab"],
                 "desc": "Next-generation notebook interface for interactive computing",
                 "needs_console": True,
+                "links": {
+                    "site": "https://jupyter.org",
+                    "docs": "https://jupyterlab.readthedocs.io",
+                    "github": "https://github.com/jupyterlab/jupyterlab",
+                    "youtube": "https://www.youtube.com/@ProjectJupyter",
+                    "twitter": "https://twitter.com/ProjectJupyter",
+                    "pypi": "https://pypi.org/project/jupyterlab/",
+                },
             },
             {
                 "name": "Jupyter Notebook",
@@ -514,6 +522,14 @@ class PackagePanel(QWidget):
                 "command": ["-m", "jupyter", "notebook"],
                 "desc": "Classic Jupyter Notebook — simple, document-centric interface",
                 "needs_console": True,
+                "links": {
+                    "site": "https://jupyter.org",
+                    "docs": "https://jupyter-notebook.readthedocs.io",
+                    "github": "https://github.com/jupyter/notebook",
+                    "youtube": "https://www.youtube.com/@ProjectJupyter",
+                    "twitter": "https://twitter.com/ProjectJupyter",
+                    "pypi": "https://pypi.org/project/notebook/",
+                },
             },
             {
                 "name": "Orange Data Mining",
@@ -524,6 +540,14 @@ class PackagePanel(QWidget):
                 "command": ["-m", "Orange.canvas"],
                 "desc": "Visual programming for data mining and machine learning",
                 "note": "Installs PyQt5 + orange3. chardet<4.0 applied automatically.",
+                "links": {
+                    "site": "https://orangedatamining.com",
+                    "docs": "https://orangedatamining.com/docs/",
+                    "github": "https://github.com/biolab/orange3",
+                    "youtube": "https://www.youtube.com/@orangedatamining",
+                    "twitter": "https://twitter.com/orangedatamining",
+                    "pypi": "https://pypi.org/project/orange3/",
+                },
             },
             {
                 "name": "Spyder IDE",
@@ -533,6 +557,14 @@ class PackagePanel(QWidget):
                 "package": "spyder",
                 "command": ["-m", "spyder.app.start"],
                 "desc": "Scientific Python development environment",
+                "links": {
+                    "site": "https://www.spyder-ide.org",
+                    "docs": "https://docs.spyder-ide.org",
+                    "github": "https://github.com/spyder-ide/spyder",
+                    "youtube": "https://www.youtube.com/@spyderide",
+                    "twitter": "https://twitter.com/spyder_ide",
+                    "pypi": "https://pypi.org/project/spyder/",
+                },
             },
             {
                 "name": "IPython",
@@ -543,6 +575,13 @@ class PackagePanel(QWidget):
                 "command": ["-m", "IPython"],
                 "desc": "Enhanced interactive Python shell",
                 "needs_console": True,
+                "links": {
+                    "site": "https://ipython.org",
+                    "docs": "https://ipython.readthedocs.io",
+                    "github": "https://github.com/ipython/ipython",
+                    "twitter": "https://twitter.com/IPythonDev",
+                    "pypi": "https://pypi.org/project/ipython/",
+                },
             },
             {
                 "name": "Streamlit",
@@ -555,6 +594,16 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:8501",
                 "browser_delay": 3,
+                "links": {
+                    "site": "https://streamlit.io",
+                    "docs": "https://docs.streamlit.io",
+                    "github": "https://github.com/streamlit/streamlit",
+                    "youtube": "https://www.youtube.com/@streamlitofficial",
+                    "twitter": "https://twitter.com/streamlit",
+                    "linkedin": "https://www.linkedin.com/company/streamlit/",
+                    "discord": "https://discord.gg/streamlit",
+                    "pypi": "https://pypi.org/project/streamlit/",
+                },
             },
             {
                 "name": "Gradio",
@@ -567,6 +616,15 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:7860",
                 "browser_delay": 4,
+                "links": {
+                    "site": "https://www.gradio.app",
+                    "docs": "https://www.gradio.app/docs",
+                    "github": "https://github.com/gradio-app/gradio",
+                    "youtube": "https://www.youtube.com/@Gradio",
+                    "twitter": "https://twitter.com/Gradio",
+                    "discord": "https://discord.gg/feTf9x3ZSB",
+                    "pypi": "https://pypi.org/project/gradio/",
+                },
             },
             {
                 "name": "Dash",
@@ -579,6 +637,16 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:8050",
                 "browser_delay": 3,
+                "links": {
+                    "site": "https://plotly.com/dash",
+                    "docs": "https://dash.plotly.com",
+                    "github": "https://github.com/plotly/dash",
+                    "youtube": "https://www.youtube.com/@plotly",
+                    "twitter": "https://twitter.com/plotlygraphs",
+                    "linkedin": "https://www.linkedin.com/company/plotly/",
+                    "discord": "https://discord.gg/ATTkeutMuT",
+                    "pypi": "https://pypi.org/project/dash/",
+                },
             },
             {
                 "name": "Panel",
@@ -589,6 +657,14 @@ class PackagePanel(QWidget):
                 "command": ["-m", "panel", "serve", "--show"],
                 "desc": "HoloViz dashboards & data apps",
                 "needs_console": True,
+                "links": {
+                    "site": "https://panel.holoviz.org",
+                    "docs": "https://panel.holoviz.org/reference/index.html",
+                    "github": "https://github.com/holoviz/panel",
+                    "twitter": "https://twitter.com/HoloViz_dev",
+                    "discord": "https://discord.gg/AXRHnJU6sP",
+                    "pypi": "https://pypi.org/project/panel/",
+                },
             },
             {
                 "name": "Voilà",
@@ -601,6 +677,12 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:8866",
                 "browser_delay": 3,
+                "links": {
+                    "site": "https://voila.readthedocs.io",
+                    "docs": "https://voila.readthedocs.io/en/stable/",
+                    "github": "https://github.com/voila-dashboards/voila",
+                    "pypi": "https://pypi.org/project/voila/",
+                },
             },
             {
                 "name": "MLflow UI",
@@ -613,6 +695,16 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:5000",
                 "browser_delay": 3,
+                "links": {
+                    "site": "https://mlflow.org",
+                    "docs": "https://mlflow.org/docs/latest/index.html",
+                    "github": "https://github.com/mlflow/mlflow",
+                    "youtube": "https://www.youtube.com/@mlflow-org",
+                    "twitter": "https://twitter.com/mlflow",
+                    "linkedin": "https://www.linkedin.com/company/mlflow-org/",
+                    "discord": "https://discord.gg/QNAzvfYHXU",
+                    "pypi": "https://pypi.org/project/mlflow/",
+                },
             },
             {
                 "name": "TensorBoard",
@@ -627,6 +719,14 @@ class PackagePanel(QWidget):
                 "open_browser": "http://localhost:6006",
                 "browser_delay": 6,
                 "pick_logdir": True,
+                "links": {
+                    "site": "https://www.tensorflow.org/tensorboard",
+                    "docs": "https://www.tensorflow.org/tensorboard/get_started",
+                    "github": "https://github.com/tensorflow/tensorboard",
+                    "youtube": "https://www.youtube.com/@TensorFlow",
+                    "twitter": "https://twitter.com/TensorFlow",
+                    "pypi": "https://pypi.org/project/tensorboard/",
+                },
             },
             {
                 "name": "FastAPI",
@@ -638,6 +738,15 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:8000/docs",
                 "browser_delay": 3,
+                "links": {
+                    "site": "https://fastapi.tiangolo.com",
+                    "docs": "https://fastapi.tiangolo.com/tutorial/",
+                    "github": "https://github.com/fastapi/fastapi",
+                    "youtube": "https://www.youtube.com/@tiangolo",
+                    "twitter": "https://twitter.com/tiangolo",
+                    "discord": "https://discord.gg/VQjSZaeJmf",
+                    "pypi": "https://pypi.org/project/fastapi/",
+                },
             },
             {
                 "name": "Datasette",
@@ -649,6 +758,13 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:8001",
                 "browser_delay": 3,
+                "links": {
+                    "site": "https://datasette.io",
+                    "docs": "https://docs.datasette.io",
+                    "github": "https://github.com/simonw/datasette",
+                    "twitter": "https://twitter.com/datasetteproj",
+                    "pypi": "https://pypi.org/project/datasette/",
+                },
             },
             # ── pip-based: Marimo ─────────────────────────────────────────────
             {
@@ -662,6 +778,15 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:2718",
                 "browser_delay": 3,
+                "links": {
+                    "site": "https://marimo.io",
+                    "docs": "https://docs.marimo.io",
+                    "github": "https://github.com/marimo-team/marimo",
+                    "youtube": "https://www.youtube.com/@marimo-team",
+                    "twitter": "https://twitter.com/marimo_io",
+                    "discord": "https://discord.gg/JE7nhX6mD8",
+                    "pypi": "https://pypi.org/project/marimo/",
+                },
             },
             # ── System-level apps (detect & launch, no pip install) ───────────
             {
@@ -689,6 +814,12 @@ class PackagePanel(QWidget):
                 },
                 "desc": "R statistical computing language — open R console",
                 "needs_console": True,
+                "links": {
+                    "site": "https://www.r-project.org",
+                    "docs": "https://cran.r-project.org/manuals.html",
+                    "youtube": "https://www.youtube.com/@RConsortium",
+                    "twitter": "https://twitter.com/_R_Foundation",
+                },
             },
             {
                 "name": "RStudio",
@@ -716,6 +847,14 @@ class PackagePanel(QWidget):
                     ],
                 },
                 "desc": "RStudio IDE — full R development environment",
+                "links": {
+                    "site": "https://posit.co/products/open-source/rstudio/",
+                    "docs": "https://docs.posit.co/ide/user/",
+                    "github": "https://github.com/rstudio/rstudio",
+                    "youtube": "https://www.youtube.com/@PositPBC",
+                    "twitter": "https://twitter.com/posit_pbc",
+                    "linkedin": "https://www.linkedin.com/company/posit-pbc/",
+                },
             },
             {
                 "name": "Ollama",
@@ -733,6 +872,14 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:11434",
                 "browser_delay": 3,
+                "links": {
+                    "site": "https://ollama.com",
+                    "docs": "https://github.com/ollama/ollama/tree/main/docs",
+                    "github": "https://github.com/ollama/ollama",
+                    "youtube": "https://www.youtube.com/@OllamaAI",
+                    "twitter": "https://twitter.com/ollama",
+                    "discord": "https://discord.gg/ollama",
+                },
             },
             {
                 "name": "DBeaver",
@@ -760,6 +907,14 @@ class PackagePanel(QWidget):
                     ],
                 },
                 "desc": "Universal database manager — explore SQLite, PostgreSQL, MySQL…",
+                "links": {
+                    "site": "https://dbeaver.io",
+                    "docs": "https://dbeaver.com/docs/dbeaver/",
+                    "github": "https://github.com/dbeaver/dbeaver",
+                    "youtube": "https://www.youtube.com/@DBeaverChannel",
+                    "twitter": "https://twitter.com/dbeaver_news",
+                    "linkedin": "https://www.linkedin.com/company/dbeaver-corp/",
+                },
             },
             {
                 "name": "Quarto",
@@ -771,6 +926,14 @@ class PackagePanel(QWidget):
                 "desc": "Publish documents, reports & dashboards from Python/R notebooks",
                 "needs_console": True,
                 "note": "Installs Quarto binary inside the environment (~100MB). No system install needed.",
+                "links": {
+                    "site": "https://quarto.org",
+                    "docs": "https://quarto.org/docs/guide/",
+                    "github": "https://github.com/quarto-dev/quarto-cli",
+                    "youtube": "https://www.youtube.com/@QuartoPub",
+                    "twitter": "https://twitter.com/quarto_pub",
+                    "discord": "https://discord.gg/9z9GgCHXAR",
+                },
             },
             {
                 "name": "jamovi",
@@ -787,6 +950,13 @@ class PackagePanel(QWidget):
                     "macos":   ["open", "-a", "jamovi"],
                 },
                 "desc": "Point-and-click statistics — SPSS alternative, free & open source",
+                "links": {
+                    "site": "https://www.jamovi.org",
+                    "docs": "https://www.jamovi.org/user-manual.html",
+                    "github": "https://github.com/jamovi/jamovi",
+                    "youtube": "https://www.youtube.com/@jamovistats",
+                    "twitter": "https://twitter.com/jamovistats",
+                },
             },
             {
                 "name": "JASP",
@@ -803,6 +973,13 @@ class PackagePanel(QWidget):
                     "macos":   ["open", "-a", "JASP"],
                 },
                 "desc": "Bayesian & frequentist statistics — beautiful, free, open source",
+                "links": {
+                    "site": "https://jasp-stats.org",
+                    "docs": "https://jasp-stats.org/support/",
+                    "github": "https://github.com/jasp-stats/jasp-desktop",
+                    "youtube": "https://www.youtube.com/@JASPStatistics",
+                    "twitter": "https://twitter.com/JASPStats",
+                },
             },
         ]
 
@@ -865,6 +1042,39 @@ class PackagePanel(QWidget):
         desc.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         desc.setToolTip(tooltip_text)
         layout.addWidget(desc)
+
+        # Links row: Site, Docs, YouTube, GitHub, Twitter, LinkedIn, Discord, PyPI
+        _links = app_def.get("links", {})
+        if _links:
+            links_row = QHBoxLayout()
+            links_row.setSpacing(3)
+            links_row.setContentsMargins(0, 2, 0, 0)
+            _link_defs = [
+                ("site",     "🌐 Site",     "#a6e3a1"),
+                ("docs",     "📖 Docs",     "#89b4fa"),
+                ("youtube",  "▶ YouTube",   "#f38ba8"),
+                ("github",   "🐙 GitHub",   "#cba6f7"),
+                ("twitter",  "𝕏",           "#74c7ec"),
+                ("linkedin", "in",          "#89dceb"),
+                ("discord",  "💬 Discord",  "#b4befe"),
+                ("pypi",     "📦 PyPI",     "#fab387"),
+            ]
+            for _key, _label, _color in _link_defs:
+                _url = _links.get(_key)
+                if not _url:
+                    continue
+                _lb = QPushButton(_label)
+                _lb.setFixedHeight(19)
+                _lb.setStyleSheet(
+                    f"QPushButton {{ background: transparent; color: {_color}; "
+                    f"border: none; font-size: 11px; padding: 0 3px; }}"
+                    f"QPushButton:hover {{ text-decoration: underline; color: white; }}"
+                )
+                _lb.setCursor(Qt.PointingHandCursor)
+                _lb.clicked.connect(lambda _, u=_url: __import__('webbrowser').open(u))
+                links_row.addWidget(_lb)
+            links_row.addStretch()
+            layout.addLayout(links_row)
 
         # Set card-level tooltip too
         card.setToolTip(tooltip_text)

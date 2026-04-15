@@ -242,6 +242,41 @@
 - Seçim dialog'u: "Install for current user" vs "Install for all users (admin/sudo required)"
 - `settings_catalog.py` → `_toggle_vs_cli()` genişletilecek
 
+### 🟡 F123 — Python Download Kaynakları (Mirror Seçimi)
+- Settings > Python Versions > Download Python bölümüne kaynak seçimi ekle
+- **Yerleşik kaynaklar:**
+  - 🚀 **Astral CDN** (varsayılan) — `https://downloads.astral.sh/` — hızlı CDN
+  - 🐙 **GitHub Releases** — `https://github.com/astral-sh/python-build-standalone/releases` — her zaman güncel
+  - 🐍 **python.org** — `https://www.python.org/ftp/python/` — sadece Windows/macOS (MSI/PKG)
+  - 📦 **SourceForge Mirror** — `https://sourceforge.net/projects/python-standalone.mirror/` — resmi olmayan kopya
+- **Özel URL desteği:**
+  - Kullanıcı kendi mirror URL'sini girebilir (şirket içi mirror, hava boşluklu ağ vb.)
+  - Opsiyonel parametreler eklenebilir (auth header, proxy vb.)
+  - URL doğrulama: bağlantı testi butonu
+- **Uygulama:**
+  - `settings_python.py` → Download Python bölümüne kaynak combo + custom URL input ekle
+  - `src/core/python_downloader.py` → indirme URL'si seçilen kaynaktan oluşturulsun
+  - Seçim `config` altında `python_download_source` ve `python_download_custom_url` olarak saklanır
+  - python.org seçilince format uyarısı göster (portable değil, installer format)
+
+### 🟡 F124 — Catalog Paket Bilgilerini Düzenleme (Settings)
+- Settings > Catalog bölümüne mevcut catalog paketlerini düzenleme imkânı ekle
+- **Özellikler:**
+  - Mevcut paketleri listele (tüm kategoriler)
+  - Her paket için düzenlenebilir alanlar:
+    - `desc` — açıklama
+    - `links` — PyPI, Docs, GitHub, YouTube linkleri
+    - `category` — kategori değiştirme
+  - **Override sistemi:** `constants.py`'deki orijinal veri değişmez, kullanıcı overrideleri `config`'e kaydedilir (`catalog_overrides` dict)
+  - Orijinal değere sıfırlama butonu (her satırda)
+  - Tüm overrideleri sıfırlama butonu
+  - Arama/filtre
+- **Uygulama:**
+  - `settings_catalog.py` → yeni "Edit Catalog" bölümü
+  - `package_panel.py` → `_populate_catalog()` önce `catalog_overrides`'a bakıp override varsa onu kullansın
+  - Override format: `{"numpy": {"desc": "...", "links": {...}}, ...}`
+  - `config_manager.py` → `catalog_overrides` key'i
+
 ## 🔴 KRİTİK BUGLAR
 
 - **B42** — Python yükleyici güvenlik kontrolleri (en sona alındı)

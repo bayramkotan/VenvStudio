@@ -184,19 +184,37 @@ def open_terminal_at(path: Path, terminal_type: str = "", env_type: str = "") ->
                     return
                 # Git Bash not found, fall through to PowerShell
 
-            # Conda on Windows: add env Scripts to PATH, no shell init needed
+            # Conda on Windows: use micromamba run (no shell init needed)
             if env_type == "conda":
-                # Prepend conda env's Scripts/bin to PATH so conda packages work
-                _scripts = str(path / "Scripts")
-                _lib_bin = str(path / "Library" / "bin")
-                _new_path = f"{_scripts};{_lib_bin};{os.environ.get('PATH', '')}"
-                _env = {**os.environ, "PATH": _new_path, "CONDA_PREFIX": str(path),
-                        "CONDA_DEFAULT_ENV": path.name}
-                subprocess.Popen(
-                    ["cmd", "/k", f'cd /d "{path}" && echo Conda env: {path.name} activated'],
-                    creationflags=subprocess.CREATE_NEW_CONSOLE,
-                    env=_env,
-                )
+                _mamba = shutil.which("micromamba")
+                # Also check VenvStudio-managed micromamba
+                if not _mamba:
+                    import os as _os2
+                    _vs_mamba = _os2.path.join(
+                        _os2.environ.get("APPDATA", ""),
+                        "VenvStudio", "micromamba", "micromamba.exe"
+                    )
+                    if _os2.path.isfile(_vs_mamba):
+                        _mamba = _vs_mamba
+                if not _mamba:
+                    _mamba = shutil.which("conda")
+                if _mamba:
+                    subprocess.Popen(
+                        ["cmd", "/k", f'"{_mamba}" run -p "{path}" --no-capture-output cmd /k'],
+                        creationflags=subprocess.CREATE_NEW_CONSOLE,
+                    )
+                else:
+                    # Fallback: just inject PATH
+                    _scripts = str(path / "Scripts")
+                    _lib_bin = str(path / "Library" / "bin")
+                    _new_path = f"{_scripts};{_lib_bin};{os.environ.get('PATH', '')}"
+                    _env = {**os.environ, "PATH": _new_path,
+                            "CONDA_PREFIX": str(path), "CONDA_DEFAULT_ENV": path.name}
+                    subprocess.Popen(
+                        ["cmd", "/k", f"echo Conda env: {path.name}"],
+                        creationflags=subprocess.CREATE_NEW_CONSOLE,
+                        env=_env,
+                    )
                 return
 
             # Default: PowerShell

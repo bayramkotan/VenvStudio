@@ -20,18 +20,6 @@ from src.utils.constants import (
     PRESET_DESCRIPTIONS, LAUNCHER_TOOLTIPS, UI_TOOLTIPS,
 )
 
-# ── Launcher Links — loaded from launcher_links.json ──────────────────────────
-def _load_launcher_links() -> dict:
-    import json as _json, os as _os
-    _p = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "launcher_links.json")
-    try:
-        with open(_p, "r", encoding="utf-8") as _f:
-            return _json.load(_f)
-    except Exception:
-        return {}
-
-LAUNCHER_LINKS: dict = _load_launcher_links()
-
 # Docs URLs for popular packages
 _PACKAGE_DOCS = {
     "numpy": "https://numpy.org/doc/",
@@ -878,67 +866,90 @@ class PackagePanel(QWidget):
         desc.setToolTip(tooltip_text)
         layout.addWidget(desc)
 
-        # Links toggle button — reads from LAUNCHER_LINKS json
-        _links = LAUNCHER_LINKS.get(app_def["name"], {})
-        if _links:
-            _link_defs = [
-                ("site",     "🌐 Site",    "#a6e3a1"),
-                ("docs",     "📖 Docs",    "#89b4fa"),
-                ("youtube",  "▶ YouTube",  "#f38ba8"),
-                ("github",   "🐙 GitHub",  "#cba6f7"),
-                ("twitter",  "𝕏",          "#74c7ec"),
-                ("linkedin", "in",         "#89dceb"),
-                ("discord",  "💬 Discord", "#b4befe"),
-                ("pypi",     "📦 PyPI",    "#fab387"),
-            ]
+        # Links toggle — lazy load from JSON only on first click
+        _app_name_for_links = app_def["name"]
+        _link_defs = [
+            ("site",     "🌐 Site",    "#a6e3a1"),
+            ("docs",     "📖 Docs",    "#89b4fa"),
+            ("youtube",  "▶ YouTube",  "#f38ba8"),
+            ("github",   "🐙 GitHub",  "#cba6f7"),
+            ("twitter",  "𝕏",          "#74c7ec"),
+            ("linkedin", "in",         "#89dceb"),
+            ("discord",  "💬 Discord", "#b4befe"),
+            ("pypi",     "📦 PyPI",    "#fab387"),
+        ]
+        _links_container = QWidget()
+        _links_container.setVisible(False)
+        _lc_layout = QHBoxLayout(_links_container)
+        _lc_layout.setContentsMargins(0, 2, 0, 0)
+        _lc_layout.setSpacing(3)
+        _lc_layout.addStretch()  # placeholder until loaded
 
-            # Collapsible links container
-            _links_container = QWidget()
-            _links_container.setVisible(False)
-            _lc_layout = QHBoxLayout(_links_container)
-            _lc_layout.setContentsMargins(0, 2, 0, 0)
-            _lc_layout.setSpacing(3)
-            for _key, _label, _color in _link_defs:
-                _url = _links.get(_key)
-                if not _url:
-                    continue
-                _lb = QPushButton(_label)
-                _lb.setFixedHeight(19)
-                _lb.setStyleSheet(
-                    f"QPushButton {{ background: transparent; color: {_color}; "
-                    f"border: none; font-size: 11px; padding: 0 3px; }}"
-                    f"QPushButton:hover {{ text-decoration: underline; color: white; }}"
-                )
-                _lb.setCursor(Qt.PointingHandCursor)
-                _lb.clicked.connect(lambda _, u=_url: __import__('webbrowser').open(u))
-                _lc_layout.addWidget(_lb)
-            _lc_layout.addStretch()
+        _toggle_row = QHBoxLayout()
+        _toggle_row.setContentsMargins(0, 0, 0, 0)
+        _toggle_btn = QPushButton("🔗 Links ›")
+        _toggle_btn.setFixedHeight(18)
+        _toggle_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; color: {self._c()['fg_muted']}; "
+            f"border: none; font-size: 11px; padding: 0; }}"
+            f"QPushButton:hover {{ color: {self._c()['fg']}; }}"
+        )
+        _toggle_btn.setCursor(Qt.PointingHandCursor)
 
-            # Toggle button row
-            _toggle_row = QHBoxLayout()
-            _toggle_row.setContentsMargins(0, 0, 0, 0)
-            _toggle_btn = QPushButton("🔗 Links ›")
-            _toggle_btn.setFixedHeight(18)
-            _toggle_btn.setStyleSheet(
-                f"QPushButton {{ background: transparent; color: {self._c()['fg_muted']}; "
-                f"border: none; font-size: 11px; padding: 0; }}"
-                f"QPushButton:hover {{ color: {self._c()['fg']}; }}"
-            )
-            _toggle_btn.setCursor(Qt.PointingHandCursor)
+        def _make_lazy_toggle(btn, container, app_name, defs):
+            _loaded = [False]
+            def _toggle():
+                _vis = not container.isVisible()
+                # Lazy load: only read JSON on first open
+                if _vis and not _loaded[0]:
+                    _loaded[0] = True
+                    try:
+                        import json as _j, os as _o
+                        _p = _o.path.join(_o.path.dirname(_o.path.abspath(__file__)),
+                                          "launcher_links.json")
+                        with open(_p, "r", encoding="utf-8") as _f:
+                            _all = _j.load(_f)
+                        _links = _all.get(app_name, {})
+                    except Exception:
+                        _links = {}
+                    # Clear placeholder stretch
+                    while container.layout().count():
+                        _item = container.layout().takeAt(0)
+                        if _item.widget():
+                            _item.widget().deleteLater()
+                    # Add link buttons
+                    _has_any = False
+                    for _key, _label, _color in defs:
+                        _url = _links.get(_key)
+                        if not _url:
+                            continue
+                        _has_any = True
+                        _lb = QPushButton(_label)
+                        _lb.setFixedHeight(19)
+                        _lb.setStyleSheet(
+                            f"QPushButton {{ background: transparent; color: {_color}; "
+                            f"border: none; font-size: 11px; padding: 0 3px; }}"
+                            f"QPushButton:hover {{ text-decoration: underline; color: white; }}"
+                        )
+                        _lb.setCursor(Qt.PointingHandCursor)
+                        _lb.clicked.connect(lambda _, u=_url: __import__('webbrowser').open(u))
+                        container.layout().addWidget(_lb)
+                    container.layout().addStretch()
+                    if not _has_any:
+                        # No links for this app — hide toggle button
+                        btn.setVisible(False)
+                        return
+                container.setVisible(_vis)
+                btn.setText("🔗 Links ∨" if _vis else "🔗 Links ›")
+            return _toggle
 
-            def _make_toggle(btn, container):
-                def _toggle():
-                    _vis = not container.isVisible()
-                    container.setVisible(_vis)
-                    btn.setText("🔗 Links ∨" if _vis else "🔗 Links ›")
-                return _toggle
-
-            _toggle_btn.clicked.connect(_make_toggle(_toggle_btn, _links_container))
-            _toggle_row.addWidget(_toggle_btn)
-            _toggle_row.addStretch()
-
-            layout.addLayout(_toggle_row)
-            layout.addWidget(_links_container)
+        _toggle_btn.clicked.connect(
+            _make_lazy_toggle(_toggle_btn, _links_container, _app_name_for_links, _link_defs)
+        )
+        _toggle_row.addWidget(_toggle_btn)
+        _toggle_row.addStretch()
+        layout.addLayout(_toggle_row)
+        layout.addWidget(_links_container)
 
         # Set card-level tooltip too
         card.setToolTip(tooltip_text)

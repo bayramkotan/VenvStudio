@@ -188,7 +188,7 @@ def create_conda_env(env_path: Path, python_version: str = "",
         specs.append(f"python={python_version}")
     specs.extend(packages)
 
-    def _build_args(chs, ssl_verify=True):
+    def _build_args(chs):
         channel_args = []
         for ch in chs:
             channel_args += ["-c", ch]
@@ -201,13 +201,11 @@ def create_conda_env(env_path: Path, python_version: str = "",
             *channel_args,
             *specs,
         ]
-        if not ssl_verify:
-            a.append("--ssl-no-verify")
         return a
 
-    # Attempt 1: conda-forge with SSL verify
+    # Attempt 1: conda-forge
     try:
-        result = _run_micromamba(_build_args(channels, ssl_verify=True),
+        result = _run_micromamba(_build_args(channels),
                                  progress_cb, timeout=600)
         if result.returncode == 0:
             if progress_cb:
@@ -216,30 +214,18 @@ def create_conda_env(env_path: Path, python_version: str = "",
 
         err = result.stderr or ""
 
-        # Attempt 2: SSL error → retry with --ssl-no-verify
-        if "SSL" in err or "ssl" in err or "certificate" in err.lower():
-            if progress_cb:
-                progress_cb("SSL error detected — retrying with SSL verification disabled...")
-            result = _run_micromamba(_build_args(channels, ssl_verify=False),
-                                     progress_cb, timeout=600)
-            if result.returncode == 0:
-                if progress_cb:
-                    progress_cb("Conda environment created!")
-                return True
-            err = result.stderr or ""
-
-        # Attempt 3: fallback to defaults channel
+        # Attempt 2: fallback to defaults channel
         if "conda-forge" in channels:
             fallback_channels = ["defaults"] + [c for c in channels if c != "conda-forge"]
             if progress_cb:
                 progress_cb("conda-forge failed — retrying with defaults channel...")
-            result = _run_micromamba(_build_args(fallback_channels, ssl_verify=False),
+            result = _run_micromamba(_build_args(fallback_channels),
                                      progress_cb, timeout=600)
             if result.returncode == 0:
                 if progress_cb:
                     progress_cb("Conda environment created!")
                 return True
-            err = result.stderr or ""
+            err = result.stderr or "" ""
 
         if progress_cb:
             progress_cb(f"Error: {err[:500]}")
@@ -264,7 +250,7 @@ def install_conda_packages(env_path: Path, packages: list,
     if progress_cb:
         progress_cb(f"Installing: {', '.join(packages)}...")
 
-    def _build_args(chs, ssl_verify=True):
+    def _build_args(chs):
         channel_args = []
         for ch in chs:
             channel_args += ["-c", ch]
@@ -277,12 +263,10 @@ def install_conda_packages(env_path: Path, packages: list,
             *channel_args,
             *packages,
         ]
-        if not ssl_verify:
-            a.append("--ssl-no-verify")
         return a
 
     try:
-        result = _run_micromamba(_build_args(channels, ssl_verify=True),
+        result = _run_micromamba(_build_args(channels),
                                  progress_cb, timeout=600)
         if result.returncode == 0:
             if progress_cb:
@@ -291,24 +275,12 @@ def install_conda_packages(env_path: Path, packages: list,
 
         err = result.stderr or ""
 
-        # SSL retry
-        if "SSL" in err or "ssl" in err or "certificate" in err.lower():
-            if progress_cb:
-                progress_cb("SSL error — retrying with SSL verification disabled...")
-            result = _run_micromamba(_build_args(channels, ssl_verify=False),
-                                     progress_cb, timeout=600)
-            if result.returncode == 0:
-                if progress_cb:
-                    progress_cb(f"Installed: {', '.join(packages)}")
-                return True
-            err = result.stderr or ""
-
         # Fallback channel
         if "conda-forge" in channels:
             fallback = ["defaults"] + [c for c in channels if c != "conda-forge"]
             if progress_cb:
                 progress_cb("Retrying with defaults channel...")
-            result = _run_micromamba(_build_args(fallback, ssl_verify=False),
+            result = _run_micromamba(_build_args(fallback),
                                      progress_cb, timeout=600)
             if result.returncode == 0:
                 if progress_cb:

@@ -200,7 +200,8 @@ def open_terminal_at(path: Path, terminal_type: str = "", env_type: str = "") ->
                     _mamba = shutil.which("conda")
                 if _mamba:
                     subprocess.Popen(
-                        ["cmd", "/k", f'"{_mamba}" run -p "{path}" --no-capture-output cmd /k'],
+                        ["cmd", "/k",
+                         f'"{_mamba}" run -p "{path}" cmd /k'],
                         creationflags=subprocess.CREATE_NEW_CONSOLE,
                     )
                 else:

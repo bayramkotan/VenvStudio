@@ -343,7 +343,7 @@ class EnvCreateDialog(QDialog):
         right_inner.setSpacing(8)
 
         self.status_label = QLabel("Ready.")
-        self.status_label.setStyleSheet("color: #585b70; font-size: 12px;")
+        self.status_label.setStyleSheet("color: #585b70; font-size: 14px; font-weight: bold; padding: 2px 0;")
         right_inner.addWidget(self.status_label)
 
         self.progress_bar = QProgressBar()
@@ -355,7 +355,7 @@ class EnvCreateDialog(QDialog):
         self.progress_msg_label = QLabel("")
         self.progress_msg_label.setWordWrap(True)
         self.progress_msg_label.setStyleSheet(
-            "color: #89b4fa; font-size: 12px; padding: 2px 4px;"
+            "color: #89b4fa; font-size: 14px; padding: 3px 4px;"
         )
         self.progress_msg_label.setVisible(False)
         right_inner.addWidget(self.progress_msg_label)
@@ -928,7 +928,8 @@ class EnvCreateDialog(QDialog):
             self.create_btn.setText("Creating...")
             self.name_input.setEnabled(False)
             self.env_type_combo.setEnabled(False)
-            self.status_label.setText("Preparing micromamba...")
+            self.status_label.setStyleSheet("color: #89b4fa; font-size: 15px; font-weight: bold;")
+            self.status_label.setText("⚙️ Preparing micromamba...")
 
             def _do_conda_create(callback=None):
                 from src.core.micromamba_installer import (
@@ -966,11 +967,13 @@ class EnvCreateDialog(QDialog):
                 self.name_input.setEnabled(True)
                 self.env_type_combo.setEnabled(True)
                 if success:
+                    self.status_label.setStyleSheet("color: #a6e3a1; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"✅ {message}")
                     self.env_created.emit(name)
                     from PySide6.QtCore import QTimer
                     QTimer.singleShot(800, self.accept)
                 else:
+                    self.status_label.setStyleSheet("color: #f38ba8; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"❌ {message}")
                     QMessageBox.critical(self, "Error", message)
 
@@ -1060,7 +1063,8 @@ class EnvCreateDialog(QDialog):
             self.create_btn.setText("Creating...")
             self.name_input.setEnabled(False)
             self.env_type_combo.setEnabled(False)
-            self.status_label.setText(f"Creating {env_type} environment...")
+            self.status_label.setStyleSheet("color: #89b4fa; font-size: 15px; font-weight: bold;")
+            self.status_label.setText(f"⚙️ Creating {env_type} environment...")
 
             _env_path = env_path
             _python  = python_path
@@ -1353,11 +1357,13 @@ class EnvCreateDialog(QDialog):
                 self.name_input.setEnabled(True)
                 self.env_type_combo.setEnabled(True)
                 if success:
+                    self.status_label.setStyleSheet("color: #a6e3a1; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"✅ {message}")
                     self.env_created.emit(_name)
                     from PySide6.QtCore import QTimer
                     QTimer.singleShot(800, self.accept)
                 else:
+                    self.status_label.setStyleSheet("color: #f38ba8; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"❌ Failed")
                     QMessageBox.critical(self, "Error", message)
 
@@ -1376,8 +1382,8 @@ class EnvCreateDialog(QDialog):
         self.create_btn.setText("Creating...")
         self.name_input.setEnabled(False)
         self.python_combo.setEnabled(False)
-        self.status_label.setStyleSheet("color: #a6adc8; font-size: 12px;")
-        self.status_label.setText("Initializing environment...")
+        self.status_label.setStyleSheet("color: #89b4fa; font-size: 15px; font-weight: bold;")
+        self.status_label.setText("⚙️ Initializing...")
         self.cancel_btn.setText("Cancel")
         self.cancel_btn.setObjectName("danger")
         self.cancel_btn.setStyleSheet("")

@@ -335,7 +335,7 @@ class EnvCreateDialog(QDialog):
         left.addWidget(self.options_group)
         left.addStretch()
 
-        body.addLayout(left, stretch=5)
+        body.addLayout(left, stretch=4)
 
         # RIGHT: terminal (always visible, never causes resize)
         right_group = QGroupBox("Progress")
@@ -377,7 +377,7 @@ class EnvCreateDialog(QDialog):
 
         right_group.setLayout(right_inner)
         right_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        body.addWidget(right_group, stretch=5)
+        body.addWidget(right_group, stretch=6)
 
         root.addLayout(body, stretch=1)
 

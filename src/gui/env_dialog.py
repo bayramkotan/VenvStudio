@@ -63,8 +63,8 @@ class EnvCreateDialog(QDialog):
         self.worker = None
 
         self.setWindowTitle("Create New Environment")
-        self.setMinimumSize(980, 560)
-        self.resize(1040, 600)
+        self.setMinimumSize(1060, 620)
+        self.resize(1120, 680)
         self.setModal(True)
         self._setup_ui()
 
@@ -335,7 +335,7 @@ class EnvCreateDialog(QDialog):
         left.addWidget(self.options_group)
         left.addStretch()
 
-        body.addLayout(left, stretch=4)
+        body.addLayout(left, stretch=3)
 
         # RIGHT: terminal (always visible, never causes resize)
         right_group = QGroupBox("Progress")
@@ -377,7 +377,7 @@ class EnvCreateDialog(QDialog):
 
         right_group.setLayout(right_inner)
         right_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        body.addWidget(right_group, stretch=6)
+        body.addWidget(right_group, stretch=7)
 
         root.addLayout(body, stretch=1)
 

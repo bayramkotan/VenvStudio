@@ -1443,13 +1443,33 @@ class MainWindow(QMainWindow):
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
         )
         if reply == QMessageBox.Yes:
-            self.delete_progress = QProgressDialog(
-                f"Deleting '{name}'...", None, 0, 0, self
-            )
+            # Custom delete progress dialog
+            from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QProgressBar
+            self.delete_progress = QDialog(self)
             self.delete_progress.setWindowTitle("Deleting Environment")
-            self.delete_progress.setMinimumWidth(350)
             self.delete_progress.setWindowModality(Qt.WindowModal)
-            self.delete_progress.setCancelButton(None)
+            self.delete_progress.setMinimumWidth(420)
+            self.delete_progress.setWindowFlags(
+                self.delete_progress.windowFlags() & ~Qt.WindowCloseButtonHint
+            )
+            _dp_layout = QVBoxLayout(self.delete_progress)
+            _dp_layout.setSpacing(12)
+            _dp_layout.setContentsMargins(24, 20, 24, 20)
+            _dp_title = QLabel(f"🗑️ Deleting '{name}'")
+            _dp_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #f38ba8;")
+            _dp_layout.addWidget(_dp_title)
+            self._dp_msg = QLabel("⏳ Preparing...")
+            self._dp_msg.setStyleSheet("font-size: 13px; color: #cdd6f4;")
+            self._dp_msg.setWordWrap(True)
+            _dp_layout.addWidget(self._dp_msg)
+            _dp_bar = QProgressBar()
+            _dp_bar.setRange(0, 0)
+            _dp_bar.setFixedHeight(6)
+            _dp_bar.setStyleSheet(
+                "QProgressBar { border: none; background: #313244; border-radius: 3px; }"
+                "QProgressBar::chunk { background: #f38ba8; border-radius: 3px; }"
+            )
+            _dp_layout.addWidget(_dp_bar)
             self.delete_progress.show()
 
             self._deleting_env_name = name
@@ -1466,7 +1486,7 @@ class MainWindow(QMainWindow):
                     _env_type = _type_item.data(Qt.UserRole) or "venv"
             self._delete_worker = DeleteWorker(self.venv_manager, name, env_path=_env_path, env_type=_env_type)
             self._delete_worker.progress.connect(
-                lambda msg: self.delete_progress.setLabelText(f"⏳ {msg}")
+                lambda msg: self._dp_msg.setText(f"⏳ {msg}")
             )
             self._delete_worker.finished.connect(self._on_delete_finished)
             self._delete_worker.start()

@@ -1,0 +1,167 @@
+{
+    "JupyterLab": {
+        "site":    "https://jupyter.org",
+        "docs":    "https://jupyterlab.readthedocs.io",
+        "github":  "https://github.com/jupyterlab/jupyterlab",
+        "twitter": "https://twitter.com/ProjectJupyter",
+        "pypi":    "https://pypi.org/project/jupyterlab/"
+    },
+    "Jupyter Notebook": {
+        "site":    "https://jupyter.org",
+        "docs":    "https://jupyter-notebook.readthedocs.io",
+        "github":  "https://github.com/jupyter/notebook",
+        "twitter": "https://twitter.com/ProjectJupyter",
+        "pypi":    "https://pypi.org/project/notebook/"
+    },
+    "Orange Data Mining": {
+        "site":    "https://orangedatamining.com",
+        "docs":    "https://orangedatamining.com/docs/",
+        "github":  "https://github.com/biolab/orange3",
+        "youtube": "https://www.youtube.com/channel/UClKKWBe2SCAEyv7ZNGhIe4g",
+        "twitter": "https://twitter.com/orangedatamining",
+        "pypi":    "https://pypi.org/project/orange3/"
+    },
+    "Spyder IDE": {
+        "site":    "https://www.spyder-ide.org",
+        "docs":    "https://docs.spyder-ide.org",
+        "github":  "https://github.com/spyder-ide/spyder",
+        "twitter": "https://twitter.com/spyder_ide",
+        "pypi":    "https://pypi.org/project/spyder/"
+    },
+    "IPython": {
+        "site":    "https://ipython.org",
+        "docs":    "https://ipython.readthedocs.io",
+        "github":  "https://github.com/ipython/ipython",
+        "pypi":    "https://pypi.org/project/ipython/"
+    },
+    "Streamlit": {
+        "site":    "https://streamlit.io",
+        "docs":    "https://docs.streamlit.io",
+        "github":  "https://github.com/streamlit/streamlit",
+        "twitter": "https://twitter.com/streamlit",
+        "linkedin":"https://www.linkedin.com/company/streamlit/",
+        "discord": "https://discord.gg/streamlit",
+        "pypi":    "https://pypi.org/project/streamlit/"
+    },
+    "Gradio": {
+        "site":    "https://www.gradio.app",
+        "docs":    "https://www.gradio.app/docs",
+        "github":  "https://github.com/gradio-app/gradio",
+        "twitter": "https://twitter.com/Gradio",
+        "discord": "https://discord.gg/feTf9x3ZSB",
+        "pypi":    "https://pypi.org/project/gradio/"
+    },
+    "Dash": {
+        "site":    "https://plotly.com/dash",
+        "docs":    "https://dash.plotly.com",
+        "github":  "https://github.com/plotly/dash",
+        "youtube": "https://www.youtube.com/c/plotly",
+        "twitter": "https://twitter.com/plotlygraphs",
+        "linkedin":"https://www.linkedin.com/company/plotly/",
+        "discord": "https://discord.gg/ATTkeutMuT",
+        "pypi":    "https://pypi.org/project/dash/"
+    },
+    "Panel": {
+        "site":    "https://panel.holoviz.org",
+        "docs":    "https://panel.holoviz.org/reference/index.html",
+        "github":  "https://github.com/holoviz/panel",
+        "twitter": "https://twitter.com/HoloViz_dev",
+        "discord": "https://discord.gg/AXRHnJU6sP",
+        "pypi":    "https://pypi.org/project/panel/"
+    },
+    "Voilà": {
+        "site":    "https://voila.readthedocs.io",
+        "docs":    "https://voila.readthedocs.io/en/stable/",
+        "github":  "https://github.com/voila-dashboards/voila",
+        "pypi":    "https://pypi.org/project/voila/"
+    },
+    "MLflow UI": {
+        "site":    "https://mlflow.org",
+        "docs":    "https://mlflow.org/docs/latest/index.html",
+        "github":  "https://github.com/mlflow/mlflow",
+        "twitter": "https://twitter.com/mlflow",
+        "linkedin":"https://www.linkedin.com/company/mlflow-org/",
+        "pypi":    "https://pypi.org/project/mlflow/"
+    },
+    "TensorBoard": {
+        "site":    "https://www.tensorflow.org/tensorboard",
+        "docs":    "https://www.tensorflow.org/tensorboard/get_started",
+        "github":  "https://github.com/tensorflow/tensorboard",
+        "youtube": "https://www.youtube.com/tensorflow",
+        "twitter": "https://twitter.com/TensorFlow",
+        "pypi":    "https://pypi.org/project/tensorboard/"
+    },
+    "FastAPI": {
+        "site":    "https://fastapi.tiangolo.com",
+        "docs":    "https://fastapi.tiangolo.com/tutorial/",
+        "github":  "https://github.com/fastapi/fastapi",
+        "twitter": "https://twitter.com/tiangolo",
+        "discord": "https://discord.gg/VQjSZaeJmf",
+        "pypi":    "https://pypi.org/project/fastapi/"
+    },
+    "Datasette": {
+        "site":    "https://datasette.io",
+        "docs":    "https://docs.datasette.io",
+        "github":  "https://github.com/simonw/datasette",
+        "twitter": "https://twitter.com/datasetteproj",
+        "pypi":    "https://pypi.org/project/datasette/"
+    },
+    "Marimo": {
+        "site":    "https://marimo.io",
+        "docs":    "https://docs.marimo.io",
+        "github":  "https://github.com/marimo-team/marimo",
+        "twitter": "https://twitter.com/marimo_io",
+        "discord": "https://discord.gg/JE7nhX6mD8",
+        "pypi":    "https://pypi.org/project/marimo/"
+    },
+    "R Console": {
+        "site":    "https://www.r-project.org",
+        "docs":    "https://cran.r-project.org/manuals.html",
+        "youtube": "https://www.youtube.com/user/TheRFoundation",
+        "twitter": "https://twitter.com/_R_Foundation"
+    },
+    "RStudio": {
+        "site":    "https://posit.co/products/open-source/rstudio/",
+        "docs":    "https://docs.posit.co/ide/user/",
+        "github":  "https://github.com/rstudio/rstudio",
+        "youtube": "https://www.youtube.com/c/PositPBC",
+        "twitter": "https://twitter.com/posit_pbc",
+        "linkedin":"https://www.linkedin.com/company/posit-pbc/"
+    },
+    "Ollama": {
+        "site":    "https://ollama.com",
+        "docs":    "https://github.com/ollama/ollama/tree/main/docs",
+        "github":  "https://github.com/ollama/ollama",
+        "twitter": "https://twitter.com/ollama",
+        "discord": "https://discord.gg/ollama"
+    },
+    "DBeaver": {
+        "site":    "https://dbeaver.io",
+        "docs":    "https://dbeaver.com/docs/dbeaver/",
+        "github":  "https://github.com/dbeaver/dbeaver",
+        "youtube": "https://www.youtube.com/c/DBeaverSQL",
+        "twitter": "https://twitter.com/dbeaver_news",
+        "linkedin":"https://www.linkedin.com/company/dbeaver-corp/"
+    },
+    "Quarto": {
+        "site":    "https://quarto.org",
+        "docs":    "https://quarto.org/docs/guide/",
+        "github":  "https://github.com/quarto-dev/quarto-cli",
+        "twitter": "https://twitter.com/quarto_pub",
+        "discord": "https://discord.gg/9z9GgCHXAR"
+    },
+    "jamovi": {
+        "site":    "https://www.jamovi.org",
+        "docs":    "https://www.jamovi.org/user-manual.html",
+        "github":  "https://github.com/jamovi/jamovi",
+        "youtube": "https://www.youtube.com/c/jamovistats",
+        "twitter": "https://twitter.com/jamovistats"
+    },
+    "JASP": {
+        "site":    "https://jasp-stats.org",
+        "docs":    "https://jasp-stats.org/support/",
+        "github":  "https://github.com/jasp-stats/jasp-desktop",
+        "youtube": "https://www.youtube.com/c/JASPStatistics",
+        "twitter": "https://twitter.com/JASPStats"
+    }
+}

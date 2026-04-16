@@ -504,12 +504,7 @@ class PackagePanel(QWidget):
                 "command": ["-m", "jupyter", "lab"],
                 "desc": "Next-generation notebook interface for interactive computing",
                 "needs_console": True,
-                "links": {
-                    "youtube": "https://www.youtube.com/results?search_query=jupyterlab+tutorial",
-                    "docs": "https://jupyterlab.readthedocs.io",
-                    "site": "https://jupyter.org",
-                },
-            },
+                            },
             {
                 "name": "Jupyter Notebook",
                 "icon": "📓",
@@ -519,12 +514,7 @@ class PackagePanel(QWidget):
                 "command": ["-m", "jupyter", "notebook"],
                 "desc": "Classic Jupyter Notebook — simple, document-centric interface",
                 "needs_console": True,
-                "links": {
-                    "youtube": "https://www.youtube.com/results?search_query=jupyter+notebook+tutorial",
-                    "docs": "https://jupyter-notebook.readthedocs.io",
-                    "site": "https://jupyter.org",
-                },
-            },
+                            },
             {
                 "name": "Orange Data Mining",
                 "icon": "🍊",
@@ -534,12 +524,7 @@ class PackagePanel(QWidget):
                 "command": ["-m", "Orange.canvas"],
                 "desc": "Visual programming for data mining and machine learning",
                 "note": "Installs PyQt5 + orange3. chardet<4.0 applied automatically.",
-                "links": {
-                    "youtube": "https://www.youtube.com/results?search_query=orange+data+mining+tutorial",
-                    "docs": "https://orangedatamining.com/docs/",
-                    "site": "https://orangedatamining.com",
-                },
-            },
+                            },
             {
                 "name": "Spyder IDE",
                 "icon": "🕷️",
@@ -548,12 +533,7 @@ class PackagePanel(QWidget):
                 "package": "spyder",
                 "command": ["-m", "spyder.app.start"],
                 "desc": "Scientific Python development environment",
-                "links": {
-                    "youtube": "https://www.youtube.com/results?search_query=spyder+ide+tutorial",
-                    "docs": "https://docs.spyder-ide.org",
-                    "site": "https://www.spyder-ide.org",
-                },
-            },
+                            },
             {
                 "name": "IPython",
                 "icon": "🐍",
@@ -563,12 +543,7 @@ class PackagePanel(QWidget):
                 "command": ["-m", "IPython"],
                 "desc": "Enhanced interactive Python shell",
                 "needs_console": True,
-                "links": {
-                    "youtube": "https://www.youtube.com/results?search_query=ipython+tutorial",
-                    "docs": "https://ipython.readthedocs.io",
-                    "site": "https://ipython.org",
-                },
-            },
+                            },
             {
                 "name": "Streamlit",
                 "icon": "🎈",
@@ -580,12 +555,7 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:8501",
                 "browser_delay": 3,
-                "links": {
-                    "youtube": "https://www.youtube.com/results?search_query=streamlit+tutorial",
-                    "docs": "https://docs.streamlit.io",
-                    "site": "https://streamlit.io",
-                },
-            },
+                            },
             {
                 "name": "Gradio",
                 "icon": "🤗",
@@ -597,12 +567,7 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:7860",
                 "browser_delay": 4,
-                "links": {
-                    "youtube": "https://www.youtube.com/results?search_query=gradio+tutorial",
-                    "docs": "https://www.gradio.app/docs",
-                    "site": "https://www.gradio.app",
-                },
-            },
+                            },
             {
                 "name": "Dash",
                 "icon": "📊",
@@ -614,12 +579,7 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:8050",
                 "browser_delay": 3,
-                "links": {
-                    "youtube": "https://www.youtube.com/results?search_query=plotly+dash+tutorial",
-                    "docs": "https://dash.plotly.com",
-                    "site": "https://plotly.com/dash",
-                },
-            },
+                            },
             {
                 "name": "Panel",
                 "icon": "🔲",
@@ -629,12 +589,7 @@ class PackagePanel(QWidget):
                 "command": ["-m", "panel", "serve", "--show"],
                 "desc": "HoloViz dashboards & data apps",
                 "needs_console": True,
-                "links": {
-                    "youtube": "https://www.youtube.com/results?search_query=panel+holoviz+tutorial",
-                    "docs": "https://panel.holoviz.org",
-                    "site": "https://panel.holoviz.org",
-                },
-            },
+                            },
             {
                 "name": "Voilà",
                 "icon": "📓",
@@ -646,12 +601,7 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:8866",
                 "browser_delay": 3,
-                "links": {
-                    "youtube": "https://www.youtube.com/results?search_query=voila+jupyter+tutorial",
-                    "docs": "https://voila.readthedocs.io",
-                    "site": "https://voila.readthedocs.io",
-                },
-            },
+                            },
             {
                 "name": "MLflow UI",
                 "icon": "🧪",
@@ -663,12 +613,7 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:5000",
                 "browser_delay": 3,
-                "links": {
-                    "youtube": "https://www.youtube.com/results?search_query=mlflow+tutorial",
-                    "docs": "https://mlflow.org/docs/latest/index.html",
-                    "site": "https://mlflow.org",
-                },
-            },
+                            },
             {
                 "name": "TensorBoard",
                 "script_launcher": True,
@@ -682,7 +627,7 @@ class PackagePanel(QWidget):
                 "open_browser": "http://localhost:6006",
                 "browser_delay": 6,
                 "pick_logdir": True,
-            },
+                            },
             {
                 "name": "FastAPI",
                 "icon": "⚡",
@@ -693,7 +638,7 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:8000/docs",
                 "browser_delay": 3,
-            },
+                            },
             {
                 "name": "Datasette",
                 "icon": "🗄️",
@@ -704,7 +649,7 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:8001",
                 "browser_delay": 3,
-            },
+                            },
             # ── pip-based: Marimo ─────────────────────────────────────────────
             {
                 "name": "Marimo",
@@ -717,7 +662,7 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:2718",
                 "browser_delay": 3,
-            },
+                            },
             # ── System-level apps (detect & launch, no pip install) ───────────
             {
                 "name": "R Console",
@@ -744,7 +689,7 @@ class PackagePanel(QWidget):
                 },
                 "desc": "R statistical computing language — open R console",
                 "needs_console": True,
-            },
+                            },
             {
                 "name": "RStudio",
                 "icon": "🎯",
@@ -771,7 +716,7 @@ class PackagePanel(QWidget):
                     ],
                 },
                 "desc": "RStudio IDE — full R development environment",
-            },
+                            },
             {
                 "name": "Ollama",
                 "icon": "🦙",
@@ -788,7 +733,7 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:11434",
                 "browser_delay": 3,
-            },
+                            },
             {
                 "name": "DBeaver",
                 "icon": "🦫",
@@ -815,7 +760,7 @@ class PackagePanel(QWidget):
                     ],
                 },
                 "desc": "Universal database manager — explore SQLite, PostgreSQL, MySQL…",
-            },
+                            },
             {
                 "name": "Quarto",
                 "icon": "📝",
@@ -826,7 +771,7 @@ class PackagePanel(QWidget):
                 "desc": "Publish documents, reports & dashboards from Python/R notebooks",
                 "needs_console": True,
                 "note": "Installs Quarto binary inside the environment (~100MB). No system install needed.",
-            },
+                            },
             {
                 "name": "jamovi",
                 "icon": "🧩",
@@ -842,7 +787,7 @@ class PackagePanel(QWidget):
                     "macos":   ["open", "-a", "jamovi"],
                 },
                 "desc": "Point-and-click statistics — SPSS alternative, free & open source",
-            },
+                            },
             {
                 "name": "JASP",
                 "icon": "📊",
@@ -858,7 +803,7 @@ class PackagePanel(QWidget):
                     "macos":   ["open", "-a", "JASP"],
                 },
                 "desc": "Bayesian & frequentist statistics — beautiful, free, open source",
-            },
+                            },
         ]
 
         self.launcher_cards = {}
@@ -921,34 +866,90 @@ class PackagePanel(QWidget):
         desc.setToolTip(tooltip_text)
         layout.addWidget(desc)
 
-        # Links row (YouTube, Docs, Site)
-        _links = app_def.get("links", {})
-        if _links:
-            links_row = QHBoxLayout()
-            links_row.setSpacing(4)
-            links_row.setContentsMargins(0, 0, 0, 0)
-            _link_defs = [
-                ("youtube", "▶ YouTube", "#f38ba8"),
-                ("docs",    "📖 Docs",   "#89b4fa"),
-                ("site",    "🌐 Site",   "#a6e3a1"),
-                ("github",  "🐙 GitHub", "#cba6f7"),
-            ]
-            for key, label, color in _link_defs:
-                url = _links.get(key)
-                if not url:
-                    continue
-                lb = QPushButton(label)
-                lb.setFixedHeight(20)
-                lb.setStyleSheet(
-                    f"QPushButton {{ background: transparent; color: {color}; "
-                    f"border: none; font-size: 11px; padding: 0 4px; text-decoration: underline; }}"
-                    f"QPushButton:hover {{ color: white; }}"
-                )
-                lb.setCursor(Qt.PointingHandCursor)
-                lb.clicked.connect(lambda _, u=url: __import__('webbrowser').open(u))
-                links_row.addWidget(lb)
-            links_row.addStretch()
-            layout.addLayout(links_row)
+        # Links toggle — lazy load from JSON only on first click
+        _app_name_for_links = app_def["name"]
+        _link_defs = [
+            ("site",     "🌐 Site",    "#a6e3a1"),
+            ("docs",     "📖 Docs",    "#89b4fa"),
+            ("youtube",  "▶ YouTube",  "#f38ba8"),
+            ("github",   "🐙 GitHub",  "#cba6f7"),
+            ("twitter",  "𝕏",          "#74c7ec"),
+            ("linkedin", "in",         "#89dceb"),
+            ("discord",  "💬 Discord", "#b4befe"),
+            ("pypi",     "📦 PyPI",    "#fab387"),
+        ]
+        _links_container = QWidget()
+        _links_container.setVisible(False)
+        _lc_layout = QHBoxLayout(_links_container)
+        _lc_layout.setContentsMargins(0, 2, 0, 0)
+        _lc_layout.setSpacing(3)
+        _lc_layout.addStretch()  # placeholder until loaded
+
+        _toggle_row = QHBoxLayout()
+        _toggle_row.setContentsMargins(0, 0, 0, 0)
+        _toggle_btn = QPushButton("🔗 Links ›")
+        _toggle_btn.setFixedHeight(18)
+        _toggle_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; color: {self._c()['fg_muted']}; "
+            f"border: none; font-size: 11px; padding: 0; }}"
+            f"QPushButton:hover {{ color: {self._c()['fg']}; }}"
+        )
+        _toggle_btn.setCursor(Qt.PointingHandCursor)
+
+        def _make_lazy_toggle(btn, container, app_name, defs):
+            _loaded = [False]
+            def _toggle():
+                _vis = not container.isVisible()
+                # Lazy load: only read JSON on first open
+                if _vis and not _loaded[0]:
+                    _loaded[0] = True
+                    try:
+                        import json as _j, os as _o
+                        _p = _o.path.join(_o.path.dirname(_o.path.abspath(__file__)),
+                                          "launcher_links.json")
+                        with open(_p, "r", encoding="utf-8") as _f:
+                            _all = _j.load(_f)
+                        _links = _all.get(app_name, {})
+                    except Exception:
+                        _links = {}
+                    # Clear placeholder stretch
+                    while container.layout().count():
+                        _item = container.layout().takeAt(0)
+                        if _item.widget():
+                            _item.widget().deleteLater()
+                    # Add link buttons
+                    _has_any = False
+                    for _key, _label, _color in defs:
+                        _url = _links.get(_key)
+                        if not _url:
+                            continue
+                        _has_any = True
+                        _lb = QPushButton(_label)
+                        _lb.setFixedHeight(19)
+                        _lb.setStyleSheet(
+                            f"QPushButton {{ background: transparent; color: {_color}; "
+                            f"border: none; font-size: 11px; padding: 0 3px; }}"
+                            f"QPushButton:hover {{ text-decoration: underline; color: white; }}"
+                        )
+                        _lb.setCursor(Qt.PointingHandCursor)
+                        _lb.clicked.connect(lambda _, u=_url: __import__('webbrowser').open(u))
+                        container.layout().addWidget(_lb)
+                    container.layout().addStretch()
+                    if not _has_any:
+                        # No links for this app — hide toggle button
+                        btn.setVisible(False)
+                        return
+                container.setVisible(_vis)
+                btn.setText("🔗 Links ∨" if _vis else "🔗 Links ›")
+            return _toggle
+
+        _toggle_btn.clicked.connect(
+            _make_lazy_toggle(_toggle_btn, _links_container, _app_name_for_links, _link_defs)
+        )
+        _toggle_row.addWidget(_toggle_btn)
+        _toggle_row.addStretch()
+        layout.addLayout(_toggle_row)
+        layout.addWidget(_links_container)
 
         # Set card-level tooltip too
         card.setToolTip(tooltip_text)

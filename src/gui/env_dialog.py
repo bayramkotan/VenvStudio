@@ -355,7 +355,7 @@ class EnvCreateDialog(QDialog):
         self.progress_msg_label = QLabel("")
         self.progress_msg_label.setWordWrap(True)
         self.progress_msg_label.setStyleSheet(
-            "color: #89b4fa; font-size: 14px; padding: 3px 4px;"
+            "color: #89b4fa; font-size: 16px; font-weight: bold; padding: 3px 4px;"
         )
         self.progress_msg_label.setVisible(False)
         right_inner.addWidget(self.progress_msg_label)

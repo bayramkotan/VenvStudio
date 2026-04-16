@@ -328,12 +328,12 @@ class TopicCard(QFrame):
         hl.setContentsMargins(14, 10, 14, 10)
 
         title_lbl = QLabel(self._topic["title"])
-        title_lbl.setStyleSheet(f"color: {c['fg']}; font-size: {c['fs_small']}px; font-weight: bold; border: none;")
+        title_lbl.setStyleSheet(f"color: {c['fg']}; font-size: 14px; font-weight: bold; border: none; letter-spacing: 0.3px;")
         hl.addWidget(title_lbl)
         hl.addStretch()
 
         self._arrow = QLabel("›")
-        self._arrow.setStyleSheet(f"color: {c['fg_muted']}; font-size: 18px; border: none;")
+        self._arrow.setStyleSheet(f"color: {c['fg_muted']}; font-size: 20px; border: none;")
         hl.addWidget(self._arrow)
         layout.addWidget(header)
 
@@ -354,7 +354,7 @@ class TopicCard(QFrame):
         if self._topic.get("body"):
             body_lbl = QLabel(self._topic["body"])
             body_lbl.setWordWrap(True)
-            body_lbl.setStyleSheet(f"color: {c['fg_muted']}; font-size: {c['fs_small']}px; border: none; line-height: 1.5;")
+            body_lbl.setStyleSheet("color: #a6adc8; font-size: 13px; border: none; line-height: 1.6;")
             bl.addWidget(body_lbl)
 
         # Code snippet
@@ -403,7 +403,7 @@ class TopicCard(QFrame):
             snippet_edit = QTextEdit()
             snippet_edit.setPlainText(self._topic["snippet"])
             snippet_edit.setReadOnly(True)
-            snippet_edit.setFont(QFont("Consolas, Courier New, monospace", c.get("fs_tiny", 11)))
+            snippet_edit.setFont(QFont("Consolas", 12))
             snippet_edit.setStyleSheet(f"""
                 QTextEdit {{
                     background: transparent;
@@ -411,7 +411,7 @@ class TopicCard(QFrame):
                     border: none;
                     padding: 8px 10px;
                     font-family: 'Consolas', 'Courier New', monospace;
-                    font-size: {c.get('fs_tiny', 11)}px;
+                    font-size: 12px;
                 }}
             """)
             lines = self._topic["snippet"].count("\n") + 1
@@ -523,14 +523,14 @@ class CategoryPanel(QWidget):
 
         title_lbl = QLabel(self._cat["title"])
         title_lbl.setStyleSheet(
-            f"color: {self._cat['color']}; font-size: 20px; font-weight: bold; border: none;"
+            f"color: {self._cat['color']}; font-size: 22px; font-weight: bold; border: none; letter-spacing: 0.5px;"
         )
         title_row.addWidget(title_lbl)
         title_row.addStretch()
         hl.addLayout(title_row)
 
         desc_lbl = QLabel(self._cat["desc"])
-        desc_lbl.setStyleSheet(f"color: {c['fg_muted']}; font-size: {c['fs_small']}px; border: none;")
+        desc_lbl.setStyleSheet("color: #a6adc8; font-size: 13px; border: none;")
         hl.addWidget(desc_lbl)
         layout.addWidget(header)
 
@@ -577,7 +577,7 @@ class LearnPage(QWidget):
 
         nav_title = QLabel("  📚 Learn")
         nav_title.setStyleSheet(
-            f"color: {c['fg']}; font-size: 15px; font-weight: bold; padding: 4px 0 12px 0;"
+            f"color: {c['fg']}; font-size: 16px; font-weight: bold; padding: 4px 0 14px 0;"
         )
         nav_layout.addWidget(nav_title)
 
@@ -595,7 +595,7 @@ class LearnPage(QWidget):
                     border: none;
                     border-radius: 6px;
                     text-align: left;
-                    font-size: {c['fs_small']}px;
+                    font-size: 13px;
                     padding: 0 8px;
                 }}
                 QPushButton:hover {{ background: {c['accent']}22; color: {c['fg']}; }}

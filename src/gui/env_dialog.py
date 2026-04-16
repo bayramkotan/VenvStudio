@@ -351,18 +351,17 @@ class EnvCreateDialog(QDialog):
         self.progress_bar.setVisible(False)
         right_inner.addWidget(self.progress_bar)
 
-        self.cmd_label = QLabel(
-            "💡 Equivalent terminal commands\nwill appear here when creation starts."
-        )
+        self.cmd_label = QTextEdit()
+        self.cmd_label.setReadOnly(True)
         self.cmd_label.setStyleSheet(
             "background-color: #1e1e2e; border: 1px solid #45475a; "
-            "border-radius: 6px; padding: 14px; color: #585b70; "
-            "font-family: Consolas, monospace; font-size: 14px;"
+            "border-radius: 6px; padding: 8px; color: #cdd6f4; "
+            "font-family: Consolas, monospace; font-size: 13px;"
         )
-        self.cmd_label.setWordWrap(True)
-        self.cmd_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.cmd_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.cmd_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.cmd_label.setHtml(
+            "<p style='color:#585b70;font-size:13px;'>"            "💡 Equivalent terminal commands<br>will appear here when creation starts.</p>"
+        )
         right_inner.addWidget(self.cmd_label, stretch=1)
 
         right_group.setLayout(right_inner)
@@ -452,43 +451,76 @@ class EnvCreateDialog(QDialog):
         if hasattr(self, "subtitle_label"):
             self.subtitle_label.setText(subtitles.get(env_type, subtitles["venv"]))
 
-        # Progress panel hints
+        # Progress panel hints — rich HTML with syntax colors
+        def _cmd(t): return f"<span style='color:#89b4fa;font-family:Consolas,monospace;'>{t}</span>"
+        def _path(t): return f"<span style='color:#a6e3a1;font-family:Consolas,monospace;'>{t}</span>"
+        def _kw(t): return f"<span style='color:#cba6f7;font-family:Consolas,monospace;font-weight:bold;'>{t}</span>"
+        def _ver(t): return f"<span style='color:#f9e2af;font-family:Consolas,monospace;'>{t}</span>"
+        def _title(icon, text, color="#cdd6f4"): return f"<p style='font-size:15px;font-weight:bold;color:{color};margin:8px 0 4px 0;'>{icon} {text}</p>"
+        def _line(t): return f"<p style='margin:2px 0;font-size:13px;font-family:Consolas,monospace;color:#cdd6f4;'>&nbsp;&nbsp;{t}</p>"
+        def _note(t): return f"<p style='margin:6px 0 1px 0;font-size:11px;color:#585b70;'>{t}</p>"
         hints = {
             "venv": (
-                "💡  Equivalent terminal commands:\n"
-                "will appear here when creation starts."
+                _title("🐍", "Python venv", "#89b4fa") +
+                _note("Standard library virtual environment") +
+                _line(_kw("python") + " -m " + _cmd("venv") + " " + _path("myproject")) +
+                _note("Activate — Linux/macOS:") +
+                _line(_cmd("source") + " " + _path("myproject/bin/activate")) +
+                _note("Activate — Windows:") +
+                _line(_path("myproject\\Scripts\\activate")) +
+                _note("Install packages:") +
+                _line(_cmd("pip") + " install " + _kw("numpy") + " " + _kw("pandas")) +
+                _note("Deactivate:") +
+                _line(_cmd("deactivate"))
             ),
             "uv": (
-                "⚡  uv is 10-100x faster than pip.\n\n"
-                "uv will be downloaded automatically\n"
-                "if not already installed (~5 MB).\n\n"
-                "Equivalent: uv venv <name>"
+                _title("⚡", "uv — Ultra Fast", "#f9e2af") +
+                _note("10-100x faster than pip. Rust-powered.") +
+                _line(_cmd("uv") + " venv " + _path("myproject")) +
+                _note("With specific Python version:") +
+                _line(_cmd("uv") + " venv --python " + _ver("3.12") + " " + _path("myproject")) +
+                _note("Install packages:") +
+                _line(_cmd("uv") + " pip install " + _kw("numpy") + " " + _kw("pandas")) +
+                _note("Run without activating:") +
+                _line(_cmd("uv") + " run " + _kw("python") + " script.py")
             ),
             "poetry": (
-                "📜  Poetry manages dependencies and\n"
-                "virtual environments together.\n\n"
-                "💡  Equivalent terminal commands:\n\n"
-                "$ pip install poetry\n"
-                "$ poetry new <name>\n"
-                "$ cd <name> && poetry install"
+                _title("📜", "Poetry", "#cba6f7") +
+                _note("Dependency management + virtual environments") +
+                _line(_cmd("pip") + " install " + _kw("poetry")) +
+                _note("Create new project:") +
+                _line(_cmd("poetry") + " new " + _path("myproject")) +
+                _line(_cmd("cd") + " " + _path("myproject") + " &amp;&amp; " + _cmd("poetry") + " install") +
+                _note("Add dependencies:") +
+                _line(_cmd("poetry") + " add " + _kw("numpy") + " " + _kw("pandas")) +
+                _note("Run scripts:") +
+                _line(_cmd("poetry") + " run " + _kw("python") + " script.py")
             ),
             "pipx": (
-                "📦  pipx installs Python CLI apps\n"
-                "into isolated environments.\n\n"
-                "💡  Equivalent terminal commands:\n\n"
-                "$ pip install --user pipx\n"
-                "$ pipx install <package>\n"
-                "$ pipx list"
+                _title("📦", "pipx", "#a6e3a1") +
+                _note("Install Python CLI apps in isolated environments") +
+                _line(_cmd("pip") + " install --user " + _kw("pipx")) +
+                _line(_cmd("pipx") + " ensurepath") +
+                _note("Install a CLI tool globally:") +
+                _line(_cmd("pipx") + " install " + _kw("black")) +
+                _note("List installed apps:") +
+                _line(_cmd("pipx") + " list") +
+                _note("Run without installing:") +
+                _line(_cmd("pipx") + " run " + _kw("cowsay") + " Hello!")
             ),
             "conda": (
-                "🦎  A Conda Environment will be created\n"
-                "    using micromamba + conda-forge.\n\n"
-                "You can install R, RStudio, jamovi, JASP,\n"
-                "DBeaver and 25,000+ packages from the\n"
-                "Launch tab after creation."
+                _title("🦎", "Conda (micromamba)", "#89dceb") +
+                _note("conda-forge — 25,000+ packages incl. R, RStudio") +
+                _line(_cmd("micromamba") + " create -n " + _path("myenv") + " python=" + _ver("3.12")) +
+                _note("Activate:") +
+                _line(_cmd("micromamba") + " activate " + _path("myenv")) +
+                _note("Install packages:") +
+                _line(_cmd("micromamba") + " install -c conda-forge " + _kw("numpy") + " " + _kw("r-base")) +
+                _note("List environments:") +
+                _line(_cmd("micromamba") + " env list")
             ),
         }
-        self.cmd_label.setText(hints.get(env_type, hints["venv"]))
+        self.cmd_label.setHtml(hints.get(env_type, hints["venv"]))
 
     def _on_python_changed(self, index):
         """Seçili Python'un tam yolunu göster."""
@@ -934,7 +966,7 @@ class EnvCreateDialog(QDialog):
             from src.gui.package_panel import WorkerThread
             self.worker = WorkerThread(_do_conda_create)
             self.worker.progress.connect(
-                lambda msg: self.cmd_label.setText(msg))
+                lambda msg: self.cmd_label.setPlainText(msg))
             self.worker.finished.connect(_on_conda_done)
             self.worker.start()
             return
@@ -1320,7 +1352,7 @@ class EnvCreateDialog(QDialog):
 
             from src.gui.package_panel import WorkerThread
             self.worker = WorkerThread(_do_alt_create)
-            self.worker.progress.connect(lambda msg: self.cmd_label.setText(msg))
+            self.worker.progress.connect(lambda msg: self.cmd_label.setPlainText(msg))
             self.worker.finished.connect(_on_alt_done)
             self.worker.start()
             return

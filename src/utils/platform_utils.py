@@ -619,7 +619,40 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                     system_bash = candidate
                     break
 
-            bash_cmd = f"{posix_cmd} && exec {system_bash}"
+            # ── Build an rcfile so shell functions (micromamba, conda activate)
+            # remain loaded in the INTERACTIVE bash session.
+            # Old approach `{posix_cmd} && exec bash` loses functions defined
+            # via `eval $(mamba shell hook -s bash)` because exec starts a new
+            # shell that re-reads ~/.bashrc only.
+            import tempfile as _tempfile
+            _rc_content = (
+                "# VenvStudio-generated rcfile (temporary)\n"
+                "# Load user's normal init so prompt/aliases work\n"
+                "[ -f ~/.bashrc ] && source ~/.bashrc\n"
+                "\n"
+                "# VenvStudio: activate environment\n"
+                f"{posix_cmd}\n"
+            )
+            _rc_file = _tempfile.NamedTemporaryFile(
+                mode="w", suffix=".venvstudio-rc", prefix="vs-",
+                delete=False, encoding="utf-8",
+            )
+            _rc_file.write(_rc_content)
+            _rc_file.close()
+            _rc_path = _rc_file.name
+
+            # Interactive bash with our rcfile → env activated, prompt shows
+            # (env) prefix, functions loaded, Ctrl-D / exit closes the shell.
+            bash_cmd = f'{system_bash} --rcfile "{_rc_path}" -i'
+
+            # Schedule rcfile cleanup: add a trap in the rcfile so when the
+            # shell exits, the temp file is removed.
+            _cleanup_trap = (
+                f"\n# Cleanup temp rcfile when shell exits\n"
+                f"trap 'rm -f \"{_rc_path}\"' EXIT\n"
+            )
+            with open(_rc_path, "a", encoding="utf-8") as _f:
+                _f.write(_cleanup_trap)
 
             def _find_terminal(term: str) -> Optional[str]:
                 """Find terminal executable, checking system PATH even inside AppImage."""
@@ -655,43 +688,44 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                 try:
                     if term == "gnome-terminal":
                         subprocess.Popen(
-                            [term_exe, "--", system_bash, "-c", bash_cmd],
+                            [term_exe, "--", system_bash, "--rcfile", _rc_path, "-i"],
                             env=clean_env
                         )
                     elif term in ("konsole", "yakuake"):
                         subprocess.Popen(
-                            [term_exe, "--noclose", "-e", system_bash, "-c", bash_cmd],
+                            [term_exe, "--noclose", "-e", system_bash, "--rcfile", _rc_path, "-i"],
                             env=clean_env
                         )
                     elif term in ("xfce4-terminal", "mate-terminal", "lxterminal", "tilix"):
+                        # These expect a single -e argument with shell+args as string
                         subprocess.Popen(
-                            [term_exe, "-e", f"{system_bash} -c '{bash_cmd}'"],
+                            [term_exe, "-e", f"{system_bash} --rcfile '{_rc_path}' -i"],
                             env=clean_env
                         )
                     elif term == "kitty":
                         subprocess.Popen(
-                            [term_exe, system_bash, "-c", bash_cmd],
+                            [term_exe, system_bash, "--rcfile", _rc_path, "-i"],
                             env=clean_env
                         )
                     elif term == "alacritty":
                         subprocess.Popen(
-                            [term_exe, "-e", system_bash, "-c", bash_cmd],
+                            [term_exe, "-e", system_bash, "--rcfile", _rc_path, "-i"],
                             env=clean_env
                         )
                     elif term == "wezterm":
                         subprocess.Popen(
-                            [term_exe, "start", "--", system_bash, "-c", bash_cmd],
+                            [term_exe, "start", "--", system_bash, "--rcfile", _rc_path, "-i"],
                             env=clean_env
                         )
                     elif term == "foot":
                         subprocess.Popen(
-                            [term_exe, system_bash, "-c", bash_cmd],
+                            [term_exe, system_bash, "--rcfile", _rc_path, "-i"],
                             env=clean_env
                         )
                     else:
                         # xterm, x-terminal-emulator and others
                         subprocess.Popen(
-                            [term_exe, "-e", f"{system_bash} -c '{bash_cmd}'"],
+                            [term_exe, "-e", f"{system_bash} --rcfile '{_rc_path}' -i"],
                             env=clean_env
                         )
                     return True
@@ -733,3 +767,84 @@ def get_venv_size(venv_path: Path) -> str:
             return f"{total:.1f} {unit}"
         total /= 1024
     return f"{total:.1f} TB"
+
+
+def open_folder(path) -> tuple[bool, str]:
+    """Open a folder in the system file manager.
+
+    Cross-platform:
+      - Windows  → explorer.exe "<path>"
+      - macOS    → open "<path>"
+      - Linux    → xdg-open "<path>"  (falls back to common file managers)
+      - FreeBSD  → xdg-open (if available) / falls back like Linux
+
+    If the given path is a file, opens the containing directory (and on Windows
+    additionally selects the file).
+
+    Returns (success, message).
+    """
+    try:
+        p = Path(path)
+    except Exception as e:
+        return False, f"Invalid path: {e}"
+
+    if not p.exists():
+        return False, f"Path does not exist: {p}"
+
+    system = get_platform()
+    target = p if p.is_dir() else p.parent
+
+    try:
+        if system == "windows":
+            if p.is_dir():
+                # Open the directory itself
+                subprocess.Popen(["explorer.exe", str(p)])
+            else:
+                # Open containing folder with the file selected
+                subprocess.Popen(["explorer.exe", "/select,", str(p)])
+            return True, f"Opened {target}"
+
+        elif system == "macos":
+            if p.is_dir():
+                subprocess.Popen(["open", str(p)])
+            else:
+                subprocess.Popen(["open", "-R", str(p)])
+            return True, f"Opened {target}"
+
+        else:  # linux / bsd
+            # Clean AppImage-injected env so the file manager uses the host
+            clean_env = os.environ.copy()
+            for var in ("APPIMAGE", "APPDIR", "OWD", "ARGV0",
+                        "APPIMAGE_EXTRACT_AND_RUN",
+                        "LD_LIBRARY_PATH", "LD_PRELOAD"):
+                clean_env.pop(var, None)
+
+            # Prefer xdg-open (DE-neutral), then fall back to specific FMs
+            candidates = [
+                "xdg-open",
+                "gio",          # GNOME (used as: gio open <path>)
+                "nautilus",     # GNOME
+                "dolphin",      # KDE
+                "thunar",       # XFCE
+                "pcmanfm",      # LXDE
+                "nemo",         # Cinnamon
+                "caja",         # MATE
+            ]
+            for tool in candidates:
+                exe = shutil.which(tool)
+                if not exe:
+                    continue
+                try:
+                    if tool == "gio":
+                        subprocess.Popen([exe, "open", str(target)], env=clean_env)
+                    else:
+                        subprocess.Popen([exe, str(target)], env=clean_env)
+                    return True, f"Opened {target} with {tool}"
+                except Exception:
+                    continue
+
+            return False, ("No file manager found. Install 'xdg-utils' or "
+                           "a desktop file manager (nautilus, dolphin, thunar, ...).")
+
+    except Exception as e:
+        return False, f"Could not open folder: {e}"

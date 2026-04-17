@@ -141,11 +141,11 @@ Her kütüphane için uzun bir dedike sayfa. Mevcut tek-snippet formatını **ge
 - **Çözüm:** Tüm subprocess çağrılarına `subprocess_args()` (platform_utils) kullanılmasını zorla — Windows'ta otomatik `CREATE_NO_WINDOW` ekliyor
 - Grep: `subprocess.run(` / `subprocess.Popen(` / `_run(` → `subprocess_args(**kwargs)` ile sarılmamış olanları bul ve düzelt
 
-### ✨ F131 — Sağ Click → Open Location
-- Env tablosunda env üzerine sağ click → bağlam menüsünden **"📁 Open Folder"** seçeneği
-- `platform_utils.py` → `open_folder(path)` helper (Linux: xdg-open, macOS: open, Windows: explorer)
-- `main_window.py` → `_show_env_context_menu` içinde yeni action ekle
-- Env'in gerçek path'ini aç (poetry/pipx için base_dir değil, marker'daki real path)
+### ✅ F131 — Sağ Click → Open Folder (TAMAMLANDI v1.4.63)
+- [x] Context menu'ya "📁 Open Folder" action eklendi
+- [x] `platform_utils.open_folder()` — Windows (explorer), macOS (open -R), Linux (xdg-open + fallbacks: gio, nautilus, dolphin, thunar, pcmanfm, nemo, caja)
+- [x] Gerçek env path kullanılıyor (pipx/poetry dahil)
+- [x] AppImage env temizlemesi Linux'ta
 
 ### 🐛 B139 — Open Terminal GNOME'da çalışmadı (openSUSE)
 - `platform_utils.py::open_terminal_at` — GNOME terminal açılmadı openSUSE'de

@@ -153,15 +153,18 @@ Her kütüphane için uzun bir dedike sayfa. Mevcut tek-snippet formatını **ge
 - **Çözüm:** `--` vs `-e` vs `-x` combinations dene; başarısız olursa otomatik bir sonraki terminal'e fallback yap (zaten var ama gnome-terminal başarılı sayılıp hata veriyor olabilir)
 - Log: Popen.returncode kontrol et, sessiz fail olmasın
 
-### ✨ F132 — Python Download: Mirror Seçimi (F123 tekrar)
-- Şu an sadece Astral (python-build-standalone) kullanılıyor
-- **Ek mirror'lar:**
-  - python.org/downloads (resmi)
-  - GitHub Releases (Astral'ın release sayfası)
-  - SourceForge (bazı ülkelerde daha hızlı)
-  - Kullanıcı tanımlı özel URL
-- `settings_python.py` → mirror dropdown
-- Her mirror için URL pattern ve versiyon listesi çekme endpoint'i
+### ✅ F132 — Python Download: Mirror Seçimi (TAMAMLANDI v1.4.63)
+- [x] Astral (python-build-standalone) — varsayılan, önerilen
+- [x] GitHub Releases (direkt) — Astral ile aynı data, alternatif label
+- [x] python.org — resmi kaynak. Linux/macOS source tarball, Windows .exe installer
+- [x] SourceForge — placeholder (şu an "Custom URL kullanın" yönlendirmesi, ileride doldurulabilir)
+- [x] Custom URL — kullanıcı kendi download URL'ini yapıştırır
+- [x] Mirror dropdown + description satırı + custom URL input (sadece Custom seçilince görünür)
+- [x] Refetch butonu (🔄)
+- [x] Seçilen mirror Config'e kaydediliyor (`python_download_mirror`, `python_download_custom_url`)
+- [x] Otomatik fallback (Astral → GitHub → python.org)
+- [x] Strategy pattern: her mirror `MirrorBackend` sınıfından türer
+- [x] Windows'ta python.org .exe/.msi indirilir ama otomatik install yapılmaz — kullanıcı manuel çalıştırır
 
 ### ✨ F133 — Catalog Override (Settings)
 - Kütüphanelerin description ve linklerini kullanıcı değiştirebilsin

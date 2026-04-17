@@ -25,6 +25,16 @@ from src.utils.platform_utils import (
 # Module-level logger — routes to 'venvstudio.core.venv_manager'
 _log = logging.getLogger("venvstudio.core.venv_manager")
 
+# Banner helpers for visual terminal output
+try:
+    from src.utils.logger import banner_start, banner_success, banner_error, banner_warning
+except Exception:
+    # Fallback no-ops if logger module has issues during bootstrap
+    def banner_start(*args, **kwargs): pass
+    def banner_success(*args, **kwargs): pass
+    def banner_error(*args, **kwargs): pass
+    def banner_warning(*args, **kwargs): pass
+
 # Suppress terminal windows on Windows (EXE builds)
 _SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if _platform.system().lower() == "windows" else 0
 
@@ -234,10 +244,23 @@ class VenvManager:
         """
         _log.info(f"create_venv: name={name!r} python={python_path!r} "
                   f"with_pip={with_pip} system_site={system_site_packages}")
+        banner_start(
+            f"Creating environment '{name}'",
+            details=[
+                f"Python: {python_path or 'system default'}",
+                f"Pip: {'yes' if with_pip else 'no'}",
+                f"System site-packages: {'yes' if system_site_packages else 'no'}",
+                f"Location: {self.base_dir / name}",
+            ],
+        )
         venv_path = self.base_dir / name
 
         if venv_path.exists():
             _log.warning(f"create_venv: env already exists at {venv_path}")
+            banner_warning(
+                f"Environment '{name}' already exists",
+                details=[f"Path: {venv_path}", "Delete it first or pick a new name."],
+            )
             return False, f"Environment '{name}' already exists at {venv_path}"
 
         if python_path:
@@ -400,15 +423,40 @@ class VenvManager:
             with open(meta_file, "w") as f:
                 json.dump(meta, f, indent=2)
 
+            # Build success details
+            _py_in_venv = get_python_executable(venv_path)
+            _details = [f"Path: {venv_path}"]
+            try:
+                if _py_in_venv.exists():
+                    _ver = _run(
+                        [str(_py_in_venv), "--version"],
+                        capture_output=True, text=True, timeout=5,
+                    )
+                    _v = (_ver.stdout or _ver.stderr or "").strip()
+                    if _v:
+                        _details.append(f"Python: {_v}")
+            except Exception:
+                pass
+            if with_pip:
+                _details.append("pip: installed & upgraded")
+            if system_site_packages:
+                _details.append("System site-packages: enabled")
+            banner_success(f"Environment '{name}' is ready!", details=_details)
+
             return True, f"Environment '{name}' created successfully at {venv_path}"
 
         except subprocess.TimeoutExpired:
             if venv_path.exists():
                 shutil.rmtree(venv_path, ignore_errors=True)
+            banner_error(
+                f"Creating '{name}' timed out",
+                details=["Took longer than 120 seconds", "Check your network or try a different Python"],
+            )
             return False, "Environment creation timed out (120s)"
         except Exception as e:
             if venv_path.exists():
                 shutil.rmtree(venv_path, ignore_errors=True)
+            banner_error(f"Could not create '{name}'", details=[str(e)])
             return False, f"Error creating environment: {str(e)}"
 
     # ── Auto-install python3-venv ──────────────────────────────────────────
@@ -496,6 +544,13 @@ class VenvManager:
         For other envs: deletes base_dir/name or env_path if given.
         """
         _log.info(f"delete_venv: name={name!r} env_type={env_type!r} env_path={env_path!r}")
+        banner_start(
+            f"Deleting environment '{name}'",
+            details=[
+                f"Type: {env_type}",
+                f"Path: {env_path or (self.base_dir / name)}",
+            ],
+        )
         venv_path = Path(env_path) if env_path else self.base_dir / name
         if not venv_path.exists():
             # For poetry, try base_dir / name as project dir
@@ -503,6 +558,7 @@ class VenvManager:
             if alt.exists():
                 venv_path = alt
             else:
+                banner_error(f"Environment '{name}' not found", details=[f"Looked at: {venv_path}"])
                 return False, f"Environment '{name}' not found"
         try:
             if callback:
@@ -525,8 +581,10 @@ class VenvManager:
                             pass
             if callback:
                 callback(f"Deleted {name} successfully.")
+            banner_success(f"Environment '{name}' deleted", details=[f"Removed: {venv_path}"])
             return True, f"Environment '{name}' deleted successfully"
         except Exception as e:
+            banner_error(f"Could not delete '{name}'", details=[str(e)])
             return False, f"Error deleting environment: {str(e)}"
 
     def invalidate_cache_by_name(self, name: str) -> None:
@@ -1232,8 +1290,20 @@ class VenvManager:
                    source_path: Optional[str] = None, source_type: str = "venv") -> tuple[bool, str]:
         _log.info(f"clone_venv: {source_name!r} → {target_name!r} "
                   f"source_type={source_type!r} source_path={source_path!r}")
+        banner_start(
+            f"Cloning '{source_name}' → '{target_name}'",
+            details=[
+                f"Type: {source_type}",
+                f"Source: {source_path or (self.base_dir / source_name)}",
+                f"Target: {self.base_dir / target_name}",
+            ],
+        )
         # ── Env-type guards: pipx / poetry not supported via Clone ─────────
         if source_type == "pipx":
+            banner_warning(
+                f"Cloning a pipx env is not supported",
+                details=["pipx apps are single-binary installs.", "Use: pipx install <pkg>"],
+            )
             return False, (
                 "Cloning a pipx environment is not supported.\n\n"
                 "pipx manages its own isolated environments per CLI app.\n"
@@ -1244,6 +1314,10 @@ class VenvManager:
                 "    pipx list"
             )
         if source_type == "poetry":
+            banner_warning(
+                f"Cloning a Poetry env is not supported",
+                details=["Poetry envs are tied to pyproject.toml", "Use: poetry install in new project"],
+            )
             return False, (
                 "Cloning a Poetry environment is not supported directly.\n\n"
                 "Poetry environments are tied to a project's pyproject.toml.\n"
@@ -1301,8 +1375,17 @@ class VenvManager:
                 except Exception:
                     pass
 
+                banner_success(
+                    f"Conda env cloned to '{target_name}'",
+                    details=[
+                        f"Source: {source_path_obj}",
+                        f"Target: {target_path}",
+                        f"Python: {_pyver or 'unknown'}",
+                    ],
+                )
                 return True, f"Conda environment '{source_name}' cloned to '{target_name}' successfully"
             except Exception as e:
+                banner_error(f"Could not clone conda env '{source_name}'", details=[str(e)])
                 return False, f"Error cloning conda env: {e}"
 
         # ── uv clone: uv pip freeze → uv venv → uv pip install ─────────────
@@ -1374,8 +1457,13 @@ class VenvManager:
                     if result.returncode != 0:
                         return False, f"Created env but failed to install some packages:\n{result.stderr.strip()}"
 
+                banner_success(
+                    f"uv env cloned to '{target_name}'",
+                    details=[f"Source: {source_path_obj}", f"Target: {target_path}"],
+                )
                 return True, f"uv environment '{source_name}' cloned to '{target_name}' successfully"
             except Exception as e:
+                banner_error(f"Could not clone uv env '{source_name}'", details=[str(e)])
                 return False, f"Error cloning uv env: {e}"
 
         # ── venv clone (default): pip freeze → create → pip install -r ─────
@@ -1414,18 +1502,45 @@ class VenvManager:
                 req_file.unlink(missing_ok=True)
 
                 if result.returncode != 0:
+                    banner_error(
+                        f"Clone completed but some packages failed",
+                        details=[f"Target: {target_path}", "Check pip output below"],
+                    )
                     return False, f"Created env but failed to install some packages:\n{result.stderr}"
 
+            # Count packages for nice summary
+            _pkg_count = 0
+            try:
+                _pkg_count = len([l for l in requirements.splitlines() if l and not l.startswith("#")])
+            except Exception:
+                pass
+            banner_success(
+                f"Environment '{target_name}' ready!",
+                details=[
+                    f"Cloned from: {source_name}",
+                    f"Path: {target_path}",
+                    f"Packages reinstalled: {_pkg_count}" if _pkg_count else f"Packages reinstalled: ok",
+                ],
+            )
             return True, f"Environment '{source_name}' cloned to '{target_name}' successfully"
 
         except Exception as e:
+            banner_error(f"Could not clone '{source_name}'", details=[str(e)])
             return False, f"Error cloning environment: {str(e)}"
 
     def rename_venv(self, old_name: str, new_name: str,
                     old_path: Optional[str] = None, env_type: str = "venv") -> tuple[bool, str]:
         _log.info(f"rename_venv: {old_name!r} → {new_name!r} env_type={env_type!r}")
+        banner_start(
+            f"Renaming '{old_name}' → '{new_name}' (folder-only)",
+            details=[f"Type: {env_type}", f"Path: {old_path or (self.base_dir / old_name)}"],
+        )
         # ── Env-type guards ────────────────────────────────────────────────
         if env_type == "pipx":
+            banner_warning(
+                "Rename not supported for pipx",
+                details=["Use: pipx uninstall + pipx install"],
+            )
             return False, (
                 "Renaming a pipx environment is not supported.\n\n"
                 "pipx apps are identified by their package name. To 'rename':\n\n"
@@ -1433,6 +1548,10 @@ class VenvManager:
                 f"    pipx install {new_name}"
             )
         if env_type == "poetry":
+            banner_warning(
+                "Rename not supported for Poetry",
+                details=["Edit pyproject.toml name + poetry install"],
+            )
             return False, (
                 "Renaming a Poetry environment by folder is not supported.\n\n"
                 "Poetry env names are derived from the project name in pyproject.toml.\n"
@@ -1441,6 +1560,10 @@ class VenvManager:
                 "    poetry install"
             )
         if env_type == "conda":
+            banner_warning(
+                "In-place rename not supported for conda",
+                details=["Use Rename (Full) instead — safe clone + delete"],
+            )
             return False, (
                 "Renaming a conda environment in place is not supported by micromamba.\n\n"
                 "Use the 'Rename (Full)' option instead, which will:\n"
@@ -1458,14 +1581,25 @@ class VenvManager:
         new_path_obj = self.base_dir / new_name
 
         if not old_path_obj.exists():
+            banner_error(f"Source env '{old_name}' not found", details=[f"Looked at: {old_path_obj}"])
             return False, f"Environment '{old_name}' not found at {old_path_obj}"
         if new_path_obj.exists():
+            banner_error(f"Target '{new_name}' already exists", details=[f"Path: {new_path_obj}"])
             return False, f"Environment '{new_name}' already exists"
 
         try:
             old_path_obj.rename(new_path_obj)
+            banner_success(
+                f"Renamed '{old_name}' → '{new_name}'",
+                details=[
+                    f"Old path: {old_path_obj}",
+                    f"New path: {new_path_obj}",
+                    "⚠ Note: activate scripts may contain old path — run Rename (Full) for a full rewrite",
+                ],
+            )
             return True, f"Environment '{old_name}' renamed to '{new_name}'"
         except Exception as e:
+            banner_error(f"Could not rename '{old_name}'", details=[str(e)])
             return False, f"Error renaming environment: {str(e)}"
 
     def rename_full_venv(self, old_name: str, new_name: str, callback=None,
@@ -1475,6 +1609,15 @@ class VenvManager:
         Slower but safe — all packages reinstalled, paths correct.
         """
         _log.info(f"rename_full_venv: {old_name!r} → {new_name!r} env_type={env_type!r}")
+        banner_start(
+            f"Full rename '{old_name}' → '{new_name}'",
+            details=[
+                f"Type: {env_type}",
+                "Step 1/2: Clone with new name",
+                "Step 2/2: Delete old env",
+                "⏳ This may take a while (packages reinstalled)",
+            ],
+        )
         # Check env-type support via clone's guards first
         if env_type in ("pipx", "poetry"):
             # Delegate to clone_venv so user gets the helpful error
@@ -1486,6 +1629,10 @@ class VenvManager:
         success, msg = self.clone_venv(old_name, new_name, callback=callback,
                                        source_path=old_path, source_type=env_type)
         if not success:
+            banner_error(
+                f"Full rename aborted",
+                details=[f"Could not clone '{old_name}'", "Old env is untouched", msg.splitlines()[0] if msg else ""],
+            )
             return False, f"Failed to create '{new_name}': {msg}"
 
         if callback:
@@ -1495,10 +1642,22 @@ class VenvManager:
             success, msg = self.delete_venv(old_name, callback=callback,
                                             env_path=old_path, env_type=env_type)
             if not success:
+                banner_warning(
+                    f"New env created but old env remains",
+                    details=[f"'{new_name}' is ready", f"Could not delete '{old_name}' — delete manually"],
+                )
                 return False, f"'{new_name}' created but could not delete '{old_name}': {msg}"
         except Exception as e:
+            banner_warning(
+                f"New env created but old env remains",
+                details=[f"'{new_name}' is ready", f"Delete '{old_name}' failed: {e}"],
+            )
             return False, f"'{new_name}' created but could not delete '{old_name}': {e}"
 
+        banner_success(
+            f"Full rename complete: '{old_name}' → '{new_name}'",
+            details=["All packages reinstalled with correct paths", "Old env deleted"],
+        )
         return True, f"Environment '{old_name}' fully renamed to '{new_name}'"
 
     def set_poetry_display_name(self, env_path, new_display_name: str) -> tuple[bool, str]:
@@ -1509,16 +1668,26 @@ class VenvManager:
         try:
             _p = Path(env_path)
             if not _p.exists() or not _p.is_dir():
+                banner_error("Poetry env path not found", details=[f"Path: {env_path}"])
                 return False, f"Poetry environment path not found: {env_path}"
             marker = _p / ".venvstudio_display_name"
             if new_display_name.strip():
                 marker.write_text(new_display_name.strip(), encoding="utf-8")
+                banner_success(
+                    "Display name set",
+                    details=[f"Env: {_p.name}", f"New display name: {new_display_name.strip()}"],
+                )
                 return True, f"Display name set to '{new_display_name.strip()}'"
             else:
                 # Empty → remove override (revert to default stripped name)
                 if marker.exists():
                     marker.unlink()
+                banner_success(
+                    "Display name override cleared",
+                    details=[f"Env: {_p.name}", "Reverted to default poetry name"],
+                )
                 return True, "Display name override cleared"
         except Exception as e:
+            banner_error("Could not set display name", details=[str(e)])
             return False, f"Could not set display name: {e}"
 

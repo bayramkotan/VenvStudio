@@ -50,10 +50,22 @@ class _FetchWorker(QThread):
     progress = Signal(str)
     finished = Signal(list)
 
+    def __init__(self, mirror: str = "astral", custom_url: str = "",
+                 try_fallbacks: bool = True, parent=None):
+        super().__init__(parent)
+        self.mirror = mirror
+        self.custom_url = custom_url
+        self.try_fallbacks = try_fallbacks
+
     def run(self):
         try:
             from src.core.python_downloader import get_available_versions
-            versions = get_available_versions(progress_callback=self.progress.emit)
+            versions = get_available_versions(
+                progress_callback=self.progress.emit,
+                mirror=self.mirror,
+                custom_url=self.custom_url,
+                try_fallbacks=self.try_fallbacks,
+            )
             self.finished.emit(versions)
         except Exception:
             self.finished.emit([])
@@ -87,6 +99,77 @@ class PythonDownloadDialog(QDialog):
         header.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px;")
         header.setWordWrap(True)
         layout.addWidget(header)
+
+        # ── Mirror selector ─────────────────────────────────────────
+        mirror_row = QHBoxLayout()
+        mirror_label = QLabel("🌐 Source:")
+        mirror_label.setStyleSheet(f"color: {self._c()['fg']}; font-size: {self._c()['fs_base']}px;")
+        mirror_row.addWidget(mirror_label)
+
+        self.mirror_combo = QComboBox()
+        self.mirror_combo.setStyleSheet(f"font-size: {self._c()['fs_base']}px;")
+        from src.core.python_downloader import get_all_mirror_infos
+        self._mirror_infos = get_all_mirror_infos()
+        for info in self._mirror_infos:
+            self.mirror_combo.addItem(info["name"], userData=info["id"])
+            idx = self.mirror_combo.count() - 1
+            self.mirror_combo.setItemData(idx, info["description"], Qt.ToolTipRole)
+
+        # Preselect saved preference
+        try:
+            from src.core.config_manager import ConfigManager
+            saved = ConfigManager().get("python_download_mirror", "astral")
+            for i in range(self.mirror_combo.count()):
+                if self.mirror_combo.itemData(i) == saved:
+                    self.mirror_combo.setCurrentIndex(i)
+                    break
+        except Exception:
+            pass
+
+        self.mirror_combo.currentIndexChanged.connect(self._on_mirror_changed)
+        mirror_row.addWidget(self.mirror_combo, 1)
+
+        self.refetch_btn = QPushButton("🔄")
+        self.refetch_btn.setToolTip("Re-fetch versions from selected source")
+        self.refetch_btn.setFixedWidth(36)
+        self.refetch_btn.clicked.connect(self._fetch_versions)
+        mirror_row.addWidget(self.refetch_btn)
+        layout.addLayout(mirror_row)
+
+        # ── Custom URL input (shown only when Custom is selected) ────
+        self.custom_url_row = QWidget()
+        custom_layout = QHBoxLayout(self.custom_url_row)
+        custom_layout.setContentsMargins(0, 0, 0, 0)
+        cu_label = QLabel("🔗 URL:")
+        cu_label.setStyleSheet(f"color: {self._c()['fg']}; font-size: {self._c()['fs_base']}px;")
+        custom_layout.addWidget(cu_label)
+        self.custom_url_input = QLineEdit()
+        self.custom_url_input.setPlaceholderText(
+            "https://example.com/cpython-3.13.12-x86_64-linux.tar.gz"
+        )
+        self.custom_url_input.setStyleSheet(f"font-size: {self._c()['fs_base']}px;")
+        # Load saved custom URL
+        try:
+            from src.core.config_manager import ConfigManager
+            saved_url = ConfigManager().get("python_download_custom_url", "")
+            if saved_url:
+                self.custom_url_input.setText(saved_url)
+        except Exception:
+            pass
+        self.custom_url_input.editingFinished.connect(self._on_custom_url_changed)
+        custom_layout.addWidget(self.custom_url_input, 1)
+        self.custom_url_row.setVisible(False)
+        layout.addWidget(self.custom_url_row)
+
+        # Mirror description line
+        self.mirror_desc = QLabel("")
+        self.mirror_desc.setStyleSheet(
+            f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px; "
+            f"padding: 2px 4px 4px 4px; font-style: italic;"
+        )
+        self.mirror_desc.setWordWrap(True)
+        layout.addWidget(self.mirror_desc)
+        self._update_mirror_desc()
 
         # Version list
         self.version_list = QListWidget()
@@ -154,9 +237,66 @@ class PythonDownloadDialog(QDialog):
 
         self.version_list.currentRowChanged.connect(self._on_selection_changed)
 
+    def _get_current_mirror(self) -> str:
+        """Return the currently selected mirror id."""
+        data = self.mirror_combo.currentData()
+        return data if data else "astral"
+
+    def _get_current_custom_url(self) -> str:
+        return self.custom_url_input.text().strip()
+
+    def _update_mirror_desc(self):
+        idx = self.mirror_combo.currentIndex()
+        if idx >= 0 and idx < len(self._mirror_infos):
+            self.mirror_desc.setText(self._mirror_infos[idx]["description"])
+
+    def _on_mirror_changed(self, idx):
+        """User picked a different mirror."""
+        mirror = self._get_current_mirror()
+        self.custom_url_row.setVisible(mirror == "custom")
+        self._update_mirror_desc()
+
+        # Persist preference
+        try:
+            from src.core.config_manager import ConfigManager
+            ConfigManager().set("python_download_mirror", mirror)
+        except Exception:
+            pass
+
+        # Re-fetch unless custom (without URL yet)
+        if mirror == "custom" and not self._get_current_custom_url():
+            self.progress_label.setText("Enter a URL above, then press 🔄")
+            self.version_list.clear()
+            return
+
+        self._fetch_versions()
+
+    def _on_custom_url_changed(self):
+        """Save custom URL and re-fetch."""
+        url = self._get_current_custom_url()
+        try:
+            from src.core.config_manager import ConfigManager
+            ConfigManager().set("python_download_custom_url", url)
+        except Exception:
+            pass
+        if self._get_current_mirror() == "custom" and url:
+            self._fetch_versions()
+
     def _fetch_versions(self):
-        """Fetch available versions in background."""
-        self._fetch_worker = _FetchWorker(parent=self)
+        """Fetch available versions in background using the selected mirror."""
+        mirror = self._get_current_mirror()
+        custom_url = self._get_current_custom_url() if mirror == "custom" else ""
+
+        # Reset UI
+        self.progress_bar.setRange(0, 0)
+        self.progress_label.setText(f"Fetching versions from {mirror}...")
+        self.version_list.clear()
+
+        # For custom, no fallbacks (the user picked that URL deliberately)
+        try_fallbacks = (mirror != "custom")
+        self._fetch_worker = _FetchWorker(
+            mirror=mirror, custom_url=custom_url, try_fallbacks=try_fallbacks, parent=self,
+        )
         self._fetch_worker.progress.connect(self._on_progress)
         self._fetch_worker.finished.connect(self._on_versions_fetched)
         self._fetch_worker.start()

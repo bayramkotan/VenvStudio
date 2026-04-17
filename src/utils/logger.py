@@ -33,7 +33,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, List, Optional
 
 # ─── Module-level logger (set after setup_logging) ───
 _root_logger: Optional[logging.Logger] = None
@@ -126,6 +126,258 @@ def _collect_session_context() -> dict:
 #  SETUP
 # =====================================================================
 
+# =====================================================================
+#  CONSOLE STYLING — ANSI fallback + banner helpers
+# =====================================================================
+
+# ANSI SGR codes
+_ANSI = {
+    "reset":   "\033[0m",
+    "bold":    "\033[1m",
+    "dim":     "\033[2m",
+    "italic":  "\033[3m",
+    # Foreground
+    "black":   "\033[30m",
+    "red":     "\033[31m",
+    "green":   "\033[32m",
+    "yellow":  "\033[33m",
+    "blue":    "\033[34m",
+    "magenta": "\033[35m",
+    "cyan":    "\033[36m",
+    "white":   "\033[37m",
+    "gray":    "\033[90m",
+    # Bright
+    "br_red":     "\033[91m",
+    "br_green":   "\033[92m",
+    "br_yellow":  "\033[93m",
+    "br_blue":    "\033[94m",
+    "br_magenta": "\033[95m",
+    "br_cyan":    "\033[96m",
+}
+
+
+def _ansi_supported() -> bool:
+    """Detect if the current stdout supports ANSI color codes."""
+    # Windows 10+ with modern terminals supports ANSI, older cmd.exe doesn't
+    if os.environ.get("NO_COLOR"):
+        return False
+    if os.environ.get("FORCE_COLOR"):
+        return True
+    try:
+        if not sys.stdout.isatty():
+            return False
+    except Exception:
+        return False
+    if sys.platform == "win32":
+        # Windows Terminal / ANSICON / ConEmu / VSCode terminal → supports
+        if os.environ.get("WT_SESSION") or os.environ.get("TERM_PROGRAM"):
+            return True
+        # Try enabling ANSI mode via kernel32
+        try:
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            # ENABLE_VIRTUAL_TERMINAL_PROCESSING = 4
+            kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
+            return True
+        except Exception:
+            return False
+    return True
+
+
+class _AnsiFormatter(logging.Formatter):
+    """Colored formatter with level-based coloring for ANSI terminals."""
+
+    LEVEL_COLORS = {
+        logging.DEBUG:    _ANSI["gray"],
+        logging.INFO:     _ANSI["br_cyan"],
+        logging.WARNING:  _ANSI["yellow"],
+        logging.ERROR:    _ANSI["br_red"],
+        logging.CRITICAL: _ANSI["bold"] + _ANSI["br_red"],
+    }
+
+    LEVEL_ICONS = {
+        logging.DEBUG:    "·",
+        logging.INFO:     "ℹ",
+        logging.WARNING:  "⚠",
+        logging.ERROR:    "✗",
+        logging.CRITICAL: "☠",
+    }
+
+    def __init__(self, use_color: bool = True):
+        super().__init__()
+        self.use_color = use_color and _ansi_supported()
+
+    def format(self, record):
+        ts = datetime.fromtimestamp(record.created).strftime("%H:%M:%S")
+        level_color = self.LEVEL_COLORS.get(record.levelno, "")
+        icon = self.LEVEL_ICONS.get(record.levelno, "·")
+        reset = _ANSI["reset"] if self.use_color else ""
+        dim = _ANSI["dim"] if self.use_color else ""
+        gray = _ANSI["gray"] if self.use_color else ""
+        bold = _ANSI["bold"] if self.use_color else ""
+
+        if not self.use_color:
+            level_color = ""
+
+        # Shorten the logger name (venvstudio.core.venv_manager → core.venv_manager)
+        name = record.name
+        if name.startswith("venvstudio."):
+            name = name[len("venvstudio."):]
+
+        # Compose: "HH:MM:SS │ icon level │ name  │ message"
+        line = (
+            f"{gray}{ts}{reset} {dim}│{reset} "
+            f"{level_color}{icon} {record.levelname:<7}{reset} {dim}│{reset} "
+            f"{bold}{name:<22}{reset} {dim}│{reset} "
+            f"{record.getMessage()}"
+        )
+
+        if record.exc_info:
+            line += "\n" + self.formatException(record.exc_info)
+        return line
+
+
+def _build_ansi_console_handler() -> logging.Handler:
+    """Build a stream handler with the ANSI colored formatter."""
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setLevel(logging.DEBUG)
+    ch.setFormatter(_AnsiFormatter(use_color=True))
+    return ch
+
+
+# =====================================================================
+#  BANNER HELPERS — visually highlight major events
+# =====================================================================
+
+def _has_rich() -> bool:
+    """Check if Rich is importable."""
+    try:
+        import rich  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def banner(title: str, style: str = "info", details: Optional[List[str]] = None,
+           logger: Optional[logging.Logger] = None) -> None:
+    """
+    Print a visually distinct banner for major events.
+
+    Styles:
+      - "start"    → 🚀 blue/cyan, for operations beginning
+      - "success"  → ✅ green, for completed operations
+      - "warning"  → ⚠️  yellow
+      - "error"    → ❌ red, for failures
+      - "info"     → ℹ️  cyan (default)
+
+    `details` is an optional list of bullet points shown under the title.
+    If a `logger` is passed, the banner is also recorded at INFO level
+    (with ANSI codes stripped for clean log files).
+
+    Cross-platform: uses Rich panel if available, otherwise ANSI box art.
+    """
+    style_config = {
+        "start":   {"color": "br_cyan",    "icon": "🚀", "rich_style": "bold cyan"},
+        "success": {"color": "br_green",   "icon": "✅", "rich_style": "bold green"},
+        "warning": {"color": "br_yellow",  "icon": "⚠️ ", "rich_style": "bold yellow"},
+        "error":   {"color": "br_red",     "icon": "❌", "rich_style": "bold red"},
+        "info":    {"color": "br_cyan",    "icon": "ℹ️ ", "rich_style": "cyan"},
+    }
+    cfg = style_config.get(style, style_config["info"])
+
+    # ── Try Rich panel ──
+    if _has_rich():
+        try:
+            from rich.console import Console
+            from rich.panel import Panel
+            from rich.text import Text
+
+            content_lines = [Text(f"{cfg['icon']}  {title}", style=cfg["rich_style"])]
+            if details:
+                for d in details:
+                    content_lines.append(Text(f"   • {d}", style="dim"))
+
+            # Combine into a single renderable
+            combined = Text()
+            for i, line in enumerate(content_lines):
+                if i > 0:
+                    combined.append("\n")
+                combined.append_text(line)
+
+            console = Console(force_terminal=True, color_system="auto")
+            panel = Panel(
+                combined,
+                border_style=cfg["rich_style"],
+                padding=(0, 2),
+                expand=False,
+            )
+            console.print(panel)
+
+            if logger:
+                logger.info(f"[{style.upper()}] {title}" +
+                            (" · " + " · ".join(details) if details else ""))
+            return
+        except Exception:
+            pass  # fall through to ANSI
+
+    # ── ANSI fallback ──
+    use_color = _ansi_supported()
+    color = _ANSI[cfg["color"]] if use_color else ""
+    bold = _ANSI["bold"] if use_color else ""
+    dim = _ANSI["dim"] if use_color else ""
+    reset = _ANSI["reset"] if use_color else ""
+
+    # Compute box width (at least title + 8, cap at 78)
+    lines = [f"{cfg['icon']}  {title}"]
+    if details:
+        lines.extend(f"   • {d}" for d in details)
+    inner_width = min(max(max(len(line) for line in lines) + 4, 40), 78)
+
+    top = f"{color}{bold}╭{'─' * (inner_width - 2)}╮{reset}"
+    bot = f"{color}{bold}╰{'─' * (inner_width - 2)}╯{reset}"
+    print(top)
+    for i, line in enumerate(lines):
+        pad = inner_width - 2 - len(line) - 2  # - 2 for leading/trailing space
+        if i == 0:
+            print(f"{color}{bold}│{reset} {color}{bold}{line}{reset}{' ' * pad} {color}{bold}│{reset}")
+        else:
+            print(f"{color}│{reset} {dim}{line}{reset}{' ' * pad} {color}│{reset}")
+    print(bot)
+
+    if logger:
+        logger.info(f"[{style.upper()}] {title}" +
+                    (" · " + " · ".join(details) if details else ""))
+
+
+def banner_start(title: str, details: Optional[List[str]] = None,
+                 logger: Optional[logging.Logger] = None) -> None:
+    """Convenience: start banner for beginning of an operation."""
+    banner(title, "start", details, logger)
+
+
+def banner_success(title: str, details: Optional[List[str]] = None,
+                   logger: Optional[logging.Logger] = None) -> None:
+    """Convenience: success banner for completed operation."""
+    banner(title, "success", details, logger)
+
+
+def banner_error(title: str, details: Optional[List[str]] = None,
+                 logger: Optional[logging.Logger] = None) -> None:
+    """Convenience: error banner for failed operation."""
+    banner(title, "error", details, logger)
+
+
+def banner_warning(title: str, details: Optional[List[str]] = None,
+                   logger: Optional[logging.Logger] = None) -> None:
+    """Convenience: warning banner."""
+    banner(title, "warning", details, logger)
+
+
+# =====================================================================
+#  ORIGINAL SETUP_LOGGING (below, unchanged in structure)
+# =====================================================================
+
+
 def setup_logging() -> logging.Logger:
     """
     Initialize the VenvStudio logging system.
@@ -187,15 +439,35 @@ def setup_logging() -> logging.Logger:
     _debug_env = bool(os.environ.get("VENVSTUDIO_DEBUG"))
 
     if (_has_tty or _debug_env) and not _quiet:
-        # Human-friendly console formatter — shorter than file formatter
-        console_fmt = logging.Formatter(
-            "%(asctime)s [%(levelname)-7s] %(name)-20s | %(message)s",
-            datefmt="%H:%M:%S",
-        )
-        ch = logging.StreamHandler(sys.stdout)
-        ch.setLevel(logging.DEBUG)
-        ch.setFormatter(console_fmt)
-        logger.addHandler(ch)
+        # ── Try Rich first (pretty colors + syntax highlighting + tracebacks) ──
+        _console_handler = None
+        try:
+            from rich.logging import RichHandler
+            from rich.console import Console
+            _rich_console = Console(
+                force_terminal=True,
+                color_system="auto",
+                stderr=False,
+            )
+            rh = RichHandler(
+                console=_rich_console,
+                show_time=True,
+                show_level=True,
+                show_path=False,
+                markup=True,
+                rich_tracebacks=True,
+                tracebacks_show_locals=False,
+                omit_repeated_times=False,
+            )
+            rh.setLevel(logging.DEBUG)
+            # Rich handles level/time formatting; we only want the message
+            rh.setFormatter(logging.Formatter("%(name)-22s  %(message)s"))
+            _console_handler = rh
+        except ImportError:
+            # ── Fallback: ANSI colored console handler ──
+            _console_handler = _build_ansi_console_handler()
+
+        logger.addHandler(_console_handler)
 
     # ── Session header ──
     ctx = _collect_session_context()

@@ -8,7 +8,7 @@ from pathlib import Path
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QComboBox, QCheckBox, QPushButton, QFileDialog, QMessageBox,
-    QGroupBox, QFormLayout, QProgressBar, QSizePolicy, QWidget,
+    QGroupBox, QFormLayout, QProgressBar, QSizePolicy, QWidget, QTextEdit,
 )
 from PySide6.QtCore import Qt, Signal, QThread
 
@@ -63,8 +63,8 @@ class EnvCreateDialog(QDialog):
         self.worker = None
 
         self.setWindowTitle("Create New Environment")
-        self.setMinimumSize(980, 560)
-        self.resize(1040, 600)
+        self.setMinimumSize(1060, 620)
+        self.resize(1120, 680)
         self.setModal(True)
         self._setup_ui()
 
@@ -335,7 +335,7 @@ class EnvCreateDialog(QDialog):
         left.addWidget(self.options_group)
         left.addStretch()
 
-        body.addLayout(left, stretch=5)
+        body.addLayout(left, stretch=3)
 
         # RIGHT: terminal (always visible, never causes resize)
         right_group = QGroupBox("Progress")
@@ -343,7 +343,7 @@ class EnvCreateDialog(QDialog):
         right_inner.setSpacing(8)
 
         self.status_label = QLabel("Ready.")
-        self.status_label.setStyleSheet("color: #585b70; font-size: 12px;")
+        self.status_label.setStyleSheet("color: #585b70; font-size: 14px; font-weight: bold; padding: 2px 0;")
         right_inner.addWidget(self.status_label)
 
         self.progress_bar = QProgressBar()
@@ -351,23 +351,33 @@ class EnvCreateDialog(QDialog):
         self.progress_bar.setVisible(False)
         right_inner.addWidget(self.progress_bar)
 
-        self.cmd_label = QLabel(
-            "💡 Equivalent terminal commands\nwill appear here when creation starts."
+        # Progress message label (above hints)
+        self.progress_msg_label = QLabel("")
+        self.progress_msg_label.setWordWrap(True)
+        self.progress_msg_label.setStyleSheet(
+            "color: #89b4fa; font-size: 16px; font-weight: bold; padding: 3px 4px;"
         )
+        self.progress_msg_label.setVisible(False)
+        right_inner.addWidget(self.progress_msg_label)
+
+        # Hints panel — rich HTML, stays visible always
+        self.cmd_label = QTextEdit()
+        self.cmd_label.setReadOnly(True)
         self.cmd_label.setStyleSheet(
-            "background-color: #1e1e2e; border: 1px solid #45475a; "
-            "border-radius: 6px; padding: 14px; color: #585b70; "
-            "font-family: Consolas, monospace; font-size: 14px;"
+            "background-color: #181825; border: 1px solid #313244; "
+            "border-radius: 8px; padding: 4px; color: #cdd6f4; "
+            "font-family: Consolas, monospace; font-size: 15px;"
         )
-        self.cmd_label.setWordWrap(True)
-        self.cmd_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self.cmd_label.setAlignment(Qt.AlignTop | Qt.AlignLeft)
         self.cmd_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.cmd_label.setHtml(
+            "<p style='color:#585b70;font-size:12px;padding:8px;'>"
+            "💡 Select an environment type to see terminal commands.</p>"
+        )
         right_inner.addWidget(self.cmd_label, stretch=1)
 
         right_group.setLayout(right_inner)
         right_group.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        body.addWidget(right_group, stretch=5)
+        body.addWidget(right_group, stretch=7)
 
         root.addLayout(body, stretch=1)
 
@@ -452,43 +462,76 @@ class EnvCreateDialog(QDialog):
         if hasattr(self, "subtitle_label"):
             self.subtitle_label.setText(subtitles.get(env_type, subtitles["venv"]))
 
-        # Progress panel hints
+        # Progress panel hints — rich HTML with syntax colors
+        def _cmd(t): return f"<span style='color:#89b4fa;font-family:Consolas,monospace;font-size:15px;'>{t}</span>"
+        def _path(t): return f"<span style='color:#a6e3a1;font-family:Consolas,monospace;font-size:15px;'>{t}</span>"
+        def _kw(t): return f"<span style='color:#cba6f7;font-family:Consolas,monospace;font-weight:bold;font-size:15px;'>{t}</span>"
+        def _ver(t): return f"<span style='color:#f9e2af;font-family:Consolas,monospace;font-size:15px;'>{t}</span>"
+        def _title(icon, text, color='#cdd6f4'): return f"<p style='font-size:20px;font-weight:bold;color:{color};margin:10px 0 6px 0;letter-spacing:0.5px;'>{icon}&nbsp; {text}</p>"
+        def _line(t): return f"<p style='margin:4px 0;font-size:15px;font-family:Consolas,monospace;color:#cdd6f4;background:#11111b;padding:4px 10px;border-radius:4px;'>{t}</p>"
+        def _note(t): return f"<p style='margin:10px 0 2px 0;font-size:12px;color:#6c7086;font-style:italic;'>{t}</p>"
         hints = {
             "venv": (
-                "💡  Equivalent terminal commands:\n"
-                "will appear here when creation starts."
+                _title("🐍", "Python venv", "#89b4fa") +
+                _note("Standard library virtual environment") +
+                _line(_kw("python") + " -m " + _cmd("venv") + " " + _path("myproject")) +
+                _note("Activate — Linux/macOS:") +
+                _line(_cmd("source") + " " + _path("myproject/bin/activate")) +
+                _note("Activate — Windows:") +
+                _line(_path("myproject\\Scripts\\activate")) +
+                _note("Install packages:") +
+                _line(_cmd("pip") + " install " + _kw("numpy") + " " + _kw("pandas")) +
+                _note("Deactivate:") +
+                _line(_cmd("deactivate"))
             ),
             "uv": (
-                "⚡  uv is 10-100x faster than pip.\n\n"
-                "uv will be downloaded automatically\n"
-                "if not already installed (~5 MB).\n\n"
-                "Equivalent: uv venv <name>"
+                _title("⚡", "uv — Ultra Fast", "#f9e2af") +
+                _note("10-100x faster than pip. Rust-powered.") +
+                _line(_cmd("uv") + " venv " + _path("myproject")) +
+                _note("With specific Python version:") +
+                _line(_cmd("uv") + " venv --python " + _ver("3.12") + " " + _path("myproject")) +
+                _note("Install packages:") +
+                _line(_cmd("uv") + " pip install " + _kw("numpy") + " " + _kw("pandas")) +
+                _note("Run without activating:") +
+                _line(_cmd("uv") + " run " + _kw("python") + " script.py")
             ),
             "poetry": (
-                "📜  Poetry manages dependencies and\n"
-                "virtual environments together.\n\n"
-                "💡  Equivalent terminal commands:\n\n"
-                "$ pip install poetry\n"
-                "$ poetry new <name>\n"
-                "$ cd <name> && poetry install"
+                _title("📜", "Poetry", "#cba6f7") +
+                _note("Dependency management + virtual environments") +
+                _line(_cmd("pip") + " install " + _kw("poetry")) +
+                _note("Create new project:") +
+                _line(_cmd("poetry") + " new " + _path("myproject")) +
+                _line(_cmd("cd") + " " + _path("myproject") + " &amp;&amp; " + _cmd("poetry") + " install") +
+                _note("Add dependencies:") +
+                _line(_cmd("poetry") + " add " + _kw("numpy") + " " + _kw("pandas")) +
+                _note("Run scripts:") +
+                _line(_cmd("poetry") + " run " + _kw("python") + " script.py")
             ),
             "pipx": (
-                "📦  pipx installs Python CLI apps\n"
-                "into isolated environments.\n\n"
-                "💡  Equivalent terminal commands:\n\n"
-                "$ pip install --user pipx\n"
-                "$ pipx install <package>\n"
-                "$ pipx list"
+                _title("📦", "pipx", "#a6e3a1") +
+                _note("Install Python CLI apps in isolated environments") +
+                _line(_cmd("pip") + " install --user " + _kw("pipx")) +
+                _line(_cmd("pipx") + " ensurepath") +
+                _note("Install a CLI tool globally:") +
+                _line(_cmd("pipx") + " install " + _kw("black")) +
+                _note("List installed apps:") +
+                _line(_cmd("pipx") + " list") +
+                _note("Run without installing:") +
+                _line(_cmd("pipx") + " run " + _kw("cowsay") + " Hello!")
             ),
             "conda": (
-                "🦎  A Conda Environment will be created\n"
-                "    using micromamba + conda-forge.\n\n"
-                "You can install R, RStudio, jamovi, JASP,\n"
-                "DBeaver and 25,000+ packages from the\n"
-                "Launch tab after creation."
+                _title("🦎", "Conda (micromamba)", "#89dceb") +
+                _note("conda-forge — 25,000+ packages incl. R, RStudio") +
+                _line(_cmd("micromamba") + " create -n " + _path("myenv") + " python=" + _ver("3.12")) +
+                _note("Activate:") +
+                _line(_cmd("micromamba") + " activate " + _path("myenv")) +
+                _note("Install packages:") +
+                _line(_cmd("micromamba") + " install -c conda-forge " + _kw("numpy") + " " + _kw("r-base")) +
+                _note("List environments:") +
+                _line(_cmd("micromamba") + " env list")
             ),
         }
-        self.cmd_label.setText(hints.get(env_type, hints["venv"]))
+        self.cmd_label.setHtml(hints.get(env_type, hints["venv"]))
 
     def _on_python_changed(self, index):
         """Seçili Python'un tam yolunu göster."""
@@ -885,7 +928,8 @@ class EnvCreateDialog(QDialog):
             self.create_btn.setText("Creating...")
             self.name_input.setEnabled(False)
             self.env_type_combo.setEnabled(False)
-            self.status_label.setText("Preparing micromamba...")
+            self.status_label.setStyleSheet("color: #89b4fa; font-size: 15px; font-weight: bold;")
+            self.status_label.setText("⚙️ Preparing micromamba...")
 
             def _do_conda_create(callback=None):
                 from src.core.micromamba_installer import (
@@ -923,18 +967,20 @@ class EnvCreateDialog(QDialog):
                 self.name_input.setEnabled(True)
                 self.env_type_combo.setEnabled(True)
                 if success:
+                    self.status_label.setStyleSheet("color: #a6e3a1; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"✅ {message}")
                     self.env_created.emit(name)
                     from PySide6.QtCore import QTimer
                     QTimer.singleShot(800, self.accept)
                 else:
+                    self.status_label.setStyleSheet("color: #f38ba8; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"❌ {message}")
                     QMessageBox.critical(self, "Error", message)
 
             from src.gui.package_panel import WorkerThread
             self.worker = WorkerThread(_do_conda_create)
             self.worker.progress.connect(
-                lambda msg: self.cmd_label.setText(msg))
+                lambda msg: (self.progress_msg_label.setVisible(bool(msg)), self.progress_msg_label.setText(msg)))
             self.worker.finished.connect(_on_conda_done)
             self.worker.start()
             return
@@ -1017,7 +1063,8 @@ class EnvCreateDialog(QDialog):
             self.create_btn.setText("Creating...")
             self.name_input.setEnabled(False)
             self.env_type_combo.setEnabled(False)
-            self.status_label.setText(f"Creating {env_type} environment...")
+            self.status_label.setStyleSheet("color: #89b4fa; font-size: 15px; font-weight: bold;")
+            self.status_label.setText(f"⚙️ Creating {env_type} environment...")
 
             _env_path = env_path
             _python  = python_path
@@ -1310,17 +1357,19 @@ class EnvCreateDialog(QDialog):
                 self.name_input.setEnabled(True)
                 self.env_type_combo.setEnabled(True)
                 if success:
+                    self.status_label.setStyleSheet("color: #a6e3a1; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"✅ {message}")
                     self.env_created.emit(_name)
                     from PySide6.QtCore import QTimer
                     QTimer.singleShot(800, self.accept)
                 else:
+                    self.status_label.setStyleSheet("color: #f38ba8; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"❌ Failed")
                     QMessageBox.critical(self, "Error", message)
 
             from src.gui.package_panel import WorkerThread
             self.worker = WorkerThread(_do_alt_create)
-            self.worker.progress.connect(lambda msg: self.cmd_label.setText(msg))
+            self.worker.progress.connect(lambda msg: (self.progress_msg_label.setVisible(bool(msg)), self.progress_msg_label.setText(msg)))
             self.worker.finished.connect(_on_alt_done)
             self.worker.start()
             return
@@ -1333,8 +1382,8 @@ class EnvCreateDialog(QDialog):
         self.create_btn.setText("Creating...")
         self.name_input.setEnabled(False)
         self.python_combo.setEnabled(False)
-        self.status_label.setStyleSheet("color: #a6adc8; font-size: 12px;")
-        self.status_label.setText("Initializing environment...")
+        self.status_label.setStyleSheet("color: #89b4fa; font-size: 15px; font-weight: bold;")
+        self.status_label.setText("⚙️ Initializing...")
         self.cancel_btn.setText("Cancel")
         self.cancel_btn.setObjectName("danger")
         self.cancel_btn.setStyleSheet("")
@@ -1345,20 +1394,34 @@ class EnvCreateDialog(QDialog):
         venv_path = os.path.join(location, name)
 
         from src.utils.platform_utils import get_platform
-        cmds = ["💡  Equivalent terminal commands:", ""]
-        cmds.append(f"$ {py_exe} -m venv {venv_path}")
+        def _c(t): return f"<span style='color:#89b4fa;font-family:Consolas,monospace;font-size:15px;'>{t}</span>"
+        def _p(t): return f"<span style='color:#a6e3a1;font-family:Consolas,monospace;font-size:15px;'>{t}</span>"
+        def _k(t): return f"<span style='color:#cba6f7;font-family:Consolas,monospace;font-weight:bold;font-size:15px;'>{t}</span>"
+        def _ln(t): return f"<p style='margin:4px 0;font-size:15px;font-family:Consolas,monospace;color:#cdd6f4;background:#11111b;padding:4px 10px;border-radius:4px;'>{t}</p>"
+        def _nt(t): return f"<p style='margin:10px 0 2px 0;font-size:12px;color:#6c7086;font-style:italic;'>{t}</p>"
+        def _ttl(icon,txt,col): return f"<p style='font-size:20px;font-weight:bold;color:{col};margin:10px 0 6px 0;'>{icon}&nbsp; {txt}</p>"
         if get_platform() == "windows":
-            cmds.append(f"$ {venv_path}\\Scripts\\Activate.ps1")
+            activate_cmd = _ln(_p(venv_path + "\\Scripts\\Activate.ps1"))
+            activate_note = _nt("Activate (Windows PowerShell):")
         else:
-            cmds.append(f"$ source {venv_path}/bin/activate")
-        cmds.append("$ pip install --upgrade pip")
-
-        self.cmd_label.setStyleSheet(
-            "background-color: #1e1e2e; border: 1px solid #45475a; "
-            "border-radius: 6px; padding: 14px; color: #a6e3a1; "
-            "font-family: Consolas, monospace; font-size: 14px;"
+            activate_cmd = _ln(_c("source") + " " + _p(f"{venv_path}/bin/activate"))
+            activate_note = _nt("Activate (Linux/macOS):")
+        html = (
+            _ttl("🐍", "Python venv", "#89b4fa") +
+            _nt("Create virtual environment:") +
+            _ln(_k("python") + " -m " + _c("venv") + " " + _p(venv_path)) +
+            activate_note +
+            activate_cmd +
+            _nt("Upgrade pip:") +
+            _ln(_c("pip") + " install --upgrade " + _k("pip")) +
+            _nt("Install packages:") +
+            _ln(_c("pip") + " install " + _k("numpy") + " " + _k("pandas")) +
+            _nt("Save dependencies:") +
+            _ln(_c("pip") + " freeze > " + _p("requirements.txt")) +
+            _nt("Deactivate:") +
+            _ln(_c("deactivate"))
         )
-        self.cmd_label.setText("\n".join(cmds))
+        self.cmd_label.setHtml(html)
 
         self.worker = CreateWorker(
             self.venv_manager, name, python_path,

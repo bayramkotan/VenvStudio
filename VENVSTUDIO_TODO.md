@@ -313,6 +313,12 @@
 - **Progress tracking** — hangi topic'leri okuduğunu işaretle
 - **Arama** — topic başlığı ve içeriğinde full-text search
 
+### 🔴 B136 — env_dialog Komutlar Küçük Görünüyor
+- Sağ panel (Progress/hints) çok dar — komutlar kısalıyor
+- Dialog boyutu 1120x680 yapıldı, stretch 3:7 ama hâlâ küçük görünüyor
+- Olası çözüm: QScrollArea içine al, ya da font daha da büyüt (18px?)
+- Veya hints paneli ayrı bir scrollable widget olsun
+
 ## 🔴 KRİTİK BUGLAR
 
 - **B42** — Python yükleyici güvenlik kontrolleri (en sona alındı)

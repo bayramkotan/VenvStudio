@@ -627,6 +627,15 @@ class VenvManager:
                     # Name: strip hash suffix e.g. poetryenv-0KHIYmlT-py3.14 → poetryenv
                     _parts = _penv.name.rsplit("-", 2)
                     _pname = _parts[0] if len(_parts) >= 3 else _penv.name
+                    # Apply display name override if user set one
+                    _display_override = _penv / ".venvstudio_display_name"
+                    if _display_override.exists():
+                        try:
+                            _dn = _display_override.read_text(encoding="utf-8").strip()
+                            if _dn:
+                                _pname = _dn
+                        except Exception:
+                            pass
                     _pinfo = VenvInfo(name=_pname, path=_penv, is_valid=True, env_type="poetry")
                     # Python version from pyvenv.cfg
                     _pycfg = _penv / "pyvenv.cfg"
@@ -1181,16 +1190,162 @@ class VenvManager:
 
         return info
 
-    def clone_venv(self, source_name: str, target_name: str, callback=None) -> tuple[bool, str]:
-        source_path = self.base_dir / source_name
-        if not source_path.exists():
-            return False, f"Source environment '{source_name}' not found"
+    def clone_venv(self, source_name: str, target_name: str, callback=None,
+                   source_path: Optional[str] = None, source_type: str = "venv") -> tuple[bool, str]:
+        # ── Env-type guards: pipx / poetry not supported via Clone ─────────
+        if source_type == "pipx":
+            return False, (
+                "Cloning a pipx environment is not supported.\n\n"
+                "pipx manages its own isolated environments per CLI app.\n"
+                "To replicate a pipx app elsewhere, run:\n\n"
+                f"    pipx install {source_name}\n"
+                "    pipx reinstall-all\n\n"
+                "Or list installed apps with:\n\n"
+                "    pipx list"
+            )
+        if source_type == "poetry":
+            return False, (
+                "Cloning a Poetry environment is not supported directly.\n\n"
+                "Poetry environments are tied to a project's pyproject.toml.\n"
+                "To replicate the environment:\n\n"
+                "    cd <your-project>\n"
+                "    poetry lock\n"
+                "    poetry install\n\n"
+                "Or copy pyproject.toml + poetry.lock to the new project and run:\n\n"
+                "    poetry install"
+            )
+
+        source_path_obj = Path(source_path) if source_path else (self.base_dir / source_name)
+        if not source_path_obj.exists():
+            return False, f"Source environment '{source_name}' not found at {source_path_obj}"
 
         target_path = self.base_dir / target_name
         if target_path.exists():
             return False, f"Target environment '{target_name}' already exists"
 
-        source_pip = get_pip_executable(source_path)
+        # ── conda clone via micromamba create --clone ──────────────────────
+        if source_type == "conda":
+            try:
+                from src.core.micromamba_installer import get_micromamba_exe, write_conda_marker
+                mm = get_micromamba_exe()
+                if not mm:
+                    return False, (
+                        "micromamba not found. Install it via Settings → Toolchain Manager, "
+                        "or clone manually:\n\n"
+                        f"    micromamba env export -p {source_path_obj} > env.yml\n"
+                        f"    micromamba create -p {target_path} --file env.yml"
+                    )
+                if callback:
+                    callback(f"Cloning conda env to '{target_name}'...")
+                result = _run(
+                    [str(mm), "create", "-p", str(target_path),
+                     "--clone", str(source_path_obj), "--yes"],
+                    capture_output=True, text=True, timeout=600,
+                )
+                if result.returncode != 0:
+                    return False, f"micromamba clone failed:\n{result.stderr.strip() or result.stdout.strip()}"
+
+                # Write marker so VenvStudio recognizes it as conda
+                # Try to detect python version from the new env
+                _pyver = ""
+                try:
+                    _py = get_python_executable(target_path)
+                    if _py.exists():
+                        _r = _run([str(_py), "--version"],
+                                  capture_output=True, text=True, timeout=5)
+                        _pyver = (_r.stdout or _r.stderr).strip().replace("Python", "").strip()
+                except Exception:
+                    pass
+                try:
+                    write_conda_marker(target_path, python_version=_pyver or "3.12")
+                except Exception:
+                    pass
+
+                return True, f"Conda environment '{source_name}' cloned to '{target_name}' successfully"
+            except Exception as e:
+                return False, f"Error cloning conda env: {e}"
+
+        # ── uv clone: uv pip freeze → uv venv → uv pip install ─────────────
+        if source_type == "uv":
+            try:
+                import shutil as _sh
+                uv_bin = _sh.which("uv")
+                if not uv_bin:
+                    # Platform-aware manual command example
+                    from src.utils.platform_utils import get_platform as _gp
+                    if _gp() == "windows":
+                        _src_py_hint = f"{source_path_obj}\\Scripts\\python.exe"
+                        _tgt_py_hint = f"{target_path}\\Scripts\\python.exe"
+                    else:
+                        _src_py_hint = f"{source_path_obj}/bin/python"
+                        _tgt_py_hint = f"{target_path}/bin/python"
+                    return False, (
+                        "uv not found in PATH. Install it via Settings → Toolchain Manager,\n"
+                        "or clone manually:\n\n"
+                        f"    uv pip freeze --python {_src_py_hint} > req.txt\n"
+                        f"    uv venv {target_path}\n"
+                        f"    uv pip install -r req.txt --python {_tgt_py_hint}"
+                    )
+
+                src_py = get_python_executable(source_path_obj)
+                if not src_py.exists():
+                    return False, f"Source Python interpreter not found at {src_py}"
+
+                if callback:
+                    callback(f"Reading packages from '{source_name}' (uv pip freeze)...")
+                result = _run(
+                    [uv_bin, "pip", "freeze", "--python", str(src_py)],
+                    capture_output=True, text=True, timeout=30,
+                )
+                if result.returncode != 0:
+                    return False, f"uv pip freeze failed:\n{result.stderr.strip()}"
+                requirements = result.stdout
+
+                if callback:
+                    callback(f"Creating new uv env '{target_name}'...")
+                # Use the same Python as source to preserve version
+                result = _run(
+                    [uv_bin, "venv", str(target_path), "--python", str(src_py)],
+                    capture_output=True, text=True, timeout=60,
+                )
+                if result.returncode != 0:
+                    # Retry without --python in case the source interp isn't discoverable
+                    result = _run(
+                        [uv_bin, "venv", str(target_path)],
+                        capture_output=True, text=True, timeout=60,
+                    )
+                    if result.returncode != 0:
+                        return False, f"uv venv failed:\n{result.stderr.strip()}"
+
+                if requirements.strip():
+                    req_file = target_path / "requirements_clone.txt"
+                    with open(req_file, "w") as f:
+                        f.write(requirements)
+
+                    target_py = get_python_executable(target_path)
+                    if callback:
+                        callback(f"Installing packages into '{target_name}' (uv pip install)...")
+                    result = _run(
+                        [uv_bin, "pip", "install", "-r", str(req_file),
+                         "--python", str(target_py)],
+                        capture_output=True, text=True, timeout=600,
+                    )
+                    req_file.unlink(missing_ok=True)
+                    if result.returncode != 0:
+                        return False, f"Created env but failed to install some packages:\n{result.stderr.strip()}"
+
+                return True, f"uv environment '{source_name}' cloned to '{target_name}' successfully"
+            except Exception as e:
+                return False, f"Error cloning uv env: {e}"
+
+        # ── venv clone (default): pip freeze → create → pip install -r ─────
+        source_pip = get_pip_executable(source_path_obj)
+        if not source_pip.exists():
+            return False, (
+                f"Source pip not found at {source_pip}.\n\n"
+                f"This env appears to have no pip installed. Install pip first, or\n"
+                f"recreate the env with '--with-pip' and try again."
+            )
 
         try:
             result = _run(
@@ -1226,39 +1381,101 @@ class VenvManager:
         except Exception as e:
             return False, f"Error cloning environment: {str(e)}"
 
-    def rename_venv(self, old_name: str, new_name: str) -> tuple[bool, str]:
-        old_path = self.base_dir / old_name
-        new_path = self.base_dir / new_name
+    def rename_venv(self, old_name: str, new_name: str,
+                    old_path: Optional[str] = None, env_type: str = "venv") -> tuple[bool, str]:
+        # ── Env-type guards ────────────────────────────────────────────────
+        if env_type == "pipx":
+            return False, (
+                "Renaming a pipx environment is not supported.\n\n"
+                "pipx apps are identified by their package name. To 'rename':\n\n"
+                f"    pipx uninstall {old_name}\n"
+                f"    pipx install {new_name}"
+            )
+        if env_type == "poetry":
+            return False, (
+                "Renaming a Poetry environment by folder is not supported.\n\n"
+                "Poetry env names are derived from the project name in pyproject.toml.\n"
+                "To rename, update the 'name' field in your pyproject.toml, then run:\n\n"
+                "    poetry env remove --all\n"
+                "    poetry install"
+            )
+        if env_type == "conda":
+            return False, (
+                "Renaming a conda environment in place is not supported by micromamba.\n\n"
+                "Use the 'Rename (Full)' option instead, which will:\n"
+                "  1. Export packages from the old env\n"
+                "  2. Create a new env with the desired name\n"
+                "  3. Delete the old env\n\n"
+                "Or do it manually:\n\n"
+                f"    micromamba env export -n {old_name} > env.yml\n"
+                f"    micromamba create -n {new_name} --file env.yml\n"
+                f"    micromamba env remove -n {old_name} --yes"
+            )
 
-        if not old_path.exists():
-            return False, f"Environment '{old_name}' not found"
-        if new_path.exists():
+        # ── venv / uv: folder rename ───────────────────────────────────────
+        old_path_obj = Path(old_path) if old_path else (self.base_dir / old_name)
+        new_path_obj = self.base_dir / new_name
+
+        if not old_path_obj.exists():
+            return False, f"Environment '{old_name}' not found at {old_path_obj}"
+        if new_path_obj.exists():
             return False, f"Environment '{new_name}' already exists"
 
         try:
-            old_path.rename(new_path)
+            old_path_obj.rename(new_path_obj)
             return True, f"Environment '{old_name}' renamed to '{new_name}'"
         except Exception as e:
             return False, f"Error renaming environment: {str(e)}"
 
-    def rename_full_venv(self, old_name: str, new_name: str, callback=None) -> tuple[bool, str]:
+    def rename_full_venv(self, old_name: str, new_name: str, callback=None,
+                         old_path: Optional[str] = None, env_type: str = "venv") -> tuple[bool, str]:
         """
         Full rename: clone old env to new name, then delete old.
         Slower but safe — all packages reinstalled, paths correct.
         """
+        # Check env-type support via clone's guards first
+        if env_type in ("pipx", "poetry"):
+            # Delegate to clone_venv so user gets the helpful error
+            return self.clone_venv(old_name, new_name, callback=callback,
+                                   source_path=old_path, source_type=env_type)
+
         if callback:
             callback(f"Cloning '{old_name}' → '{new_name}'...")
-        success, msg = self.clone_venv(old_name, new_name, callback=callback)
+        success, msg = self.clone_venv(old_name, new_name, callback=callback,
+                                       source_path=old_path, source_type=env_type)
         if not success:
             return False, f"Failed to create '{new_name}': {msg}"
 
         if callback:
             callback(f"Deleting old environment '{old_name}'...")
-        old_path = self.base_dir / old_name
         try:
-            shutil.rmtree(old_path)
+            # Use delete_venv so conda/marker handling is correct
+            success, msg = self.delete_venv(old_name, callback=callback,
+                                            env_path=old_path, env_type=env_type)
+            if not success:
+                return False, f"'{new_name}' created but could not delete '{old_name}': {msg}"
         except Exception as e:
             return False, f"'{new_name}' created but could not delete '{old_name}': {e}"
 
         return True, f"Environment '{old_name}' fully renamed to '{new_name}'"
+
+    def set_poetry_display_name(self, env_path, new_display_name: str) -> tuple[bool, str]:
+        """Set a display name override for a Poetry env (VenvStudio-only, doesn't touch Poetry itself).
+        The override is stored in a .venvstudio_display_name file inside the poetry env dir.
+        """
+        try:
+            _p = Path(env_path)
+            if not _p.exists() or not _p.is_dir():
+                return False, f"Poetry environment path not found: {env_path}"
+            marker = _p / ".venvstudio_display_name"
+            if new_display_name.strip():
+                marker.write_text(new_display_name.strip(), encoding="utf-8")
+                return True, f"Display name set to '{new_display_name.strip()}'"
+            else:
+                # Empty → remove override (revert to default stripped name)
+                if marker.exists():
+                    marker.unlink()
+                return True, "Display name override cleared"
+        except Exception as e:
+            return False, f"Could not set display name: {e}"
 

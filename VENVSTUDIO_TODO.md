@@ -201,14 +201,126 @@ Her kütüphane için uzun bir dedike sayfa. Mevcut tek-snippet formatını **ge
 - **"Skip All"** butonu — wizard tekrar açılmasın (`welcome_shown` config)
 - Settings altında "🧙 Run Setup Wizard Again" butonu
 
-### ✨ F135 — Terminal Log Mirror
-- Uygulama GUI'deki tüm işlemleri terminal'e de yazsın
-- Env create → "python -m venv /path..." komutu terminal'de de görünsün
-- pip install → aynı şekilde
-- **Yeni dosya:** `src/utils/terminal_logger.py` — stdout + log dosyası + GUI status mirror
-- Opsiyonel: `--verbose` CLI flag ile detaylı log
-- Settings altında "Show commands in console" toggle
-- Kullanıcı copy-paste edip kendisi çalıştırabilsin
+### ✅ F135 — Terminal Log Mirror (KISMEN TAMAMLANDI v1.4.62+)
+- [x] TTY tespit edilirse console handler otomatik açılır
+- [x] `_run()` wrapper her subprocess çağrısını loglar (▶ cmd + exit code)
+- [x] create/delete/clone/rename/display_name — INFO level giriş log'ları
+- [x] `VENVSTUDIO_QUIET=1` ile opt-out
+- [x] Global `sys.excepthook` + `threading.excepthook` (B137 için)
+- [ ] Settings altında "Show commands in console" GUI toggle
+- [ ] `--verbose` / `--quiet` CLI flag'leri
+- [ ] package_panel.py, settings_*.py, env_dialog.py da logger ile donatılacak (şu an sadece core + main_window)
+- [ ] Terminal log'larda renkli output (Rich ile) — hata/uyarı ayırt edilsin
+
+### ✨ F136 — Python Temel Dersleri (Learn'e ek)
+Learn sayfasına yeni kategori: **"🐍 Python Temelleri"** — F130'un önünde yer almalı (yeni başlayanlar için)
+- [ ] Değişkenler, veri tipleri (int, float, str, bool, None)
+- [ ] Listeler, tuple, dict, set — ne zaman hangisi
+- [ ] Fonksiyonlar, *args, **kwargs, default/keyword arguments
+- [ ] Kontrol akışı: if/elif/else, for, while, match-case
+- [ ] List/dict/set comprehensions
+- [ ] Lambda, map, filter, reduce
+- [ ] Decorator'lar (basit örnekler)
+- [ ] Context manager (with statement) ve generator (yield)
+- [ ] Sınıflar, inheritance, dunder methods
+- [ ] Exception handling (try/except/finally/else)
+- [ ] Dosya I/O (open, pathlib, json, csv)
+- [ ] Modüller, paketler, `__init__.py`, relative vs absolute imports
+- [ ] Type hints (typing modülü, Optional, List, Dict, Callable)
+- [ ] async/await temelleri
+- [ ] Python'un iç işleyişi: GIL, reference counting, garbage collection
+- Her konsept 👶 çocuk modu + 🎓 detay + interaktif snippet ile anlatılacak
+- Hedef: Programlamaya hiç başlamamış biri bile bu kategoriyi bitirip F130'a geçebilmeli
+
+### ✨ F137 — İstatistik & Matematik Dersleri (Learn'e ek)
+Data Science ve ML'in matematik temellerini anlatan ayrı kategori: **"📐 Matematik & İstatistik"**
+- [ ] **İstatistik:**
+  - Merkezi eğilim (ortalama, medyan, mod)
+  - Dağılım (varyans, standart sapma, IQR)
+  - Korelasyon vs nedensellik
+  - Hipotez testi (t-test, chi-square, ANOVA)
+  - p-değeri nedir, ne değildir
+  - Güven aralığı, örneklem büyüklüğü
+  - Bayesian vs frequentist yaklaşım
+  - Dağılımlar: Normal, Binomial, Poisson, Exponential (görsel!)
+  - Central Limit Theorem (simülasyon ile)
+- [ ] **Doğrusal Cebir:**
+  - Vektör, matris, matris çarpımı
+  - Öz değer / öz vektör — görsel (PCA'nın temeli)
+  - Transpoz, determinant, ters matris
+  - Dot product, cross product (geometrik anlam)
+  - Norm (L1, L2, infinity)
+- [ ] **Kalkülüs:**
+  - Türev — eğim, değişim hızı (gradient descent'in temeli)
+  - Integral — altında kalan alan, kümülatif
+  - Kısmi türev — çok değişkenli fonksiyonlar için
+  - Chain rule — backpropagation'ın kalbi
+- [ ] **Olasılık:**
+  - Koşullu olasılık, Bayes teoremi
+  - Bağımsız olaylar, Markov property
+  - Beklenen değer
+  - Entropy ve cross-entropy (loss function için)
+- [ ] **Optimizasyon:**
+  - Convex vs non-convex problems
+  - Gradient descent varyantları (SGD, Adam, RMSprop — görsel animasyon)
+  - Learning rate, momentum
+- Her konu: SymPy + NumPy + matplotlib görsel, interaktif slider'lar (Streamlit / ipywidgets), çocuk modu analojileri
+
+### ✨ F138 — Visualization Detaylı Kategori (Learn'e ek)
+F130'da kısaca geçiyor, ayrı bir büyük kategori olsun: **"📊 Görselleştirme Atölyesi"**
+- [ ] **Matplotlib** — temelden ileri:
+  - figure, axes, subplot anatomi
+  - Line, scatter, bar, histogram, heatmap, contour, 3D surface
+  - Stil (rcParams, style sheets, seaborn-style)
+  - Twin axes, colorbars, legends
+  - Animasyon (FuncAnimation)
+  - Kaydetme: PNG vs SVG vs PDF, dpi, transparent
+- [ ] **Seaborn** — istatistik için:
+  - distplot, kdeplot, violinplot, boxplot, stripplot, swarmplot
+  - pairplot, jointplot, heatmap, clustermap
+  - FacetGrid, catplot
+  - Color palettes (categorical, sequential, diverging)
+- [ ] **Plotly** — interaktif:
+  - Express vs Graph Objects
+  - Scatter, line, bar, pie, sunburst, treemap
+  - 3D: scatter_3d, surface, mesh3d
+  - Geo: choropleth, scatter_geo, scatter_mapbox
+  - Dashboards: Dash framework örneği
+  - Animation frames (time series için)
+- [ ] **Bokeh** — büyük veri + web:
+  - ColumnDataSource, tools, HoverTool
+  - LinkedBrushing, LinkedAxes
+  - Server apps
+- [ ] **Altair** — Grammar of Graphics (declarative):
+  - Vega-Lite tabanlı
+  - Encoding channels (x, y, color, size, shape)
+  - Compound charts: layer, concat, repeat, facet
+- [ ] **PyVista / VTK** — 3D scientific viz:
+  - Volume rendering
+  - Mesh visualization
+  - CFD/FEM sonuçları
+- [ ] **Networkx + plotly/pyvis** — graph visualization
+- [ ] **Holoviews + DataShader** — çok büyük veri (milyarlarca nokta)
+- Her kütüphane için:
+  - Hangi durumda tercih edilir (karar ağacı)
+  - 5-10 "gallery" örneği — tam çalışan kod + çıktı
+  - Performans ipuçları
+  - Kitap önerileri (Fundamentals of Data Viz, Storytelling with Data)
+
+### ✨ F139 — Learn'den Install Yaparken Env Sorusu
+Şu an Learn sayfasında "⬇ Install [pkgs]" butonuna basınca current/default env'e kuruyor. **Önce hangi env diye sorsun:**
+- [ ] Install butonuna basılınca QDialog açılsın
+- [ ] Dialog içinde:
+  - Radio button: "Current selected env: X" (default, varsa)
+  - Radio button: "Default env: Y" (varsa ve current ile farklıysa)
+  - Dropdown: Tüm env'lerden seç
+  - Checkbox: "Create a new env for this" → tıklanırsa env name input'u göster
+- [ ] Pipx paketi ise otomatik tespit et (örnek: `streamlit`, `httpie`, `black`) → pipx install öner
+- [ ] Paketin uyumluluğunu kontrol et — env'in Python versiyonu paketin min gereksinimini karşılıyor mu
+- [ ] Install öncesi son onay ekranı: "Bu env'e X, Y, Z paketleri kurulacak. Devam?"
+- [ ] Install sonrası açılan env'in Packages sayfasına otomatik geçiş (opsiyonel, toggle)
+- Dosya: `src/gui/learn_install_dialog.py` — yeni dialog widget
+- `learn_page.py` → `install_requested.emit(pkgs)` yerine `install_requested.emit(pkgs, target_env)` (breaking change, main_window.py de güncellenmeli)
 
 ---
 

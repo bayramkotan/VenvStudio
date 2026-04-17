@@ -121,7 +121,6 @@ import subprocess
 import os
 import sys
 
-
 class WorkerThread(QThread):
     """Worker thread with cancel support."""
     finished = Signal(bool, str)
@@ -158,7 +157,6 @@ class WorkerThread(QThread):
 
     def cancel(self):
         self._cancelled = True
-
 
 class CommandHintDialog(QDialog):
     """Shows the equivalent pip command for educational purposes."""
@@ -202,7 +200,6 @@ class CommandHintDialog(QDialog):
         ok_btn.accepted.connect(self.accept)
         btn_layout.addWidget(ok_btn)
         layout.addLayout(btn_layout)
-
 
 class PackagePanel(QWidget):
     """Package management panel with catalog browsing and pip operations."""
@@ -297,7 +294,8 @@ class PackagePanel(QWidget):
 
         # Environment selector at top (2-row bar)
         self.env_bar = QFrame()
-        self.env_bar.setFixedHeight(72)
+        self.env_bar.setMinimumHeight(90)
+        self.env_bar.setMaximumHeight(90)
         self.env_bar.setStyleSheet(
             "QFrame { background-color: " + self._c()['sidebar'] + "; "
             "border-bottom: 2px solid #313244; }"
@@ -315,9 +313,13 @@ class PackagePanel(QWidget):
         row1.addWidget(env_lbl)
 
         self.env_selector = QComboBox()
-        self.env_selector.setMinimumWidth(280)
+        self.env_selector.setMinimumWidth(120)
         self.env_selector.setMaximumWidth(500)
         self.env_selector.setFixedHeight(34)
+        self.env_selector.setSizePolicy(
+            self.env_selector.sizePolicy().horizontalPolicy(),
+            self.env_selector.sizePolicy().verticalPolicy()
+        )
         # Disable mouse wheel scrolling on env selector to prevent accidental switches
         # wheelEvent enabled — scroll to switch environments
         self.env_selector.setStyleSheet(
@@ -356,7 +358,7 @@ class PackagePanel(QWidget):
         row1.addWidget(self._env_bar_terminal_btn)
 
         self.env_pkg_count = QLabel("")
-        self.env_pkg_count.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_subheader']}px; font-weight: bold; padding-left: 12px;")
+        self.env_pkg_count.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px; font-weight: bold; padding-left: 12px;")
         row1.addWidget(self.env_pkg_count)
 
         row1.addStretch()
@@ -365,7 +367,8 @@ class PackagePanel(QWidget):
 
         # ── Row 2: Info bar — path | disk size | backend | last used ──
         row2 = QHBoxLayout()
-        row2.setSpacing(16)
+        row2.setSpacing(12)
+        row2.setContentsMargins(0, 2, 0, 2)
 
         info_style = f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;"
         separator_style = f"color: {self._c()['border']}; font-size: {self._c()['fs_tiny']}px;"
@@ -411,21 +414,33 @@ class PackagePanel(QWidget):
 
         env_bar_outer.addLayout(row2)
 
-        layout.addWidget(self.env_bar)
+        # Wrap env_bar in scroll area for low-resolution / small window support
+        from PySide6.QtWidgets import QScrollArea as _QSA
+        _env_bar_scroll = _QSA()
+        _env_bar_scroll.setWidget(self.env_bar)
+        _env_bar_scroll.setWidgetResizable(True)
+        _env_bar_scroll.setFixedHeight(96)
+        _env_bar_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        _env_bar_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        _env_bar_scroll.setFrameShape(QFrame.NoFrame)
+        layout.addWidget(_env_bar_scroll)
 
         self.tabs = QTabWidget()
-        self.tabs.addTab(self._create_launcher_tab(), f"🚀 {tr('app_launcher')}")
-        self.tabs.addTab(self._create_installed_tab(), f"📦 {tr('installed')}")
-        self.tabs.addTab(self._create_catalog_tab(), f"🛒 {tr('catalog')}")
-        self.tabs.addTab(self._create_presets_tab(), f"⚡ {tr('presets')}")
-        self.tabs.addTab(self._create_manual_tab(), f"⌨️ {tr('manual_install')}")
+        self.tabs.setUsesScrollButtons(False)  # No < > scroll buttons
 
-        # Educational: Tab tooltips
-        self.tabs.setTabToolTip(0, UI_TOOLTIPS.get("tab_launch", ""))
-        self.tabs.setTabToolTip(1, UI_TOOLTIPS.get("tab_installed", ""))
-        self.tabs.setTabToolTip(2, UI_TOOLTIPS.get("tab_catalog", ""))
-        self.tabs.setTabToolTip(3, UI_TOOLTIPS.get("tab_presets", ""))
-        self.tabs.setTabToolTip(4, UI_TOOLTIPS.get("tab_manual", ""))
+        # Store tab definitions for dynamic show/hide via removeTab/insertTab
+        self._tab_defs = [
+            ("launcher",  f"🚀 {tr('app_launcher')}",   self._create_launcher_tab(),  UI_TOOLTIPS.get("tab_launch", "")),
+            ("installed", f"📦 {tr('installed')}",       self._create_installed_tab(), UI_TOOLTIPS.get("tab_installed", "")),
+            ("catalog",   f"🛒 {tr('catalog')}",         self._create_catalog_tab(),   UI_TOOLTIPS.get("tab_catalog", "")),
+            ("presets",   f"⚡ {tr('presets')}",         self._create_presets_tab(),   UI_TOOLTIPS.get("tab_presets", "")),
+            ("manual",    f"⌨️ {tr('manual_install')}",  self._create_manual_tab(),    UI_TOOLTIPS.get("tab_manual", "")),
+        ]
+        # Add all tabs initially
+        for key, label, widget, tooltip in self._tab_defs:
+            self.tabs.addTab(widget, label)
+        for i, (key, label, widget, tooltip) in enumerate(self._tab_defs):
+            self.tabs.setTabToolTip(i, tooltip)
         layout.addWidget(self.tabs)
 
         # Status bar with cancel button
@@ -477,119 +492,134 @@ class PackagePanel(QWidget):
         # App cards grid
         self.launcher_grid = QGridLayout()
         self.launcher_grid.setSpacing(16)
+        self.launcher_grid.setAlignment(Qt.AlignTop)
 
         self.app_definitions = [
             {
                 "name": "JupyterLab",
                 "icon": "🔬",
                 "icon_key": "jupyterlab",
+                "env_types": ["venv"],
                 "package": "jupyterlab",
                 "command": ["-m", "jupyter", "lab"],
                 "desc": "Next-generation notebook interface for interactive computing",
-            },
+                "needs_console": True,
+                            },
             {
                 "name": "Jupyter Notebook",
                 "icon": "📓",
                 "icon_key": "jupyter_notebook",
+                "env_types": ["venv"],
                 "package": "notebook",
                 "command": ["-m", "jupyter", "notebook"],
                 "desc": "Classic Jupyter Notebook — simple, document-centric interface",
-            },
+                "needs_console": True,
+                            },
             {
                 "name": "Orange Data Mining",
                 "icon": "🍊",
                 "icon_key": "orange3",
+                "env_types": ["venv"],
                 "package": "orange3",
                 "command": ["-m", "Orange.canvas"],
                 "desc": "Visual programming for data mining and machine learning",
                 "note": "Installs PyQt5 + orange3. chardet<4.0 applied automatically.",
-            },
+                            },
             {
                 "name": "Spyder IDE",
                 "icon": "🕷️",
                 "icon_key": "spyder",
+                "env_types": ["venv"],
                 "package": "spyder",
                 "command": ["-m", "spyder.app.start"],
                 "desc": "Scientific Python development environment",
-            },
+                            },
             {
                 "name": "IPython",
                 "icon": "🐍",
                 "icon_key": "ipython",
+                "env_types": ["venv"],
                 "package": "ipython",
                 "command": ["-m", "IPython"],
                 "desc": "Enhanced interactive Python shell",
                 "needs_console": True,
-            },
+                            },
             {
                 "name": "Streamlit",
                 "icon": "🎈",
                 "icon_key": "streamlit",
+                "env_types": ["venv"],
                 "package": "streamlit",
                 "command": ["-m", "streamlit", "hello", "--server.headless", "true"],
                 "desc": "Build data apps in minutes — launches demo app",
                 "needs_console": True,
                 "open_browser": "http://localhost:8501",
                 "browser_delay": 3,
-            },
+                            },
             {
                 "name": "Gradio",
                 "icon": "🤗",
                 "icon_key": "gradio",
+                "env_types": ["venv"],
                 "package": "gradio",
                 "command": ["-c", "import gradio as gr; gr.Interface(lambda x: x, 'text', 'text', title='Gradio Demo').launch()"],
                 "desc": "Build ML model demos & web apps",
                 "needs_console": True,
                 "open_browser": "http://localhost:7860",
                 "browser_delay": 4,
-            },
+                            },
             {
                 "name": "Dash",
                 "icon": "📊",
                 "icon_key": "dash",
+                "env_types": ["venv"],
                 "package": "dash",
                 "command": ["-c", "import dash; from dash import html; app=dash.Dash(); app.layout=html.H1('Dash is running!'); app.run(debug=False)"],
                 "desc": "Interactive dashboards by Plotly",
                 "needs_console": True,
                 "open_browser": "http://localhost:8050",
                 "browser_delay": 3,
-            },
+                            },
             {
                 "name": "Panel",
                 "icon": "🔲",
                 "icon_key": "panel",
+                "env_types": ["venv"],
                 "package": "panel",
                 "command": ["-m", "panel", "serve", "--show"],
                 "desc": "HoloViz dashboards & data apps",
                 "needs_console": True,
-            },
+                            },
             {
                 "name": "Voilà",
                 "icon": "📓",
                 "icon_key": "voila",
+                "env_types": ["venv"],
                 "package": "voila",
                 "command": ["-m", "voila", "--no-browser"],
                 "desc": "Turn notebooks into standalone web apps",
                 "needs_console": True,
                 "open_browser": "http://localhost:8866",
                 "browser_delay": 3,
-            },
+                            },
             {
                 "name": "MLflow UI",
                 "icon": "🧪",
                 "icon_key": "mlflow",
+                "env_types": ["venv"],
                 "package": "mlflow",
                 "command": ["-m", "mlflow", "ui"],
                 "desc": "ML experiment tracking & model registry",
                 "needs_console": True,
                 "open_browser": "http://localhost:5000",
                 "browser_delay": 3,
-            },
+                            },
             {
                 "name": "TensorBoard",
                 "script_launcher": True,
                 "icon": "📈",
                 "icon_key": "tensorboard",
+                "env_types": ["venv"],
                 "package": "tensorboard",
                 "command": ["-m", "tensorboard.main", "--logdir", "."],
                 "desc": "Visualize training metrics — pick a log directory",
@@ -597,7 +627,7 @@ class PackagePanel(QWidget):
                 "open_browser": "http://localhost:6006",
                 "browser_delay": 6,
                 "pick_logdir": True,
-            },
+                            },
             {
                 "name": "FastAPI",
                 "icon": "⚡",
@@ -608,7 +638,7 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:8000/docs",
                 "browser_delay": 3,
-            },
+                            },
             {
                 "name": "Datasette",
                 "icon": "🗄️",
@@ -619,24 +649,26 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:8001",
                 "browser_delay": 3,
-            },
+                            },
             # ── pip-based: Marimo ─────────────────────────────────────────────
             {
                 "name": "Marimo",
                 "icon": "🌊",
                 "icon_key": "marimo",
+                "env_types": ["venv"],
                 "package": "marimo",
                 "command": ["-m", "marimo", "edit"],
                 "desc": "Reactive notebook — next-gen Jupyter alternative",
                 "needs_console": True,
                 "open_browser": "http://localhost:2718",
                 "browser_delay": 3,
-            },
+                            },
             # ── System-level apps (detect & launch, no pip install) ───────────
             {
                 "name": "R Console",
                 "icon": "📐",
                 "icon_key": "r_console",
+                "env_types": ["conda"],
                 "package": "__system__",
                 "system_app": True,
                 "conda_packages": ["r-base"],
@@ -657,11 +689,12 @@ class PackagePanel(QWidget):
                 },
                 "desc": "R statistical computing language — open R console",
                 "needs_console": True,
-            },
+                            },
             {
                 "name": "RStudio",
                 "icon": "🎯",
                 "icon_key": "rstudio",
+                "env_types": ["conda"],
                 "package": "__system__",
                 "system_app": True,
                 "conda_packages": ["rstudio"],
@@ -683,11 +716,12 @@ class PackagePanel(QWidget):
                     ],
                 },
                 "desc": "RStudio IDE — full R development environment",
-            },
+                            },
             {
                 "name": "Ollama",
                 "icon": "🦙",
                 "icon_key": "ollama",
+                "env_types": ["conda"],
                 "package": "__system__",
                 "system_app": True,
                 "system_commands": {
@@ -699,11 +733,12 @@ class PackagePanel(QWidget):
                 "needs_console": True,
                 "open_browser": "http://localhost:11434",
                 "browser_delay": 3,
-            },
+                            },
             {
                 "name": "DBeaver",
                 "icon": "🦫",
                 "icon_key": "dbeaver",
+                "env_types": ["conda"],
                 "package": "__system__",
                 "system_app": True,
                 "conda_packages": ["dbeaver-ce"],
@@ -725,21 +760,23 @@ class PackagePanel(QWidget):
                     ],
                 },
                 "desc": "Universal database manager — explore SQLite, PostgreSQL, MySQL…",
-            },
+                            },
             {
                 "name": "Quarto",
                 "icon": "📝",
                 "icon_key": "quarto",
+                "env_types": ["venv"],
                 "package": "quarto-cli",
                 "command": ["-m", "quarto_cli.quarto", "preview"],
                 "desc": "Publish documents, reports & dashboards from Python/R notebooks",
                 "needs_console": True,
                 "note": "Installs Quarto binary inside the environment (~100MB). No system install needed.",
-            },
+                            },
             {
                 "name": "jamovi",
                 "icon": "🧩",
                 "icon_key": "jamovi",
+                "env_types": ["conda"],
                 "package": "__system__",
                 "system_app": True,
                 "conda_packages": ["jamovi"],
@@ -750,11 +787,12 @@ class PackagePanel(QWidget):
                     "macos":   ["open", "-a", "jamovi"],
                 },
                 "desc": "Point-and-click statistics — SPSS alternative, free & open source",
-            },
+                            },
             {
                 "name": "JASP",
                 "icon": "📊",
                 "icon_key": "jasp",
+                "env_types": ["conda"],
                 "package": "__system__",
                 "system_app": True,
                 "conda_packages": ["jasp"],
@@ -765,16 +803,18 @@ class PackagePanel(QWidget):
                     "macos":   ["open", "-a", "JASP"],
                 },
                 "desc": "Bayesian & frequentist statistics — beautiful, free, open source",
-            },
+                            },
         ]
 
         self.launcher_cards = {}
+        self.launcher_grid_widget = QWidget()
+        self.launcher_grid_widget.setLayout(self.launcher_grid)
         for i, app in enumerate(self.app_definitions):
             card = self._create_app_card(app)
             self.launcher_grid.addWidget(card, i // 3, i % 3)
             self.launcher_cards[app["name"]] = card
-
-        layout.addLayout(self.launcher_grid)
+        self._launcher_container_layout = layout  # keep ref for rebuild
+        layout.addWidget(self.launcher_grid_widget)
         layout.addStretch()
 
         scroll.setWidget(container)
@@ -785,6 +825,8 @@ class PackagePanel(QWidget):
         card = QFrame()
         card.setObjectName("card")
         card.setMinimumHeight(200)
+        card.setMaximumHeight(280)
+        card.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         card.setStyleSheet("""
             QFrame#card {
                 background-color: rgba(137, 180, 250, 0.05);
@@ -824,6 +866,91 @@ class PackagePanel(QWidget):
         desc.setToolTip(tooltip_text)
         layout.addWidget(desc)
 
+        # Links toggle — lazy load from JSON only on first click
+        _app_name_for_links = app_def["name"]
+        _link_defs = [
+            ("site",     "🌐 Site",    "#a6e3a1"),
+            ("docs",     "📖 Docs",    "#89b4fa"),
+            ("youtube",  "▶ YouTube",  "#f38ba8"),
+            ("github",   "🐙 GitHub",  "#cba6f7"),
+            ("twitter",  "𝕏",          "#74c7ec"),
+            ("linkedin", "in",         "#89dceb"),
+            ("discord",  "💬 Discord", "#b4befe"),
+            ("pypi",     "📦 PyPI",    "#fab387"),
+        ]
+        _links_container = QWidget()
+        _links_container.setVisible(False)
+        _lc_layout = QHBoxLayout(_links_container)
+        _lc_layout.setContentsMargins(0, 2, 0, 0)
+        _lc_layout.setSpacing(3)
+        _lc_layout.addStretch()  # placeholder until loaded
+
+        _toggle_row = QHBoxLayout()
+        _toggle_row.setContentsMargins(0, 0, 0, 0)
+        _toggle_btn = QPushButton("🔗 Links ›")
+        _toggle_btn.setFixedHeight(18)
+        _toggle_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; color: {self._c()['fg_muted']}; "
+            f"border: none; font-size: 11px; padding: 0; }}"
+            f"QPushButton:hover {{ color: {self._c()['fg']}; }}"
+        )
+        _toggle_btn.setCursor(Qt.PointingHandCursor)
+
+        def _make_lazy_toggle(btn, container, app_name, defs):
+            _loaded = [False]
+            def _toggle():
+                _vis = not container.isVisible()
+                # Lazy load: only read JSON on first open
+                if _vis and not _loaded[0]:
+                    _loaded[0] = True
+                    try:
+                        import json as _j, os as _o
+                        _p = _o.path.join(_o.path.dirname(_o.path.abspath(__file__)),
+                                          "launcher_links.json")
+                        with open(_p, "r", encoding="utf-8") as _f:
+                            _all = _j.load(_f)
+                        _links = _all.get(app_name, {})
+                    except Exception:
+                        _links = {}
+                    # Clear placeholder stretch
+                    while container.layout().count():
+                        _item = container.layout().takeAt(0)
+                        if _item.widget():
+                            _item.widget().deleteLater()
+                    # Add link buttons
+                    _has_any = False
+                    for _key, _label, _color in defs:
+                        _url = _links.get(_key)
+                        if not _url:
+                            continue
+                        _has_any = True
+                        _lb = QPushButton(_label)
+                        _lb.setFixedHeight(19)
+                        _lb.setStyleSheet(
+                            f"QPushButton {{ background: transparent; color: {_color}; "
+                            f"border: none; font-size: 11px; padding: 0 3px; }}"
+                            f"QPushButton:hover {{ text-decoration: underline; color: white; }}"
+                        )
+                        _lb.setCursor(Qt.PointingHandCursor)
+                        _lb.clicked.connect(lambda _, u=_url: __import__('webbrowser').open(u))
+                        container.layout().addWidget(_lb)
+                    container.layout().addStretch()
+                    if not _has_any:
+                        # No links for this app — hide toggle button
+                        btn.setVisible(False)
+                        return
+                container.setVisible(_vis)
+                btn.setText("🔗 Links ∨" if _vis else "🔗 Links ›")
+            return _toggle
+
+        _toggle_btn.clicked.connect(
+            _make_lazy_toggle(_toggle_btn, _links_container, _app_name_for_links, _link_defs)
+        )
+        _toggle_row.addWidget(_toggle_btn)
+        _toggle_row.addStretch()
+        layout.addLayout(_toggle_row)
+        layout.addWidget(_links_container)
+
         # Set card-level tooltip too
         card.setToolTip(tooltip_text)
 
@@ -862,14 +989,43 @@ class PackagePanel(QWidget):
             "QPushButton:hover { background-color: #45475a; border-color: #89b4fa; }"
         )
 
-        # Build install + run commands
+        # Build install + run commands (env-type aware)
         pkg_name = app_def["package"]
-        install_cmd = f"pip install {pkg_name}"
-        run_parts = app_def.get("command", [])
-        if run_parts:
-            run_cmd = "python " + " ".join(run_parts)
+        _env_type = getattr(self, "_current_env_type", "venv")
+        is_system_app = app_def.get("system_app", False)
+
+        if is_system_app:
+            # System apps: show system-level commands, not pip
+            from src.utils.platform_utils import get_platform as _gp
+            _plat = _gp()
+            _sys_cmds = app_def.get("system_commands", {})
+            _cmd_list = _sys_cmds.get(_plat, _sys_cmds.get("linux", []))
+            _conda_pkgs = app_def.get("conda_packages", [])
+
+            if _conda_pkgs and _env_type == "conda":
+                _channels = app_def.get("conda_channels", ["conda-forge"])
+                _ch_flag = " ".join(f"-c {c}" for c in _channels)
+                install_cmd = f"conda install {_ch_flag} {' '.join(_conda_pkgs)}"
+            elif _conda_pkgs:
+                _channels = app_def.get("conda_channels", ["conda-forge"])
+                _ch_flag = " ".join(f"-c {c}" for c in _channels)
+                install_cmd = f"conda install {_ch_flag} {' '.join(_conda_pkgs)}"
+            else:
+                install_cmd = f"Install {app_def['name']} from official website"
+
+            run_cmd = " ".join(_cmd_list) if _cmd_list else app_def["name"].lower()
         else:
-            run_cmd = f"python -m {pkg_name}"
+            _install_prefixes = {
+                "venv": "pip install", "uv": "uv pip install",
+                "poetry": "poetry add",
+                "conda": "conda install", "pipx": "pipx install",
+            }
+            install_cmd = f"{_install_prefixes.get(_env_type, 'pip install')} {pkg_name}"
+            run_parts = app_def.get("command", [])
+            if run_parts:
+                run_cmd = "python " + " ".join(run_parts)
+            else:
+                run_cmd = f"python -m {pkg_name}"
 
         copy_cmd_btn.setToolTip(
             f"<p style='font-size:13px; font-weight:bold; color:#a6e3a1;'>"
@@ -910,6 +1066,7 @@ class PackagePanel(QWidget):
         card._launch_btn = launch_btn
         card._uninstall_btn = uninstall_btn
         card._shortcut_btn = shortcut_btn
+        card._copy_cmd_btn = copy_cmd_btn
 
         return card
 
@@ -940,6 +1097,50 @@ class PackagePanel(QWidget):
             pkg = app_def["package"].lower()
             is_system_app = app_def.get("system_app", False)
 
+            # Update copy command tooltip for current env type
+            _env_type = getattr(self, "_current_env_type", "venv")
+            if hasattr(card, "_copy_cmd_btn"):
+                _pkg_name = app_def["package"]
+                if is_system_app:
+                    from src.utils.platform_utils import get_platform as _gp_upd
+                    _plat_upd = _gp_upd()
+                    _sys_cmds_upd = app_def.get("system_commands", {})
+                    _cmd_list_upd = _sys_cmds_upd.get(_plat_upd, _sys_cmds_upd.get("linux", []))
+                    _conda_pkgs_upd = app_def.get("conda_packages", [])
+                    if _conda_pkgs_upd:
+                        _channels_upd = app_def.get("conda_channels", ["conda-forge"])
+                        _ch_flag_upd = " ".join(f"-c {c}" for c in _channels_upd)
+                        _ic = f"conda install {_ch_flag_upd} {' '.join(_conda_pkgs_upd)}"
+                    else:
+                        _ic = f"Install {app_def['name']} from official website"
+                    _rc = " ".join(_cmd_list_upd) if _cmd_list_upd else app_def["name"].lower()
+                else:
+                    _ip = {
+                        "venv": "pip install", "uv": "uv pip install",
+                        "poetry": "poetry add",
+                        "conda": "conda install", "pipx": "pipx install",
+                    }
+                    _ic = f"{_ip.get(_env_type, 'pip install')} {_pkg_name}"
+                    _rp = app_def.get("command", [])
+                    _rc = ("python " + " ".join(_rp)) if _rp else f"python -m {_pkg_name}"
+                card._copy_cmd_btn.setToolTip(
+                    f"<p style='font-size:13px; font-weight:bold; color:#a6e3a1;'>"
+                    f"💡 Terminal commands for {app_def['name']}:</p>"
+                    f"<p style='font-size:15px; font-family:Consolas,monospace; color:#cdd6f4; "
+                    f"background-color:#1e1e2e; padding:6px; border-radius:4px;'>"
+                    f"1️⃣ {_ic}<br>"
+                    f"2️⃣ {_rc}</p>"
+                    f"<p style='font-size:11px; color:#6c7086;'>Click to copy both commands</p>"
+                )
+                # Update click handler with new commands
+                try:
+                    card._copy_cmd_btn.clicked.disconnect()
+                except Exception:
+                    pass
+                card._copy_cmd_btn.clicked.connect(
+                    lambda checked, ic=_ic, rc=_rc, nm=app_def["name"]: self._copy_launcher_commands(ic, rc, nm)
+                )
+
             # System apps: detect via installer's get_exe_path (more thorough than shutil.which)
             if is_system_app:
                 # ── Conda env: check conda packages ──────────────────────
@@ -950,8 +1151,13 @@ class PackagePanel(QWidget):
                     from src.core.micromamba_installer import list_conda_packages
                     _conda_pkgs = app_def.get("conda_packages", [])
                     if _conda_pkgs:
-                        _installed = {p.get("name", "").lower()
-                                      for p in list_conda_packages(_env_path)}
+                        # Use cached set to avoid repeated subprocess per card
+                        _cache_key = f"_conda_installed_cache_{_env_path}"
+                        if not hasattr(self, _cache_key):
+                            setattr(self, _cache_key,
+                                    {p.get("name", "").lower()
+                                     for p in list_conda_packages(_env_path)})
+                        _installed = getattr(self, _cache_key)
                         _found = _conda_pkgs[0].lower() in _installed
                         status = card._status_label
                         card._launch_btn.setEnabled(True)
@@ -970,12 +1176,26 @@ class PackagePanel(QWidget):
                                 f" font-size: {self._c()['fs_tiny']}px;")
                         continue
                     else:
+                        # No conda package defined — check if available on system
+                        _env_name = self.env_selector.currentText()
+                        import shutil as _shutil
+                        from src.utils.platform_utils import get_platform as _gp
+                        _sys_cmds = app_def.get("system_commands", {})
+                        _exe = (_sys_cmds.get(_gp()) or _sys_cmds.get("linux", [""]))[0]
+                        _sys_found = bool(_shutil.which(_exe)) if _exe else False
                         status = card._status_label
-                        status.setText("⚠️ Not available for conda")
-                        status.setStyleSheet(
-                            f"color: {self._c().get('warning','#f9e2af')};"
-                            f" font-size: {self._c()['fs_tiny']}px;")
-                        card._launch_btn.setEnabled(False)
+                        if _sys_found:
+                            status.setText(f"✅ Detected on system, not in {_env_name} env")
+                            status.setStyleSheet(
+                                f"color: {self._c()['success']};"
+                                f" font-size: {self._c()['fs_tiny']}px;")
+                            card._launch_btn.setEnabled(True)
+                        else:
+                            status.setText("❌ Not installed — click Launch to install")
+                            status.setStyleSheet(
+                                f"color: {self._c()['danger']};"
+                                f" font-size: {self._c()['fs_tiny']}px;")
+                            card._launch_btn.setEnabled(True)
                         continue
                 # ─────────────────────────────────────────────────────────
 
@@ -996,11 +1216,12 @@ class PackagePanel(QWidget):
                 card._launch_btn.setStyleSheet("")
                 card._uninstall_btn.setVisible(False)
                 card._shortcut_btn.setVisible(False)
+                _env_name = self.env_selector.currentText()
                 if system_found:
-                    status.setText("✅ Detected on system")
+                    status.setText(f"✅ Detected on system, not in {_env_name} env")
                     status.setStyleSheet(f"color: {self._c()['success']}; font-size: {self._c()['fs_tiny']}px;")
                 else:
-                    status.setText("⚠️ Not found — install separately")
+                    status.setText("⚠️ Not found on system — install separately")
                     status.setStyleSheet(f"color: {self._c().get('warning', '#f9e2af')}; font-size: {self._c()['fs_tiny']}px;")
                 continue
 
@@ -1316,9 +1537,18 @@ class PackagePanel(QWidget):
                                      stdout=subprocess.DEVNULL,
                                      stderr=subprocess.DEVNULL)
             else:
-                subprocess.Popen(cmd, cwd=work_dir,
-                                 stdout=subprocess.DEVNULL,
-                                 stderr=subprocess.DEVNULL)
+                if show_console:
+                    from src.gui.platform_utils import launch_in_terminal
+                    terminal_type = self.config.get("terminal_type", "") if hasattr(self, "config") and self.config else ""
+                    launch_in_terminal(cmd, cwd=work_dir, terminal_type=terminal_type)
+                else:
+                    from src.utils.platform_utils import appimage_clean_env
+                    _ai_env = appimage_clean_env()
+                    _popen_kw2 = dict(cwd=work_dir, stdout=subprocess.DEVNULL,
+                                      stderr=subprocess.DEVNULL, start_new_session=True)
+                    if _ai_env is not None:
+                        _popen_kw2["env"] = _ai_env
+                    subprocess.Popen(cmd, **_popen_kw2)
             self.status_label.setText(f"✅ {name} launched")
             url = app_def.get("open_browser")
             if url:
@@ -1335,6 +1565,11 @@ class PackagePanel(QWidget):
         name = app_def["name"]
         if success:
             self.status_label.setText(f"✅ {name} installed. Launching...")
+            # Invalidate conda package cache so status refreshes correctly
+            if self.pip_manager:
+                _cache_key = f"_conda_installed_cache_{self.pip_manager.venv_path}"
+                if hasattr(self, _cache_key):
+                    delattr(self, _cache_key)
             # Refresh card states then launch
             self._update_launcher_status()
             from PySide6.QtCore import QTimer
@@ -1345,7 +1580,7 @@ class PackagePanel(QWidget):
                 self, f"{name} — Install Failed",
                 f"Could not install {name} automatically.\n\n"
                 f"{message}\n\n"
-                f"Please install it manually and try again."
+                f"Please install it manually and try again.\n"
             )
 
     def _get_orange3_packages(self, python_exe) -> list:
@@ -1430,11 +1665,9 @@ class PackagePanel(QWidget):
             if get_platform() == "windows":
                 subprocess.Popen(cmd, cwd=work_dir, creationflags=subprocess.CREATE_NEW_CONSOLE)
             else:
-                cmd_str = " ".join(f'"{c}"' for c in cmd)
-                try:
-                    subprocess.Popen(["x-terminal-emulator", "-e", f"bash -c '{cmd_str}; read -p Press_Enter'"], cwd=work_dir)
-                except FileNotFoundError:
-                    subprocess.Popen(cmd, cwd=work_dir)
+                from src.gui.platform_utils import launch_in_terminal
+                terminal_type = self.config.get("terminal_type", "") if hasattr(self, "config") and self.config else ""
+                launch_in_terminal(cmd, cwd=work_dir, terminal_type=terminal_type)
 
             self.status_label.setText(f"🚀 Running {os.path.basename(filepath)}")
 
@@ -1542,9 +1775,43 @@ class PackagePanel(QWidget):
                 pkgs_to_install = self._get_orange3_packages(python_exe)
             self._set_busy(True)
             self.status_label.setText(f"Installing {', '.join(pkgs_to_install)}...")
-            self.current_worker = WorkerThread(
-                self.pip_manager.install_packages, pkgs_to_install
-            )
+
+            # pipx env: use pipx install instead of pip
+            if getattr(self, "_current_env_type", "venv") == "pipx":
+                import shutil as _shutil
+                _pipx_bin = _shutil.which("pipx")
+                _pipx_python = None
+                if self.pip_manager and self.pip_manager.venv_path:
+                    _marker = self.pip_manager.venv_path / ".venvstudio_env"
+                    if _marker.exists():
+                        try:
+                            import json as _json
+                            with open(_marker) as _mf:
+                                _mdata = _json.load(_mf)
+                            _pipx_python = _mdata.get("python_path", "")
+                        except Exception:
+                            pass
+                def _do_pipx_launch_install(callback=None):
+                    import subprocess, sys
+                    from src.utils.platform_utils import subprocess_args
+                    failed = []
+                    for pkg in pkgs_to_install:
+                        if callback:
+                            callback(f"pipx install {pkg}...")
+                        cmd = [_pipx_bin, "install", pkg] if _pipx_bin else [sys.executable, "-m", "pipx", "install", pkg]
+                        if _pipx_python:
+                            cmd += ["--python", _pipx_python]
+                        r = subprocess.run(cmd, capture_output=True, text=True, timeout=300, **subprocess_args())
+                        if r.returncode != 0:
+                            failed.append(pkg)
+                    if failed:
+                        return (False, f"pipx install failed for: {', '.join(failed)}")
+                    return (True, f"pipx installed: {', '.join(pkgs_to_install)}")
+                self.current_worker = WorkerThread(_do_pipx_launch_install)
+            else:
+                self.current_worker = WorkerThread(
+                    self.pip_manager.install_packages, pkgs_to_install
+                )
             self.current_worker.progress.connect(self._on_progress)
             self.current_worker.finished.connect(
                 lambda ok, msg, a=app_def: self._on_app_install_finished(ok, msg, a)
@@ -1553,7 +1820,62 @@ class PackagePanel(QWidget):
             return
 
         # Launch the app — check console toggle
-        cmd = [str(python_exe)] + app_def["command"]
+        # pipx env: find app executable in pipx venv or local bin
+        if getattr(self, "_current_env_type", "venv") == "pipx":
+            from src.utils.platform_utils import get_pipx_home, get_platform as _gp
+            import os as _os, shutil as _sh
+            _pipx_home = get_pipx_home()
+            _pkg = app_def["package"].lower()
+            _app_cmd = app_def.get("command", [])
+            _is_win = _gp() == "windows"
+            _exe_suffix = ".exe" if _is_win else ""
+            _scripts_dir = "Scripts" if _is_win else "bin"
+            # Package -> primary executable name mapping
+            _pipx_exe_map = {
+                "jupyterlab":  "jupyter-lab",
+                "notebook":    "jupyter-notebook",
+                "orange3":     "orange-canvas",
+                "spyder":      "spyder",
+                "ipython":     "ipython",
+                "streamlit":   "streamlit",
+                "gradio":      "gradio",
+                "dash":        "dash",
+                "panel":       "panel",
+                "voila":       "voila",
+                "mlflow":      "mlflow",
+                "tensorboard": "tensorboard",
+                "marimo":      "marimo",
+                "datasette":   "datasette",
+            }
+            _exe_name = _pipx_exe_map.get(_pkg)
+            if not _exe_name:
+                # fallback: derive from command "-m jupyter lab" -> "jupyter"
+                if len(_app_cmd) >= 2 and _app_cmd[0] == "-m":
+                    _exe_name = _app_cmd[1].split(".")[0]
+                else:
+                    _exe_name = _pkg
+            _exe_path = None
+            # 1. pipx venvs/<pkg>/Scripts/<exe>
+            if _pipx_home:
+                _venv_exe = _os.path.join(_pipx_home, "venvs", _pkg,
+                    _scripts_dir, _exe_name + _exe_suffix)
+                if _os.path.isfile(_venv_exe):
+                    _exe_path = _venv_exe
+            # 2. ~/.local/bin/<exe> (pipx exposed apps)
+            if not _exe_path:
+                _local_bin = _os.path.join(_os.path.expanduser("~"), ".local", "bin", _exe_name + _exe_suffix)
+                if _os.path.isfile(_local_bin):
+                    _exe_path = _local_bin
+            # 3. shutil.which (PATH)
+            if not _exe_path:
+                _exe_path = _sh.which(_exe_name)
+            if _exe_path:
+                cmd = [_exe_path]
+            else:
+                # fallback: python -m ...
+                cmd = [str(python_exe)] + _app_cmd
+        else:
+            cmd = [str(python_exe)] + app_def["command"]
 
         # Check if app needs console (e.g. IPython)
         show_console = app_def.get("needs_console", False)
@@ -1597,23 +1919,22 @@ class PackagePanel(QWidget):
                     )
             else:
                 if show_console:
-                    # Open in terminal
-                    cmd_str = " ".join(f'"{c}"' for c in cmd)
-                    try:
-                        subprocess.Popen(
-                            ["x-terminal-emulator", "-e", f"bash -c '{cmd_str}; read -p Press_Enter'"],
-                            cwd=work_dir,
-                        )
-                    except FileNotFoundError:
-                        subprocess.Popen(cmd, cwd=work_dir)
+                    from src.gui.platform_utils import launch_in_terminal
+                    terminal_type = self.config.get("terminal_type", "") if hasattr(self, "config") and self.config else ""
+                    launch_in_terminal(cmd, cwd=work_dir, terminal_type=terminal_type)
                 else:
-                    subprocess.Popen(
-                        cmd, cwd=work_dir,
+                    from src.utils.platform_utils import appimage_clean_env
+                    _ai_env = appimage_clean_env()
+                    _popen_kw = dict(
+                        cwd=work_dir,
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
                         stdin=subprocess.DEVNULL,
                         start_new_session=True,
                     )
+                    if _ai_env is not None:
+                        _popen_kw["env"] = _ai_env
+                    subprocess.Popen(cmd, **_popen_kw)
 
             self.status_label.setText(f"🚀 Launched {app_def['name']}")
 
@@ -1938,10 +2259,10 @@ $s.Save()
         self.update_btn.clicked.connect(self._check_outdated)
         toolbar.addWidget(self.update_btn)
 
-        uninstall_btn = QPushButton(f"🗑️ {tr('uninstall_selected')}")
-        uninstall_btn.setObjectName("danger")
-        uninstall_btn.clicked.connect(self._uninstall_selected)
-        toolbar.addWidget(uninstall_btn)
+        self.uninstall_btn = QPushButton(f"🗑️ {tr('uninstall_selected')}")
+        self.uninstall_btn.setObjectName("danger")
+        self.uninstall_btn.clicked.connect(self._uninstall_selected)
+        toolbar.addWidget(self.uninstall_btn)
 
         # Export dropdown button (in toolbar for visibility)
         export_btn = QPushButton("📤 Export ▾")
@@ -1972,6 +2293,8 @@ $s.Save()
         self.packages_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.packages_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
         self.packages_table.setColumnWidth(2, 40)
+        self.packages_table.horizontalHeader().setStretchLastSection(False)
+        self.packages_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.packages_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.packages_table.setAlternatingRowColors(True)
         self.packages_table.verticalHeader().setVisible(False)
@@ -2036,12 +2359,14 @@ $s.Save()
         self.catalog_table.setColumnCount(5)
         self.catalog_table.setHorizontalHeaderLabels(["Install", "Package", "Description", "Category", "Links"])
         self.catalog_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
-        self.catalog_table.setColumnWidth(0, 55)
+        self.catalog_table.setColumnWidth(0, 28)
         self.catalog_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         self.catalog_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
         self.catalog_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
         self.catalog_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Fixed)
         self.catalog_table.setColumnWidth(4, 80)
+        self.catalog_table.horizontalHeader().setStretchLastSection(False)
+        self.catalog_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.catalog_table.setAlternatingRowColors(True)
         self.catalog_table.verticalHeader().setVisible(False)
         self.catalog_table.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -2070,16 +2395,22 @@ $s.Save()
 
     def reload_presets_tab(self):
         """Reload presets tab — called after settings saved to show new custom presets."""
-        # Find preset tab index (index 3)
-        preset_idx = 3
-        old_widget = self.tabs.widget(preset_idx)
         new_widget = self._create_presets_tab()
-        self.tabs.removeTab(preset_idx)
-        self.tabs.insertTab(preset_idx, new_widget, f"⚡ {tr('presets')}")
-        self.tabs.setCurrentIndex(self.tabs.currentIndex())  # keep current tab
-        if old_widget:
-            old_widget.deleteLater()
-        # Update badge states
+        new_label = f"⚡ {tr('presets')}"
+        new_tooltip = UI_TOOLTIPS.get("tab_presets", "")
+
+        # Update _tab_defs
+        if hasattr(self, "_tab_defs"):
+            for idx, (key, label, widget, tooltip) in enumerate(self._tab_defs):
+                if key == "presets":
+                    old_widget = widget
+                    self._tab_defs[idx] = ("presets", new_label, new_widget, new_tooltip)
+                    if old_widget:
+                        old_widget.deleteLater()
+                    break
+
+        # Re-apply tab visibility (will rebuild tabs with new presets widget)
+        self._update_tabs_for_env_type()
         self._update_preset_badges()
 
     def _create_presets_tab(self) -> QWidget:
@@ -2151,15 +2482,7 @@ $s.Save()
 
             copy_btn = QPushButton(f"📋 {tr('copy_command')}")
             copy_btn.setObjectName("secondary")
-            pip_cmd = "pip install " + " ".join(packages)
-            copy_btn.setToolTip(
-                f"<p style='font-size:14px; font-weight:bold; color:#a6e3a1;'>"
-                f"💡 Equivalent terminal command:</p>"
-                f"<p style='font-size:16px; font-family:Consolas,monospace; color:#cdd6f4; "
-                f"background-color:#1e1e2e; padding:8px; border-radius:4px;'>"
-                f"{pip_cmd}</p>"
-                f"<p style='font-size:11px; color:#6c7086;'>Click to copy to clipboard</p>"
-            )
+            copy_btn._preset_packages = packages  # store for dynamic tooltip update
             copy_btn.clicked.connect(
                 lambda checked, pkgs=packages: self._copy_preset_command(pkgs)
             )
@@ -2169,6 +2492,7 @@ $s.Save()
                 "badge": badge,
                 "install_btn": install_btn,
                 "uninstall_btn": uninstall_btn,
+                "copy_btn": copy_btn,
                 "packages": packages,
             }
 
@@ -2245,13 +2569,13 @@ $s.Save()
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(12, 12, 12, 12)
 
-        info = QLabel(
+        self.manual_info_label = QLabel(
             "Enter package names separated by spaces or newlines.\n"
             "You can specify versions like: numpy==1.24.0 or pandas>=2.0"
         )
-        info.setObjectName("subheader")
-        info.setWordWrap(True)
-        layout.addWidget(info)
+        self.manual_info_label.setObjectName("subheader")
+        self.manual_info_label.setWordWrap(True)
+        layout.addWidget(self.manual_info_label)
 
         self.manual_input = QTextEdit()
         self.manual_input.setPlaceholderText(
@@ -2263,7 +2587,7 @@ $s.Save()
 
         copy_cmd_btn = QPushButton("📋 Copy Command")
         copy_cmd_btn.setObjectName("secondary")
-        copy_cmd_btn.setToolTip("Copy the pip install command to clipboard")
+        copy_cmd_btn.setToolTip("Copy the install command to clipboard")
         copy_cmd_btn.clicked.connect(self._copy_install_command)
         btn_layout.addWidget(copy_cmd_btn)
 
@@ -2415,8 +2739,12 @@ $s.Save()
             from src.utils.platform_utils import open_terminal_at
             from src.core.config_manager import ConfigManager
             terminal_type = ConfigManager().get("terminal_type", "")
-            open_terminal_at(self._current_venv_path, terminal_type)
+            env_type = getattr(self, "_current_env_type", "venv")
+            print(f"[DEBUG] open_terminal_at path={self._current_venv_path} env_type={env_type}")
+            open_terminal_at(self._current_venv_path, terminal_type,
+                             env_type=env_type)
         except Exception as e:
+            print(f"[DEBUG] terminal error: {e}")
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "Error", f"Could not open terminal:\n{e}")
 
@@ -2438,10 +2766,8 @@ $s.Save()
             backend = ConfigManager().get("package_manager", "pip")
         except Exception:
             pass
-        self.pip_manager = PipManager(venv_path, backend=backend)
-        self._current_venv_path = venv_path
 
-        # Detect env type from marker
+        # Detect env type from marker FIRST — needed to choose backend
         self._current_env_type = "venv"  # default
         marker = venv_path / ".venvstudio_env"
         if marker.exists():
@@ -2452,6 +2778,27 @@ $s.Save()
                 self._current_env_type = _m.get("type", "system_tools")
             except Exception:
                 self._current_env_type = "system_tools"
+        else:
+            # No marker — check if this is a poetry venv (inside pypoetry cache)
+            _vp_str = str(venv_path)
+            if "pypoetry" in _vp_str and "virtualenvs" in _vp_str:
+                self._current_env_type = "poetry"
+            elif "pipx" in _vp_str:
+                self._current_env_type = "pipx"
+
+        # Override backend based on env type
+        if self._current_env_type == "uv":
+            backend = "uv"
+        elif self._current_env_type == "poetry":
+            backend = "poetry"
+        elif self._current_env_type == "conda":
+            backend = "conda"
+        elif self._current_env_type == "pipx":
+            backend = "pipx"
+
+        self.pip_manager = PipManager(venv_path, backend=backend)
+        self._current_venv_path = venv_path
+
         if hasattr(self, "_env_bar_terminal_btn"):
             self._env_bar_terminal_btn.setEnabled(True)
         # Select in dropdown
@@ -2465,8 +2812,171 @@ $s.Save()
         self.env_selector.blockSignals(False)
         self.status_label.setText(f"Loading packages for {name}...")
         self._update_env_info_bar(venv_path, backend)
-        # Async refresh — UI hemen görünür, paketler arka planda yüklenir
+        self._update_tabs_for_env_type()
+        # Async refresh
         self._async_refresh_packages()
+
+    def _update_tabs_for_env_type(self):
+        """
+        Show/hide tabs based on current env type using removeTab/insertTab.
+        All env types get full tabs except system_tools (launcher + manual).
+        """
+        if not hasattr(self, "_tab_defs"):
+            return
+
+        env_type = getattr(self, "_current_env_type", "venv")
+
+        # Update manual tab description and placeholder per env type
+        if hasattr(self, "manual_info_label") and hasattr(self, "manual_input"):
+            _manual_descriptions = {
+                "venv":   "Enter package names separated by spaces or newlines.\nYou can specify versions like: numpy==1.24.0 or pandas>=2.0",
+                "uv":    "Enter package names separated by spaces or newlines.\nUses uv pip install (10-100× faster than pip).",
+                "poetry": "Enter package names to add.\nUses poetry add command.",
+                "conda":  "Enter package names separated by spaces or newlines.\nPackages will be installed from conda-forge.",
+                "pipx":   "Enter CLI app names to install globally.\nEach app gets its own isolated environment via pipx.",
+            }
+            _manual_placeholders = {
+                "venv":   "numpy pandas matplotlib\nscikit-learn==1.3.0\nrequests>=2.28",
+                "uv":     "numpy pandas matplotlib\nscikit-learn==1.3.0",
+                "poetry": "numpy pandas matplotlib",
+                "conda":  "numpy pandas matplotlib\nscipy r-base",
+                "pipx":   "httpie black ruff poetry cowsay",
+            }
+            self.manual_info_label.setText(_manual_descriptions.get(env_type, _manual_descriptions["venv"]))
+            self.manual_input.setPlaceholderText(_manual_placeholders.get(env_type, _manual_placeholders["venv"]))
+
+        # Which tab keys should be visible?
+        visible_keys = {
+            "venv":         {"launcher", "installed", "catalog", "presets", "manual"},
+            "uv":           {"launcher", "installed", "catalog", "presets", "manual"},
+            "poetry":       {"launcher", "installed", "catalog", "presets", "manual"},
+            "conda":        {"launcher", "installed", "catalog", "presets", "manual"},
+            "pipx":         {"launcher", "installed", "catalog", "presets", "manual"},
+        }.get(env_type, {"launcher", "installed", "catalog", "presets", "manual"})
+
+        # Remember current tab key before we remove tabs
+        cur_widget = self.tabs.currentWidget()
+        cur_key = None
+        for key, label, widget, tooltip in self._tab_defs:
+            if widget is cur_widget:
+                cur_key = key
+                break
+
+        # Block signals to prevent feedback loops
+        self.tabs.blockSignals(True)
+
+        # Remove all tabs (widgets are kept alive, just removed from tab bar)
+        while self.tabs.count() > 0:
+            self.tabs.removeTab(0)
+
+        # Re-add only visible tabs in original order with env-type-aware tooltips
+        _manual_tooltips = {
+            "venv":   "📝 Manually install packages by name.\nYou can paste from pip install commands.",
+            "uv":     "📝 Manually install packages by name.\nUses uv pip install (10-100× faster).",
+            "poetry": "📝 Manually add packages.\nUses poetry add command.",
+            "conda":  "📝 Manually install packages by name.\nUses conda install command.",
+            "pipx":   "📝 Install CLI apps by name.\nUses pipx install command.",
+        }
+        _installed_tooltips = {
+            "venv":   "📦 View and manage installed pip packages.",
+            "uv":     "📦 View and manage installed packages (uv backend).",
+            "poetry": "📦 View installed packages (Poetry environment).",
+            "conda":  "📦 View installed conda packages.",
+        }
+        _catalog_tooltips = {
+            "conda":  "🛒 Browse popular packages.\nInstalls via conda-forge channel.",
+        }
+        for key, label, widget, tooltip in self._tab_defs:
+            if key in visible_keys:
+                # Override tooltip for env-type awareness
+                if key == "manual":
+                    tooltip = _manual_tooltips.get(env_type, tooltip)
+                elif key == "installed":
+                    tooltip = _installed_tooltips.get(env_type, tooltip)
+                elif key == "catalog":
+                    tooltip = _catalog_tooltips.get(env_type, tooltip)
+                idx = self.tabs.addTab(widget, label)
+                self.tabs.setTabToolTip(idx, tooltip)
+
+        self.tabs.blockSignals(False)
+
+        # Restore current tab if still visible, else go to Launch
+        restored = False
+        if cur_key and cur_key in visible_keys:
+            for i, (key, label, widget, tooltip) in enumerate(self._tab_defs):
+                if key == cur_key and key in visible_keys:
+                    # Find its actual index in the new tab order
+                    for j in range(self.tabs.count()):
+                        if self.tabs.widget(j) is widget:
+                            self.tabs.setCurrentIndex(j)
+                            restored = True
+                            break
+                    break
+        if not restored:
+            self.tabs.setCurrentIndex(0)
+
+        # Installed tab toolbar: disable pip-only actions for non-pip envs
+        is_pip_like = env_type in ("venv", "uv", "poetry")
+        if hasattr(self, "update_btn"):
+            self.update_btn.setEnabled(is_pip_like)
+            self.update_btn.setToolTip(
+                "" if is_pip_like else f"Not available for {env_type} environments"
+            )
+        if hasattr(self, "uninstall_btn"):
+            self.uninstall_btn.setEnabled(is_pip_like)
+            self.uninstall_btn.setToolTip(
+                "" if is_pip_like else f"Not available for {env_type} environments"
+            )
+
+        # Rebuild launcher grid — remove gaps from hidden cards
+        if hasattr(self, "launcher_cards") and hasattr(self, "launcher_grid"):
+            # Collect visible apps for this env type
+            # pip-based env types share the same launcher apps as venv
+            _filter_type = "venv" if env_type in ("uv", "poetry", "pipx") else env_type
+            visible_apps = [
+                app for app in self.app_definitions
+                if _filter_type in app.get("env_types",
+                    ["venv"] if not app.get("system_app")
+                    else ["conda", "system_tools"])
+            ]
+
+            # Hide all cards first
+            for card in self.launcher_cards.values():
+                card.setVisible(False)
+                self.launcher_grid.removeWidget(card)
+
+            # Re-add only visible cards in order (no gaps)
+            col_count = 3
+            for idx, app in enumerate(visible_apps):
+                card = self.launcher_cards.get(app["name"])
+                if card:
+                    row, col = divmod(idx, col_count)
+                    self.launcher_grid.addWidget(card, row, col)
+                    card.setVisible(True)
+
+        # Update preset copy button tooltips for current env type
+        _cmd_prefixes = {
+            "venv":   "pip install",
+            "uv":     "uv pip install",
+            "poetry": "poetry add",
+            "conda":  "conda install",
+            "pipx":   "pipx install",
+        }
+        _prefix = _cmd_prefixes.get(env_type, "pip install")
+        if hasattr(self, "_preset_cards"):
+            for pname, pdata in self._preset_cards.items():
+                copy_btn = pdata.get("copy_btn")
+                if copy_btn and hasattr(copy_btn, "_preset_packages"):
+                    _pkgs = copy_btn._preset_packages
+                    _cmd = f"{_prefix} {' '.join(_pkgs)}"
+                    copy_btn.setToolTip(
+                        f"<p style='font-size:14px; font-weight:bold; color:#a6e3a1;'>"
+                        f"💡 Equivalent terminal command:</p>"
+                        f"<p style='font-size:16px; font-family:Consolas,monospace; color:#cdd6f4; "
+                        f"background-color:#1e1e2e; padding:8px; border-radius:4px;'>"
+                        f"{_cmd}</p>"
+                        f"<p style='font-size:11px; color:#6c7086;'>Click to copy to clipboard</p>"
+                    )
 
     def populate_env_list(self, env_list):
         """Populate the environment dropdown from main window."""
@@ -2539,15 +3049,47 @@ $s.Save()
                 backend = ConfigManager().get("package_manager", "pip")
             except Exception:
                 pass
-            self.pip_manager = PipManager(Path(path_str), backend=backend)
-            self._current_venv_path = Path(path_str)
+            venv_path = Path(path_str)
+            self._current_venv_path = venv_path
+
+            # Detect env type from marker — same as set_venv
+            self._current_env_type = "venv"
+            marker = venv_path / ".venvstudio_env"
+            if marker.exists():
+                try:
+                    import json as _json
+                    with open(marker) as f:
+                        _m = _json.load(f)
+                    self._current_env_type = _m.get("type", "system_tools")
+                except Exception:
+                    self._current_env_type = "system_tools"
+            else:
+                _vp_str = str(venv_path)
+                if "pypoetry" in _vp_str and "virtualenvs" in _vp_str:
+                    self._current_env_type = "poetry"
+                elif "pipx" in _vp_str:
+                    self._current_env_type = "pipx"
+
+            # Override backend based on env type
+            if self._current_env_type == "uv":
+                backend = "uv"
+            elif self._current_env_type == "poetry":
+                backend = "poetry"
+            elif self._current_env_type == "conda":
+                backend = "conda"
+            elif self._current_env_type == "pipx":
+                backend = "pipx"
+
+            self.pip_manager = PipManager(venv_path, backend=backend)
+
             if hasattr(self, "_env_bar_terminal_btn"):
                 self._env_bar_terminal_btn.setEnabled(True)
             self.status_label.setText(f"Loading packages...")
-            self._update_env_info_bar(Path(path_str), backend)
+            self._update_env_info_bar(venv_path, backend)
+            self._update_tabs_for_env_type()
             # Notify main window to sync QL selector immediately
             if hasattr(self, "_ql_env_changed_callback") and callable(self._ql_env_changed_callback):
-                self._ql_env_changed_callback(Path(path_str).name)
+                self._ql_env_changed_callback(venv_path.name)
             self._async_refresh_packages()
         else:
             self._safe_clear_env_state()
@@ -2573,21 +3115,46 @@ $s.Save()
         except Exception:
             pass
 
-        # 1) Python version — from cache or subprocess
+        # 1) Python version — from cache, marker, or subprocess
         if python_ver:
             self.python_version_label.setText(f"🐍 Python {python_ver}")
         else:
-            try:
-                python_exe = get_python_executable(venv_path)
-                result = subprocess.run(
-                    [str(python_exe), "--version"],
-                    capture_output=True, text=True, timeout=10,
-                    **subprocess_args()
-                )
-                ver_text = result.stdout.strip() or result.stderr.strip()
-                self.python_version_label.setText(f"🐍 {ver_text}")
-            except Exception:
-                self.python_version_label.setText("")
+            # Try marker first (for pipx, conda, system_tools envs)
+            _marker_pyver = ""
+            _marker_file = venv_path / ".venvstudio_env"
+            if _marker_file.exists():
+                try:
+                    import json as _json
+                    with open(_marker_file) as _mf:
+                        _mdata = _json.load(_mf)
+                    _marker_pyver = _mdata.get("python_version", "")
+                except Exception:
+                    pass
+            if _marker_pyver:
+                self.python_version_label.setText(f"🐍 Python {_marker_pyver}")
+            else:
+                try:
+                    python_exe = get_python_executable(venv_path)
+                    result = subprocess.run(
+                        [str(python_exe), "--version"],
+                        capture_output=True, text=True, timeout=10,
+                        **subprocess_args()
+                    )
+                    ver_text = result.stdout.strip() or result.stderr.strip()
+                    self.python_version_label.setText(f"🐍 {ver_text}")
+                except Exception:
+                    # Last fallback: system Python
+                    try:
+                        import sys as _sys
+                        result = subprocess.run(
+                            [_sys.executable, "--version"],
+                            capture_output=True, text=True, timeout=5,
+                            **subprocess_args()
+                        )
+                        ver_text = result.stdout.strip() or result.stderr.strip()
+                        self.python_version_label.setText(f"🐍 {ver_text}")
+                    except Exception:
+                        self.python_version_label.setText("")
 
         # 2) Shortened path
         try:
@@ -2629,8 +3196,16 @@ $s.Save()
             except Exception:
                 self.env_disk_label.setText("💾 ?")
 
-        # 4) Backend (pip/uv)
-        backend_display = backend.upper() if backend else "PIP"
+        # 4) Backend (pip/uv/conda/poetry/pipx)
+        _env_type = getattr(self, "_current_env_type", "venv")
+        _backend_names = {
+            "venv": backend.upper() if backend else "PIP",
+            "uv": "UV",
+            "poetry": "Poetry",
+            "pipx": "pipx",
+            "conda": "Conda",
+        }
+        backend_display = _backend_names.get(_env_type, backend.upper() if backend else "PIP")
         self.env_backend_label.setText(f"⚙️ {backend_display}")
 
         # 5) Last used (modification time of pyvenv.cfg or activate script)
@@ -2639,6 +3214,7 @@ $s.Save()
                 venv_path / "pyvenv.cfg",
                 venv_path / "Scripts" / "activate.bat",
                 venv_path / "bin" / "activate",
+                venv_path / "conda-meta" / "history",
             ]
             latest_mtime = 0
             for c in candidates:
@@ -2651,8 +3227,34 @@ $s.Save()
                 dt = datetime.fromtimestamp(latest_mtime)
                 self.env_last_used_label.setText(f"🕐 {dt.strftime('%Y-%m-%d %H:%M')}")
             else:
-                self.env_last_used_label.setText("")
-                self._info_sep3.setVisible(False)
+                # Fallback: use marker created date (e.g. pipx has no activate/pyvenv.cfg)
+                _marker = venv_path / ".venvstudio_env"
+                _created = ""
+                if _marker.exists():
+                    try:
+                        import json as _j
+                        _created = _j.loads(_marker.read_text()).get("created", "")
+                    except Exception:
+                        pass
+                if not _created:
+                    # For poetry venvs, use dir ctime
+                    try:
+                        from datetime import datetime
+                        _created = datetime.fromtimestamp(venv_path.stat().st_ctime).strftime("%Y-%m-%d %H:%M")
+                    except Exception:
+                        pass
+                if _created:
+                    try:
+                        from datetime import datetime
+                        if "T" in _created:
+                            dt = datetime.fromisoformat(_created)
+                            _created = dt.strftime("%Y-%m-%d %H:%M")
+                    except Exception:
+                        pass
+                    self.env_last_used_label.setText(f"🕐 {_created}")
+                else:
+                    self.env_last_used_label.setText("")
+                    self._info_sep3.setVisible(False)
         except Exception:
             self.env_last_used_label.setText("")
             self._info_sep3.setVisible(False)
@@ -2703,23 +3305,81 @@ $s.Save()
 
         # Capture pip_manager reference (env may change before thread finishes)
         pip_mgr_snapshot = self.pip_manager
+        _env_type = getattr(self, "_current_env_type", "venv")
+        _venv_path = self._current_venv_path if hasattr(self, "_current_venv_path") else None
 
         # Use QThread for background loading
         class PkgLoader(QThread):
             done = Signal(list)
-            def __init__(self, pip_mgr, parent=None):
+            def __init__(self, pip_mgr, env_type, venv_path, parent=None):
                 super().__init__(parent)
                 self.pip_mgr = pip_mgr
+                self.env_type = env_type
+                self.venv_path = venv_path
             def run(self):
                 try:
-                    pkgs = self.pip_mgr.list_packages()
+                    if self.env_type == "conda" and self.venv_path:
+                        from src.core.micromamba_installer import list_conda_packages
+                        raw = list_conda_packages(self.venv_path)
+                        class _Pkg:
+                            def __init__(self, name, version):
+                                self.name = name
+                                self.version = version
+                        pkgs = [_Pkg(p.get("name",""), p.get("version",""))
+                                for p in raw]
+                    elif self.env_type == "pipx":
+                        # List globally installed pipx apps
+                        import subprocess, sys, json as _json
+                        from src.utils.platform_utils import subprocess_args
+                        class _Pkg:
+                            def __init__(self, name, version):
+                                self.name = name
+                                self.version = version
+                        pkgs = []
+                        try:
+                            from src.utils.platform_utils import get_pipx_executable as _get_pipx
+                            _pipx_exe = _get_pipx()
+                            _pipx_cmd = [_pipx_exe, "list", "--json"] if _pipx_exe else [sys.executable, "-m", "pipx", "list", "--json"]
+                            r = subprocess.run(
+                                _pipx_cmd,
+                                capture_output=True, text=True, timeout=30,
+                                **subprocess_args()
+                            )
+                            if r.returncode == 0 and r.stdout.strip():
+                                data = _json.loads(r.stdout)
+                                venvs = data.get("venvs", {})
+                                for pkg_name, info in venvs.items():
+                                    meta = info.get("metadata", {})
+                                    ver = meta.get("main_package", {}).get("package_version", "")
+                                    pkgs.append(_Pkg(pkg_name, ver))
+                        except Exception:
+                            pass
+                    else:
+                        pkgs = self.pip_mgr.list_packages()
                     self.done.emit(pkgs)
                 except Exception:
                     self.done.emit([])
 
-        self._pkg_loader = PkgLoader(pip_mgr_snapshot, parent=self)
+        self._pkg_loader = PkgLoader(pip_mgr_snapshot, _env_type, _venv_path, parent=self)
         self._pkg_loader.done.connect(self._on_packages_loaded)
         self._pkg_loader.start()
+
+
+    def _get_catalog_lookup(self) -> dict:
+        """Build {pkg_name_lower: (desc, category)} from PACKAGE_CATALOG.
+        Uses EXACTLY the same iteration as _populate_catalog.
+        """
+        lookup = {}
+        for cat_name, cat_data in PACKAGE_CATALOG.items():
+            if not cat_data:
+                continue
+            for pkg in cat_data.get("packages", []):
+                name = pkg["name"]
+                desc = pkg["desc"]
+                lookup[name.lower()] = (desc, cat_name)
+                lookup[name.lower().replace("-", "_")] = (desc, cat_name)
+                lookup[name.lower().replace("_", "-")] = (desc, cat_name)
+        return lookup
 
     def _on_packages_loaded(self, packages):
         """Called when async package loading finishes."""
@@ -2997,12 +3657,23 @@ $s.Save()
         if reply != QMessageBox.Yes:
             return
 
-        # Show command hint
+        # Show command hint (env-type aware)
+        _env_type = getattr(self, "_current_env_type", "venv")
+        _install_cmds = {
+            "venv": "pip install {packages}", "uv": "uv pip install {packages}",
+            "poetry": "poetry add {packages}",
+            "conda": "conda install {packages}", "pipx": "pipx install {packages}",
+        }
+        _uninstall_cmds = {
+            "venv": "pip uninstall -y {packages}", "uv": "uv pip uninstall {packages}",
+            "poetry": "poetry remove {packages}",
+            "conda": "conda remove {packages}", "pipx": "pipx uninstall {packages}",
+        }
         cmds = []
         if to_uninstall:
-            cmds.append(COMMAND_HINTS["uninstall"].format(packages=" ".join(to_uninstall)))
+            cmds.append(_uninstall_cmds.get(_env_type, COMMAND_HINTS["uninstall"]).format(packages=" ".join(to_uninstall)))
         if to_install:
-            cmds.append(COMMAND_HINTS["install"].format(packages=" ".join(to_install)))
+            cmds.append(_install_cmds.get(_env_type, COMMAND_HINTS["install"]).format(packages=" ".join(to_install)))
         self._show_command_hint("Apply Changes", " && ".join(cmds))
 
         self._set_busy(True)
@@ -3089,8 +3760,17 @@ $s.Save()
         if reply != QMessageBox.Yes:
             return
 
-        # Show command hint
-        cmd = COMMAND_HINTS["install"].format(packages=" ".join(packages))
+        # Show command hint based on env type
+        _env_type = getattr(self, "_current_env_type", "venv")
+        _install_cmds = {
+            "venv":   "pip install {packages}",
+            "uv":     "uv pip install {packages}",
+            "poetry": "poetry add {packages}",
+            "conda":  "conda install {packages}",
+            "pipx":   "pipx install {packages}",
+        }
+        _cmd_template = _install_cmds.get(_env_type, COMMAND_HINTS["install"])
+        cmd = _cmd_template.format(packages=" ".join(packages))
         self._show_command_hint(hint_name or "Install Packages", cmd)
 
         self._do_install(packages)
@@ -3099,13 +3779,85 @@ $s.Save()
         """Actually start install worker (no confirm dialog)."""
         self._set_busy(True)
         self.output_log.clear()
-        self.current_worker = WorkerThread(self.pip_manager.install_packages, packages)
+
+        _env_type = getattr(self, "_current_env_type", "venv")
+        if _env_type == "conda" and self.pip_manager and self.pip_manager.venv_path:
+            # Use conda install instead of pip for conda environments
+            _env_path = self.pip_manager.venv_path
+            _pkgs = list(packages)
+
+            def _do_conda_install(callback=None):
+                from src.core.micromamba_installer import (
+                    install_conda_packages, get_micromamba_exe, download_micromamba,
+                )
+                if not get_micromamba_exe():
+                    if callback:
+                        callback("Downloading micromamba...")
+                    download_micromamba(progress_cb=callback)
+                ok = install_conda_packages(
+                    _env_path, _pkgs,
+                    channels=["conda-forge"],
+                    progress_cb=callback,
+                )
+                return (ok,
+                        f"Installed: {', '.join(_pkgs)}" if ok
+                        else f"conda install failed for: {', '.join(_pkgs)}")
+
+            self.current_worker = WorkerThread(_do_conda_install)
+        elif _env_type == "pipx":
+            # Use pipx install for each package — with selected Python from marker
+            _pkgs = list(packages)
+            _pipx_python = None
+            if self.pip_manager and self.pip_manager.venv_path:
+                _marker = self.pip_manager.venv_path / ".venvstudio_env"
+                if _marker.exists():
+                    try:
+                        import json as _json
+                        with open(_marker) as _mf:
+                            _mdata = _json.load(_mf)
+                        _pipx_python = _mdata.get("python_path", "")
+                    except Exception:
+                        pass
+
+            def _do_pipx_install(callback=None):
+                import subprocess, sys, shutil
+                from src.utils.platform_utils import subprocess_args
+                # Find pipx executable — prefer direct binary over python -m pipx
+                _pipx_bin = shutil.which("pipx")
+                installed = []
+                failed = []
+                for pkg in _pkgs:
+                    if callback:
+                        callback(f"pipx install {pkg}...")
+                    if _pipx_bin:
+                        cmd = [_pipx_bin, "install", pkg]
+                    else:
+                        _pipx_exe2 = shutil.which("pipx")
+                        cmd = [_pipx_exe2, "install", pkg] if _pipx_exe2 else [sys.executable, "-m", "pipx", "install", pkg]
+                    if _pipx_python:
+                        cmd += ["--python", _pipx_python]
+                    r = subprocess.run(
+                        cmd, capture_output=True, text=True, timeout=300,
+                        **subprocess_args()
+                    )
+                    if r.returncode == 0:
+                        installed.append(pkg)
+                    else:
+                        failed.append(pkg)
+                if failed:
+                    return (False, f"pipx install failed for: {', '.join(failed)}")
+                return (True, f"pipx installed: {', '.join(installed)}")
+
+            self.current_worker = WorkerThread(_do_pipx_install)
+        else:
+            self.current_worker = WorkerThread(self.pip_manager.install_packages, packages)
+
         self.current_worker.progress.connect(self._on_progress)
         self.current_worker.finished.connect(self._on_install_finished)
         self.current_worker.start()
 
     def _copy_install_command(self):
-        """Copy the pip install command for entered packages."""
+        """Copy the install command for entered packages (env-type aware)."""
         text = self.manual_input.toPlainText().strip()
         if not text:
             self.status_label.setText("⚠️ No packages entered")
@@ -3134,7 +3886,16 @@ $s.Save()
                     cleaned.append(t)
 
         if cleaned:
-            cmd = f"pip install {' '.join(cleaned)}"
+            _env_type = getattr(self, "_current_env_type", "venv")
+            _cmd_prefixes = {
+                "venv":   "pip install",
+                "uv":     "uv pip install",
+                "poetry": "poetry add",
+                "conda":  "conda install",
+                "pipx":   "pipx install",
+            }
+            _prefix = _cmd_prefixes.get(_env_type, "pip install")
+            cmd = f"{_prefix} {' '.join(cleaned)}"
             from PySide6.QtWidgets import QApplication
             QApplication.clipboard().setText(cmd)
             self.status_label.setText(f"📋 Copied: {cmd}")
@@ -3253,7 +4014,15 @@ $s.Save()
         if reply != QMessageBox.Yes:
             return
 
-        cmd = COMMAND_HINTS["uninstall"].format(packages=" ".join(packages))
+        _env_type = getattr(self, "_current_env_type", "venv")
+        _uninstall_cmds = {
+            "venv":   "pip uninstall -y {packages}",
+            "uv":     "uv pip uninstall {packages}",
+            "poetry": "poetry remove {packages}",
+            "conda":  "conda remove {packages}",
+            "pipx":   "pipx uninstall {packages}",
+        }
+        cmd = _uninstall_cmds.get(_env_type, COMMAND_HINTS["uninstall"]).format(packages=" ".join(packages))
         self._show_command_hint("Uninstall Packages", cmd)
 
         self._set_busy(True)
@@ -3270,7 +4039,12 @@ $s.Save()
         )
         if filepath:
             success, msg = self.pip_manager.export_requirements(Path(filepath))
-            self._show_command_hint("Export Requirements", COMMAND_HINTS["freeze"])
+            self._show_command_hint("Export Requirements", {
+                "venv": "pip freeze > requirements.txt",
+                "uv": "uv pip freeze > requirements.txt",
+                "poetry": "poetry export -f requirements.txt",
+                "conda": "conda list --export > requirements.txt",
+            }.get(getattr(self, "_current_env_type", "venv"), COMMAND_HINTS["freeze"]))
             if success:
                 QMessageBox.information(self, "Success", msg)
             else:
@@ -3519,7 +4293,12 @@ dependencies:
             self, "Import Requirements", "", "Text Files (*.txt);;All Files (*)"
         )
         if filepath:
-            self._show_command_hint("Import Requirements", COMMAND_HINTS["import_req"])
+            self._show_command_hint("Import Requirements", {
+                "venv": "pip install -r requirements.txt",
+                "uv": "uv pip install -r requirements.txt",
+                "poetry": "poetry install",
+                "conda": "conda install --file requirements.txt",
+            }.get(getattr(self, "_current_env_type", "venv"), COMMAND_HINTS["import_req"]))
             self._set_busy(True)
             self.current_worker = WorkerThread(
                 self.pip_manager.import_requirements, Path(filepath)
@@ -3535,6 +4314,13 @@ dependencies:
             return
 
         menu = QMenu(self)
+        _env_type = getattr(self, "_current_env_type", "venv")
+        _prefixes = {
+            "venv": "pip install", "uv": "uv pip install",
+            "poetry": "poetry add",
+            "conda": "conda install", "pipx": "pipx install",
+        }
+        _prefix = _prefixes.get(_env_type, "pip install")
 
         # Gather selected package names
         selected_pkgs = []
@@ -3548,19 +4334,19 @@ dependencies:
 
         if len(selected_pkgs) == 1:
             pkg, ver = selected_pkgs[0]
-            menu.addAction(f"ℹ️ Package Info (pip show)", lambda: self._show_pip_info(pkg))
+            menu.addAction(f"ℹ️ Package Info", lambda: self._show_pip_info(pkg))
             menu.addSeparator()
-            menu.addAction(f"📋 Copy: pip install {pkg}", lambda: self._copy_to_clipboard(f"pip install {pkg}"))
-            menu.addAction(f"📋 Copy: pip install {pkg}=={ver}", lambda: self._copy_to_clipboard(f"pip install {pkg}=={ver}"))
+            menu.addAction(f"📋 Copy: {_prefix} {pkg}", lambda p=pkg: self._copy_to_clipboard(f"{_prefix} {p}"))
+            menu.addAction(f"📋 Copy: {_prefix} {pkg}=={ver}", lambda p=pkg, v=ver: self._copy_to_clipboard(f"{_prefix} {p}=={v}"))
             menu.addSeparator()
             menu.addAction(f"📋 Copy package name", lambda: self._copy_to_clipboard(pkg))
             menu.addAction(f"🌐 Open on PyPI", lambda: self._open_pypi(pkg))
         else:
             names = " ".join(p for p, _ in selected_pkgs)
-            menu.addAction(f"📋 Copy: pip install {names}", lambda: self._copy_to_clipboard(f"pip install {names}"))
+            menu.addAction(f"📋 Copy: {_prefix} {names}", lambda: self._copy_to_clipboard(f"{_prefix} {names}"))
             pinned = " ".join(f"{p}=={v}" for p, v in selected_pkgs if v)
             if pinned:
-                menu.addAction(f"📋 Copy with versions", lambda: self._copy_to_clipboard(f"pip install {pinned}"))
+                menu.addAction(f"📋 Copy with versions", lambda: self._copy_to_clipboard(f"{_prefix} {pinned}"))
 
         menu.exec(self.packages_table.viewport().mapToGlobal(position))
 
@@ -3579,11 +4365,19 @@ dependencies:
         is_installed = pkg.lower() in self.installed_package_names
 
         menu = QMenu(self)
+        _env_type = getattr(self, "_current_env_type", "venv")
+        _prefixes = {
+            "venv": "pip install", "uv": "uv pip install",
+            "poetry": "poetry add",
+            "conda": "conda install", "pipx": "pipx install",
+        }
+        _prefix = _prefixes.get(_env_type, "pip install")
+
         menu.addAction(f"ℹ️ Package Info", lambda: self._show_pip_info(pkg))
         if not is_installed:
             menu.addAction(f"⬇️ Install {pkg}", lambda: self._install_packages([pkg], hint_name=pkg))
         menu.addSeparator()
-        menu.addAction(f"📋 Copy: pip install {pkg}", lambda: self._copy_to_clipboard(f"pip install {pkg}"))
+        menu.addAction(f"📋 Copy: {_prefix} {pkg}", lambda: self._copy_to_clipboard(f"{_prefix} {pkg}"))
         menu.addAction(f"📋 Copy package name", lambda: self._copy_to_clipboard(pkg))
         menu.addSeparator()
         menu.addAction(f"🌐 Open on PyPI", lambda: self._open_pypi(pkg))
@@ -3874,8 +4668,17 @@ dependencies:
             self.current_worker.start()
 
     def _copy_preset_command(self, packages):
-        """Copy pip install command to clipboard."""
-        cmd = f"pip install {' '.join(packages)}"
+        """Copy install command to clipboard (env-type-aware)."""
+        _env_type = getattr(self, "_current_env_type", "venv")
+        _cmd_prefixes = {
+            "venv":   "pip install",
+            "uv":     "uv pip install",
+            "poetry": "poetry add",
+            "conda":  "conda install",
+            "pipx":   "pipx install",
+        }
+        _prefix = _cmd_prefixes.get(_env_type, "pip install")
+        cmd = f"{_prefix} {' '.join(packages)}"
         from PySide6.QtWidgets import QApplication
         clipboard = QApplication.clipboard()
         clipboard.setText(cmd)

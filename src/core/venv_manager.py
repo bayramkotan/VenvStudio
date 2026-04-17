@@ -8,7 +8,6 @@ import sys
 import shutil
 import subprocess
 import json
-import logging
 import platform as _platform
 from pathlib import Path
 from typing import Optional, List, Dict, Any
@@ -21,9 +20,6 @@ from src.utils.platform_utils import (
     get_venv_size,
     get_activate_command,
 )
-
-# Module-level logger — routes to 'venvstudio.core.venv_manager'
-_log = logging.getLogger("venvstudio.core.venv_manager")
 
 # Suppress terminal windows on Windows (EXE builds)
 _SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if _platform.system().lower() == "windows" else 0
@@ -96,43 +92,13 @@ def _find_windows_python() -> str:
 
 
 def _run(*args, **kwargs):
-    """subprocess.run wrapper — uses subprocess_args for platform safety.
-    Logs every invocation at DEBUG level so terminal users see exactly what's
-    being executed (create, install, activate etc.).
-    """
+    """subprocess.run wrapper — uses subprocess_args for platform safety."""
     from src.utils.platform_utils import subprocess_args
     # subprocess_args: Windows CREATE_NO_WINDOW + EXE PATH fix, Linux AppImage env clean
     merged = subprocess_args()
     for k, v in merged.items():
         kwargs.setdefault(k, v)
-
-    # Log the command being executed (visible in terminal when TTY)
-    try:
-        cmd = args[0] if args else kwargs.get("args", "?")
-        if isinstance(cmd, (list, tuple)):
-            cmd_str = " ".join(str(c) for c in cmd)
-        else:
-            cmd_str = str(cmd)
-        _log.debug(f"▶ subprocess: {cmd_str}")
-    except Exception:
-        pass
-
-    result = subprocess.run(*args, **kwargs)
-
-    # Log non-zero exit codes
-    try:
-        rc = getattr(result, "returncode", None)
-        if rc is not None and rc != 0:
-            stderr_preview = ""
-            if hasattr(result, "stderr") and result.stderr:
-                stderr_preview = str(result.stderr)[:200].replace("\n", " ")
-            _log.warning(f"  ↳ exit={rc}  stderr={stderr_preview!r}")
-        else:
-            _log.debug(f"  ↳ exit=0")
-    except Exception:
-        pass
-
-    return result
+    return subprocess.run(*args, **kwargs)
 
 
 @dataclass
@@ -145,7 +111,6 @@ class VenvInfo:
     created: str = ""
     package_count: int = 0
     is_valid: bool = True
-    env_type: str = "venv"  # venv | uv | poetry | pipx | conda
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -156,7 +121,6 @@ class VenvInfo:
             "created": self.created,
             "package_count": self.package_count,
             "is_valid": self.is_valid,
-            "env_type": self.env_type,
         }
 
 
@@ -172,54 +136,6 @@ class VenvManager:
         self.base_dir = new_dir
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
-    def ensure_pipx_env(self) -> bool:
-        """Auto-create a pipx marker env in pipx home dir if pipx is installed.
-        Returns True if pipx env exists or was created, False if pipx not found."""
-        import shutil, json as _json, datetime as _dt, sys as _sys
-        from src.utils.platform_utils import get_pipx_executable, get_pipx_home, get_pipx_cmd
-        pipx_exe = get_pipx_executable()
-        if not pipx_exe:
-            return False
-        pipx_home = get_pipx_home() or ""
-        # Use pipx home as the marker dir — not the user venv base dir
-        if pipx_home:
-            marker_dir = Path(pipx_home)
-        else:
-            # Fallback to default pipx home locations
-            import os
-            if sys.platform == "win32":
-                marker_dir = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "pipx"
-            else:
-                marker_dir = Path.home() / ".local" / "share" / "pipx"
-        marker_dir.mkdir(parents=True, exist_ok=True)
-        marker = marker_dir / ".venvstudio_env"
-        if not marker.exists():
-            try:
-                with open(marker, "w", encoding="utf-8") as _f:
-                    _json.dump({
-                        "type": "pipx",
-                        "name": "pipx",
-                        "pipx_home": str(pipx_home),
-                        "pipx_exe": str(pipx_exe),
-                        "python_path": _sys.executable,
-                        "created": _dt.datetime.now().isoformat(),
-                        "auto_detected": True,
-                    }, _f, indent=2)
-            except Exception:
-                pass
-        else:
-            # Update pipx_home/exe in case they changed
-            try:
-                with open(marker, "r", encoding="utf-8") as _f:
-                    data = _json.load(_f)
-                data["pipx_home"] = str(pipx_home)
-                data["pipx_exe"] = str(pipx_exe)
-                with open(marker, "w", encoding="utf-8") as _f:
-                    _json.dump(data, _f, indent=2)
-            except Exception:
-                pass
-        return True
-
     def create_venv(
         self,
         name: str,
@@ -232,12 +148,9 @@ class VenvManager:
         Create a new virtual environment.
         Returns (success, message).
         """
-        _log.info(f"create_venv: name={name!r} python={python_path!r} "
-                  f"with_pip={with_pip} system_site={system_site_packages}")
         venv_path = self.base_dir / name
 
         if venv_path.exists():
-            _log.warning(f"create_venv: env already exists at {venv_path}")
             return False, f"Environment '{name}' already exists at {venv_path}"
 
         if python_path:
@@ -490,39 +403,14 @@ class VenvManager:
 
     # ── Delete ─────────────────────────────────────────────────────────────
 
-    def delete_venv(self, name: str, callback=None, env_path=None, env_type: str = "venv") -> tuple[bool, str]:
-        """Delete a virtual environment.
-        For poetry envs: deletes both the project marker dir (base_dir/name) AND the real venv (env_path).
-        For other envs: deletes base_dir/name or env_path if given.
-        """
-        _log.info(f"delete_venv: name={name!r} env_type={env_type!r} env_path={env_path!r}")
-        venv_path = Path(env_path) if env_path else self.base_dir / name
+    def delete_venv(self, name: str, callback=None) -> tuple[bool, str]:
+        venv_path = self.base_dir / name
         if not venv_path.exists():
-            # For poetry, try base_dir / name as project dir
-            alt = self.base_dir / name
-            if alt.exists():
-                venv_path = alt
-            else:
-                return False, f"Environment '{name}' not found"
+            return False, f"Environment '{name}' not found"
         try:
             if callback:
                 callback(f"Deleting {name}...")
             shutil.rmtree(venv_path)
-            # For poetry: also delete the project marker dir in base_dir if different
-            if env_type == "poetry" and env_path:
-                for _item in self.base_dir.iterdir():
-                    if not _item.is_dir():
-                        continue
-                    _marker = _item / ".venvstudio_env"
-                    if _marker.exists():
-                        try:
-                            import json as _json
-                            _data = _json.loads(_marker.read_text())
-                            if _data.get("poetry_venv_path", "") == str(env_path):
-                                shutil.rmtree(_item, ignore_errors=True)
-                                break
-                        except Exception:
-                            pass
             if callback:
                 callback(f"Deleted {name} successfully.")
             return True, f"Environment '{name}' deleted successfully"
@@ -555,167 +443,6 @@ class VenvManager:
         venvs = []
         if not self.base_dir.exists():
             return venvs
-
-        # ── Include pipx from its own home dir (not base_dir) ────────────
-        try:
-            from src.utils.platform_utils import get_pipx_home, get_pipx_executable, get_pipx_cmd
-            import sys as _sys
-            _pipx_home = get_pipx_home()
-            if not _pipx_home:
-                if _sys.platform == "win32":
-                    _pipx_home = os.path.join(os.environ.get("LOCALAPPDATA", ""), "pipx")
-                else:
-                    _pipx_home = os.path.join(os.path.expanduser("~"), ".local", "share", "pipx")
-            _pipx_home_path = Path(_pipx_home) if _pipx_home else None
-            if _pipx_home_path and _pipx_home_path.exists():
-                _marker = _pipx_home_path / ".venvstudio_env"
-                if _marker.exists():
-                    try:
-                        with open(_marker) as _f:
-                            _mdata = json.load(_f)
-                    except Exception:
-                        _mdata = {}
-                    _info = VenvInfo(
-                        name=_mdata.get("name", "pipx"),
-                        path=_pipx_home_path,
-                        is_valid=True,
-                        env_type="pipx",
-                    )
-                    _info.created = _mdata.get("created", "")
-                    # Python version from marker or system python
-                    _pyver = _mdata.get("python_version", "")
-                    if not _pyver:
-                        try:
-                            import sys as _sys
-                            _r = _run([_sys.executable, "--version"],
-                                      capture_output=True, text=True, timeout=5)
-                            _pyver = (_r.stdout.strip() or _r.stderr.strip()).replace("Python ", "")
-                        except Exception:
-                            pass
-                    _info.python_version = _pyver
-                    # Count installed pipx apps
-                    try:
-                        import sys as _sys
-                        from src.utils.platform_utils import get_pipx_cmd as _gpc3
-                        _pipx_cmd = (_gpc3() or [_sys.executable, "-m", "pipx"]) + ["list", "--short"]
-                        _r = _run(_pipx_cmd, capture_output=True, text=True, timeout=15)
-                        if _r.returncode == 0:
-                            _lines = [l for l in _r.stdout.strip().splitlines() if l.strip()]
-                            _info.package_count = len(_lines)
-                    except Exception:
-                        _info.package_count = 0
-                    # Size: scan pipx venvs directory
-                    try:
-                        _venvs_dir = _pipx_home_path / "venvs"
-                        if _venvs_dir.exists():
-                            _total = 0
-                            for _dp, _dns, _fns in os.walk(str(_venvs_dir)):
-                                for _fn in _fns:
-                                    _fp = os.path.join(_dp, _fn)
-                                    if not os.path.islink(_fp):
-                                        _total += os.path.getsize(_fp)
-                            # Format size
-                            for _unit in ["B", "KB", "MB", "GB"]:
-                                if _total < 1024:
-                                    _info.size = f"{_total:.1f} {_unit}"
-                                    break
-                                _total /= 1024
-                            else:
-                                _info.size = f"{_total:.1f} TB"
-                    except Exception:
-                        pass
-                    # Size: scan pipx venvs directory
-                    _venvs_dir = _pipx_home_path / "venvs"
-                    if _venvs_dir.exists():
-                        _total = 0
-                        for _dp, _dns, _fns in os.walk(str(_venvs_dir)):
-                            for _fn in _fns:
-                                _fp = os.path.join(_dp, _fn)
-                                try:
-                                    if not os.path.islink(_fp):
-                                        _total += os.path.getsize(_fp)
-                                except OSError:
-                                    pass
-                        _sz = _total
-                        for _unit in ["B", "KB", "MB", "GB"]:
-                            if _sz < 1024:
-                                _info.size = f"{_sz:.1f} {_unit}"
-                                break
-                            _sz /= 1024
-                        else:
-                            _info.size = f"{_sz:.1f} TB"
-                    venvs.append(_info)
-        except Exception:
-            import traceback; traceback.print_exc()
-
-        # ── Include poetry envs from platform-specific poetry virtualenvs dir ─
-        try:
-            import sys as _sys
-            _plat = _sys.platform
-            if _plat == "win32":
-                _poetry_base = Path(os.environ.get("LOCALAPPDATA", os.environ.get("APPDATA", ""))) / "pypoetry" / "Cache" / "virtualenvs"
-            elif _plat == "darwin":
-                _poetry_base = Path.home() / "Library" / "Caches" / "pypoetry" / "virtualenvs"
-            else:  # linux
-                _poetry_base = Path.home() / ".cache" / "pypoetry" / "virtualenvs"
-            if _poetry_base.exists():
-                for _penv in sorted(_poetry_base.iterdir()):
-                    if not _penv.is_dir():
-                        continue
-                    # Name: strip hash suffix e.g. poetryenv-0KHIYmlT-py3.14 → poetryenv
-                    _parts = _penv.name.rsplit("-", 2)
-                    _pname = _parts[0] if len(_parts) >= 3 else _penv.name
-                    # Apply display name override if user set one
-                    _display_override = _penv / ".venvstudio_display_name"
-                    if _display_override.exists():
-                        try:
-                            _dn = _display_override.read_text(encoding="utf-8").strip()
-                            if _dn:
-                                _pname = _dn
-                        except Exception:
-                            pass
-                    _pinfo = VenvInfo(name=_pname, path=_penv, is_valid=True, env_type="poetry")
-                    # Python version from pyvenv.cfg
-                    _pycfg = _penv / "pyvenv.cfg"
-                    if _pycfg.exists():
-                        try:
-                            for _line in _pycfg.read_text().splitlines():
-                                if _line.strip().startswith("version"):
-                                    _ver = _line.split("=", 1)[1].strip()
-                                    # Clean: "3.14.3.final.0" → "3.14.3"
-                                    _ver_parts = _ver.split(".")
-                                    _clean = []
-                                    for _p in _ver_parts:
-                                        if _p.isdigit():
-                                            _clean.append(_p)
-                                        else:
-                                            break
-                                    _pinfo.python_version = ".".join(_clean) if _clean else _ver
-                                    break
-                        except Exception:
-                            pass
-                    # Package count
-                    _pip_exe = get_pip_executable(_penv)
-                    if _pip_exe.exists():
-                        try:
-                            _r = _run([str(_pip_exe), "list", "--format=json"],
-                                      capture_output=True, text=True, timeout=15)
-                            if _r.returncode == 0:
-                                _pinfo.package_count = len(json.loads(_r.stdout))
-                        except Exception:
-                            pass
-                    # Size
-                    _pinfo.size = get_venv_size(_penv)
-                    # Created from pyvenv.cfg or dir stat
-                    try:
-                        from datetime import datetime as _dt
-                        _pinfo.created = _dt.fromtimestamp(_penv.stat().st_ctime).isoformat()
-                    except Exception:
-                        pass
-                    venvs.append(_pinfo)
-        except Exception:
-            import traceback; traceback.print_exc()
-
         for item in sorted(self.base_dir.iterdir()):
             if not item.is_dir():
                 continue
@@ -728,163 +455,27 @@ class VenvManager:
                 except Exception:
                     marker_data = {}
                 env_type = marker_data.get("type", "system_tools")
-                # Skip pipx marker in base_dir — listed from its own home
-                if env_type == "pipx":
-                    continue
-                # Skip poetry marker in base_dir — listed from APPDATA/pypoetry/Cache/virtualenvs
-                # (marker has poetry_venv_path pointing to real venv; avoid duplicate)
-                if env_type == "poetry":
-                    continue
-                info = VenvInfo(name=item.name, path=item, is_valid=True,
-                                env_type=env_type)
-
-                # ── Resolve Python version from marker or venv binary ─────
-                marker_pyver = marker_data.get("python_version", "")
-
+                info = VenvInfo(name=item.name, path=item, is_valid=True)
                 if env_type == "conda":
-                    # Always try real binary first — marker may have short version
-                    _conda_pyver = ""
-                    _conda_py = None
-                    for _cand in (
-                        item / "python.exe",
-                        item / "Scripts" / "python.exe",
-                        item / "bin" / "python",
-                        item / "bin" / "python3",
-                    ):
-                        if _cand.exists():
-                            _conda_py = _cand
-                            break
-                    if _conda_py:
-                        try:
-                            _r = _run([str(_conda_py), "--version"],
-                                      capture_output=True, text=True, timeout=5)
-                            _conda_pyver = (
-                                _r.stdout.strip() or _r.stderr.strip()
-                            ).replace("Python ", "")
-                        except Exception:
-                            pass
-                    info.python_version = _conda_pyver or marker_pyver or ""
-                    # Count conda packages from conda-meta (most reliable, no subprocess needed)
+                    pyver = marker_data.get("python_version", "")
+                    info.python_version = (
+                        f"🦎 conda py{pyver}" if pyver else "🦎 conda"
+                    )
+                    # Count conda packages
                     try:
-                        _cmeta = item / "conda-meta"
-                        if _cmeta.exists():
-                            info.package_count = len([
-                                f for f in _cmeta.iterdir()
-                                if f.suffix == ".json" and f.name != "history"
-                            ])
-                        else:
-                            info.package_count = 0
+                        from src.core.micromamba_installer import list_conda_packages
+                        info.package_count = len(list_conda_packages(item))
                     except Exception:
                         info.package_count = 0
-
-                elif env_type in ("uv", "poetry"):
-                    # For poetry: real venv is at poetry_venv_path in marker
-                    # For uv: venv is at item itself
-                    if env_type == "poetry":
-                        _venv_path_str = marker_data.get("poetry_venv_path", "")
-                        _venv_dir = Path(_venv_path_str) if _venv_path_str else item
-                        if _venv_dir != item and _venv_dir.exists():
-                            info.path = _venv_dir
-                            info.size = get_venv_size(_venv_dir)
-                    else:
-                        _venv_dir = item
-                    # Python version from marker or pyvenv.cfg or binary
-                    if marker_pyver:
-                        info.python_version = marker_pyver
-                    else:
-                        _pycfg = _venv_dir / "pyvenv.cfg"
-                        if _pycfg.exists():
-                            try:
-                                for _line in _pycfg.read_text().splitlines():
-                                    if _line.strip().startswith("version"):
-                                        info.python_version = _line.split("=", 1)[1].strip()
-                                        break
-                            except Exception:
-                                pass
-                        if not info.python_version:
-                            _py = get_python_executable(_venv_dir)
-                            if _py.exists():
-                                try:
-                                    _r = _run([str(_py), "--version"],
-                                              capture_output=True, text=True, timeout=5)
-                                    info.python_version = (
-                                        _r.stdout.strip() or _r.stderr.strip()
-                                    ).replace("Python ", "")
-                                except Exception:
-                                    pass
-                    # Count packages
-                    # uv envs: no pip.exe, no pip module — use "uv pip list"
-                    # poetry/venv envs: pip.exe exists
-                    _counted = False
-                    if env_type == "uv":
-                        try:
-                            from src.utils.platform_utils import get_pipx_executable as _dummy
-                            import shutil as _shutil
-                            _uv_bin = _shutil.which("uv")
-                            if _uv_bin:
-                                _r = _run([_uv_bin, "pip", "list", "--format=json",
-                                           "--python", str(get_python_executable(_venv_dir))],
-                                          capture_output=True, text=True, timeout=15)
-                                if _r.returncode == 0:
-                                    info.package_count = len(json.loads(_r.stdout))
-                                    _counted = True
-                        except Exception:
-                            pass
-                    if not _counted:
-                        _pip_exe = get_pip_executable(_venv_dir)
-                        if _pip_exe.exists():
-                            try:
-                                _r = _run([str(_pip_exe), "list", "--format=json"],
-                                          capture_output=True, text=True, timeout=15)
-                                if _r.returncode == 0:
-                                    info.package_count = len(json.loads(_r.stdout))
-                            except Exception:
-                                pass
-
-                elif env_type == "pipx":
-                    # Get Python version — prefer marker, fallback to sys.executable
-                    if marker_pyver:
-                        info.python_version = marker_pyver
-                    else:
-                        try:
-                            import sys as _sys
-                            _r = _run([_sys.executable, "--version"],
-                                      capture_output=True, text=True, timeout=5)
-                            info.python_version = (
-                                _r.stdout.strip() or _r.stderr.strip()
-                            ).replace("Python ", "")
-                        except Exception:
-                            info.python_version = ""
-                    # Count installed pipx apps
-                    try:
-                        import sys as _sys
-                        from src.utils.platform_utils import get_pipx_executable as _gpx
-                        _pipx_cmd = (get_pipx_cmd() or [_sys.executable, "-m", "pipx"]) + ["list", "--short"]
-                        _r = _run(_pipx_cmd,
-                                  capture_output=True, text=True, timeout=15)
-                        if _r.returncode == 0:
-                            _lines = [l for l in _r.stdout.strip().splitlines() if l.strip()]
-                            info.package_count = len(_lines)
-                        else:
-                            info.package_count = 0
-                    except Exception:
-                        info.package_count = 0
-
-                else:  # system_tools
-                    info.python_version = ""
-                    info.package_count = 0
-
-                info.size = get_venv_size(item)
-                # Created date: prefer marker, fallback to filesystem
-                _marker_created = marker_data.get("created", "")
-                if _marker_created:
-                    info.created = _marker_created
                 else:
-                    try:
-                        info.created = datetime.fromtimestamp(
-                            item.stat().st_ctime).isoformat()
-                    except OSError:
-                        pass
+                    info.python_version = "🗂 system_tools"
+                    info.package_count = 0
+                info.size = get_venv_size(item)
+                try:
+                    info.created = datetime.fromtimestamp(
+                        item.stat().st_ctime).isoformat()
+                except OSError:
+                    pass
                 venvs.append(info)
                 continue
             # ─────────────────────────────────────────────────────────────
@@ -919,28 +510,15 @@ class VenvManager:
                         info.size = "..."
                         venvs.append(info)
                         continue
-                    # Try pyvenv.cfg first (no subprocess needed)
-                    _pycfg = item / "pyvenv.cfg"
-                    if _pycfg.exists():
-                        try:
-                            for _line in _pycfg.read_text().splitlines():
-                                if _line.strip().startswith("version"):
-                                    _v = _line.split("=", 1)[1].strip()
-                                    _parts = [p for p in _v.split(".") if p.isdigit()]
-                                    info.python_version = ".".join(_parts) if _parts else _v
-                                    break
-                        except Exception:
-                            pass
-                    if not info.python_version:
-                        try:
-                            result = _run(
-                                [str(python_exe), "--version"],
-                                capture_output=True, text=True, timeout=5,
-                            )
-                            ver = result.stdout.strip() or result.stderr.strip()
-                            info.python_version = ver.replace("Python ", "")
-                        except Exception:
-                            info.python_version = "?"
+                    try:
+                        result = _run(
+                            [str(python_exe), "--version"],
+                            capture_output=True, text=True, timeout=5,
+                        )
+                        ver = result.stdout.strip() or result.stderr.strip()
+                        info.python_version = ver.replace("Python ", "")
+                    except Exception:
+                        info.python_version = "?"
 
                     info.size = get_venv_size(item)
 
@@ -961,8 +539,7 @@ class VenvManager:
             # Not a valid Python venv — treat as system tools env and auto-create marker
             if not is_valid:
                 info.is_valid = True  # show in list
-                info.env_type = "system_tools"
-                info.python_version = ""
+                info.python_version = "🗂 system_tools"
                 info.package_count = 0
                 info.size = get_venv_size(item)
                 # Auto-create marker so it's recognized next time
@@ -998,101 +575,20 @@ class VenvManager:
                     except Exception:
                         marker_data = {}
                     env_type = marker_data.get("type", "system_tools")
-                    info = VenvInfo(name=item.name, path=item, is_valid=True,
-                                    env_type=env_type)
-                    marker_pyver = marker_data.get("python_version", "")
-
+                    info = VenvInfo(name=item.name, path=item, is_valid=True)
                     if env_type == "conda":
-                        _conda_pyver = ""
-                        _conda_py = None
-                        for _cand in (
-                            item / "bin" / "python",
-                            item / "bin" / "python3",
-                            item / "python.exe",
-                            item / "Scripts" / "python.exe",
-                        ):
-                            if _cand.exists():
-                                _conda_py = _cand
-                                break
-                        if _conda_py:
-                            try:
-                                _r = _run([str(_conda_py), "--version"],
-                                          capture_output=True, text=True, timeout=5)
-                                _conda_pyver = (
-                                    _r.stdout.strip() or _r.stderr.strip()
-                                ).replace("Python ", "")
-                            except Exception:
-                                pass
-                        info.python_version = _conda_pyver or marker_pyver or ""
-                    elif env_type in ("uv", "poetry"):
-                        if marker_pyver:
-                            info.python_version = marker_pyver
-                        else:
-                            _py = get_python_executable(item)
-                            if _py.exists():
-                                try:
-                                    _r = _run([str(_py), "--version"],
-                                              capture_output=True, text=True, timeout=5)
-                                    _v = (_r.stdout.strip() or _r.stderr.strip()
-                                           ).replace("Python ", "")
-                                    info.python_version = _v
-                                except Exception:
-                                    info.python_version = ""
-                            else:
-                                info.python_version = ""
-                        # Count packages via pip executable in the env
-                        _pip_exe = get_pip_executable(item)
-                        if _pip_exe.exists():
-                            try:
-                                _r = _run(
-                                    [str(_pip_exe), "list", "--format=json"],
-                                    capture_output=True, text=True, timeout=15,
-                                )
-                                if _r.returncode == 0:
-                                    info.package_count = len(json.loads(_r.stdout))
-                            except Exception:
-                                pass
-                    elif env_type == "pipx":
-                        if marker_pyver:
-                            info.python_version = marker_pyver
-                        else:
-                            try:
-                                import sys as _sys
-                                _r = _run([_sys.executable, "--version"],
-                                          capture_output=True, text=True, timeout=5)
-                                info.python_version = (
-                                    _r.stdout.strip() or _r.stderr.strip()
-                                ).replace("Python ", "")
-                            except Exception:
-                                info.python_version = ""
-                        try:
-                            import sys as _sys
-                            from src.utils.platform_utils import get_pipx_cmd as _gpc2
-                            _pipx_cmd = (_gpc2() or [_sys.executable, "-m", "pipx"]) + ["list", "--short"]
-                            _r = _run(_pipx_cmd,
-                                      capture_output=True, text=True, timeout=15)
-                            if _r.returncode == 0:
-                                _lines = [l for l in _r.stdout.strip().splitlines() if l.strip()]
-                                info.package_count = len(_lines)
-                            else:
-                                info.package_count = 0
-                        except Exception:
-                            info.package_count = 0
+                        pyver = marker_data.get("python_version", "")
+                        info.python_version = (
+                            f"🦎 conda py{pyver}" if pyver else "🦎 conda"
+                        )
                     else:
-                        info.python_version = ""
-                        info.package_count = 0
-
+                        info.python_version = "🗂 system_tools"
                     info.size = get_venv_size(item)
-                    # Created date: prefer marker, fallback to filesystem
-                    _marker_created = marker_data.get("created", "")
-                    if _marker_created:
-                        info.created = _marker_created
-                    else:
-                        try:
-                            info.created = datetime.fromtimestamp(
-                                item.stat().st_ctime).isoformat()
-                        except OSError:
-                            pass
+                    try:
+                        info.created = datetime.fromtimestamp(
+                            item.stat().st_ctime).isoformat()
+                    except OSError:
+                        pass
                     venvs.append(info)
                     continue
                 info = self.get_venv_info(item.name, use_cache=use_cache)
@@ -1228,164 +724,16 @@ class VenvManager:
 
         return info
 
-    def clone_venv(self, source_name: str, target_name: str, callback=None,
-                   source_path: Optional[str] = None, source_type: str = "venv") -> tuple[bool, str]:
-        _log.info(f"clone_venv: {source_name!r} → {target_name!r} "
-                  f"source_type={source_type!r} source_path={source_path!r}")
-        # ── Env-type guards: pipx / poetry not supported via Clone ─────────
-        if source_type == "pipx":
-            return False, (
-                "Cloning a pipx environment is not supported.\n\n"
-                "pipx manages its own isolated environments per CLI app.\n"
-                "To replicate a pipx app elsewhere, run:\n\n"
-                f"    pipx install {source_name}\n"
-                "    pipx reinstall-all\n\n"
-                "Or list installed apps with:\n\n"
-                "    pipx list"
-            )
-        if source_type == "poetry":
-            return False, (
-                "Cloning a Poetry environment is not supported directly.\n\n"
-                "Poetry environments are tied to a project's pyproject.toml.\n"
-                "To replicate the environment:\n\n"
-                "    cd <your-project>\n"
-                "    poetry lock\n"
-                "    poetry install\n\n"
-                "Or copy pyproject.toml + poetry.lock to the new project and run:\n\n"
-                "    poetry install"
-            )
-
-        source_path_obj = Path(source_path) if source_path else (self.base_dir / source_name)
-        if not source_path_obj.exists():
-            return False, f"Source environment '{source_name}' not found at {source_path_obj}"
+    def clone_venv(self, source_name: str, target_name: str, callback=None) -> tuple[bool, str]:
+        source_path = self.base_dir / source_name
+        if not source_path.exists():
+            return False, f"Source environment '{source_name}' not found"
 
         target_path = self.base_dir / target_name
         if target_path.exists():
             return False, f"Target environment '{target_name}' already exists"
 
-        # ── conda clone via micromamba create --clone ──────────────────────
-        if source_type == "conda":
-            try:
-                from src.core.micromamba_installer import get_micromamba_exe, write_conda_marker
-                mm = get_micromamba_exe()
-                if not mm:
-                    return False, (
-                        "micromamba not found. Install it via Settings → Toolchain Manager, "
-                        "or clone manually:\n\n"
-                        f"    micromamba env export -p {source_path_obj} > env.yml\n"
-                        f"    micromamba create -p {target_path} --file env.yml"
-                    )
-                if callback:
-                    callback(f"Cloning conda env to '{target_name}'...")
-                result = _run(
-                    [str(mm), "create", "-p", str(target_path),
-                     "--clone", str(source_path_obj), "--yes"],
-                    capture_output=True, text=True, timeout=600,
-                )
-                if result.returncode != 0:
-                    return False, f"micromamba clone failed:\n{result.stderr.strip() or result.stdout.strip()}"
-
-                # Write marker so VenvStudio recognizes it as conda
-                # Try to detect python version from the new env
-                _pyver = ""
-                try:
-                    _py = get_python_executable(target_path)
-                    if _py.exists():
-                        _r = _run([str(_py), "--version"],
-                                  capture_output=True, text=True, timeout=5)
-                        _pyver = (_r.stdout or _r.stderr).strip().replace("Python", "").strip()
-                except Exception:
-                    pass
-                try:
-                    write_conda_marker(target_path, python_version=_pyver or "3.12")
-                except Exception:
-                    pass
-
-                return True, f"Conda environment '{source_name}' cloned to '{target_name}' successfully"
-            except Exception as e:
-                return False, f"Error cloning conda env: {e}"
-
-        # ── uv clone: uv pip freeze → uv venv → uv pip install ─────────────
-        if source_type == "uv":
-            try:
-                import shutil as _sh
-                uv_bin = _sh.which("uv")
-                if not uv_bin:
-                    # Platform-aware manual command example
-                    from src.utils.platform_utils import get_platform as _gp
-                    if _gp() == "windows":
-                        _src_py_hint = f"{source_path_obj}\\Scripts\\python.exe"
-                        _tgt_py_hint = f"{target_path}\\Scripts\\python.exe"
-                    else:
-                        _src_py_hint = f"{source_path_obj}/bin/python"
-                        _tgt_py_hint = f"{target_path}/bin/python"
-                    return False, (
-                        "uv not found in PATH. Install it via Settings → Toolchain Manager,\n"
-                        "or clone manually:\n\n"
-                        f"    uv pip freeze --python {_src_py_hint} > req.txt\n"
-                        f"    uv venv {target_path}\n"
-                        f"    uv pip install -r req.txt --python {_tgt_py_hint}"
-                    )
-
-                src_py = get_python_executable(source_path_obj)
-                if not src_py.exists():
-                    return False, f"Source Python interpreter not found at {src_py}"
-
-                if callback:
-                    callback(f"Reading packages from '{source_name}' (uv pip freeze)...")
-                result = _run(
-                    [uv_bin, "pip", "freeze", "--python", str(src_py)],
-                    capture_output=True, text=True, timeout=30,
-                )
-                if result.returncode != 0:
-                    return False, f"uv pip freeze failed:\n{result.stderr.strip()}"
-                requirements = result.stdout
-
-                if callback:
-                    callback(f"Creating new uv env '{target_name}'...")
-                # Use the same Python as source to preserve version
-                result = _run(
-                    [uv_bin, "venv", str(target_path), "--python", str(src_py)],
-                    capture_output=True, text=True, timeout=60,
-                )
-                if result.returncode != 0:
-                    # Retry without --python in case the source interp isn't discoverable
-                    result = _run(
-                        [uv_bin, "venv", str(target_path)],
-                        capture_output=True, text=True, timeout=60,
-                    )
-                    if result.returncode != 0:
-                        return False, f"uv venv failed:\n{result.stderr.strip()}"
-
-                if requirements.strip():
-                    req_file = target_path / "requirements_clone.txt"
-                    with open(req_file, "w") as f:
-                        f.write(requirements)
-
-                    target_py = get_python_executable(target_path)
-                    if callback:
-                        callback(f"Installing packages into '{target_name}' (uv pip install)...")
-                    result = _run(
-                        [uv_bin, "pip", "install", "-r", str(req_file),
-                         "--python", str(target_py)],
-                        capture_output=True, text=True, timeout=600,
-                    )
-                    req_file.unlink(missing_ok=True)
-                    if result.returncode != 0:
-                        return False, f"Created env but failed to install some packages:\n{result.stderr.strip()}"
-
-                return True, f"uv environment '{source_name}' cloned to '{target_name}' successfully"
-            except Exception as e:
-                return False, f"Error cloning uv env: {e}"
-
-        # ── venv clone (default): pip freeze → create → pip install -r ─────
-        source_pip = get_pip_executable(source_path_obj)
-        if not source_pip.exists():
-            return False, (
-                f"Source pip not found at {source_pip}.\n\n"
-                f"This env appears to have no pip installed. Install pip first, or\n"
-                f"recreate the env with '--with-pip' and try again."
-            )
+        source_pip = get_pip_executable(source_path)
 
         try:
             result = _run(
@@ -1421,104 +769,39 @@ class VenvManager:
         except Exception as e:
             return False, f"Error cloning environment: {str(e)}"
 
-    def rename_venv(self, old_name: str, new_name: str,
-                    old_path: Optional[str] = None, env_type: str = "venv") -> tuple[bool, str]:
-        _log.info(f"rename_venv: {old_name!r} → {new_name!r} env_type={env_type!r}")
-        # ── Env-type guards ────────────────────────────────────────────────
-        if env_type == "pipx":
-            return False, (
-                "Renaming a pipx environment is not supported.\n\n"
-                "pipx apps are identified by their package name. To 'rename':\n\n"
-                f"    pipx uninstall {old_name}\n"
-                f"    pipx install {new_name}"
-            )
-        if env_type == "poetry":
-            return False, (
-                "Renaming a Poetry environment by folder is not supported.\n\n"
-                "Poetry env names are derived from the project name in pyproject.toml.\n"
-                "To rename, update the 'name' field in your pyproject.toml, then run:\n\n"
-                "    poetry env remove --all\n"
-                "    poetry install"
-            )
-        if env_type == "conda":
-            return False, (
-                "Renaming a conda environment in place is not supported by micromamba.\n\n"
-                "Use the 'Rename (Full)' option instead, which will:\n"
-                "  1. Export packages from the old env\n"
-                "  2. Create a new env with the desired name\n"
-                "  3. Delete the old env\n\n"
-                "Or do it manually:\n\n"
-                f"    micromamba env export -n {old_name} > env.yml\n"
-                f"    micromamba create -n {new_name} --file env.yml\n"
-                f"    micromamba env remove -n {old_name} --yes"
-            )
+    def rename_venv(self, old_name: str, new_name: str) -> tuple[bool, str]:
+        old_path = self.base_dir / old_name
+        new_path = self.base_dir / new_name
 
-        # ── venv / uv: folder rename ───────────────────────────────────────
-        old_path_obj = Path(old_path) if old_path else (self.base_dir / old_name)
-        new_path_obj = self.base_dir / new_name
-
-        if not old_path_obj.exists():
-            return False, f"Environment '{old_name}' not found at {old_path_obj}"
-        if new_path_obj.exists():
+        if not old_path.exists():
+            return False, f"Environment '{old_name}' not found"
+        if new_path.exists():
             return False, f"Environment '{new_name}' already exists"
 
         try:
-            old_path_obj.rename(new_path_obj)
+            old_path.rename(new_path)
             return True, f"Environment '{old_name}' renamed to '{new_name}'"
         except Exception as e:
             return False, f"Error renaming environment: {str(e)}"
 
-    def rename_full_venv(self, old_name: str, new_name: str, callback=None,
-                         old_path: Optional[str] = None, env_type: str = "venv") -> tuple[bool, str]:
+    def rename_full_venv(self, old_name: str, new_name: str, callback=None) -> tuple[bool, str]:
         """
         Full rename: clone old env to new name, then delete old.
         Slower but safe — all packages reinstalled, paths correct.
         """
-        _log.info(f"rename_full_venv: {old_name!r} → {new_name!r} env_type={env_type!r}")
-        # Check env-type support via clone's guards first
-        if env_type in ("pipx", "poetry"):
-            # Delegate to clone_venv so user gets the helpful error
-            return self.clone_venv(old_name, new_name, callback=callback,
-                                   source_path=old_path, source_type=env_type)
-
         if callback:
             callback(f"Cloning '{old_name}' → '{new_name}'...")
-        success, msg = self.clone_venv(old_name, new_name, callback=callback,
-                                       source_path=old_path, source_type=env_type)
+        success, msg = self.clone_venv(old_name, new_name, callback=callback)
         if not success:
             return False, f"Failed to create '{new_name}': {msg}"
 
         if callback:
             callback(f"Deleting old environment '{old_name}'...")
+        old_path = self.base_dir / old_name
         try:
-            # Use delete_venv so conda/marker handling is correct
-            success, msg = self.delete_venv(old_name, callback=callback,
-                                            env_path=old_path, env_type=env_type)
-            if not success:
-                return False, f"'{new_name}' created but could not delete '{old_name}': {msg}"
+            shutil.rmtree(old_path)
         except Exception as e:
             return False, f"'{new_name}' created but could not delete '{old_name}': {e}"
 
         return True, f"Environment '{old_name}' fully renamed to '{new_name}'"
-
-    def set_poetry_display_name(self, env_path, new_display_name: str) -> tuple[bool, str]:
-        """Set a display name override for a Poetry env (VenvStudio-only, doesn't touch Poetry itself).
-        The override is stored in a .venvstudio_display_name file inside the poetry env dir.
-        """
-        _log.info(f"set_poetry_display_name: path={env_path!r} new_name={new_display_name!r}")
-        try:
-            _p = Path(env_path)
-            if not _p.exists() or not _p.is_dir():
-                return False, f"Poetry environment path not found: {env_path}"
-            marker = _p / ".venvstudio_display_name"
-            if new_display_name.strip():
-                marker.write_text(new_display_name.strip(), encoding="utf-8")
-                return True, f"Display name set to '{new_display_name.strip()}'"
-            else:
-                # Empty → remove override (revert to default stripped name)
-                if marker.exists():
-                    marker.unlink()
-                return True, "Display name override cleared"
-        except Exception as e:
-            return False, f"Could not set display name: {e}"
 

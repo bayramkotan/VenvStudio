@@ -1651,6 +1651,7 @@ class MainWindow(QMainWindow):
             QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:
+            self._log.info(f"_make_default_env: setting default={name!r} (was {current_default!r})")
             self.config.set("default_env", name)
             self._refresh_env_list()
             self.statusBar().showMessage(f"✅ '{name}' set as default environment")
@@ -1684,6 +1685,7 @@ class MainWindow(QMainWindow):
         return ""
 
     def _create_env(self):
+        self._log.info("_create_env: opening EnvCreateDialog")
         dialog = EnvCreateDialog(self.venv_manager, self.config, self)
         dialog.env_created.connect(lambda name: self._refresh_env_list())
         dialog.exec()
@@ -2405,6 +2407,7 @@ class MainWindow(QMainWindow):
         name = self._get_selected_env_name()
         if not name:
             return
+        self._log.info(f"_open_terminal: env={name!r}")
         # Delegate to package_panel which handles all env types correctly
         self.package_panel._open_terminal_here()
         self.statusBar().showMessage(f"Opened terminal for '{name}'")

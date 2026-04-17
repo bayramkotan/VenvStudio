@@ -171,11 +171,30 @@ def setup_logging() -> logging.Logger:
     fh.setFormatter(fmt)
     logger.addHandler(fh)
 
-    # ── Console handler (dev mode) ──
-    if os.environ.get("VENVSTUDIO_DEBUG"):
-        ch = logging.StreamHandler()
+    # ── Console handler ──
+    # Verbose console output is ON by default when:
+    #   1. Running from a terminal (sys.stdout is a TTY), OR
+    #   2. VENVSTUDIO_DEBUG env var is set, OR
+    #   3. VENVSTUDIO_QUIET is NOT set (user opt-out)
+    # This makes every create/delete/config/subprocess event visible in terminal,
+    # while packaged GUI EXE (no stdout) stays silent.
+    _quiet = os.environ.get("VENVSTUDIO_QUIET", "").lower() in ("1", "true", "yes")
+    _has_tty = False
+    try:
+        _has_tty = bool(sys.stdout and sys.stdout.isatty())
+    except Exception:
+        _has_tty = False
+    _debug_env = bool(os.environ.get("VENVSTUDIO_DEBUG"))
+
+    if (_has_tty or _debug_env) and not _quiet:
+        # Human-friendly console formatter — shorter than file formatter
+        console_fmt = logging.Formatter(
+            "%(asctime)s [%(levelname)-7s] %(name)-20s | %(message)s",
+            datefmt="%H:%M:%S",
+        )
+        ch = logging.StreamHandler(sys.stdout)
         ch.setLevel(logging.DEBUG)
-        ch.setFormatter(fmt)
+        ch.setFormatter(console_fmt)
         logger.addHandler(ch)
 
     # ── Session header ──

@@ -396,6 +396,43 @@ def main():
         # Install handler early — will be re-installed after QApplication
         qInstallMessageHandler(_qt_message_handler)
 
+        # ── GLOBAL EXCEPTION HOOK ─────────────────────────────────────────
+        # Qt event loop (resize/move/paint) sometimes swallows Python exceptions
+        # silently in release builds. This hook ensures every traceback hits
+        # the log AND the console so crashes can be diagnosed.
+        def _global_excepthook(exc_type, exc_value, exc_tb):
+            tb_text = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+            full_msg = (
+                f"\n{'='*70}\n"
+                f"UNHANDLED EXCEPTION — {exc_type.__name__}: {exc_value}\n"
+                f"{'='*70}\n{tb_text}{'='*70}\n"
+            )
+            try:
+                logger.critical(f"UNHANDLED: {exc_type.__name__}: {exc_value}\n{tb_text}")
+            except Exception:
+                pass
+            # Always also print to stderr (visible in terminal / debug EXE)
+            print(full_msg, file=sys.stderr, flush=True)
+            # Write crash report
+            try:
+                from src.utils.logger import _write_crash_report, get_log_dir
+                _write_crash_report(get_log_dir(), tb_text, context="runtime")
+            except Exception:
+                pass
+
+        sys.excepthook = _global_excepthook
+
+        # PyQt/PySide does NOT call sys.excepthook for exceptions raised inside
+        # Qt slots/events by default — install a threading hook and also
+        # wrap Qt's exception path via custom event filter if needed.
+        try:
+            import threading
+            threading.excepthook = lambda args: _global_excepthook(
+                args.exc_type, args.exc_value, args.exc_traceback
+            )
+        except Exception:
+            pass
+
         # ── Load config and language ──
         config = ConfigManager()
         lang = config.get("language", "en")

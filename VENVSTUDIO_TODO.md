@@ -126,6 +126,92 @@ Her kütüphane için uzun bir dedike sayfa. Mevcut tek-snippet formatını **ge
 
 ---
 
+## 🆕 YENİ TOPLANAN NOTLAR (v1.4.62 sonrası)
+
+### 🐛 B137 — Form yüklenmeden hareket ettirince çöküyor
+- Uygulama ilk açıldığında ana pencereyi form elemanları yüklenmeden sürüklemeye çalışınca crash oluyor
+- Muhtemelen env listesi async yüklenirken main thread'de event loop meşgul
+- **Çözüm fikri:** Splash screen / loading overlay göster, yükleme bitene kadar pencere interaktif olmasın
+- Alternatif: async ops'lar paintEvent'i bloklamasın (QTimer.singleShot ile batch'lere böl)
+
+### 🐛 B138 — Windows EXE'de başlangıçta terminal yanıp sönüyor
+- Form yüklenince **3-5 kez terminal penceresi** açılıp kayboluyor (flash)
+- `subprocess.Popen/run` çağrıları `CREATE_NO_WINDOW` flag'i eksik
+- `settings_page.py`'deki PowerShell scan için B96'da düzeltilmişti, ama başka yerlerde kalmış
+- **Çözüm:** Tüm subprocess çağrılarına `subprocess_args()` (platform_utils) kullanılmasını zorla — Windows'ta otomatik `CREATE_NO_WINDOW` ekliyor
+- Grep: `subprocess.run(` / `subprocess.Popen(` / `_run(` → `subprocess_args(**kwargs)` ile sarılmamış olanları bul ve düzelt
+
+### ✨ F131 — Sağ Click → Open Location
+- Env tablosunda env üzerine sağ click → bağlam menüsünden **"📁 Open Folder"** seçeneği
+- `platform_utils.py` → `open_folder(path)` helper (Linux: xdg-open, macOS: open, Windows: explorer)
+- `main_window.py` → `_show_env_context_menu` içinde yeni action ekle
+- Env'in gerçek path'ini aç (poetry/pipx için base_dir değil, marker'daki real path)
+
+### 🐛 B139 — Open Terminal GNOME'da çalışmadı (openSUSE)
+- `platform_utils.py::open_terminal_at` — GNOME terminal açılmadı openSUSE'de
+- `gnome-terminal`'un çağırma argümanları dağıtıma göre farklı olabilir
+- **Çözüm:** `--` vs `-e` vs `-x` combinations dene; başarısız olursa otomatik bir sonraki terminal'e fallback yap (zaten var ama gnome-terminal başarılı sayılıp hata veriyor olabilir)
+- Log: Popen.returncode kontrol et, sessiz fail olmasın
+
+### ✨ F132 — Python Download: Mirror Seçimi (F123 tekrar)
+- Şu an sadece Astral (python-build-standalone) kullanılıyor
+- **Ek mirror'lar:**
+  - python.org/downloads (resmi)
+  - GitHub Releases (Astral'ın release sayfası)
+  - SourceForge (bazı ülkelerde daha hızlı)
+  - Kullanıcı tanımlı özel URL
+- `settings_python.py` → mirror dropdown
+- Her mirror için URL pattern ve versiyon listesi çekme endpoint'i
+
+### ✨ F133 — Catalog Override (Settings)
+- Kütüphanelerin description ve linklerini kullanıcı değiştirebilsin
+- Settings altında yeni sekme: **"📦 Package Catalog"** 
+- Her paket için: description, website, docs, GitHub, YouTube alanları düzenlenebilir
+- Override'lar `~/.config/VenvStudio/catalog_overrides.json`'a yazılır
+- Reset butonu → default'lara dön
+- `package_panel.py` ve `learn_page.py` catalog'u okurken önce override kontrol eder
+
+### 🐛 B140 — Fedora / openSUSE'de İkonlar Görünmüyor
+- Linux dağıtımlarında ikonlar boş kare veya hiç görünmüyor
+- Qt'nin icon theme'i `breeze`/`hicolor`/`adwaita` aramaya gidiyor ama bulamıyor
+- **Çözüm:**
+  1. Fallback icon theme embed et (app bundle içine)
+  2. `QIcon.setThemeSearchPaths()` ile bundled theme path'i ekle
+  3. Emoji font fallback → `NotoColorEmoji`, `Segoe UI Emoji`, `Apple Color Emoji`
+- **Alternatif:** SVG ikonlarını Qt Resources olarak embed et (`*.qrc`)
+- Dağıtım-spesifik install komutları (settings'te):
+  - Fedora: `sudo dnf install breeze-icon-theme adwaita-icon-theme`
+  - openSUSE: `sudo zypper install breeze5-icons adwaita-icon-theme`
+
+### ✨ F134 — İlk Kurulum Sihirbazı (Welcome Wizard)
+- İlk çalıştırmada wizard açılsın → sistem kontrolleri + gerekli paketleri kur
+- **Linux adımları:**
+  1. `python-is-python3` paketi var mı? Yoksa kur
+  2. `python3-virtualenv` / `python-virtualenv` var mı?
+  3. `python3-pip` / `python-pip` var mı?
+  4. İkon teması (Fedora/openSUSE için)
+  5. Terminal emülatörü (gnome-terminal / konsole / xterm)
+- **macOS adımları:**
+  1. Xcode Command Line Tools (`xcode-select -p`)
+  2. Homebrew opsiyonel
+- **Windows adımları:**
+  1. Python.org / Microsoft Store Python kontrol
+  2. Windows Terminal opsiyonel (eski: cmd)
+- Distro-aware paket yöneticisi komutları (apt/dnf/pacman/zypper)
+- **"Skip All"** butonu — wizard tekrar açılmasın (`welcome_shown` config)
+- Settings altında "🧙 Run Setup Wizard Again" butonu
+
+### ✨ F135 — Terminal Log Mirror
+- Uygulama GUI'deki tüm işlemleri terminal'e de yazsın
+- Env create → "python -m venv /path..." komutu terminal'de de görünsün
+- pip install → aynı şekilde
+- **Yeni dosya:** `src/utils/terminal_logger.py` — stdout + log dosyası + GUI status mirror
+- Opsiyonel: `--verbose` CLI flag ile detaylı log
+- Settings altında "Show commands in console" toggle
+- Kullanıcı copy-paste edip kendisi çalıştırabilsin
+
+---
+
 ### 🎓 F52 — EĞİTİMSEL UYGULAMALAR MENÜSÜ (v1.4.60+)
 - [ ] Yeni "Learn" / "Education" sekmesi
 - [ ] Kod Blokları: ML, DL, Transformers, HuggingFace, Colab, NLP, CV, TS, Finance

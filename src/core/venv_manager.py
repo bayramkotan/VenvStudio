@@ -8,6 +8,7 @@ import sys
 import shutil
 import subprocess
 import json
+import logging
 import platform as _platform
 from pathlib import Path
 from typing import Optional, List, Dict, Any
@@ -20,6 +21,9 @@ from src.utils.platform_utils import (
     get_venv_size,
     get_activate_command,
 )
+
+# Module-level logger — routes to 'venvstudio.core.venv_manager'
+_log = logging.getLogger("venvstudio.core.venv_manager")
 
 # Suppress terminal windows on Windows (EXE builds)
 _SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if _platform.system().lower() == "windows" else 0
@@ -92,13 +96,43 @@ def _find_windows_python() -> str:
 
 
 def _run(*args, **kwargs):
-    """subprocess.run wrapper — uses subprocess_args for platform safety."""
+    """subprocess.run wrapper — uses subprocess_args for platform safety.
+    Logs every invocation at DEBUG level so terminal users see exactly what's
+    being executed (create, install, activate etc.).
+    """
     from src.utils.platform_utils import subprocess_args
     # subprocess_args: Windows CREATE_NO_WINDOW + EXE PATH fix, Linux AppImage env clean
     merged = subprocess_args()
     for k, v in merged.items():
         kwargs.setdefault(k, v)
-    return subprocess.run(*args, **kwargs)
+
+    # Log the command being executed (visible in terminal when TTY)
+    try:
+        cmd = args[0] if args else kwargs.get("args", "?")
+        if isinstance(cmd, (list, tuple)):
+            cmd_str = " ".join(str(c) for c in cmd)
+        else:
+            cmd_str = str(cmd)
+        _log.debug(f"▶ subprocess: {cmd_str}")
+    except Exception:
+        pass
+
+    result = subprocess.run(*args, **kwargs)
+
+    # Log non-zero exit codes
+    try:
+        rc = getattr(result, "returncode", None)
+        if rc is not None and rc != 0:
+            stderr_preview = ""
+            if hasattr(result, "stderr") and result.stderr:
+                stderr_preview = str(result.stderr)[:200].replace("\n", " ")
+            _log.warning(f"  ↳ exit={rc}  stderr={stderr_preview!r}")
+        else:
+            _log.debug(f"  ↳ exit=0")
+    except Exception:
+        pass
+
+    return result
 
 
 @dataclass
@@ -198,9 +232,12 @@ class VenvManager:
         Create a new virtual environment.
         Returns (success, message).
         """
+        _log.info(f"create_venv: name={name!r} python={python_path!r} "
+                  f"with_pip={with_pip} system_site={system_site_packages}")
         venv_path = self.base_dir / name
 
         if venv_path.exists():
+            _log.warning(f"create_venv: env already exists at {venv_path}")
             return False, f"Environment '{name}' already exists at {venv_path}"
 
         if python_path:
@@ -458,6 +495,7 @@ class VenvManager:
         For poetry envs: deletes both the project marker dir (base_dir/name) AND the real venv (env_path).
         For other envs: deletes base_dir/name or env_path if given.
         """
+        _log.info(f"delete_venv: name={name!r} env_type={env_type!r} env_path={env_path!r}")
         venv_path = Path(env_path) if env_path else self.base_dir / name
         if not venv_path.exists():
             # For poetry, try base_dir / name as project dir
@@ -1192,6 +1230,8 @@ class VenvManager:
 
     def clone_venv(self, source_name: str, target_name: str, callback=None,
                    source_path: Optional[str] = None, source_type: str = "venv") -> tuple[bool, str]:
+        _log.info(f"clone_venv: {source_name!r} → {target_name!r} "
+                  f"source_type={source_type!r} source_path={source_path!r}")
         # ── Env-type guards: pipx / poetry not supported via Clone ─────────
         if source_type == "pipx":
             return False, (
@@ -1383,6 +1423,7 @@ class VenvManager:
 
     def rename_venv(self, old_name: str, new_name: str,
                     old_path: Optional[str] = None, env_type: str = "venv") -> tuple[bool, str]:
+        _log.info(f"rename_venv: {old_name!r} → {new_name!r} env_type={env_type!r}")
         # ── Env-type guards ────────────────────────────────────────────────
         if env_type == "pipx":
             return False, (
@@ -1433,6 +1474,7 @@ class VenvManager:
         Full rename: clone old env to new name, then delete old.
         Slower but safe — all packages reinstalled, paths correct.
         """
+        _log.info(f"rename_full_venv: {old_name!r} → {new_name!r} env_type={env_type!r}")
         # Check env-type support via clone's guards first
         if env_type in ("pipx", "poetry"):
             # Delegate to clone_venv so user gets the helpful error
@@ -1463,6 +1505,7 @@ class VenvManager:
         """Set a display name override for a Poetry env (VenvStudio-only, doesn't touch Poetry itself).
         The override is stored in a .venvstudio_display_name file inside the poetry env dir.
         """
+        _log.info(f"set_poetry_display_name: path={env_path!r} new_name={new_display_name!r}")
         try:
             _p = Path(env_path)
             if not _p.exists() or not _p.is_dir():

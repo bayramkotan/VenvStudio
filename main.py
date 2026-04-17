@@ -250,6 +250,49 @@ def _ensure_single_instance():
     return server  # Keep reference alive
 
 
+def _detect_linux_distro() -> str:
+    """Return a short distro family name: fedora, suse, ubuntu, debian, arch, etc.
+    Reads /etc/os-release. Falls back to 'linux' if unknown.
+    """
+    try:
+        with open("/etc/os-release", "r", encoding="utf-8") as f:
+            data = f.read()
+    except Exception:
+        return "linux"
+
+    info = {}
+    for line in data.splitlines():
+        if "=" in line:
+            k, _, v = line.partition("=")
+            info[k.strip()] = v.strip().strip('"').strip("'")
+
+    like = (info.get("ID_LIKE", "") + " " + info.get("ID", "")).lower()
+
+    if "fedora" in like or "rhel" in like or "centos" in like:
+        return "fedora"
+    if "suse" in like or "opensuse" in like:
+        return "suse"
+    if "ubuntu" in like or "debian" in like or "mint" in like or "pardus" in like:
+        return "debian"
+    if "arch" in like or "manjaro" in like or "cachyos" in like:
+        return "arch"
+    if "alpine" in like:
+        return "alpine"
+    return info.get("ID", "linux") or "linux"
+
+
+def _emoji_install_command_for_distro(distro: str) -> str:
+    """Return the shell command to install an emoji font for the given distro."""
+    commands = {
+        "fedora":  "sudo dnf install -y google-noto-color-emoji-fonts",
+        "suse":    "sudo zypper install -y noto-coloremoji-fonts",
+        "debian":  "sudo apt install -y fonts-noto-color-emoji",
+        "arch":    "sudo pacman -S --noconfirm noto-fonts-emoji",
+        "alpine":  "sudo apk add font-noto-emoji",
+    }
+    return commands.get(distro, "Install a package named 'noto-color-emoji' or 'fonts-noto-color-emoji'")
+
+
 def _check_qt_xcb_deps():
     """Check and install Qt xcb platform plugin dependencies on Linux."""
     import subprocess, shutil
@@ -469,10 +512,117 @@ def main():
                 f"@{screen.devicePixelRatio()}x DPI={screen.logicalDotsPerInch():.0f}"
             )
 
-        # Set default font
-        font = QFont("Segoe UI", 10)
+        # ── Font setup with emoji fallback ─────────────────────────────
+        # Detect the best UI font (Segoe UI on Windows, Inter/Cantarell on Linux
+        # if available, Helvetica on macOS) and make sure at least ONE emoji
+        # font is in the fallback chain so icons like 🔄 ⭐ 📁 render.
+        from PySide6.QtGui import QFontDatabase
+
+        font_db = QFontDatabase()
+        # QFontDatabase().families() in PySide6 is a static method on newer
+        # versions; call it safely
+        try:
+            available_fonts = set(QFontDatabase.families())
+        except Exception:
+            try:
+                available_fonts = set(font_db.families())
+            except Exception:
+                available_fonts = set()
+
+        # Pick the best UI font for the platform
+        if sys.platform == "darwin":
+            ui_font_candidates = ["SF Pro Text", "Helvetica Neue", "Helvetica", "Arial"]
+        elif sys.platform == "win32":
+            ui_font_candidates = ["Segoe UI Variable Display", "Segoe UI", "Tahoma", "Arial"]
+        else:  # linux / bsd
+            ui_font_candidates = ["Inter", "Cantarell", "Ubuntu", "Noto Sans",
+                                  "DejaVu Sans", "Liberation Sans", "Arial"]
+
+        ui_font_family = None
+        for candidate in ui_font_candidates:
+            if not available_fonts or candidate in available_fonts:
+                ui_font_family = candidate
+                break
+        ui_font_family = ui_font_family or "sans-serif"
+
+        # Detect an emoji-capable font
+        emoji_font_candidates = [
+            "Noto Color Emoji",      # Linux standard (Fedora/openSUSE may lack it)
+            "Segoe UI Emoji",        # Windows
+            "Apple Color Emoji",     # macOS
+            "Twemoji Mozilla",       # Firefox / older distros
+            "EmojiOne Color",        # Community
+            "JoyPixels",             # Community
+            "Symbola",               # Monochrome unicode fallback
+            "DejaVu Sans",           # Basic unicode (last resort, no color)
+        ]
+        emoji_font_family = None
+        for candidate in emoji_font_candidates:
+            if not available_fonts or candidate in available_fonts:
+                emoji_font_family = candidate
+                break
+
+        if not emoji_font_family:
+            logger.warning(
+                "No emoji-capable font detected. Emoji (🔄 ⭐ 📁) may render as boxes. "
+                "Install 'noto-fonts-emoji' (Linux) or equivalent."
+            )
+            # Still set Symbola as safe fallback target
+            emoji_font_family = "Symbola"
+
+        logger.info(f"UI font: {ui_font_family}  |  Emoji font: {emoji_font_family}")
+
+        # Qt font substitution: when the primary font is missing a glyph, Qt
+        # walks the substitute chain. Register emoji font as substitute for
+        # the main UI font so icons in labels/buttons fall back correctly.
+        try:
+            QFont.insertSubstitution(ui_font_family, emoji_font_family)
+            # Also register common fallbacks so Qt can find SOMETHING for any glyph
+            for fb in ("DejaVu Sans", "Noto Sans"):
+                if fb != emoji_font_family and (not available_fonts or fb in available_fonts):
+                    QFont.insertSubstitution(ui_font_family, fb)
+        except Exception as _e:
+            logger.debug(f"Font substitution failed: {_e}")
+
+        # Build application font
+        font = QFont(ui_font_family, 10)
         font.setStyleHint(QFont.SansSerif)
+        # Use PreferDefault → Qt applies substitutions; PreferMatch would skip them
+        try:
+            font.setStyleStrategy(QFont.PreferDefault)
+        except Exception:
+            pass
         app.setFont(font)
+
+        # ── Linux-only: show a friendly warning dialog if no emoji font ──
+        if sys.platform == "linux" and not any(
+            f in available_fonts for f in (
+                "Noto Color Emoji", "Twemoji Mozilla", "EmojiOne Color",
+                "JoyPixels", "Symbola"
+            )
+        ):
+            try:
+                distro = _detect_linux_distro()
+                install_cmd = _emoji_install_command_for_distro(distro)
+                show_emoji = config.get("show_emoji_missing_warning", True)
+                if show_emoji and install_cmd:
+                    from PySide6.QtWidgets import QMessageBox, QCheckBox
+                    box = QMessageBox(
+                        QMessageBox.Warning,
+                        "Emoji Font Missing",
+                        "VenvStudio uses emoji characters (🔄 ⭐ 📁 🐍) for icons, "
+                        "but no emoji font was detected on your system.\n\n"
+                        f"To install, run in terminal:\n\n    {install_cmd}\n\n"
+                        "Then restart VenvStudio.",
+                    )
+                    dont_show = QCheckBox("Don't show this again")
+                    box.setCheckBox(dont_show)
+                    box.addButton(QMessageBox.Ok)
+                    box.exec()
+                    if dont_show.isChecked():
+                        config.set("show_emoji_missing_warning", False)
+            except Exception as _e:
+                logger.debug(f"Emoji warning dialog failed: {_e}")
 
         logger.info("Creating MainWindow...")
         window = MainWindow()

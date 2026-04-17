@@ -325,6 +325,52 @@ F130'da kısaca geçiyor, ayrı bir büyük kategori olsun: **"📊 Görselleşt
 - Dosya: `src/gui/learn_install_dialog.py` — yeni dialog widget
 - `learn_page.py` → `install_requested.emit(pkgs)` yerine `install_requested.emit(pkgs, target_env)` (breaking change, main_window.py de güncellenmeli)
 
+### 🐛 B141 — Windows pipx Launch App Yüklenince Tablo Güncellenmiyor
+- Launcher'dan pipx üzerinden bir uygulama yüklendiğinde Virtual Environments tablosundaki **pipx satırı** otomatik refresh olmuyor (Windows'ta gözlemlendi)
+- Diğer env'ler OK ama pipx satırı stale kalıyor — paket sayısı, size eski değerinde
+- **Muhtemel sebep**: pipx'in kendi cache'i; VenvStudio `list_pipx_apps()` çağırmıyor
+- **Çözüm**:
+  - `package_panel.py` install sonrası `main_window._refresh_env_list(force=True)` çağırmalı
+  - Veya callback zinciri ile ana tabloya signal gönder: `app_installed.emit(env_type)`
+  - pipx için özellikle: `vm.invalidate_pipx_cache()` veya tüm cache invalidation
+- Linux/macOS'ta bu davranış test edilmeli (Windows spesifik olabilir)
+
+### ✨ F140 — Launcher'da Package Conflict/Version Ayarı
+- Launcher bir uygulamayı yüklerken paket çakışmaları olabiliyor (ör. `streamlit==1.30` ama mevcut env'de `streamlit==1.28`)
+- **Talep**: Install başlamadan önce kullanıcıya **"versiyon değiştirmek ister misin?"** mini dialog
+- Dialog içinde:
+  - Uygulamanın önerdiği paketler tablosu: `name | requested | currently installed | action`
+  - Her satır için: Skip / Use requested / Use current / Pick custom version
+  - "Versiyon dropdown" (PyPI'den versiyonları çek — `pip index versions <pkg>` veya pypi JSON API)
+  - Conflict uyarısı (kırmızı): "Bu değişiklik 3 başka paketi etkiler"
+- **Akış**:
+  1. Launch App butonuna basılınca → dependency resolution (`pip install --dry-run ...`)
+  2. Conflict varsa dialog aç
+  3. Kullanıcı onayından sonra install
+- Dosya: `src/gui/install_conflict_dialog.py` — yeni dialog
+- `launcher.py` (ya da package_panel'deki install fonksiyonu) → pre-install hook ekle
+
+### 🐛 B142 — Launcher Install Terminal'e Log Düşmüyor
+- VenvStudio terminal'den (`python main.py`) çalıştırıldığında:
+  - Env create/delete → terminal'de banner + log görünüyor ✅
+  - **Launcher'dan uygulama install → terminal'de hiçbir şey görünmüyor** ❌
+- Install komutu da terminale düşmeli:
+  ```
+  ▶ subprocess: /path/to/pip install streamlit pandas
+    ↳ exit=0
+  ╭────────────────────────────╮
+  │ ✅ streamlit installed       │
+  │    • Packages: streamlit, pandas │
+  │    • Env: ml                │
+  ╰────────────────────────────╯
+  ```
+- **Sebep**: Launcher'ın install fonksiyonu subprocess'leri muhtemelen `_run` wrapper'ı kullanmıyor, direkt `subprocess.run`
+- **Çözüm**:
+  - `package_panel.py::_install_launcher_app` (veya ilgili metod) → `venv_manager._run` veya kendi module logger'ı kullansın
+  - Her install öncesi `banner_start("Installing <app>", details=[...])` çağır
+  - Install sonucu `banner_success` / `banner_error`
+- Handoff kural #12 kapsamında — verbose logging **her yerde** olmalı, launcher dahil
+
 ---
 
 ### 🎓 F52 — EĞİTİMSEL UYGULAMALAR MENÜSÜ (v1.4.60+)

@@ -30,6 +30,11 @@ def _build_theme(c: dict, font_family: str = "", font_size: int = 13,
     primary_family = _resolve_font(primary_family)     # headers
     tertiary_family = _resolve_font(tertiary_family)   # small text
 
+    # Font sizes — guard against 0 or negative values
+    font_size     = max(int(font_size or 13),     8)
+    primary_size  = max(int(primary_size or 22), 10)
+    tertiary_size = max(int(tertiary_size or 11),  8)
+
     # Font sizes
     fs_header = primary_size                              # 22px default
     fs_subheader = max(primary_size - 8, font_size + 1)   # 14px default
@@ -704,6 +709,10 @@ def get_colors(name: str = "dark", font_size: int = 13,
     Use this in widgets that apply inline styles.
     Includes font size hierarchy values.
     """
+    # Guard against 0 or negative font sizes (causes QFont::setPointSize errors)
+    font_size     = max(int(font_size or 13),     8)
+    primary_size  = max(int(primary_size or 22),  10)
+    tertiary_size = max(int(tertiary_size or 11),  8)
     palettes = {
         'dark':             _DARK_CATPPUCCIN,
         'dark-dracula':     _DARK_DRACULA,

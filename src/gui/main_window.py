@@ -22,6 +22,7 @@ from src.core.config_manager import ConfigManager
 from src.gui.env_dialog import EnvCreateDialog
 from src.gui.package_panel import PackagePanel
 from src.gui.settings_page import SettingsPage
+from src.gui.learn_page import LearnPage
 from src.gui.styles import get_theme
 from src.utils.platform_utils import (
     get_activate_command, open_terminal_at, get_platform,
@@ -48,16 +49,19 @@ class CloneWorker(QThread):
     progress = Signal(str)
     finished = Signal(bool, str)
 
-    def __init__(self, venv_manager, source, target):
+    def __init__(self, venv_manager, source, target, source_path=None, source_type="venv"):
         super().__init__()
         self.venv_manager = venv_manager
         self.source = source
         self.target = target
+        self.source_path = source_path
+        self.source_type = source_type
         self._cancelled = False
 
     def run(self):
         success, msg = self.venv_manager.clone_venv(
-            self.source, self.target, callback=self._on_progress
+            self.source, self.target, callback=self._on_progress,
+            source_path=self.source_path, source_type=self.source_type,
         )
         if self._cancelled:
             import shutil
@@ -91,6 +95,10 @@ class EnvDetailWorker(QThread):
     def _fetch_one(self, args):
         i, name = args
         venv_path = self.venv_manager.base_dir / name
+        # Skip marker-based envs — already resolved by list_venvs_fast
+        marker = venv_path / ".venvstudio_env"
+        if marker.exists():
+            return None
         cached = self.venv_manager._read_cache(venv_path)
         if cached:
             return None  # already loaded by list_venvs_fast
@@ -117,13 +125,18 @@ class DeleteWorker(QThread):
     progress = Signal(str)
     finished = Signal(bool, str)
 
-    def __init__(self, venv_manager, name):
+    def __init__(self, venv_manager, name, env_path=None, env_type="venv"):
         super().__init__()
         self.venv_manager = venv_manager
         self.name = name
+        self.env_path = env_path
+        self.env_type = env_type
 
     def run(self):
-        success, msg = self.venv_manager.delete_venv(self.name, callback=self.progress.emit)
+        success, msg = self.venv_manager.delete_venv(
+            self.name, callback=self.progress.emit,
+            env_path=self.env_path, env_type=self.env_type
+        )
         self.finished.emit(success, msg)
 
 
@@ -132,15 +145,20 @@ class RenameOnlyWorker(QThread):
     progress = Signal(str)
     finished = Signal(bool, str)
 
-    def __init__(self, venv_manager, old_name, new_name):
+    def __init__(self, venv_manager, old_name, new_name, old_path=None, env_type="venv"):
         super().__init__()
         self.venv_manager = venv_manager
         self.old_name = old_name
         self.new_name = new_name
+        self.old_path = old_path
+        self.env_type = env_type
 
     def run(self):
         self.progress.emit(f"Renaming '{self.old_name}' → '{self.new_name}'...")
-        success, msg = self.venv_manager.rename_venv(self.old_name, self.new_name)
+        success, msg = self.venv_manager.rename_venv(
+            self.old_name, self.new_name,
+            old_path=self.old_path, env_type=self.env_type,
+        )
         self.finished.emit(success, msg)
 
 
@@ -149,15 +167,18 @@ class RenameFullWorker(QThread):
     progress = Signal(str)
     finished = Signal(bool, str)
 
-    def __init__(self, venv_manager, old_name, new_name):
+    def __init__(self, venv_manager, old_name, new_name, old_path=None, env_type="venv"):
         super().__init__()
         self.venv_manager = venv_manager
         self.old_name = old_name
         self.new_name = new_name
+        self.old_path = old_path
+        self.env_type = env_type
 
     def run(self):
         success, msg = self.venv_manager.rename_full_venv(
-            self.old_name, self.new_name, callback=self.progress.emit
+            self.old_name, self.new_name, callback=self.progress.emit,
+            old_path=self.old_path, env_type=self.env_type,
         )
         self.finished.emit(success, msg)
 
@@ -184,6 +205,8 @@ class MainWindow(QMainWindow):
         self._apply_linux_emoji_fix()
         self._check_linux_venv_module()
         self.venv_manager.sync_cache_with_disk()
+        # Auto-create pipx marker env if pipx is installed
+        self.venv_manager.ensure_pipx_env()
         self._refresh_env_list()
 
         # ── Screen change safety: re-apply theme when moving between monitors ──
@@ -242,23 +265,39 @@ class MainWindow(QMainWindow):
 
     def _setup_window(self):
         self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
-        width = self.config.get("window_width", 1100)
-        height = self.config.get("window_height", 700)
-
-        # Clamp to screen size
-        screen = QApplication.primaryScreen()
-        if screen:
-            avail = screen.availableGeometry()
-            width = min(width, avail.width() - 80)
-            height = min(height, avail.height() - 80)
-
-        self.resize(width, height)
         self.setMinimumSize(900, 600)
 
-        # Center on screen
-        if screen:
-            avail = screen.availableGeometry()
-            x = avail.x() + (avail.width() - width) // 2
+        width  = self.config.get("window_width",  1100)
+        height = self.config.get("window_height", 700)
+        saved_x = self.config.get("window_x", None)
+        saved_y = self.config.get("window_y", None)
+
+        # Find the screen that contains the saved position, fallback to primary
+        target_screen = None
+        if saved_x is not None and saved_y is not None:
+            for scr in QApplication.screens():
+                if scr.geometry().contains(saved_x + width // 2, saved_y + height // 2):
+                    target_screen = scr
+                    break
+
+        if target_screen is None:
+            target_screen = QApplication.primaryScreen()
+
+        avail = target_screen.availableGeometry()
+
+        # Clamp size to available screen
+        width  = min(width,  avail.width()  - 40)
+        height = min(height, avail.height() - 40)
+        self.resize(width, height)
+
+        if saved_x is not None and saved_y is not None:
+            # Clamp position so window is fully on screen
+            x = max(avail.x(), min(saved_x, avail.x() + avail.width()  - width))
+            y = max(avail.y(), min(saved_y, avail.y() + avail.height() - height))
+            self.move(x, y)
+        else:
+            # First run — center on primary screen
+            x = avail.x() + (avail.width()  - width)  // 2
             y = avail.y() + (avail.height() - height) // 2
             self.move(x, y)
 
@@ -271,6 +310,14 @@ class MainWindow(QMainWindow):
         new_env_action.triggered.connect(self._create_env)
         file_menu.addAction(new_env_action)
         file_menu.addSeparator()
+
+        # ── Recent Environments submenu ───────────────────────────────────
+        self._recent_menu = QMenu("🕐 Recent Environments", self)
+        file_menu.addMenu(self._recent_menu)
+        self._populate_recent_menu()
+        file_menu.addSeparator()
+        # ─────────────────────────────────────────────────────────────────
+
         quit_action = QAction(f"❌ {tr('quit')}", self)
         quit_action.setShortcut("Ctrl+Q")
         quit_action.triggered.connect(self.close)
@@ -315,6 +362,100 @@ class MainWindow(QMainWindow):
         issues_action = QAction("🐛 Report a Bug", self)
         issues_action.triggered.connect(lambda: __import__("webbrowser").open("https://github.com/bayramkotan/VenvStudio/issues"))
         help_menu.addAction(issues_action)
+
+    def _populate_recent_menu(self):
+        """Rebuild the Recent Environments submenu from recent_envs.json."""
+        self._recent_menu.clear()
+        try:
+            from src.core.recent_envs import RecentEnvsManager
+            mgr = RecentEnvsManager()
+            entries = mgr.load()
+        except Exception:
+            entries = []
+
+        if not entries:
+            empty_action = QAction("  (No recent environments)", self)
+            empty_action.setEnabled(False)
+            self._recent_menu.addAction(empty_action)
+            return
+
+        # TYPE icons
+        _icons = {
+            "venv": "🐍", "uv": "⚡", "poetry": "📜",
+            "pipx": "📦", "conda": "🦎",
+        }
+        for entry in entries:
+            name       = entry.get("name", "?")
+            path       = entry.get("path", "")
+            env_type   = entry.get("type", "venv")
+            last_opened = entry.get("last_opened", "")[:16].replace("T", "  ")
+            icon       = _icons.get(env_type, "🐍")
+            label      = f"{icon} {name}   —   {last_opened}"
+            action = QAction(label, self)
+            action.setToolTip(path)
+            action.triggered.connect(
+                lambda checked=False, p=path, n=name: self._open_recent_env(n, p)
+            )
+            self._recent_menu.addAction(action)
+
+        self._recent_menu.addSeparator()
+        clear_action = QAction("🗑️ Clear Recent List", self)
+        clear_action.triggered.connect(self._clear_recent_envs)
+        self._recent_menu.addAction(clear_action)
+
+    def _open_recent_env(self, name: str, path: str):
+        """Select env in table by path; show Packages panel."""
+        import os
+        # Find row in env table matching this path
+        model = self.env_table.model() if hasattr(self, "env_table") else None
+        if model is None:
+            return
+        for row in range(model.rowCount()):
+            idx = model.index(row, 0)
+            item_path = model.data(idx, Qt.UserRole)  # env path stored as UserRole
+            if item_path and os.path.normcase(str(item_path)) == os.path.normcase(path):
+                self.env_table.selectRow(row)
+                self._on_env_selected(row)
+                # Update recency
+                try:
+                    from src.core.recent_envs import RecentEnvsManager
+                    RecentEnvsManager().touch(name, path)
+                    self._populate_recent_menu()
+                except Exception:
+                    pass
+                return
+        # Env not found in table (deleted) — remove from recent list
+        try:
+            from src.core.recent_envs import RecentEnvsManager
+            RecentEnvsManager().remove(path)
+            self._populate_recent_menu()
+        except Exception:
+            pass
+        from PySide6.QtWidgets import QMessageBox
+        QMessageBox.information(
+            self, "Not Found",
+            f"Environment '{name}' could not be found.\n"
+            f"It may have been deleted or moved.\n\n{path}"
+        )
+
+    def _clear_recent_envs(self):
+        """Clear the recent environments list."""
+        try:
+            from src.core.recent_envs import RecentEnvsManager
+            RecentEnvsManager().clear()
+            self._populate_recent_menu()
+        except Exception:
+            pass
+
+    def _track_recent(self, name: str, path: str, env_type: str):
+        """Write recent env entry and refresh menu (called deferred)."""
+        try:
+            from src.core.recent_envs import RecentEnvsManager
+            RecentEnvsManager().touch(name, path, env_type=env_type)
+            if hasattr(self, "_recent_menu"):
+                self._populate_recent_menu()
+        except Exception:
+            pass
 
     def _setup_ui(self):
         central = QWidget()
@@ -361,6 +502,12 @@ class MainWindow(QMainWindow):
         self.btn_settings.clicked.connect(lambda: self._switch_page(2))
         sidebar_layout.addWidget(self.btn_settings)
         self.nav_buttons.append(self.btn_settings)
+
+        self.btn_learn = SidebarButton("Learn", "📚")
+        self.btn_learn.setToolTip("Browse tutorials, code snippets, and learning resources")
+        self.btn_learn.clicked.connect(lambda: self._switch_page(3))
+        sidebar_layout.addWidget(self.btn_learn)
+        self.nav_buttons.append(self.btn_learn)
 
         # ── Quick Launch section (visible only on Packages page) ──
         self.quick_launch_frame = QFrame()
@@ -423,6 +570,11 @@ class MainWindow(QMainWindow):
         self.settings_page.settings_saved.connect(self._on_settings_saved)
         self.stack.addWidget(self.settings_page)             # Page 2
 
+        # Learn page
+        self.learn_page = LearnPage(self._c)
+        self.learn_page.install_packages_requested.connect(self._on_learn_install)
+        self.stack.addWidget(self.learn_page)               # Page 3
+
         main_layout.addWidget(self.stack, 1)
 
         self.statusBar().showMessage("Ready")
@@ -460,16 +612,23 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.info_label)
 
         self.env_table = QTableWidget()
-        self.env_table.setColumnCount(6)
-        self.env_table.setHorizontalHeaderLabels(["Name", "Python", "Packages", "Size", "Created", "Default"])
-        self.env_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        for col in range(1, 5):
+        self.env_table.setColumnCount(8)
+        self.env_table.setHorizontalHeaderLabels(["Name", "Type", "Path", "Runtime", "Packages", "Size", "Created", "Default"])
+        # Column resize modes — Interactive+minWidth instead of Stretch
+        # so horizontal scrollbar works properly at low resolutions
+        self.env_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.env_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self.env_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        for col in range(3, 7):
             self.env_table.horizontalHeader().setSectionResizeMode(col, QHeaderView.ResizeToContents)
-        self.env_table.horizontalHeader().setSectionResizeMode(5, QHeaderView.Fixed)
-        self.env_table.setColumnWidth(5, 70)
+        self.env_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
+        self.env_table.setColumnWidth(7, 70)
+        self.env_table.horizontalHeader().setStretchLastSection(False)
         self.env_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.env_table.setSelectionMode(QTableWidget.SingleSelection)
         self.env_table.setAlternatingRowColors(True)
+        self.env_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.env_table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.env_table.verticalHeader().setVisible(False)
         self.env_table.setEditTriggers(QTableWidget.NoEditTriggers)
         self.env_table.verticalHeader().setDefaultSectionSize(38)
@@ -480,6 +639,10 @@ class MainWindow(QMainWindow):
         )
         self.env_table.doubleClicked.connect(self._on_env_double_click)
         self.env_table.selectionModel().selectionChanged.connect(self._on_env_selected)
+        # Manual user interaction (mouse click / keyboard) — hides educational cmd panel
+        # if user moves to a different env. Programmatic selection (refresh) is not affected.
+        self.env_table.clicked.connect(self._on_env_user_interaction)
+        self.env_table.installEventFilter(self)
         self.env_table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.env_table.customContextMenuRequested.connect(self._show_env_context_menu)
         layout.addWidget(self.env_table)
@@ -495,6 +658,43 @@ class MainWindow(QMainWindow):
         )
         self.loading_label.setVisible(False)
         layout.addWidget(self.loading_label)
+
+        # ── Persistent educational command panel (ABOVE action buttons) ────
+        # Hidden by default. Shown on Delete/Clone/Rename. Hidden on env change or tab switch.
+        from PySide6.QtWidgets import QTextEdit as _QTE, QWidget as _QW_panel
+        self._cmd_panel_widget = _QW_panel()
+        _panel_layout = QVBoxLayout(self._cmd_panel_widget)
+        _panel_layout.setContentsMargins(0, 0, 0, 0)
+        _panel_layout.setSpacing(6)
+
+        self._cmd_panel_title = QLabel("💡 Command Reference")
+        self._cmd_panel_title.setStyleSheet(
+            "font-size: 14px; font-weight: bold; color: #89b4fa; "
+            "padding: 4px 2px 2px 2px;"
+        )
+        _panel_layout.addWidget(self._cmd_panel_title)
+
+        self._cmd_panel_live = QLabel("▶")
+        self._cmd_panel_live.setWordWrap(True)
+        self._cmd_panel_live.setStyleSheet(
+            "color: #f9e2af; font-size: 20px; font-weight: bold; "
+            "font-family: Consolas, monospace; padding: 10px 12px; "
+            "background: #181825; border: 2px solid #f9e2af; border-radius: 6px;"
+        )
+        _panel_layout.addWidget(self._cmd_panel_live)
+
+        self._cmd_panel_hints = _QTE()
+        self._cmd_panel_hints.setReadOnly(True)
+        self._cmd_panel_hints.setFixedHeight(200)
+        self._cmd_panel_hints.setStyleSheet(
+            "background-color: #181825; border: 1px solid #313244; "
+            "border-radius: 8px; padding: 8px; color: #cdd6f4; "
+            "font-family: Consolas, monospace; font-size: 18px; font-weight: bold;"
+        )
+        _panel_layout.addWidget(self._cmd_panel_hints)
+
+        self._cmd_panel_widget.setVisible(False)
+        layout.addWidget(self._cmd_panel_widget)
 
         action_layout = QHBoxLayout()
 
@@ -533,6 +733,17 @@ class MainWindow(QMainWindow):
         self.btn_rename_full.setEnabled(False)
         action_layout.addWidget(self.btn_rename_full)
 
+        # Poetry-specific: change the VenvStudio display label only (doesn't touch Poetry)
+        self.btn_rename_display = QPushButton("🏷️ Rename (Display Name)")
+        self.btn_rename_display.setObjectName("secondary")
+        self.btn_rename_display.setToolTip(
+            "Change the label shown in this table. VenvStudio-only — Poetry / pyproject.toml untouched."
+        )
+        self.btn_rename_display.clicked.connect(self._rename_display_name)
+        self.btn_rename_display.setEnabled(False)
+        self.btn_rename_display.setVisible(False)
+        action_layout.addWidget(self.btn_rename_display)
+
         self.btn_export = QPushButton("📤 Export ▾")
         self.btn_export.setObjectName("secondary")
         self.btn_export.setToolTip(UI_TOOLTIPS.get("btn_export", ""))
@@ -569,17 +780,275 @@ class MainWindow(QMainWindow):
         action_layout.addWidget(self.btn_delete)
 
         layout.addLayout(action_layout)
+
         return page
 
+    def _hide_cmd_panel(self):
+        """Hide the persistent educational command panel."""
+        if hasattr(self, "_cmd_panel_widget"):
+            self._cmd_panel_widget.setVisible(False)
+        self._cmd_panel_env_name = None
+        self._cmd_panel_sticky = False
+
+    def _on_env_user_interaction(self, *args):
+        """Called on manual user interaction (mouse click / key press) with env table.
+        Hides the educational cmd panel if user moved to a different env.
+        Programmatic selection changes (e.g. after refresh) do NOT trigger this.
+        """
+        if not hasattr(self, "_cmd_panel_env_name"):
+            return
+        _panel_env = self._cmd_panel_env_name
+        if _panel_env is None:
+            return
+        # What env is currently selected?
+        rows = self.env_table.selectionModel().selectedRows()
+        if not rows:
+            return
+        try:
+            cur_name = self.env_table.item(rows[0].row(), 0).text().strip()
+        except Exception:
+            return
+        if cur_name != _panel_env:
+            self._hide_cmd_panel()
+
+    def eventFilter(self, obj, event):
+        """Detect keyboard arrow navigation on env_table for panel hiding."""
+        from PySide6.QtCore import QEvent
+        if hasattr(self, "env_table") and obj is self.env_table:
+            if event.type() == QEvent.KeyRelease:
+                # After key release, Qt has updated selection — check if it moved
+                self._on_env_user_interaction()
+        return super().eventFilter(obj, event)
+
+    def _update_cmd_panel(self, action, env_type, name, env_path=""):
+        """Update the persistent educational command panel on the env page."""
+        if not hasattr(self, "_cmd_panel_live"):
+            return
+        # Show the panel (hidden by default and on env/tab changes)
+        if hasattr(self, "_cmd_panel_widget"):
+            self._cmd_panel_widget.setVisible(True)
+        # Remember which env this panel is for — used to decide when to hide
+        self._cmd_panel_env_name = name
+        # Sticky: keep panel visible through auto-selection changes (e.g. post-refresh).
+        # Only manual env switch (different env clicked) or tab switch hides it.
+        self._cmd_panel_sticky = True
+        is_win = get_platform() == "windows"
+
+        # Build live command
+        live = ""
+        if action == "delete":
+            if env_type == "pipx":
+                live = "pipx uninstall-all  →  pipx ensurepath"
+            elif env_type == "conda":
+                live = f"micromamba env remove -p {env_path} --yes"
+            else:
+                live = (f'Remove-Item -Recurse -Force "{env_path}"'
+                        if is_win else f"rm -rf {env_path}")
+        elif action == "clone":
+            if env_type == "pipx":
+                live = f"pipx install {name}  (or pipx reinstall-all)"
+            elif env_type == "poetry":
+                live = "poetry lock && poetry install  (from project dir)"
+            elif env_type == "conda":
+                live = f"micromamba create -p <new_path> --clone {env_path} --yes"
+            elif env_type == "uv":
+                live = f"uv pip freeze → uv venv <new_path> → uv pip install -r"
+            else:
+                live = (f'Copy-Item -Recurse "{env_path}" "{env_path}-clone"'
+                        if is_win else f"cp -r {env_path} {env_path}-clone")
+        elif action == "rename":
+            if env_type == "pipx":
+                live = f"pipx uninstall {name} && pipx install <new_name>"
+            elif env_type == "poetry":
+                live = "edit pyproject.toml → poetry env remove --all → poetry install"
+            elif env_type == "conda":
+                live = f"micromamba env export -n {name} > env.yml"
+            else:
+                live = (f'Rename-Item "{env_path}" "<new_name>"'
+                        if is_win else f"mv {env_path} <new_path>")
+        elif action == "rename_display":
+            live = "# VenvStudio-only label change — no shell command (writes .venvstudio_display_name)"
+        self._cmd_panel_live.setText(f"▶ {live}")
+
+        # HTML helpers
+        def _c(t): return f"<span style='color:#89b4fa;font-family:Consolas,monospace;font-size:18px;font-weight:bold;'>{t}</span>"
+        def _p(t): return f"<span style='color:#a6e3a1;font-family:Consolas,monospace;font-size:18px;font-weight:bold;'>{t}</span>"
+        def _k(t): return f"<span style='color:#cba6f7;font-family:Consolas,monospace;font-weight:bold;font-size:18px;'>{t}</span>"
+        def _ttl(icon, txt, col): return f"<p style='font-size:18px;font-weight:bold;color:{col};margin:6px 0 4px 0;'>{icon}&nbsp; {txt}</p>"
+        def _ln(t): return f"<p style='margin:3px 0;font-size:17px;font-weight:bold;font-family:Consolas,monospace;color:#cdd6f4;background:#11111b;padding:5px 10px;border-radius:4px;'>{t}</p>"
+        def _nt(t): return f"<p style='margin:6px 0 2px 0;font-size:12px;color:#6c7086;font-style:italic;'>{t}</p>"
+
+        html = ""
+        if action == "delete":
+            if env_type == "pipx":
+                html = (
+                    _ttl("📦", "Reset pipx environment", "#a6e3a1") +
+                    _nt("Uninstall ALL pipx apps:") +
+                    _ln(_c("pipx") + " uninstall-all") +
+                    _nt("Ensure PATH is set up (fresh pipx):") +
+                    _ln(_c("pipx") + " ensurepath") +
+                    _nt("Install new CLI apps:") +
+                    _ln(_c("pipx") + " install " + _k("<package>")) +
+                    _nt("List installed apps:") +
+                    _ln(_c("pipx") + " list")
+                )
+            elif env_type == "conda":
+                html = (
+                    _ttl("🦎", f"Remove conda env '{name}'", "#89dceb") +
+                    _nt("Remove by path:") +
+                    _ln(_c("micromamba") + " env remove -p " + _p(env_path) + " --yes") +
+                    _nt("Clean cache + unused packages:") +
+                    _ln(_c("micromamba") + " clean --all --yes")
+                )
+            else:
+                if is_win:
+                    rm_main = _c("Remove-Item") + " -Recurse -Force " + _p(f'"{env_path}"')
+                    rm_alt_note = "Classic cmd.exe alternative:"
+                    rm_alt = _c("rmdir") + " /S /Q " + _p(f'"{env_path}"')
+                else:
+                    rm_main = _c("rm") + " -rf " + _p(env_path)
+                    rm_alt_note = "Verbose (show each deleted file):"
+                    rm_alt = _c("rm") + " -rfv " + _p(env_path)
+                html = (
+                    _ttl("🗑️", f"Delete {env_type} env '{name}'", "#f38ba8") +
+                    _nt("Deactivate first (if active):") +
+                    _ln(_c("deactivate")) +
+                    _nt("Delete the environment folder:") +
+                    _ln(rm_main) +
+                    _nt(rm_alt_note) +
+                    _ln(rm_alt)
+                )
+        elif action == "clone":
+            if env_type == "pipx":
+                html = (
+                    _ttl("📦", f"Clone pipx app '{name}' — Not directly supported", "#f9e2af") +
+                    _nt("pipx apps are isolated per CLI tool. To replicate on another machine:") +
+                    _ln(_c("pipx") + " install " + _k(name)) +
+                    _nt("Or reinstall everything (e.g. after Python upgrade):") +
+                    _ln(_c("pipx") + " reinstall-all") +
+                    _nt("List all installed apps:") +
+                    _ln(_c("pipx") + " list")
+                )
+            elif env_type == "poetry":
+                html = (
+                    _ttl("📜", f"Clone Poetry env '{name}' — Not directly supported", "#f9e2af") +
+                    _nt("Poetry envs are tied to pyproject.toml. To replicate:") +
+                    _ln(_c("cd") + " " + _p("<your-project-dir>")) +
+                    _ln(_c("poetry") + " lock") +
+                    _ln(_c("poetry") + " install") +
+                    _nt("Or copy pyproject.toml + poetry.lock to a new project dir and run:") +
+                    _ln(_c("poetry") + " install")
+                )
+            elif env_type == "conda":
+                html = (
+                    _ttl("🦎", f"Clone conda env '{name}'", "#89dceb") +
+                    _nt("What VenvStudio runs:") +
+                    _ln(_c("micromamba") + " create -p " + _p("<new_path>") + " --clone " + _p(env_path) + " --yes") +
+                    _nt("Alternative — export/import via YAML:") +
+                    _ln(_c("micromamba") + " env export -p " + _p(env_path) + " &gt; env.yml") +
+                    _ln(_c("micromamba") + " create -p " + _p("<new_path>") + " --file env.yml")
+                )
+            elif env_type == "uv":
+                if is_win:
+                    _src_py = f"{env_path}\\Scripts\\python.exe"
+                    _tgt_py = "<new_path>\\Scripts\\python.exe"
+                else:
+                    _src_py = f"{env_path}/bin/python"
+                    _tgt_py = "<new_path>/bin/python"
+                html = (
+                    _ttl("⚡", f"Clone uv env '{name}'", "#f9e2af") +
+                    _nt("What VenvStudio runs:") +
+                    _ln(_c("uv") + " pip freeze --python " + _p(_src_py) + " &gt; req.txt") +
+                    _ln(_c("uv") + " venv " + _p("<new_path>") + " --python " + _p(_src_py)) +
+                    _ln(_c("uv") + " pip install -r req.txt --python " + _p(_tgt_py))
+                )
+            elif is_win:
+                html = (
+                    _ttl("📋", f"Clone env '{name}'", "#89b4fa") +
+                    _nt("PowerShell:") +
+                    _ln(_c("Copy-Item") + " -Recurse " + _p(f'"{env_path}"') + " " + _p(f'"{env_path}-clone"')) +
+                    _nt("Reinstall packages after clone (recommended):") +
+                    _ln(_c("pip") + " freeze &gt; requirements.txt &amp;&amp; " +
+                        _c("pip") + " install -r requirements.txt")
+                )
+            else:
+                html = (
+                    _ttl("📋", f"Clone env '{name}'", "#89b4fa") +
+                    _nt("Copy the folder:") +
+                    _ln(_c("cp") + " -r " + _p(env_path) + " " + _p(f"{env_path}-clone")) +
+                    _nt("Reinstall packages after clone (recommended):") +
+                    _ln(_c("pip") + " freeze &gt; requirements.txt &amp;&amp; " +
+                        _c("pip") + " install -r requirements.txt")
+                )
+        elif action == "rename":
+            if env_type == "pipx":
+                html = (
+                    _ttl("📦", f"Rename pipx app '{name}' — Not directly supported", "#f9e2af") +
+                    _nt("pipx apps are identified by their package name. To 'rename', uninstall and reinstall:") +
+                    _ln(_c("pipx") + " uninstall " + _k(name)) +
+                    _ln(_c("pipx") + " install " + _p("<new_name>"))
+                )
+            elif env_type == "poetry":
+                html = (
+                    _ttl("📜", f"Rename Poetry env '{name}' — Not directly supported", "#f9e2af") +
+                    _nt("Poetry env names come from pyproject.toml. Edit the 'name' field, then:") +
+                    _ln(_c("poetry") + " env remove --all") +
+                    _ln(_c("poetry") + " install") +
+                    _nt("Alternative: move the project folder to a new name, Poetry regenerates env.")
+                )
+            elif env_type == "conda":
+                html = (
+                    _ttl("🦎", f"Rename conda env '{name}'", "#89dceb") +
+                    _nt("micromamba can't rename in place. Export → recreate → remove:") +
+                    _ln(_c("micromamba") + " env export -n " + _p(name) + " &gt; env.yml") +
+                    _ln(_c("micromamba") + " create -n " + _p("<new_name>") + " --file env.yml") +
+                    _ln(_c("micromamba") + " env remove -n " + _p(name) + " --yes")
+                )
+            elif is_win:
+                html = (
+                    _ttl("✏️", f"Rename env '{name}'", "#f9e2af") +
+                    _nt("Rename folder (fast — but pip/python paths may break):") +
+                    _ln(_c("Rename-Item") + " " + _p(f'"{env_path}"') + " " + _p('"<new_name>"')) +
+                    _nt("Safer: clone with new name + delete old:") +
+                    _ln(_c("Copy-Item") + " -Recurse " + _p(f'"{env_path}"') + " " + _p('"<new_path>"'))
+                )
+            else:
+                html = (
+                    _ttl("✏️", f"Rename env '{name}'", "#f9e2af") +
+                    _nt("Rename folder (fast — but pip/python paths may break):") +
+                    _ln(_c("mv") + " " + _p(env_path) + " " + _p("<new_path>")) +
+                    _nt("Safer: clone with new name + delete old:") +
+                    _ln(_c("cp") + " -r " + _p(env_path) + " " + _p("<new_path>"))
+                )
+        self._cmd_panel_hints.setHtml(html)
+
     def _switch_page(self, index):
-        page_names = {0: "Packages", 1: "Environments", 2: "Settings"}
+        page_names = {0: "Packages", 1: "Environments", 2: "Settings", 3: "Learn"}
         self._log.debug(f"_switch_page → {page_names.get(index, index)}")
         self.stack.setCurrentIndex(index)
         for i, btn in enumerate(self.nav_buttons):
             btn.setChecked(i == index)
-        # Quick launch always visible (not on Settings page)
+        # Quick launch only on Packages page
         if hasattr(self, "quick_launch_frame"):
-            self.quick_launch_frame.setVisible(index != 2)
+            self.quick_launch_frame.setVisible(index == 0)
+        # Educational cmd panel — hide on any tab switch (re-shown on next action)
+        self._hide_cmd_panel()
+
+    def _on_learn_install(self, packages: list):
+        """Called when Learn page requests package install — switch to Packages tab."""
+        from PySide6.QtWidgets import QMessageBox
+        if not packages:
+            return
+        pkg_str = ", ".join(packages)
+        reply = QMessageBox.question(
+            self, "Install Packages",
+            f"Install the following packages into the current environment?\n\n{pkg_str}",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            self._switch_page(0)
+            if hasattr(self, "package_panel"):
+                QTimer.singleShot(300, lambda: self.package_panel._install_packages_by_name(packages))
 
     def _on_ql_env_changed(self, idx):
         """Sol sidebar QL dropdown değişti — her şeyi sync et."""
@@ -589,9 +1058,9 @@ class MainWindow(QMainWindow):
         if not venv_name:
             self._rebuild_ql_buttons(set())
             return
-        venv_path = self.venv_manager.base_dir / venv_name
-        if not venv_path.exists():
-            return
+        venv_path = self._get_env_path(venv_name) or self.venv_manager.base_dir / venv_name
+        if not venv_path.exists() and not (venv_path.parent / ".venvstudio_env").exists():
+            pass  # pipx path may not have standard structure
         # Env tablosunda ilgili satırı seç
         for row in range(self.env_table.rowCount()):
             item = self.env_table.item(row, 0)
@@ -610,9 +1079,9 @@ class MainWindow(QMainWindow):
         from src.core.venv_manager import VenvManager
         import json
 
-        venv_path = self.venv_manager.base_dir / venv_name
-        if not venv_path.exists():
-            return
+        venv_path = self._get_env_path(venv_name) or self.venv_manager.base_dir / venv_name
+        if not venv_path.exists() and not (venv_path.parent / ".venvstudio_env").exists():
+            pass  # pipx path may not have standard structure
 
         class _QLWorker(QThread):
             done = Signal(str, list)
@@ -752,8 +1221,17 @@ class MainWindow(QMainWindow):
             from PySide6.QtWidgets import QApplication
             QApplication.processEvents()
 
-        # Fast load — skip_calc=True when force so no subprocess on main thread
-        envs = self.venv_manager.list_venvs_fast(skip_calc=force)
+        # Fast load — never skip_calc (pyvenv.cfg reading is fast, no subprocess)
+        envs = self.venv_manager.list_venvs_fast(skip_calc=False)
+        # Sort: base_dir envs first (alphabetic), then poetry (alphabetic), then pipx
+        def _env_sort_key(e):
+            if e.env_type == "pipx":
+                return (2, e.name.lower())
+            elif e.env_type == "poetry":
+                return (1, e.name.lower())
+            else:
+                return (0, e.name.lower())
+        envs = sorted(envs, key=_env_sort_key)
 
         # Also show loading if some envs are missing cache in normal load
         has_missing_cache = any(e.python_version == "..." for e in envs)
@@ -781,16 +1259,34 @@ class MainWindow(QMainWindow):
                 self._rebuild_ql_buttons(set())
             self.ql_env_selector.blockSignals(False)
 
+        _type_labels = {
+            "venv":         "🐍 venv",
+            "uv":           "⚡ uv",
+            "poetry":       "📜 Poetry",
+            "pipx":         "📦 pipx",
+            "conda":        "🦎 Conda",
+            "system_tools": "🗂 Tools",
+        }
+        _type_colors = {
+            "uv":           "#f9e2af",
+            "poetry":       "#cba6f7",
+            "pipx":         "#89dceb",
+            "conda":        "#a6e3a1",
+            "system_tools": None,  # uses accent
+        }
+
         for i, env in enumerate(envs):
+            etype = getattr(env, "env_type", "venv")
+
+            # ── Name column ──
             name_item = QTableWidgetItem(f"  {env.name}")
-            is_system_tools = str(env.python_version).startswith("🗂")
-            is_conda_env    = str(env.python_version).startswith("🦎")
-            if is_system_tools:
+            _color = _type_colors.get(etype)
+            if etype == "system_tools":
                 name_item.setForeground(QColor(self._c().get("accent", "#89b4fa")))
                 name_item.setToolTip("System tools environment — install R, RStudio, Ollama, DBeaver etc. from Launch tab")
-            elif is_conda_env:
-                name_item.setForeground(QColor("#a6e3a1"))  # green
-                name_item.setToolTip("Conda environment (micromamba) — install any conda-forge package from Launch tab")
+            elif _color:
+                name_item.setForeground(QColor(_color))
+                name_item.setToolTip(f"{_type_labels.get(etype, etype)} environment")
             elif not env.is_valid:
                 name_item.setForeground(Qt.red)
                 name_item.setToolTip("Invalid environment (Python not found)")
@@ -798,10 +1294,33 @@ class MainWindow(QMainWindow):
             name_font.setBold(True)
             name_item.setFont(name_font)
             self.env_table.setItem(i, 0, name_item)
-            self.env_table.setItem(i, 1, QTableWidgetItem(f"  {env.python_version}"))
-            pkg = str(env.package_count) if env.package_count else "..."
-            self.env_table.setItem(i, 2, QTableWidgetItem(f"  {pkg}"))
-            self.env_table.setItem(i, 3, QTableWidgetItem(f"  {env.size}"))
+
+            # ── Type column ──
+            type_item = QTableWidgetItem(f"  {_type_labels.get(etype, '🐍 venv')}")
+            type_item.setData(Qt.UserRole, etype)  # store raw env_type for deletion etc.
+            if _color:
+                type_item.setForeground(QColor(_color))
+            elif etype == "system_tools":
+                type_item.setForeground(QColor(self._c().get("accent", "#89b4fa")))
+            self.env_table.setItem(i, 1, type_item)
+
+            # ── Path column ──
+            _full_path = str(env.path)
+            _display_path = _full_path
+            path_item = QTableWidgetItem(f"  {_display_path}")
+            path_item.setToolTip(_full_path)
+            path_item.setForeground(QColor(self._c().get("fg_muted", "#888")))
+            self.env_table.setItem(i, 2, path_item)
+
+            # ── Runtime column: Python version or "----" ──
+            _rv = str(env.python_version).strip()
+            _runtime_str = f"  Python {_rv}" if (_rv and _rv not in ("Unknown", "?", "...")) else "  ----"
+            self.env_table.setItem(i, 3, QTableWidgetItem(_runtime_str))
+
+            pkg = str(env.package_count) if env.package_count else "0"
+            self.env_table.setItem(i, 4, QTableWidgetItem(f"  {pkg}"))
+            _size = env.size if env.size and env.size not in ("N/A", "?", "...") else "0 MB"
+            self.env_table.setItem(i, 5, QTableWidgetItem(f"  {_size}"))
 
             created_str = ""
             if env.created:
@@ -810,19 +1329,53 @@ class MainWindow(QMainWindow):
                     created_str = dt.strftime("%Y-%m-%d %H:%M")
                 except ValueError:
                     created_str = env.created[:16]
-            self.env_table.setItem(i, 4, QTableWidgetItem(f"  {created_str}"))
+            self.env_table.setItem(i, 6, QTableWidgetItem(f"  {created_str}"))
 
             # Default column
             default_env = self.config.get("default_env", "")
             default_item = QTableWidgetItem("⭐" if env.name == default_env else "")
             default_item.setTextAlignment(Qt.AlignCenter)
             default_item.setFlags(default_item.flags() & ~Qt.ItemIsEditable)
-            self.env_table.setItem(i, 5, default_item)
+            self.env_table.setItem(i, 7, default_item)
 
-        self._update_info_label_fast(len(envs))
+        # Group envs by location
+        _base_dir = str(self.venv_manager.base_dir)
+        _home = str(Path.home())
+        _base_envs = [e for e in envs if str(e.path).startswith(_base_dir)]
+        _poetry_envs = [e for e in envs if e.env_type == "poetry"]
+        _pipx_envs = [e for e in envs if e.env_type == "pipx"]
+        # Remove poetry and pipx from base count (they have their own paths)
+        _base_envs = [e for e in _base_envs if e.env_type not in ("poetry", "pipx")]
+
+        def _fmt_size(envs_list):
+            total = 0
+            for e in envs_list:
+                s = e.size or "0 MB"
+                try:
+                    n, u = s.strip().split()
+                    n = float(n)
+                    mult = {"B":1,"KB":1024,"MB":1024**2,"GB":1024**3,"TB":1024**4}.get(u,1)
+                    total += n * mult
+                except Exception:
+                    pass
+            for unit in ["B","KB","MB","GB","TB"]:
+                if total < 1024:
+                    return f"{total:.1f} {unit}"
+                total /= 1024
+            return "?"
+
+        parts = []
+        _total_all = _fmt_size(envs)
+        parts.append(f"📂 {self.venv_manager.base_dir}  •  {len(_base_envs)} env(s)  •  {_fmt_size(_base_envs)}")
+        if _poetry_envs:
+            parts.append(f"📜 poetry  •  {len(_poetry_envs)} env(s)  •  {_fmt_size(_poetry_envs)}")
+        if _pipx_envs:
+            parts.append(f"📦 pipx  •  {len(_pipx_envs)} env(s)  •  {_fmt_size(_pipx_envs)}")
+        parts.append(f"🗂 total  •  {_total_all}")
+        self.info_label.setText("        ".join(parts))
 
         # Update package panel env dropdown
-        env_list = [(e.name, self.venv_manager.base_dir / e.name) for e in envs]
+        env_list = [(e.name, e.path) for e in envs]
         self.package_panel.populate_env_list(env_list)
         self.settings_page.populate_vscode_envs(env_list)
 
@@ -835,7 +1388,7 @@ class MainWindow(QMainWindow):
         missing_names = [
             self.env_table.item(i, 0).text().strip()
             for i in range(self.env_table.rowCount())
-            if self.env_table.item(i, 1) and self.env_table.item(i, 1).text().strip() in ("...", "")
+            if self.env_table.item(i, 2) and self.env_table.item(i, 2).text().strip() in ("...", "", "----")
         ]
 
         if missing_names:
@@ -857,9 +1410,18 @@ class MainWindow(QMainWindow):
     def _on_env_detail_ready(self, row, python_version, package_count, size):
         """Update a single row with detailed info from background thread."""
         if row < self.env_table.rowCount():
-            self.env_table.setItem(row, 1, QTableWidgetItem(f"  {python_version}"))
-            self.env_table.setItem(row, 2, QTableWidgetItem(f"  {package_count}"))
-            self.env_table.setItem(row, 3, QTableWidgetItem(f"  {size}"))
+            _rv = str(python_version).strip()
+            if _rv and _rv not in ("Unknown", "?", "..."):
+                if _rv[0].isdigit():
+                    _runtime_str = f"  Python {_rv}"
+                else:
+                    _runtime_str = f"  Python {_rv}"
+            else:
+                _runtime_str = "  ----"
+            self.env_table.setItem(row, 3, QTableWidgetItem(_runtime_str))
+            self.env_table.setItem(row, 4, QTableWidgetItem(f"  {package_count}"))
+            _size = size if size and size not in ("N/A", "?", "...") else "0 MB"
+            self.env_table.setItem(row, 5, QTableWidgetItem(f"  {_size}"))
 
     def _on_all_details_done(self):
         self.loading_label.setVisible(False)
@@ -886,14 +1448,61 @@ class MainWindow(QMainWindow):
         has_selection = len(rows) > 0
         self.btn_manage_pkgs.setEnabled(has_selection)
         self.btn_terminal.setEnabled(has_selection)
-        self.btn_clone.setEnabled(has_selection)
-        self.btn_rename.setEnabled(has_selection)
+
+        # Detect env type from selected row
+        _sel_type = ""
+        if has_selection:
+            _rows = self.env_table.selectionModel().selectedRows()
+            if _rows:
+                _ti = self.env_table.item(_rows[0].row(), 1)
+                if _ti:
+                    _sel_type = _ti.text().strip().lower()
+        _is_pipx = "pipx" in _sel_type
+        _is_poetry = "poetry" in _sel_type
+        _is_conda = "conda" in _sel_type
+
+        # pipx + poetry: folder-based clone/rename don't make sense
+        # → hide Clone, Rename (Name), Rename (Full)
+        # poetry only: show Rename (Display Name) instead
+        _hide_folder_ops = _is_pipx or _is_poetry
+        self.btn_clone.setVisible(not _hide_folder_ops)
+        self.btn_rename.setVisible(not _hide_folder_ops)
         if hasattr(self, "btn_rename_full"):
-            self.btn_rename_full.setEnabled(has_selection)
+            self.btn_rename_full.setVisible(not _hide_folder_ops)
+
+        # conda: Rename (Name) = in-place folder rename breaks conda hardcoded paths
+        # → disable Rename (Name) but keep Clone + Rename (Full) (both use micromamba)
+        self.btn_clone.setEnabled(has_selection and not _hide_folder_ops)
+        self.btn_rename.setEnabled(has_selection and not _hide_folder_ops and not _is_conda)
+        if hasattr(self, "btn_rename_full"):
+            self.btn_rename_full.setEnabled(has_selection and not _hide_folder_ops)
+
+        # Rename (Display Name) — only shown for poetry
+        if hasattr(self, "btn_rename_display"):
+            self.btn_rename_display.setVisible(_is_poetry)
+            self.btn_rename_display.setEnabled(has_selection and _is_poetry)
+
+        # Delete: enabled for all types (including pipx per user request —
+        # delete-and-reinitialize pattern)
         self.btn_delete.setEnabled(has_selection)
         self.btn_export.setEnabled(has_selection)
         if hasattr(self, "btn_make_default"):
             self.btn_make_default.setEnabled(has_selection)
+
+        # Tooltips
+        if _is_pipx:
+            self.btn_delete.setToolTip("Uninstall all pipx apps and reinitialize with a clean pipx env")
+        else:
+            self.btn_delete.setToolTip(UI_TOOLTIPS.get("btn_delete", ""))
+
+        if _is_conda:
+            self.btn_rename.setToolTip(
+                "Conda envs can't be renamed in place. Use Rename (Full) which exports+recreates via micromamba."
+            )
+        else:
+            self.btn_rename.setToolTip(
+                "Rename folder only — fast, but pip/python paths may break on Windows"
+            )
 
         if has_selection:
             row = rows[0].row()
@@ -907,10 +1516,27 @@ class MainWindow(QMainWindow):
                     self.ql_env_selector.blockSignals(True)
                     self.ql_env_selector.setCurrentIndex(idx)
                     self.ql_env_selector.blockSignals(False)
-            # Sync package_panel
-            venv_path = self.venv_manager.base_dir / name
+            # Sync package_panel — use actual path (handles pipx, poetry etc.)
+            venv_path = self._get_env_path(name) or self.venv_manager.base_dir / name
             if venv_path.exists():
                 self.package_panel.set_venv(venv_path)
+                # ── Track in recent envs (deferred — no UI blocking) ─────
+                try:
+                    type_item = self.env_table.item(row, 1)
+                    raw_type = type_item.text().strip() if type_item else "venv"
+                    env_type = "venv"
+                    for k in ("uv", "poetry", "pipx", "conda", "venv"):
+                        if k in raw_type.lower():
+                            env_type = k
+                            break
+                    _vp = str(venv_path)
+                    _nm = name
+                    _et = env_type
+                    from PySide6.QtCore import QTimer
+                    QTimer.singleShot(300, lambda: self._track_recent(_nm, _vp, _et))
+                except Exception:
+                    pass
+                # ─────────────────────────────────────────────────────
 
     def _open_default_env(self):
         """On startup, open default env in Packages if set."""
@@ -980,10 +1606,12 @@ class MainWindow(QMainWindow):
         menu.addAction(a_clone)
 
         a_rename = QAction("✏️ Rename (Name Only)", self)
+        a_rename.setToolTip("Rename folder only — fast, but pip/python paths may break on Windows")
         a_rename.triggered.connect(self._rename_env_only)
         menu.addAction(a_rename)
 
         a_rename_full = QAction("🔄 Rename (Full)", self)
+        a_rename_full.setToolTip("Clone with new name + delete old — slow but safe, all packages reinstalled")
         a_rename_full.triggered.connect(self._rename_env_full)
         menu.addAction(a_rename_full)
 
@@ -1023,12 +1651,32 @@ class MainWindow(QMainWindow):
             QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:
+            self._log.info(f"_make_default_env: setting default={name!r} (was {current_default!r})")
             self.config.set("default_env", name)
             self._refresh_env_list()
             self.statusBar().showMessage(f"✅ '{name}' set as default environment")
 
     def _on_env_double_click(self):
         self._open_package_manager()
+
+    def _get_env_path(self, name: str) -> "Path | None":
+        """Return actual path for env — handles pipx, poetry etc."""
+        # 1. Check table Path column tooltip (fast)
+        for row in range(self.env_table.rowCount()):
+            item = self.env_table.item(row, 0)
+            if item and item.text().strip() == name:
+                path_item = self.env_table.item(row, 2)
+                if path_item and path_item.toolTip():
+                    return Path(path_item.toolTip())
+                break
+        # 2. Fallback: scan venv list (handles pipx home)
+        try:
+            for env in self.venv_manager.list_venvs_fast(skip_calc=True):
+                if env.name == name:
+                    return env.path
+        except Exception:
+            pass
+        return self.venv_manager.base_dir / name
 
     def _get_selected_env_name(self):
         rows = self.env_table.selectionModel().selectedRows()
@@ -1037,6 +1685,7 @@ class MainWindow(QMainWindow):
         return ""
 
     def _create_env(self):
+        self._log.info("_create_env: opening EnvCreateDialog")
         dialog = EnvCreateDialog(self.venv_manager, self.config, self)
         dialog.env_created.connect(lambda name: self._refresh_env_list())
         dialog.exec()
@@ -1069,6 +1718,22 @@ class MainWindow(QMainWindow):
         if not new_name:
             return
 
+        # Get env type and path from selected row
+        _env_type = "venv"
+        _env_path = None
+        _sel_row = self.env_table.currentRow()
+        if _sel_row >= 0:
+            _path_item = self.env_table.item(_sel_row, 2)
+            _type_item = self.env_table.item(_sel_row, 1)
+            if _path_item:
+                _env_path = _path_item.toolTip() or _path_item.text().strip()
+            if _type_item:
+                _env_type = _type_item.data(Qt.UserRole) or "venv"
+        _display_path = _env_path or str(self.venv_manager.base_dir / name)
+
+        # Update educational cmd panel
+        self._update_cmd_panel(action="rename", env_type=_env_type, name=name, env_path=_display_path)
+
         self.rename_progress = QProgressDialog(
             f"Renaming '{name}' → '{new_name}'...", None, 0, 0, self
         )
@@ -1077,7 +1742,10 @@ class MainWindow(QMainWindow):
         self.rename_progress.setWindowModality(Qt.WindowModal)
         self.rename_progress.show()
 
-        self._rename_worker = RenameOnlyWorker(self.venv_manager, name, new_name)
+        self._rename_worker = RenameOnlyWorker(
+            self.venv_manager, name, new_name,
+            old_path=_env_path, env_type=_env_type,
+        )
         self._rename_worker.progress.connect(
             lambda msg: self.rename_progress.setLabelText(f"⏳ {msg}")
         )
@@ -1102,6 +1770,22 @@ class MainWindow(QMainWindow):
         if reply != QMessageBox.Yes:
             return
 
+        # Get env type and path from selected row
+        _env_type = "venv"
+        _env_path = None
+        _sel_row = self.env_table.currentRow()
+        if _sel_row >= 0:
+            _path_item = self.env_table.item(_sel_row, 2)
+            _type_item = self.env_table.item(_sel_row, 1)
+            if _path_item:
+                _env_path = _path_item.toolTip() or _path_item.text().strip()
+            if _type_item:
+                _env_type = _type_item.data(Qt.UserRole) or "venv"
+        _display_path = _env_path or str(self.venv_manager.base_dir / name)
+
+        # Update educational cmd panel
+        self._update_cmd_panel(action="rename", env_type=_env_type, name=name, env_path=_display_path)
+
         self.rename_progress = QProgressDialog(
             f"Renaming '{name}' → '{new_name}'...", "Cancel", 0, 0, self
         )
@@ -1110,7 +1794,10 @@ class MainWindow(QMainWindow):
         self.rename_progress.setWindowModality(Qt.WindowModal)
         self.rename_progress.show()
 
-        self._rename_worker = RenameFullWorker(self.venv_manager, name, new_name)
+        self._rename_worker = RenameFullWorker(
+            self.venv_manager, name, new_name,
+            old_path=_env_path, env_type=_env_type,
+        )
         self._rename_worker.progress.connect(
             lambda msg: self.rename_progress.setLabelText(f"⏳ {msg}")
         )
@@ -1121,39 +1808,158 @@ class MainWindow(QMainWindow):
     def _rename_env(self):
         self._rename_env_only()
 
+    def _rename_display_name(self):
+        """Change the VenvStudio display label for a Poetry env.
+        Stores an override in .venvstudio_display_name inside the poetry env dir.
+        Doesn't touch Poetry or pyproject.toml.
+        """
+        name = self._get_selected_env_name()
+        if not name:
+            return
+
+        # Get env path from selected row
+        _env_path = None
+        _sel_row = self.env_table.currentRow()
+        if _sel_row >= 0:
+            _path_item = self.env_table.item(_sel_row, 2)
+            if _path_item:
+                _env_path = _path_item.toolTip() or _path_item.text().strip()
+        if not _env_path:
+            self.statusBar().showMessage("❌ Could not resolve poetry env path")
+            return
+
+        new_display, ok = QInputDialog.getText(
+            self, "Rename (Display Name)",
+            f"Enter a new display name for '{name}'.\n\n"
+            "This changes only the label shown in VenvStudio.\n"
+            "The Poetry environment itself (and pyproject.toml) is not modified.\n\n"
+            "Leave empty and press OK to clear the override.",
+            text=name,
+        )
+        if not ok:
+            return
+        new_display = new_display.strip()
+
+        # Update educational cmd panel (display-name rename is a no-op in shell terms)
+        self._update_cmd_panel(
+            action="rename_display", env_type="poetry", name=name, env_path=_env_path
+        )
+
+        success, msg = self.venv_manager.set_poetry_display_name(_env_path, new_display)
+        if success:
+            self._refresh_env_list()
+            self.statusBar().showMessage(f"✅ {msg}")
+            if hasattr(self, "_cmd_panel_live"):
+                self._cmd_panel_live.setText(f"✅ {msg}")
+        else:
+            self.statusBar().showMessage(f"❌ {msg}")
+            if hasattr(self, "_cmd_panel_live"):
+                self._cmd_panel_live.setText(f"❌ {msg}")
+
     def _on_rename_finished(self, success, message):
         self.rename_progress.close()
         if success:
             self._refresh_env_list()
-            self.statusBar().showMessage(message)
-            QMessageBox.information(self, "Success", message)
+            self.statusBar().showMessage(f"✅ {message}")
+            if hasattr(self, "_cmd_panel_live"):
+                self._cmd_panel_live.setText(f"✅ {message}")
         else:
-            QMessageBox.critical(self, "Error", message)
+            # No popup — message shows in statusbar + live cmd box; full guidance is in the hints panel below
+            self.statusBar().showMessage(f"❌ {message.splitlines()[0] if message else 'Rename failed'}")
+            if hasattr(self, "_cmd_panel_live"):
+                first_line = message.splitlines()[0] if message else "Rename failed"
+                self._cmd_panel_live.setText(f"❌ {first_line}")
 
     def _delete_env(self):
         name = self._get_selected_env_name()
         if not name:
             return
+
+        # Detect env type early to customize the confirmation and post-delete behavior
+        _env_type_early = "venv"
+        _sel_row_early = self.env_table.currentRow()
+        if _sel_row_early >= 0:
+            _ti = self.env_table.item(_sel_row_early, 1)
+            if _ti:
+                _et = _ti.data(Qt.UserRole) or _ti.text().strip().lower()
+                _env_type_early = _et
+
+        if _env_type_early == "pipx":
+            confirm_text = (
+                f"This will uninstall all pipx apps and remove the pipx environment.\n\n"
+                "A fresh, empty pipx environment will be automatically reinitialized afterwards.\n\n"
+                "Continue?"
+            )
+        else:
+            confirm_text = (
+                f"Are you sure you want to delete '{name}'?\n\n"
+                "This will permanently remove the environment and all installed packages."
+            )
+
         reply = QMessageBox.warning(
             self, "Delete Environment",
-            f"Are you sure you want to delete '{name}'?\n\nThis will permanently remove the environment and all installed packages.",
+            confirm_text,
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
         )
         if reply == QMessageBox.Yes:
-            self.delete_progress = QProgressDialog(
-                f"Deleting '{name}'...", None, 0, 0, self
-            )
+            # Remember for post-delete reinitialization
+            self._pending_pipx_reinit = (_env_type_early == "pipx")
+            # Get env path and type from table for proper deletion (poetry needs real venv path)
+            _env_path = None
+            _env_type = "venv"
+            _sel_row = self.env_table.currentRow()
+            if _sel_row >= 0:
+                _path_item = self.env_table.item(_sel_row, 2)
+                _type_item = self.env_table.item(_sel_row, 1)
+                if _path_item:
+                    _env_path = _path_item.toolTip() or _path_item.text().strip()
+                if _type_item:
+                    _env_type = _type_item.data(Qt.UserRole) or "venv"
+
+            _display_path = _env_path or str(self.venv_manager.base_dir / name)
+
+            # Update the educational command panel at the bottom of the env page
+            self._update_cmd_panel(action="delete", env_type=_env_type, name=name, env_path=_display_path)
+
+            # Custom delete progress dialog
+            from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QProgressBar
+            self.delete_progress = QDialog(self)
             self.delete_progress.setWindowTitle("Deleting Environment")
-            self.delete_progress.setMinimumWidth(350)
             self.delete_progress.setWindowModality(Qt.WindowModal)
-            self.delete_progress.setCancelButton(None)
+            self.delete_progress.setMinimumWidth(420)
+            self.delete_progress.setWindowFlags(
+                self.delete_progress.windowFlags() & ~Qt.WindowCloseButtonHint
+            )
+            _dp_layout = QVBoxLayout(self.delete_progress)
+            _dp_layout.setSpacing(12)
+            _dp_layout.setContentsMargins(24, 20, 24, 20)
+            _dp_title = QLabel(f"🗑️ Deleting '{name}'")
+            _dp_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #f38ba8;")
+            _dp_layout.addWidget(_dp_title)
+            self._dp_msg = QLabel("⏳ Preparing...")
+            self._dp_msg.setStyleSheet("font-size: 13px; color: #cdd6f4;")
+            self._dp_msg.setWordWrap(True)
+            _dp_layout.addWidget(self._dp_msg)
+            _dp_bar = QProgressBar()
+            _dp_bar.setRange(0, 0)
+            _dp_bar.setFixedHeight(6)
+            _dp_bar.setStyleSheet(
+                "QProgressBar { border: none; background: #313244; border-radius: 3px; }"
+                "QProgressBar::chunk { background: #f38ba8; border-radius: 3px; }"
+            )
+            _dp_layout.addWidget(_dp_bar)
             self.delete_progress.show()
 
             self._deleting_env_name = name
-            self._delete_worker = DeleteWorker(self.venv_manager, name)
-            self._delete_worker.progress.connect(
-                lambda msg: self.delete_progress.setLabelText(f"⏳ {msg}")
-            )
+
+            def _on_delete_progress(msg):
+                self._dp_msg.setText(f"⏳ {msg}")
+                # Also update bottom cmd panel live command
+                if hasattr(self, "_cmd_panel_live"):
+                    self._cmd_panel_live.setText(f"▶ {msg}")
+
+            self._delete_worker = DeleteWorker(self.venv_manager, name, env_path=_env_path, env_type=_env_type)
+            self._delete_worker.progress.connect(_on_delete_progress)
             self._delete_worker.finished.connect(self._on_delete_finished)
             self._delete_worker.start()
 
@@ -1178,9 +1984,29 @@ class MainWindow(QMainWindow):
             self.package_panel._launcher_py_version_cache.clear()
             self.package_panel._update_launcher_status()
             self._refresh_env_list()
-            self.statusBar().showMessage(message)
+            self.statusBar().showMessage(f"✅ {message}")
+            if hasattr(self, "_cmd_panel_live"):
+                self._cmd_panel_live.setText(f"✅ {message}")
+            # pipx: auto-reinitialize a clean pipx env after delete
+            if getattr(self, "_pending_pipx_reinit", False):
+                self._pending_pipx_reinit = False
+                try:
+                    ok = self.venv_manager.ensure_pipx_env()
+                    if ok:
+                        self.statusBar().showMessage("✅ pipx environment reinitialized")
+                        if hasattr(self, "_cmd_panel_live"):
+                            self._cmd_panel_live.setText("✅ pipx environment reinitialized")
+                        self._refresh_env_list()
+                    else:
+                        self.statusBar().showMessage("⚠ pipx reinit skipped — install pipx manually if needed")
+                except Exception as e:
+                    self.statusBar().showMessage(f"⚠ Could not reinitialize pipx: {e}")
         else:
-            QMessageBox.critical(self, "Error", message)
+            # No popup — statusbar + live cmd box
+            first_line = message.splitlines()[0] if message else "Delete failed"
+            self.statusBar().showMessage(f"❌ {first_line}")
+            if hasattr(self, "_cmd_panel_live"):
+                self._cmd_panel_live.setText(f"❌ {first_line}")
             self._refresh_env_list()
 
     def _clone_env(self):
@@ -1197,6 +2023,22 @@ class MainWindow(QMainWindow):
 
         new_name = new_name.strip()
 
+        # Get env type and path from selected row
+        _src_env_type = "venv"
+        _src_path = None
+        _sel_row = self.env_table.currentRow()
+        if _sel_row >= 0:
+            _path_item = self.env_table.item(_sel_row, 2)
+            _type_item = self.env_table.item(_sel_row, 1)
+            if _path_item:
+                _src_path = _path_item.toolTip() or _path_item.text().strip()
+            if _type_item:
+                _src_env_type = _type_item.data(Qt.UserRole) or "venv"
+        _display_path = _src_path or str(self.venv_manager.base_dir / source)
+
+        # Update educational cmd panel
+        self._update_cmd_panel(action="clone", env_type=_src_env_type, name=source, env_path=_display_path)
+
         # Progress dialog
         self.clone_progress = QProgressDialog(
             f"Cloning '{source}' to '{new_name}'...", "Cancel", 0, 0, self
@@ -1207,7 +2049,10 @@ class MainWindow(QMainWindow):
         self.clone_progress.show()
 
         # Worker
-        self.clone_worker = CloneWorker(self.venv_manager, source, new_name)
+        self.clone_worker = CloneWorker(
+            self.venv_manager, source, new_name,
+            source_path=_src_path, source_type=_src_env_type,
+        )
         self.clone_worker.progress.connect(
             lambda msg: self.clone_progress.setLabelText(f"⏳ {msg}")
         )
@@ -1219,12 +2064,15 @@ class MainWindow(QMainWindow):
         self.clone_progress.close()
         if success:
             self._refresh_env_list()
-            self.statusBar().showMessage(message)
-            QMessageBox.information(self, "Success", message)
+            self.statusBar().showMessage(f"✅ {message}")
+            if hasattr(self, "_cmd_panel_live"):
+                self._cmd_panel_live.setText(f"✅ {message}")
         else:
-            if "cancelled" not in message.lower():
-                QMessageBox.critical(self, "Error", message)
-            self.statusBar().showMessage(message)
+            # No popup — statusbar + live cmd box; full guidance is in the hints panel below
+            first_line = message.splitlines()[0] if message else "Clone failed"
+            self.statusBar().showMessage(f"❌ {first_line}")
+            if hasattr(self, "_cmd_panel_live"):
+                self._cmd_panel_live.setText(f"❌ {first_line}")
 
     def _on_clone_cancel(self):
         if hasattr(self, 'clone_worker') and self.clone_worker.isRunning():
@@ -1559,9 +2407,9 @@ class MainWindow(QMainWindow):
         name = self._get_selected_env_name()
         if not name:
             return
-        venv_path = self.venv_manager.base_dir / name
-        terminal_type = self.config.get("default_terminal", "")
-        open_terminal_at(venv_path, terminal_type)
+        self._log.info(f"_open_terminal: env={name!r}")
+        # Delegate to package_panel which handles all env types correctly
+        self.package_panel._open_terminal_here()
         self.statusBar().showMessage(f"Opened terminal for '{name}'")
 
     def _open_settings(self):
@@ -1839,8 +2687,10 @@ class MainWindow(QMainWindow):
             )
 
     def closeEvent(self, event):
-        self.config.set("window_width", self.width())
+        self.config.set("window_width",  self.width())
         self.config.set("window_height", self.height())
+        self.config.set("window_x", self.x())
+        self.config.set("window_y", self.y())
 
         # B45 fix: wait for ALL background workers before closing
         workers = []

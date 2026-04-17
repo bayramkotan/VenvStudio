@@ -387,17 +387,105 @@ def open_terminal_at(path: Path, terminal_type: str = "",
         elif env_type == "conda":
             from src.core.micromamba_installer import get_micromamba_exe
             mamba = get_micromamba_exe()
-            if mamba:
-                activate_cmd = f'"{mamba}" shell hook -s cmd.exe && "{mamba}" activate "{path}"'
+            mamba_str = str(mamba) if mamba else "micromamba"
+            # MAMBA_ROOT_PREFIX — use parent of the mamba executable or user home
+            import os as _os
+            mamba_root = _os.environ.get("MAMBA_ROOT_PREFIX", "")
+            if not mamba_root and mamba:
+                mamba_root = str(Path(mamba).parent.parent)
+                if not mamba_root or mamba_root == ".":
+                    mamba_root = str(Path.home() / "micromamba")
+            if not mamba_root:
+                mamba_root = str(Path.home() / "micromamba")
+
+            # Find the mamba_hook.bat (installed by 'micromamba shell init --shell cmd.exe')
+            # Default locations on Windows
+            def _find_mamba_hook_bat() -> Optional[str]:
+                candidates = [
+                    Path(_os.environ.get("APPDATA", "")) / "mamba" / "condabin" / "mamba_hook.bat",
+                    Path(_os.environ.get("LOCALAPPDATA", "")) / "mamba" / "condabin" / "mamba_hook.bat",
+                    Path(mamba_root) / "condabin" / "mamba_hook.bat",
+                    Path.home() / ".local" / "share" / "mamba" / "condabin" / "mamba_hook.bat",
+                ]
+                for c in candidates:
+                    if c.exists():
+                        return str(c)
+                return None
+
+            # Find Activate.ps1 for PowerShell hook (also installed by 'shell init')
+            def _find_mamba_hook_ps1() -> Optional[str]:
+                candidates = [
+                    Path(_os.environ.get("APPDATA", "")) / "mamba" / "condabin" / "Conda.psm1",
+                    Path(mamba_root) / "condabin" / "Conda.psm1",
+                ]
+                for c in candidates:
+                    if c.exists():
+                        return str(c.parent)  # parent dir of the module
+                return None
+
+            mamba_hook_bat = _find_mamba_hook_bat()
+
+            # Ensure shell init has been run — if hook files missing, run init once
+            if not mamba_hook_bat:
+                try:
+                    subprocess.run(
+                        [mamba_str, "shell", "init", "--shell", "cmd.exe",
+                         "--root-prefix", mamba_root],
+                        capture_output=True, text=True, timeout=30,
+                    )
+                    mamba_hook_bat = _find_mamba_hook_bat()
+                except Exception:
+                    pass
+                try:
+                    subprocess.run(
+                        [mamba_str, "shell", "init", "--shell", "powershell",
+                         "--root-prefix", mamba_root],
+                        capture_output=True, text=True, timeout=30,
+                    )
+                except Exception:
+                    pass
+
+            # cmd.exe activation: set MAMBA_ROOT_PREFIX, CALL mamba_hook.bat, activate
+            if mamba_hook_bat:
+                cmd_activate = (
+                    f'set "MAMBA_ROOT_PREFIX={mamba_root}" '
+                    f'&& CALL "{mamba_hook_bat}" '
+                    f'&& micromamba activate "{path}"'
+                )
             else:
-                activate_cmd = f'conda activate "{path}"'
+                # Fallback: run shell directly inside the env (no activation prompt, but paths work)
+                cmd_activate = f'"{mamba_str}" run -p "{path}" cmd /k'
+
+            # PowerShell activation: the init creates a profile hook; we just need to activate.
+            # Try loading Conda.psm1 if present, otherwise fall back to shell hook pipe.
+            ps_activate = (
+                f'$env:MAMBA_ROOT_PREFIX=\'{mamba_root}\'; '
+                f'try {{ (& \'{mamba_str}\' shell hook -s powershell) | Out-String | Invoke-Expression }} '
+                f'catch {{ Write-Host \'Hook failed, trying direct run...\'; & \'{mamba_str}\' run -p \'{path}\' powershell -NoExit; exit }}; '
+                f'micromamba activate \'{path}\''
+            )
+
             if terminal_type == "wt" and shutil.which("wt"):
-                return f'start wt -d "{path}" cmd /k "{activate_cmd}"'
+                # Windows Terminal with cmd (uses mamba_hook.bat which is most reliable)
+                if mamba_hook_bat:
+                    return f'start wt -d "{path}" cmd /k "{cmd_activate}"'
+                return f'start wt -d "{path}" powershell -NoExit -Command "{ps_activate}"'
             elif terminal_type == "git-bash" and shutil.which("bash"):
                 git_bash = shutil.which("bash")
-                return f'start "" "{git_bash}" --login -c "cd \'{path}\'"'
+                # Git-Bash: use bash-style hook
+                bash_activate = (
+                    f"export MAMBA_ROOT_PREFIX='{mamba_root}'; "
+                    f"eval \"$('{mamba_str}' shell hook -s bash)\"; "
+                    f"micromamba activate '{path}'"
+                )
+                return (f'start "" "{git_bash}" --login -c '
+                        f'"cd \'{path}\' && {bash_activate} && exec bash"')
+            elif terminal_type == "powershell":
+                return (f'start powershell -NoExit -Command '
+                        f'"Set-Location \'{path}\'; {ps_activate}"')
             else:
-                return f'start cmd /k "cd /d {path} && {activate_cmd}"'
+                # Default: cmd.exe via mamba_hook.bat (most reliable on Windows)
+                return f'start cmd /k "cd /d {path} && {cmd_activate}"'
 
         else:  # venv
             activate_bat = path / "Scripts" / "activate.bat"
@@ -445,9 +533,45 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                 return f"cd '{_poetry_venv}' && source '{_pa}'"
             return f"cd '{path}'"
         elif env_type == "conda":
-            _mamba = shutil.which("micromamba") or shutil.which("conda")
+            # Try micromamba first, fall back to conda
+            _mamba = shutil.which("micromamba")
+            _conda = shutil.which("conda") if not _mamba else None
+            # Detect mamba from common install paths if not in PATH
+            if not _mamba and not _conda:
+                import os as _os
+                for _candidate in (
+                    Path.home() / ".local" / "bin" / "micromamba",
+                    Path.home() / "micromamba" / "bin" / "micromamba",
+                    Path("/usr/local/bin/micromamba"),
+                    Path("/opt/homebrew/bin/micromamba"),
+                ):
+                    if _candidate.exists():
+                        _mamba = str(_candidate)
+                        break
+
             if _mamba:
-                return f"cd '{path}' && {_mamba} activate '{path}' 2>/dev/null || true"
+                import os as _os
+                mamba_root = _os.environ.get("MAMBA_ROOT_PREFIX", "")
+                if not mamba_root:
+                    mamba_root = str(Path(_mamba).parent.parent)
+                    if not mamba_root or mamba_root in ("", "."):
+                        mamba_root = str(Path.home() / "micromamba")
+                # bash/zsh hook → eval → activate
+                # Works on Linux, macOS, FreeBSD — any POSIX shell with eval
+                return (
+                    f"cd '{path}' && "
+                    f"export MAMBA_ROOT_PREFIX='{mamba_root}' && "
+                    f"eval \"$('{_mamba}' shell hook -s bash)\" && "
+                    f"micromamba activate '{path}'"
+                )
+            elif _conda:
+                # Fallback for full conda: try 'conda activate' after sourcing profile
+                return (
+                    f"cd '{path}' && "
+                    f"source \"$(dirname '{_conda}')/../etc/profile.d/conda.sh\" 2>/dev/null && "
+                    f"conda activate '{path}' 2>/dev/null || cd '{path}'"
+                )
+            # Nothing found — just cd
             return f"cd '{path}'"
         else:
             activate = path / "bin" / "activate"

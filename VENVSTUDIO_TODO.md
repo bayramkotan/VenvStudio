@@ -4,7 +4,129 @@
 
 ## 🔴 EN ÖNCELİKLİ (Sonraki Sprint)
 
-### 🎓 F52 — EĞİTİMSEL UYGULAMALAR MENÜSÜ
+### 🧠 F130 — AI / ML AKADEMİSİ (Learn Sayfasına Derinlik)
+**Hedef:** Çocukların bile anlayabileceği bir dille AI/ML kavramlarını görsel+interaktif anlatmak. Learn sayfasına yeni iki büyük bölüm eklenecek.
+
+#### Bölüm A — "Yapay Zeka Nedir?" (Konseptler)
+Her kavram bir topic card olur. Her kartta:
+- 👶 **Çocuk Modu** açıklaması (analoji + günlük hayattan örnek)
+- 🎓 **Detay** — teknik açıklama
+- 📊 **Görsel** — inline SVG/Canvas animasyonu veya matplotlib statik grafik (snippet içinde çalıştırılabilir)
+- 🧪 **Deneyin** — kullanıcı env'inde çalıştırabileceği mini kod
+- 🔗 **Daha fazla** — kaynak linkleri (3Blue1Brown, StatQuest, Distill.pub)
+
+**Konu listesi (25 kart):**
+1. Yapay Zeka (AI) nedir? — "Bilgisayara insan gibi düşünmeyi öğretmek"
+2. Makine Öğrenmesi (ML) — "Örneklerle öğrenme"
+3. Derin Öğrenme (DL) — "Beyin taklit eden katmanlı öğrenme"
+4. Sinir Ağı (Neural Network) — "Neuron benzeri düğümler zinciri"
+5. Supervised Learning — "Öğretmenli öğrenme (cevap anahtarı var)"
+6. Unsupervised Learning — "Öğretmensiz öğrenme (kendi grupla)"
+7. Reinforcement Learning — "Ödül/ceza ile öğrenme (oyun oynayarak)"
+8. Classification vs Regression — "Kategori vs sayı tahmini"
+9. Clustering — "Benzer şeyleri gruplama"
+10. Overfitting & Underfitting — "Ezberleme vs anlama"
+11. Train/Val/Test split — "Ders, ara sınav, final"
+12. Feature Engineering — "Doğru soruları sorma"
+13. Loss Function — "Ne kadar yanlış olduğu"
+14. Gradient Descent — "Eğimden aşağı yuvarlanma"
+15. Backpropagation — "Hatayı geriye yayma"
+16. Activation Functions — "Sinir hücresinin anahtarı" (ReLU, sigmoid, tanh görsel)
+17. CNN (Convolutional NN) — "Resmi anlayan ağ"
+18. RNN / LSTM — "Sırayı hatırlayan ağ"
+19. Transformer & Attention — "Neye dikkat edeceğini öğrenen ağ"
+20. Embedding — "Kelimeleri sayıya çevirme"
+21. Transfer Learning — "Başkasının öğrendiğini kullanma"
+22. Regularization (L1, L2, Dropout) — "Ezberlemeyi önleme"
+23. Confusion Matrix & Metrics — "Doğru/yanlış haritası" (precision, recall, F1)
+24. ROC & AUC — "Eşik ayarlama hikayesi"
+25. GAN / Diffusion — "Görüntü üreten AI"
+
+#### Bölüm B — "Temel Kütüphaneler" (Detaylı Rehberler)
+Her kütüphane için uzun bir dedike sayfa. Mevcut tek-snippet formatını **genişlet**:
+- Kütüphanenin **ne işe yaradığı** (1 paragraf + analoji)
+- **Kurulum** komutları (env-type'a göre: pip, conda, uv)
+- **5-10 alt konu**, her biri kod + görsel + çıktı
+- **İleri seviye** tarifler (performans, best practices)
+- **Ekosistem** — hangi diğer lib'lerle birlikte kullanılır
+- **Gerçek dünya örneği** — mini proje önerisi
+
+**20-30 kütüphane (öncelik sırası):**
+
+*Veri Temelleri*
+- NumPy — N-boyutlu array, broadcasting, linear algebra
+- Pandas — DataFrame, groupby, merge, pivot
+- Polars — Rust-powered, lazy evaluation
+
+*Görselleştirme*
+- Matplotlib — her şeyi çizmek
+- Seaborn — istatistiksel güzel plotlar
+- Plotly — interaktif, web için
+- Bokeh — büyük veri interaktif
+- Altair — grammar of graphics
+
+*Klasik ML*
+- Scikit-learn — hepsi (regression, classification, clustering, pipeline)
+- XGBoost — gradient boosting kralı
+- LightGBM — hızlı boosting
+- CatBoost — categorical için
+
+*Deep Learning*
+- PyTorch — dinamik, araştırma
+- TensorFlow / Keras — production
+- JAX — autodiff + GPU
+- Hugging Face Transformers — NLP ve öteki
+
+*Spesifik*
+- OpenCV — bilgisayarlı görü
+- Pillow — görüntü işleme
+- NLTK / spaCy — doğal dil
+- Gensim — topic modeling, word2vec
+- statsmodels — istatistik modelleri, ekonometri
+- Prophet — zaman serisi
+- Optuna — hyperparameter optimizasyon
+- MLflow — model lifecycle
+- Weights & Biases — deney takibi
+- Streamlit — model demosu
+- FastAPI — model serving
+- LangChain — LLM aplikasyonları
+- LlamaIndex — RAG
+
+#### Teknik Gereksinimler
+- [ ] Her topic card için **child_mode** ve **detail_mode** alanları şemaya eklenecek (mevcut `body` yanına)
+- [ ] **Toggle switch** — "👶 Çocuk Modu / 🎓 Detay" card başlığında
+- [ ] **Inline matplotlib** — `exec_in_env` butonu: topic kartından seçili env'de snippet çalıştırıp SVG/PNG output'u kart altında göster
+- [ ] **Animasyonlu SVG** — gradient descent, neural network forward pass, attention pattern için hazır SVG'ler
+- [ ] **Search bar** — "hangi kavramı öğrenmek istiyorsun?" — cross-category arama
+- [ ] **Progress tracking** — "26 / 50 kavram tamamlandı" — kullanıcının okuduğu kartları işaretle (opsiyonel, config'de sakla)
+- [ ] **Türkçe/İngilizce çeviri** — kavramların iki dilli açıklaması (tr_body, en_body)
+- [ ] Mini **quiz** her kategori sonunda — "3 soru: hangisi supervised learning örneğidir?"
+- [ ] **Linkler** — her konu için resmi doc + YouTube video + Distill.pub makale
+
+#### Dosya Yapısı
+- `src/gui/learn_page.py` → sadece UI + LEARN_CATEGORIES referansı
+- `src/gui/learn_content/` → YENİ DİZİN:
+  - `ai_concepts.py` — 25 kavram kartı
+  - `libs_data.py` — NumPy/Pandas/Polars
+  - `libs_viz.py` — Matplotlib/Seaborn/Plotly/Bokeh/Altair
+  - `libs_ml.py` — Scikit-learn/XGBoost/LightGBM/CatBoost
+  - `libs_dl.py` — PyTorch/TF/JAX/HuggingFace
+  - `libs_cv_nlp.py` — OpenCV/Pillow/NLTK/spaCy/Gensim
+  - `libs_misc.py` — statsmodels/Prophet/Optuna/MLflow/W&B
+  - `libs_serve.py` — Streamlit/FastAPI/LangChain/LlamaIndex
+  - `assets/svg/` — animasyonlu SVG'ler (gradient descent, NN, attention vs.)
+
+#### Yol Haritası
+- **v1.4.6X** — `learn_content/` dizini + ai_concepts.py (25 kavram, çocuk modu + detay, statik görseller)
+- **v1.4.6X+1** — libs_data/viz/ml (ilk 10 kütüphane detaylı)
+- **v1.4.6X+2** — libs_dl + libs_cv_nlp (DL + spesifik)
+- **v1.4.6X+3** — exec_in_env butonu (snippet çalıştır, çıktı göster)
+- **v1.4.6X+4** — Search bar + progress tracking + quiz
+- **v1.4.6X+5** — TR çeviri + animasyonlu SVG'ler
+
+---
+
+### 🎓 F52 — EĞİTİMSEL UYGULAMALAR MENÜSÜ (v1.4.60+)
 - [ ] Yeni "Learn" / "Education" sekmesi
 - [ ] Kod Blokları: ML, DL, Transformers, HuggingFace, Colab, NLP, CV, TS, Finance
 - [ ] Basitleştirilmiş kavramlar: venv, pip, PyPI, requirements.txt

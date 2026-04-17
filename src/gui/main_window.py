@@ -1035,20 +1035,146 @@ class MainWindow(QMainWindow):
         self._hide_cmd_panel()
 
     def _on_learn_install(self, packages: list):
-        """Called when Learn page requests package install — switch to Packages tab."""
-        from PySide6.QtWidgets import QMessageBox
+        """Called when Learn page requests package install.
+        Opens LearnInstallDialog to ask which env to use, then performs install.
+        """
         if not packages:
             return
-        pkg_str = ", ".join(packages)
-        reply = QMessageBox.question(
-            self, "Install Packages",
-            f"Install the following packages into the current environment?\n\n{pkg_str}",
-            QMessageBox.Yes | QMessageBox.No,
+
+        from src.gui.learn_install_dialog import LearnInstallDialog, LearnInstallDecision
+
+        # Build env list for dialog — list_venvs_fast returns List[VenvInfo]
+        envs_raw = self.venv_manager.list_venvs_fast(skip_calc=True)
+        envs_for_dialog = []
+        for info in envs_raw:
+            # VenvInfo is a dataclass with: name, path, python_version, env_type
+            try:
+                name = info.name
+                path = info.path          # Path object
+                env_type = info.env_type
+                py_ver = info.python_version or "?"
+            except AttributeError:
+                # Fallback for any legacy dict shape
+                if isinstance(info, dict):
+                    name = info.get("name", "")
+                    path = info.get("path")
+                    env_type = info.get("env_type", info.get("type", "venv"))
+                    py_ver = info.get("python_version", info.get("python", "?"))
+                else:
+                    continue
+            envs_for_dialog.append({
+                "name": name,
+                "path": path,
+                "type": env_type,
+                "python": py_ver,
+            })
+
+        # Current + default env
+        current_name = ""
+        try:
+            if hasattr(self, "package_panel") and self.package_panel.current_venv:
+                current_name = Path(self.package_panel.current_venv).name
+        except Exception:
+            pass
+        default_name = self.config.get("default_env", "") if hasattr(self, "config") else ""
+
+        # Show dialog
+        dlg = LearnInstallDialog(
+            packages=packages,
+            envs=envs_for_dialog,
+            current_env_name=current_name,
+            default_env_name=default_name,
+            colors=self._c() if callable(self._c) else self._c,
+            parent=self,
         )
-        if reply == QMessageBox.Yes:
+        result = dlg.exec()
+        # PySide6 6.x: QDialog.DialogCode.Accepted == 1
+        if result and dlg.decision is not None:
+            self._perform_learn_install(packages, dlg.decision)
+
+    def _perform_learn_install(self, packages: list, decision):
+        """Carry out the install based on LearnInstallDecision."""
+        from src.gui.learn_install_dialog import LearnInstallDecision
+        from PySide6.QtWidgets import QMessageBox
+        from PySide6.QtCore import QTimer
+        import logging as _log_mod
+        _lg = _log_mod.getLogger("venvstudio.main_window")
+
+        _lg.info(f"_perform_learn_install: mode={decision.mode!r} "
+                 f"env_name={decision.env_name!r} env_path={decision.env_path!r} "
+                 f"new_env_name={decision.new_env_name!r} switch={decision.switch_after} "
+                 f"packages={packages!r}")
+
+        def _do_install_with_panel(pkgs: list, tag: str):
+            """Call package_panel._install_packages with exception logging."""
+            _lg.info(f"[{tag}] calling package_panel._install_packages({pkgs!r})")
+            try:
+                if not hasattr(self, "package_panel"):
+                    _lg.error(f"[{tag}] package_panel not found on MainWindow")
+                    return
+                if not self.package_panel.pip_manager:
+                    _lg.error(f"[{tag}] package_panel.pip_manager is None — set_venv didn't complete")
+                    QMessageBox.warning(
+                        self, "Install failed",
+                        "Environment manager not initialized. Please select the env "
+                        "manually from the table and try again."
+                    )
+                    return
+                self.package_panel._install_packages(pkgs, hint_name=tag)
+                _lg.info(f"[{tag}] _install_packages returned")
+            except Exception as e:
+                _lg.exception(f"[{tag}] _install_packages raised")
+                QMessageBox.critical(self, "Install failed", f"{type(e).__name__}: {e}")
+
+        if decision.mode == LearnInstallDecision.MODE_NEW_VENV:
+            # Create env first, then install
+            self.statusBar().showMessage(f"Creating '{decision.new_env_name}'...")
+            ok, msg = self.venv_manager.create_venv(decision.new_env_name)
+            if not ok:
+                QMessageBox.warning(self, "Create failed", msg)
+                return
+            try:
+                self._refresh_env_list(force=True)
+            except Exception:
+                pass
+            new_path = self.venv_manager.base_dir / decision.new_env_name
             self._switch_page(0)
-            if hasattr(self, "package_panel"):
-                QTimer.singleShot(300, lambda: self.package_panel._install_packages_by_name(packages))
+            self.package_panel.set_venv(new_path)
+            QTimer.singleShot(600, lambda: _do_install_with_panel(packages, "learn-new"))
+            return
+
+        if decision.mode == LearnInstallDecision.MODE_PIPX:
+            pipx_env = None
+            for info in self.venv_manager.list_venvs_fast(skip_calc=True):
+                try:
+                    if info.env_type == "pipx":
+                        pipx_env = info.path
+                        break
+                except AttributeError:
+                    continue
+            if pipx_env is None:
+                QMessageBox.information(
+                    self, "pipx install",
+                    f"pipx environment not detected. Please install manually:\n\n"
+                    f"    pipx install {' '.join(packages)}"
+                )
+                return
+            self._switch_page(0)
+            self.package_panel.set_venv(pipx_env)
+            QTimer.singleShot(600, lambda: _do_install_with_panel(packages, "learn-pipx"))
+            return
+
+        # MODE_EXISTING — install into the chosen env
+        target_path = decision.env_path
+        if target_path is None:
+            QMessageBox.warning(self, "Install failed", "Target environment path is unknown.")
+            return
+
+        _lg.info(f"MODE_EXISTING: calling set_venv({target_path!r})")
+        if decision.switch_after:
+            self._switch_page(0)
+        self.package_panel.set_venv(target_path)
+        QTimer.singleShot(600, lambda: _do_install_with_panel(packages, "learn-existing"))
 
     def _on_ql_env_changed(self, idx):
         """Sol sidebar QL dropdown değişti — her şeyi sync et."""

@@ -3,6 +3,7 @@ learn_page.py — VenvStudio Learn Panel
 Sidebar Learn section: categories, snippets, links, Install & Try
 """
 from __future__ import annotations
+import re
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QScrollArea, QFrame, QTextEdit, QApplication, QSizePolicy,
@@ -10,6 +11,68 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, QTimer
 from PySide6.QtGui import QFont, QColor, QFontDatabase
+
+try:
+    from src.gui.syntax_highlighter import PythonHighlighter
+except Exception:
+    PythonHighlighter = None  # fallback — no highlighting available
+
+
+def _md_to_html(text: str, c: dict) -> str:
+    """Lightweight Markdown-ish formatter for Learn body / info / table cells.
+
+    Supported:
+        `code`        → <code> (colored inline)
+        **bold**      → <b>
+        *italic*      → <i>
+        Lines starting with "• ", "- ", "* "  → bullet (▸)
+        Lines starting with "1. ", "2. " ...   → numbered (accent color)
+        Blank lines → paragraph break
+    """
+    if not text:
+        return ""
+
+    # Escape HTML first, we add only safe tags back
+    html = (text.replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;"))
+
+    # Inline code `xxx`
+    code_bg = c.get("input_bg", "#1e1e2e")
+    code_fg = c.get("accent", "#89b4fa")
+    html = re.sub(
+        r"`([^`\n]+)`",
+        rf'<code style="background:{code_bg}; color:{code_fg}; '
+        rf'padding:1px 5px; border-radius:3px; '
+        rf'font-family:Consolas,Monaco,monospace; font-size:12px;">\1</code>',
+        html,
+    )
+    # Bold **xxx**
+    html = re.sub(r"\*\*([^\*\n]+)\*\*", r"<b>\1</b>", html)
+    # Italic *xxx*
+    html = re.sub(r"(?<!\*)\*([^\*\n]+)\*(?!\*)", r"<i>\1</i>", html)
+
+    lines = html.split("\n")
+    out: list = []
+    for line in lines:
+        stripped = line.lstrip()
+        if stripped.startswith(("• ", "- ", "* ")):
+            content = stripped[2:]
+            out.append(
+                f'<div style="margin-left:14px; text-indent:-10px;">▸ {content}</div>'
+            )
+        elif re.match(r"^\d+\. ", stripped):
+            num, _, rest = stripped.partition(". ")
+            out.append(
+                f'<div style="margin-left:14px; text-indent:-14px;">'
+                f'<b style="color:{c.get("accent","#89b4fa")};">{num}.</b> {rest}</div>'
+            )
+        elif stripped == "":
+            out.append("<br/>")
+        else:
+            out.append(line)
+    return "<br/>".join(out)
+
 
 # ── Learn Content ──────────────────────────────────────────────────────────────
 
@@ -27,12 +90,28 @@ LEARN_CATEGORIES = [
             {
                 "title": "What is a Virtual Environment?",
                 "body": (
-                    "A virtual environment is an isolated Python installation. "
+                    "A **virtual environment** is an isolated Python installation. "
                     "Each project gets its own packages — no conflicts, no mess.\n\n"
-                    "Think of it like a separate room for each project:\n"
-                    "• Room A has numpy 1.x for a legacy project\n"
-                    "• Room B has numpy 2.x for a new project\n"
+                    "Think of it like a *separate room* for each project:\n"
+                    "• Room A has `numpy 1.x` for a legacy project\n"
+                    "• Room B has `numpy 2.x` for a new project\n"
                     "Both coexist peacefully."
+                ),
+                "diagram": (
+                    "  System Python (your OS)\n"
+                    "  │\n"
+                    "  ├── 📁 projectA/venv/   ← numpy 1.26, pandas 2.0\n"
+                    "  │                         (isolated sandbox)\n"
+                    "  │\n"
+                    "  ├── 📁 projectB/venv/   ← numpy 2.1, polars 0.20\n"
+                    "  │                         (independent sandbox)\n"
+                    "  │\n"
+                    "  └── 📁 projectC/venv/   ← tensorflow 2.15\n"
+                    "                            (no conflicts with A or B)"
+                ),
+                "tip": (
+                    "Use **one virtual environment per project**. Never install "
+                    "packages globally with `sudo pip` — that can break system Python."
                 ),
                 "snippet": "# Create a new environment\npython -m venv myproject\n\n# Activate it (Linux/macOS)\nsource myproject/bin/activate\n\n# Activate it (Windows)\nmyproject\\Scripts\\activate\n\n# Install a package\npip install numpy\n\n# Deactivate\ndeactivate",
                 "links": [
@@ -43,8 +122,16 @@ LEARN_CATEGORIES = [
             {
                 "title": "pip & PyPI Basics",
                 "body": (
-                    "pip is Python's package manager. PyPI (Python Package Index) "
-                    "hosts 500,000+ packages you can install instantly."
+                    "**pip** is Python's package manager. "
+                    "**PyPI** (Python Package Index) hosts **500,000+** packages you can install instantly.\n\n"
+                    "Common workflow:\n"
+                    "1. Find a package on PyPI (or Google it)\n"
+                    "2. Run `pip install packagename`\n"
+                    "3. `import packagename` in your Python code"
+                ),
+                "note": (
+                    "pip comes **pre-installed** with Python 3.4+. "
+                    "You don't need to install it separately."
                 ),
                 "snippet": "# Install a package\npip install requests\n\n# Install specific version\npip install requests==2.31.0\n\n# Install from requirements.txt\npip install -r requirements.txt\n\n# List installed packages\npip list\n\n# Show package info\npip show requests\n\n# Uninstall\npip uninstall requests\n\n# Search PyPI at https://pypi.org",
                 "links": [
@@ -55,17 +142,30 @@ LEARN_CATEGORIES = [
             {
                 "title": "requirements.txt & Dependency Pinning",
                 "body": (
-                    "A requirements.txt file lists all packages your project needs. "
-                    "Share it with teammates so everyone has the same setup.\n\n"
-                    "Version operators:\n"
-                    "• ==    exact version\n"
-                    "• >=    minimum version\n"
-                    "• ~=    compatible release (same major.minor)\n"
-                    "• <     less than"
+                    "A `requirements.txt` file lists all packages your project needs. "
+                    "**Share it with teammates** so everyone has the same setup.\n\n"
+                    "**Version operators** let you control update flexibility:"
+                ),
+                "table": {
+                    "headers": ["Operator", "Example", "Meaning"],
+                    "rows": [
+                        ["`==`",   "`numpy==1.26.0`",  "Exact version only — safest for prod"],
+                        ["`>=`",   "`numpy>=1.26`",    "At least this version or newer"],
+                        ["`~=`",   "`numpy~=1.26.0`",  "Compatible release (same major.minor)"],
+                        ["`!=`",   "`numpy!=1.26.1`",  "Any version except this one"],
+                        ["`<`",    "`numpy<2.0`",      "Strictly less than"],
+                        ["(none)", "`numpy`",          "Latest — **not recommended** for prod"],
+                    ],
+                },
+                "warning": (
+                    "Never commit a `requirements.txt` from a **dirty env** (one with leftover "
+                    "experimental packages). Use `pip-tools` or `uv pip compile` for clean lockfiles "
+                    "with proper dependency resolution."
                 ),
                 "snippet": "# Generate requirements.txt from current env\npip freeze > requirements.txt\n\n# Install from requirements.txt\npip install -r requirements.txt\n\n# Example requirements.txt:\nnumpy==1.26.0\npandas>=2.0.0\nrequests~=2.31.0\nflask\n\n# Reproducible install with hashes (supply chain safety)\npip install --require-hashes -r requirements.txt",
                 "links": [
                     ("📖 pip freeze", "https://pip.pypa.io/en/stable/cli/pip_freeze/"),
+                    ("🔒 pip-tools", "https://github.com/jazzband/pip-tools"),
                 ],
             },
             {
@@ -77,6 +177,403 @@ LEARN_CATEGORIES = [
                 "snippet": "myproject/\n├── src/\n│   └── myproject/\n│       ├── __init__.py\n│       ├── core.py\n│       └── cli.py\n├── tests/\n│   └── test_core.py\n├── pyproject.toml      # project metadata + deps\n├── README.md\n├── LICENSE\n├── .gitignore\n└── requirements.txt    # or use pyproject deps\n\n# Install in editable mode for development\npip install -e .",
                 "links": [
                     ("📖 packaging.python.org", "https://packaging.python.org/en/latest/tutorials/packaging-projects/"),
+                ],
+            },
+        ],
+    },
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Python Temelleri
+    # ═══════════════════════════════════════════════════════════════════════════
+    {
+        "id": "python_basics",
+        "icon": "🐍",
+        "title": "Python Basics",
+        "desc": "Variables, types, control flow, functions, classes — the fundamentals",
+        "color": "#a6e3a1",
+        "topics": [
+            {
+                "title": "Variables & Data Types",
+                "body": (
+                    "Python has dynamic typing: the type of a variable is determined at runtime. "
+                    "You don't declare types — just assign.\n\n"
+                    "Built-in types:\n"
+                    "• `int`   — integers (unbounded)\n"
+                    "• `float` — floating point\n"
+                    "• `str`   — text (Unicode by default)\n"
+                    "• `bool`  — True / False\n"
+                    "• `list`  — mutable sequence\n"
+                    "• `tuple` — immutable sequence\n"
+                    "• `dict`  — hash map\n"
+                    "• `set`   — unique collection"
+                ),
+                "snippet": "# Numbers\nx = 42\npi = 3.14159\nbig = 10 ** 100  # unbounded ints\n\n# Strings\nname = \"Ada\"\nmsg = f\"Hello, {name}!\"    # f-string\nmulti = \"\"\"multi\nline\"\"\"\n\n# Collections\nfruits = [\"apple\", \"banana\"]       # list — mutable\ncoords = (3, 4)                     # tuple — immutable\nperson = {\"name\": \"Ada\", \"age\": 36} # dict\nunique = {1, 2, 3, 2}               # set → {1, 2, 3}\n\n# Type check\nprint(type(x))           # <class 'int'>\nprint(isinstance(x, int)) # True",
+                "tip": (
+                    "Use `f-strings` for all string formatting — they're faster and more readable "
+                    "than `%` or `.format()`."
+                ),
+                "links": [
+                    ("📖 Python Docs", "https://docs.python.org/3/tutorial/introduction.html"),
+                ],
+            },
+            {
+                "title": "Control Flow: if / for / while",
+                "body": (
+                    "Python uses **indentation** (4 spaces by convention) instead of braces "
+                    "to delimit blocks. No semicolons needed at line ends."
+                ),
+                "snippet": "# if / elif / else\nage = 18\nif age < 13:\n    tier = \"child\"\nelif age < 20:\n    tier = \"teen\"\nelse:\n    tier = \"adult\"\n\n# for with range\nfor i in range(5):       # 0, 1, 2, 3, 4\n    print(i)\n\n# for over a collection\nfor fruit in [\"apple\", \"banana\"]:\n    print(fruit)\n\n# enumerate — index + value\nfor idx, fruit in enumerate([\"a\", \"b\"]):\n    print(idx, fruit)\n\n# while\nn = 10\nwhile n > 0:\n    n -= 1\n\n# match (Python 3.10+)\nmatch status:\n    case 200: print(\"OK\")\n    case 404: print(\"Not Found\")\n    case _:   print(\"Unknown\")",
+                "note": (
+                    "Use `for item in iterable:` instead of C-style `for i in range(len(items))`. "
+                    "It's idiomatic and avoids off-by-one errors."
+                ),
+                "links": [
+                    ("📖 Control Flow", "https://docs.python.org/3/tutorial/controlflow.html"),
+                ],
+            },
+            {
+                "title": "Functions & Arguments",
+                "body": (
+                    "Functions are first-class objects — you can pass them around, return them, "
+                    "store them in variables. Arguments support **defaults**, `*args`, `**kwargs`."
+                ),
+                "snippet": "# Basic function\ndef greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\n# Default arguments\ndef greet(name: str = \"world\") -> str:\n    return f\"Hello, {name}!\"\n\n# Keyword args\nprint(greet(name=\"Ada\"))\n\n# Variable arguments\ndef sum_all(*numbers):\n    return sum(numbers)\nsum_all(1, 2, 3, 4)  # 10\n\n# Keyword variadic\ndef make_dict(**kwargs):\n    return kwargs\nmake_dict(a=1, b=2)  # {'a': 1, 'b': 2}\n\n# Lambda (anonymous)\nsquare = lambda x: x ** 2\n\n# Type hints (recommended)\ndef add(a: int, b: int) -> int:\n    return a + b",
+                "warning": (
+                    "**Never use mutable default arguments** like `def foo(items=[])`. "
+                    "The default is created ONCE and reused across calls. Use `None` and `items = []` inside."
+                ),
+                "links": [
+                    ("📖 Functions", "https://docs.python.org/3/tutorial/controlflow.html#defining-functions"),
+                ],
+            },
+            {
+                "title": "Classes & Objects (OOP)",
+                "body": (
+                    "Python supports object-oriented programming with classes. `self` refers to "
+                    "the instance; `cls` refers to the class. Constructor is `__init__`."
+                ),
+                "snippet": "class Animal:\n    \"\"\"Base class for animals.\"\"\"\n\n    # Class variable (shared)\n    kingdom = \"Animalia\"\n\n    def __init__(self, name: str, age: int):\n        # Instance variables\n        self.name = name\n        self.age = age\n\n    def speak(self) -> str:\n        return \"...\"\n\n    def __repr__(self) -> str:\n        return f\"{type(self).__name__}({self.name!r}, {self.age})\"\n\n\nclass Dog(Animal):\n    def speak(self) -> str:\n        return \"Woof!\"\n\n\nclass Cat(Animal):\n    def speak(self) -> str:\n        return \"Meow!\"\n\n\nrex = Dog(\"Rex\", 5)\nprint(rex)              # Dog('Rex', 5)\nprint(rex.speak())       # Woof!\nprint(isinstance(rex, Animal))  # True",
+                "tip": (
+                    "Use `@dataclass` for data-heavy classes — auto-generates `__init__`, "
+                    "`__repr__`, `__eq__` for you."
+                ),
+                "links": [
+                    ("📖 Classes", "https://docs.python.org/3/tutorial/classes.html"),
+                ],
+            },
+            {
+                "title": "Dataclasses",
+                "body": (
+                    "`@dataclass` decorator auto-generates boilerplate for data-carrier classes. "
+                    "Much cleaner than writing `__init__`, `__repr__`, `__eq__` manually."
+                ),
+                "snippet": "from dataclasses import dataclass, field\nfrom typing import List\n\n@dataclass\nclass Point:\n    x: float\n    y: float\n    label: str = \"origin\"\n\np = Point(1.0, 2.0)\nprint(p)  # Point(x=1.0, y=2.0, label='origin')\n\n# Mutable defaults need field(default_factory=...)\n@dataclass\nclass Config:\n    name: str\n    tags: List[str] = field(default_factory=list)\n\n# Frozen (immutable) dataclass\n@dataclass(frozen=True)\nclass Coord:\n    x: int\n    y: int\n\n# Can now use as dict key / in set\npoints = {Coord(0, 0), Coord(1, 1)}",
+                "packages": ["dataclasses"],
+                "links": [
+                    ("📖 dataclasses", "https://docs.python.org/3/library/dataclasses.html"),
+                ],
+            },
+            {
+                "title": "Exception Handling",
+                "body": (
+                    "Use `try`/`except`/`else`/`finally` to handle errors gracefully. "
+                    "Python has a rich exception hierarchy — catch specifically, not broadly."
+                ),
+                "snippet": "# Basic try/except\ntry:\n    result = 10 / 0\nexcept ZeroDivisionError as e:\n    print(f\"Math error: {e}\")\n\n# Multiple exceptions\ntry:\n    data = json.loads(user_input)\nexcept (json.JSONDecodeError, TypeError) as e:\n    print(f\"Bad input: {e}\")\n\n# finally always runs\ntry:\n    f = open(\"data.txt\")\n    data = f.read()\nfinally:\n    f.close()\n\n# Better: context manager\nwith open(\"data.txt\") as f:\n    data = f.read()\n# auto-closed, even on exception\n\n# Custom exception\nclass ValidationError(Exception):\n    pass\n\nraise ValidationError(\"Invalid email format\")",
+                "warning": (
+                    "**Never use bare `except:`** — it catches `KeyboardInterrupt` and `SystemExit`, "
+                    "hiding real bugs. Always specify the exception type."
+                ),
+                "links": [
+                    ("📖 Errors", "https://docs.python.org/3/tutorial/errors.html"),
+                ],
+            },
+            {
+                "title": "List / Dict / Set Comprehensions",
+                "body": (
+                    "Comprehensions are concise, readable ways to transform collections. "
+                    "Much faster than equivalent `for` loops."
+                ),
+                "snippet": "# List comprehension\nsquares = [x ** 2 for x in range(10)]\n# [0, 1, 4, 9, 16, 25, 36, 49, 64, 81]\n\n# With filter\nevens = [x for x in range(20) if x % 2 == 0]\n\n# Nested\nmatrix = [[i * j for j in range(5)] for i in range(5)]\n\n# Dict comprehension\nsquared = {x: x ** 2 for x in range(5)}\n# {0: 0, 1: 1, 2: 4, 3: 9, 4: 16}\n\n# Set comprehension\nunique_lens = {len(word) for word in [\"hi\", \"bye\", \"yo\"]}\n# {2, 3}\n\n# Generator expression (lazy, memory-efficient)\ntotal = sum(x ** 2 for x in range(1_000_000))",
+                "tip": (
+                    "Prefer **generator expressions** `(x for x in ...)` over list comprehensions "
+                    "when you just iterate once — saves memory for large data."
+                ),
+                "links": [
+                    ("📖 Comprehensions", "https://docs.python.org/3/tutorial/datastructures.html#list-comprehensions"),
+                ],
+            },
+            {
+                "title": "Decorators",
+                "body": (
+                    "Decorators wrap a function to add behavior without modifying its code. "
+                    "Common uses: **logging, timing, caching, authentication, retry logic**."
+                ),
+                "snippet": "import functools\nimport time\n\ndef timer(func):\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        start = time.perf_counter()\n        result = func(*args, **kwargs)\n        elapsed = time.perf_counter() - start\n        print(f\"{func.__name__}: {elapsed:.3f}s\")\n        return result\n    return wrapper\n\n@timer\ndef slow():\n    time.sleep(1)\n    return 42\n\nslow()  # slow: 1.001s → 42\n\n# Built-in @functools.lru_cache — memoization\n@functools.lru_cache(maxsize=128)\ndef fib(n: int) -> int:\n    if n < 2: return n\n    return fib(n-1) + fib(n-2)\n\nfib(100)  # instant (would be slow without cache)",
+                "links": [
+                    ("📖 Decorators", "https://peps.python.org/pep-0318/"),
+                    ("📖 functools", "https://docs.python.org/3/library/functools.html"),
+                ],
+            },
+            {
+                "title": "Generators & Iterators",
+                "body": (
+                    "Generators produce values **lazily** using `yield`. Iterating over a "
+                    "generator doesn't load all values into memory — perfect for huge datasets."
+                ),
+                "snippet": "# Generator function\ndef count_up_to(n):\n    i = 0\n    while i < n:\n        yield i\n        i += 1\n\nfor x in count_up_to(5):\n    print(x)  # 0, 1, 2, 3, 4\n\n# Read a huge log file line-by-line (O(1) memory)\ndef read_log(path):\n    with open(path) as f:\n        for line in f:\n            if \"ERROR\" in line:\n                yield line\n\n# Consume\nerrors = list(read_log(\"app.log\"))\n\n# Infinite generator\ndef fibonacci():\n    a, b = 0, 1\n    while True:\n        yield a\n        a, b = b, a + b\n\nimport itertools\nfirst_10 = list(itertools.islice(fibonacci(), 10))",
+                "tip": (
+                    "Use `itertools` for powerful iterator combinators: `chain`, `islice`, "
+                    "`groupby`, `product`, `combinations`, `takewhile`, `accumulate`."
+                ),
+                "links": [
+                    ("📖 Generators", "https://docs.python.org/3/howto/functional.html#generators"),
+                    ("📖 itertools", "https://docs.python.org/3/library/itertools.html"),
+                ],
+            },
+            {
+                "title": "Type Hints & typing",
+                "body": (
+                    "Type hints make code self-documenting and enable static checkers like **mypy** "
+                    "to catch bugs before runtime. Hints have zero runtime cost."
+                ),
+                "snippet": "from typing import List, Dict, Optional, Union, Callable, Tuple\nfrom pathlib import Path\n\n# Basic hints\ndef greet(name: str, times: int = 1) -> str:\n    return f\"Hello {name}\\n\" * times\n\n# Collections\ndef parse(nums: List[int]) -> Dict[str, int]:\n    return {\"sum\": sum(nums), \"count\": len(nums)}\n\n# Optional = Union[X, None]\ndef find_user(uid: int) -> Optional[dict]:\n    ...\n\n# Modern syntax (Python 3.10+)\ndef find_user(uid: int) -> dict | None:\n    ...\n\n# Callable\ndef apply(fn: Callable[[int], int], x: int) -> int:\n    return fn(x)\n\n# Tuple with fixed types\ndef min_max(nums: List[int]) -> Tuple[int, int]:\n    return min(nums), max(nums)",
+                "packages": ["mypy"],
+                "links": [
+                    ("📖 typing", "https://docs.python.org/3/library/typing.html"),
+                    ("🔍 mypy", "https://mypy.readthedocs.io/"),
+                ],
+            },
+            {
+                "title": "Modules & Packages",
+                "body": (
+                    "A **module** is a `.py` file. A **package** is a directory with `__init__.py` "
+                    "(or PEP 420 namespace). Imports let you reuse code across files."
+                ),
+                "diagram": (
+                    "  my_package/\n"
+                    "  ├── __init__.py        ← marks directory as package\n"
+                    "  ├── main.py\n"
+                    "  ├── utils.py\n"
+                    "  └── submodule/\n"
+                    "      ├── __init__.py\n"
+                    "      └── helpers.py\n"
+                    "\n"
+                    "  # From main.py:\n"
+                    "  from .utils import clean\n"
+                    "  from .submodule.helpers import fetch"
+                ),
+                "snippet": "# Import a module\nimport math\nprint(math.pi)\n\n# Import specific name\nfrom math import pi, sqrt\n\n# Alias\nimport numpy as np\n\n# Relative import (inside a package)\nfrom .utils import clean\nfrom ..common import config\n\n# Guarded main block\nif __name__ == \"__main__\":\n    # Only runs when file is executed directly,\n    # NOT when imported\n    main()",
+                "note": (
+                    "The `if __name__ == \"__main__\":` idiom lets a file work both as a "
+                    "standalone script AND as an importable module."
+                ),
+                "links": [
+                    ("📖 Modules", "https://docs.python.org/3/tutorial/modules.html"),
+                ],
+            },
+            {
+                "title": "async / await (asyncio)",
+                "body": (
+                    "`async`/`await` enables **concurrent** I/O without threads. Perfect for network "
+                    "requests, web servers, database queries — anything that waits a lot."
+                ),
+                "snippet": "import asyncio\nimport aiohttp  # pip install aiohttp\n\nasync def fetch(session, url):\n    async with session.get(url) as resp:\n        return await resp.text()\n\nasync def main():\n    async with aiohttp.ClientSession() as session:\n        urls = [\n            \"https://python.org\",\n            \"https://pypi.org\",\n            \"https://github.com\",\n        ]\n        # Concurrent fetches\n        results = await asyncio.gather(\n            *(fetch(session, u) for u in urls)\n        )\n        for url, html in zip(urls, results):\n            print(f\"{url}: {len(html)} bytes\")\n\nasyncio.run(main())",
+                "tip": (
+                    "Use `asyncio.gather()` to run coroutines concurrently. "
+                    "`await` one-by-one runs sequentially — defeats the point."
+                ),
+                "packages": ["aiohttp"],
+                "links": [
+                    ("📖 asyncio", "https://docs.python.org/3/library/asyncio.html"),
+                ],
+            },
+        ],
+    },
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # İstatistik & Matematik (Data Science Foundations)
+    # ═══════════════════════════════════════════════════════════════════════════
+    {
+        "id": "stats_math",
+        "icon": "📐",
+        "title": "Statistics & Math",
+        "desc": "Probability, distributions, linear algebra, calculus — DS foundations",
+        "color": "#fab387",
+        "topics": [
+            {
+                "title": "Descriptive Statistics",
+                "body": (
+                    "Summarize data with **central tendency** (mean, median, mode) and "
+                    "**dispersion** (variance, std deviation, IQR). These are the building "
+                    "blocks of all data analysis."
+                ),
+                "snippet": "import numpy as np\nimport statistics\n\ndata = [23, 45, 67, 12, 89, 34, 56, 78, 90, 11]\n\n# Central tendency\nmean   = np.mean(data)      # 50.5\nmedian = np.median(data)    # 50.5\nmode   = statistics.mode([1,2,2,3,4])  # 2\n\n# Dispersion\nvariance = np.var(data, ddof=1)   # sample variance\nstd      = np.std(data, ddof=1)   # sample std\niqr      = np.percentile(data, 75) - np.percentile(data, 25)\n\n# Quartiles\nq1, q2, q3 = np.percentile(data, [25, 50, 75])\n\n# Full summary\nimport pandas as pd\npd.Series(data).describe()\n# count, mean, std, min, 25%, 50%, 75%, max",
+                "table": {
+                    "headers": ["Metric", "When to use", "Robust to outliers?"],
+                    "rows": [
+                        ["Mean",      "Symmetric data",             "❌ No"],
+                        ["Median",    "Skewed data, outliers",       "✅ Yes"],
+                        ["Mode",      "Categorical, most-frequent",  "✅ Yes"],
+                        ["Std dev",   "Symmetric data",             "❌ No"],
+                        ["IQR",       "Skewed data, outliers",       "✅ Yes"],
+                    ],
+                },
+                "packages": ["numpy", "pandas"],
+                "links": [
+                    ("📖 NumPy stats", "https://numpy.org/doc/stable/reference/routines.statistics.html"),
+                ],
+            },
+            {
+                "title": "Probability Distributions",
+                "body": (
+                    "Distributions model how data is spread. **Normal** (Gaussian), **Poisson**, "
+                    "**Binomial**, **Exponential** cover most real-world cases. Use `scipy.stats`."
+                ),
+                "snippet": "from scipy import stats\nimport numpy as np\nimport matplotlib.pyplot as plt\n\n# Normal distribution: N(μ=0, σ=1)\nx = np.linspace(-4, 4, 200)\npdf = stats.norm.pdf(x, loc=0, scale=1)\n\nplt.plot(x, pdf)\nplt.title(\"Standard Normal PDF\")\nplt.xlabel(\"z\")\nplt.ylabel(\"density\")\nplt.show()\n\n# Sample from distributions\nnormal_samples  = stats.norm.rvs(loc=10, scale=2, size=1000)\nuniform_samples = stats.uniform.rvs(0, 1, size=1000)\npoisson_samples = stats.poisson.rvs(mu=5, size=1000)\n\n# Probability (P(X <= x))\nstats.norm.cdf(1.96)    # 0.975 (two-tailed critical value)\n\n# Inverse CDF (quantile function)\nstats.norm.ppf(0.95)    # 1.645",
+                "table": {
+                    "headers": ["Distribution", "Models", "Parameters"],
+                    "rows": [
+                        ["Normal",      "Heights, IQ scores, measurement error", "μ (mean), σ (std)"],
+                        ["Binomial",    "# successes in N trials",                "n, p"],
+                        ["Poisson",     "Count of events per interval",           "λ (rate)"],
+                        ["Exponential", "Time between events",                    "λ (rate)"],
+                        ["Uniform",     "Equal probability in [a, b]",            "a, b"],
+                        ["Beta",        "Probabilities, proportions",             "α, β"],
+                    ],
+                },
+                "packages": ["scipy", "matplotlib"],
+                "links": [
+                    ("📖 scipy.stats", "https://docs.scipy.org/doc/scipy/reference/stats.html"),
+                ],
+            },
+            {
+                "title": "Hypothesis Testing",
+                "body": (
+                    "Hypothesis tests answer: **\"is this effect real or just chance?\"** "
+                    "Standard flow:\n"
+                    "1. Null hypothesis `H₀` (no effect)\n"
+                    "2. Alternative `H₁` (effect exists)\n"
+                    "3. Compute test statistic\n"
+                    "4. Get p-value — if `p < α` (usually 0.05), reject `H₀`"
+                ),
+                "snippet": "from scipy import stats\nimport numpy as np\n\n# ── t-test: are two group means different? ──\ngroup_a = np.random.normal(100, 15, 50)  # IQ test group A\ngroup_b = np.random.normal(105, 15, 50)  # group B\n\nt_stat, p_value = stats.ttest_ind(group_a, group_b)\nprint(f\"t = {t_stat:.3f}, p = {p_value:.4f}\")\nif p_value < 0.05:\n    print(\"Groups are significantly different\")\n\n# ── Chi-squared: categorical independence ──\nobserved = [[50, 30], [20, 60]]  # e.g. gender × preference\nchi2, p, dof, expected = stats.chi2_contingency(observed)\n\n# ── ANOVA: compare 3+ group means ──\nf_stat, p = stats.f_oneway(group_a, group_b, group_c)\n\n# ── Shapiro-Wilk: is data normal? ──\nstat, p = stats.shapiro(group_a)  # p > 0.05 → normal",
+                "warning": (
+                    "`p < 0.05` does **not** mean a result is practically important. "
+                    "With huge samples, trivial effects get tiny p-values. Always report "
+                    "**effect size** (Cohen's d, η²) alongside p-values."
+                ),
+                "packages": ["scipy"],
+                "links": [
+                    ("📖 scipy.stats tests", "https://docs.scipy.org/doc/scipy/reference/stats.html#statistical-tests"),
+                ],
+            },
+            {
+                "title": "Linear Algebra with NumPy",
+                "body": (
+                    "ML, graphics, simulations — all built on matrices and vectors. "
+                    "`numpy.linalg` gives you the essentials."
+                ),
+                "snippet": "import numpy as np\n\n# Vectors and matrices\nv = np.array([1, 2, 3])\nM = np.array([[1, 2], [3, 4]])\n\n# Basic ops\nM.T                  # transpose\nM @ M                # matrix multiply (Python 3.5+ @ operator)\nnp.linalg.inv(M)     # inverse\nnp.linalg.det(M)     # determinant → -2.0\nnp.trace(M)          # trace → 5\n\n# Dot product\nnp.dot(v, v)         # 14\nv @ v                # same — 14\n\n# Eigenvalues / eigenvectors\neigvals, eigvecs = np.linalg.eig(M)\n\n# Solve Ax = b\nA = np.array([[1, 2], [3, 4]])\nb = np.array([5, 11])\nx = np.linalg.solve(A, b)   # [-1. , 3.]\n\n# SVD — foundation of PCA, recommenders\nU, s, Vt = np.linalg.svd(M)\n\n# Norms\nnp.linalg.norm(v)        # L2 norm\nnp.linalg.norm(v, ord=1) # L1 norm",
+                "tip": (
+                    "NumPy broadcasts scalars and compatible shapes — no explicit loops needed. "
+                    "**Avoid Python for-loops over NumPy arrays** — they're 100× slower."
+                ),
+                "packages": ["numpy"],
+                "links": [
+                    ("📖 numpy.linalg", "https://numpy.org/doc/stable/reference/routines.linalg.html"),
+                ],
+            },
+            {
+                "title": "Calculus with SymPy",
+                "body": (
+                    "**SymPy** does symbolic math — exact derivatives, integrals, limits. "
+                    "Unlike NumPy (numeric), SymPy returns formulas."
+                ),
+                "snippet": "import sympy as sp\n\n# Symbols\nx, y = sp.symbols('x y')\n\n# Define a function\nf = x**3 - 2*x**2 + x - 1\n\n# Derivative\nf_prime = sp.diff(f, x)\n# 3x² - 4x + 1\n\n# Integral\nF = sp.integrate(f, x)\n# x⁴/4 - 2x³/3 + x²/2 - x\n\n# Definite integral\nsp.integrate(f, (x, 0, 2))    # -2/3\n\n# Limit\nsp.limit(sp.sin(x)/x, x, 0)   # 1\n\n# Solve equations\nsp.solve(f, x)                # roots of x³-2x²+x-1=0\nsp.solve([x + y - 5, x - y - 1], [x, y])  # {x: 3, y: 2}\n\n# Taylor series\nsp.series(sp.cos(x), x, 0, 6)\n# 1 - x²/2 + x⁴/24 + O(x⁶)\n\n# Pretty print\nsp.pprint(f_prime)",
+                "packages": ["sympy"],
+                "links": [
+                    ("📖 SymPy", "https://docs.sympy.org/"),
+                ],
+            },
+            {
+                "title": "Bayes' Theorem & Bayesian Thinking",
+                "body": (
+                    "Bayes' theorem updates beliefs with evidence:\n\n"
+                    "**P(A|B) = P(B|A) × P(A) / P(B)**\n\n"
+                    "Read as: *posterior ∝ likelihood × prior*. Core to spam filters, "
+                    "medical diagnosis, A/B testing, and Bayesian ML."
+                ),
+                "snippet": "# Example: disease test problem\n# Disease has 1% prevalence\n# Test: 95% sensitivity, 90% specificity\n# You test positive. What's the probability you have it?\n\nprior            = 0.01        # P(disease)\nsensitivity      = 0.95        # P(positive | disease)\nfalse_positive   = 0.10        # P(positive | no disease)\n\n# Total probability of positive test\np_positive = (\n    sensitivity * prior\n    + false_positive * (1 - prior)\n)\n\n# Bayes' theorem\nposterior = sensitivity * prior / p_positive\nprint(f\"P(disease | positive) = {posterior:.1%}\")\n# Result: ~8.8%, not 95% — counterintuitive!\n\n# Library: pymc for Bayesian modeling\n# pip install pymc\nimport pymc as pm\nwith pm.Model():\n    p = pm.Beta('p', alpha=1, beta=1)  # uniform prior\n    obs = pm.Binomial('obs', n=100, p=p, observed=60)\n    trace = pm.sample(1000)",
+                "note": (
+                    "The 'disease test paradox': even with a 95% accurate test, testing positive "
+                    "for a rare disease often means you probably DON'T have it. Always consider the prior."
+                ),
+                "packages": ["pymc"],
+                "links": [
+                    ("📖 PyMC", "https://www.pymc.io/"),
+                    ("📺 3Blue1Brown", "https://www.youtube.com/watch?v=HZGCoVF3YvM"),
+                ],
+            },
+            {
+                "title": "Linear Regression (OLS)",
+                "body": (
+                    "**Linear regression** fits `y = β₀ + β₁x + ε` to data. Foundation of "
+                    "predictive modeling and econometrics. Three ways in Python:"
+                ),
+                "snippet": "import numpy as np\nimport pandas as pd\n\n# ── Option 1: NumPy from scratch ──\nx = np.array([1, 2, 3, 4, 5])\ny = np.array([2.1, 3.9, 6.1, 8.0, 10.2])\n\nslope, intercept = np.polyfit(x, y, deg=1)\nprint(f\"y = {slope:.2f}x + {intercept:.2f}\")\n\n# ── Option 2: scikit-learn ──\nfrom sklearn.linear_model import LinearRegression\nX = x.reshape(-1, 1)\nmodel = LinearRegression().fit(X, y)\nprint(f\"slope={model.coef_[0]:.3f}, intercept={model.intercept_:.3f}\")\nprint(f\"R² = {model.score(X, y):.4f}\")\n\n# ── Option 3: statsmodels (best for inference) ──\nimport statsmodels.api as sm\nX_sm = sm.add_constant(x)   # add intercept column\nresult = sm.OLS(y, X_sm).fit()\nprint(result.summary())     # full stats, p-values, CIs",
+                "tip": (
+                    "Use **statsmodels** when you need p-values, confidence intervals, and "
+                    "diagnostics. Use **sklearn** when you need prediction in an ML pipeline."
+                ),
+                "packages": ["scikit-learn", "statsmodels"],
+                "links": [
+                    ("📖 statsmodels", "https://www.statsmodels.org/"),
+                    ("📖 sklearn linear", "https://scikit-learn.org/stable/modules/linear_model.html"),
+                ],
+            },
+            {
+                "title": "PCA — Principal Component Analysis",
+                "body": (
+                    "PCA reduces high-dimensional data to a few components that capture the most "
+                    "variance. Used for **visualization, compression, denoising**."
+                ),
+                "snippet": "import numpy as np\nfrom sklearn.decomposition import PCA\nfrom sklearn.datasets import load_iris\nimport matplotlib.pyplot as plt\n\n# Iris: 4D → 2D\niris = load_iris()\nX, y = iris.data, iris.target\n\npca = PCA(n_components=2)\nX_2d = pca.fit_transform(X)\n\nprint(f\"Explained variance: {pca.explained_variance_ratio_}\")\n# e.g. [0.729, 0.229] — first 2 components cover 95.8%\n\n# Plot\nfor cls in range(3):\n    mask = y == cls\n    plt.scatter(X_2d[mask, 0], X_2d[mask, 1],\n                label=iris.target_names[cls])\nplt.xlabel('PC1')\nplt.ylabel('PC2')\nplt.legend()\nplt.show()\n\n# Key: components are orthogonal, ordered by variance\nprint(pca.components_)   # 2×4 matrix of loadings",
+                "warning": (
+                    "**Always standardize** features before PCA if they have different units "
+                    "(age in years vs. income in $). Use `StandardScaler` first."
+                ),
+                "packages": ["scikit-learn", "matplotlib"],
+                "links": [
+                    ("📖 sklearn PCA", "https://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html"),
+                ],
+            },
+            {
+                "title": "Monte Carlo Simulation",
+                "body": (
+                    "**Monte Carlo** estimates results via random sampling. Powerful for integrals, "
+                    "risk analysis, physics simulations, option pricing, game AI."
+                ),
+                "snippet": "import numpy as np\n\n# ── Estimate π using random points in a unit square ──\nN = 1_000_000\nx = np.random.uniform(-1, 1, N)\ny = np.random.uniform(-1, 1, N)\n\ninside_circle = (x**2 + y**2) <= 1\npi_est = 4 * inside_circle.mean()\nprint(f\"π ≈ {pi_est:.5f}\")   # ~3.14159\n\n# ── Option pricing (Black-Scholes via MC) ──\nS0 = 100     # spot price\nK  = 105     # strike\nT  = 1       # years\nr  = 0.05    # risk-free rate\nsigma = 0.2  # volatility\n\nN = 100_000\nZ = np.random.standard_normal(N)\nST = S0 * np.exp((r - 0.5 * sigma**2) * T + sigma * np.sqrt(T) * Z)\npayoff = np.maximum(ST - K, 0)\ncall_price = np.exp(-r * T) * payoff.mean()\nprint(f\"Call option price ≈ ${call_price:.2f}\")\n\n# ── Confidence interval of the estimate ──\nstd_err = payoff.std() / np.sqrt(N)\nprint(f\"95% CI: ±{1.96 * std_err:.3f}\")",
+                "tip": (
+                    "Monte Carlo error decreases as `1/√N`. To halve the error, you need **4×** more samples. "
+                    "Use **variance reduction** (antithetic variates, control variates) for faster convergence."
+                ),
+                "packages": ["numpy"],
+                "links": [
+                    ("📖 NumPy random", "https://numpy.org/doc/stable/reference/random/index.html"),
+                ],
+            },
+            {
+                "title": "Optimization (scipy.optimize)",
+                "body": (
+                    "Find minimum/maximum of a function — critical for ML (loss), "
+                    "engineering (design), operations (cost)."
+                ),
+                "snippet": "from scipy import optimize\nimport numpy as np\n\n# ── Minimize a scalar function ──\ndef f(x):\n    return (x - 2)**2 + 3\n\nresult = optimize.minimize(f, x0=0)\nprint(result.x)    # [2.] — minimum at x=2\nprint(result.fun)  # 3.0 — min value\n\n# ── Multivariate: Rosenbrock banana function ──\ndef rosenbrock(x):\n    return sum(100 * (x[1:] - x[:-1]**2)**2 + (1 - x[:-1])**2)\n\nres = optimize.minimize(rosenbrock, x0=[0, 0, 0],\n                         method='Nelder-Mead')\nprint(res.x)     # [1., 1., 1.]\n\n# ── Find a root (where f(x)=0) ──\nroot = optimize.brentq(lambda x: x**2 - 2, 0, 2)\nprint(root)      # √2 ≈ 1.41421\n\n# ── Curve fitting ──\ndef model(x, a, b):\n    return a * np.exp(-b * x)\n\nxdata = np.linspace(0, 4, 50)\nydata = 2.5 * np.exp(-0.8 * xdata) + 0.2 * np.random.randn(50)\nparams, _ = optimize.curve_fit(model, xdata, ydata)\nprint(f\"Fitted: a={params[0]:.3f}, b={params[1]:.3f}\")",
+                "packages": ["scipy"],
+                "links": [
+                    ("📖 scipy.optimize", "https://docs.scipy.org/doc/scipy/reference/optimize.html"),
                 ],
             },
         ],
@@ -863,15 +1360,116 @@ class TopicCard(QFrame):
         sep.setStyleSheet(f"background: {c['border']}; max-height: 1px; border: none;")
         bl.addWidget(sep)
 
-        # Description
+        # Description with inline markdown (bold, italic, code, bullets, numbers)
         if self._topic.get("body"):
-            body_lbl = QLabel(self._topic["body"])
+            body_lbl = QLabel(_md_to_html(self._topic["body"], c))
             body_lbl.setWordWrap(True)
+            body_lbl.setTextFormat(Qt.RichText)
+            body_lbl.setOpenExternalLinks(True)
             body_lbl.setStyleSheet(
-                f"color: {c.get('fg_muted', '#a6adc8')}; font-size: 15px; "
-                "border: none; line-height: 1.6; padding: 2px 0;"
+                f"color: {c.get('fg', '#cdd6f4')}; font-size: 15px; "
+                "border: none; line-height: 1.6; padding: 2px 0; background: transparent;"
             )
             bl.addWidget(body_lbl)
+
+        # ── Optional: tip / note / warning info callouts ────────────────
+        for kind, icon, bg_color, border_color, title_text in (
+            ("tip",     "💡", "#1e2a1e", "#a6e3a1", "Tip"),
+            ("note",    "ℹ",  "#1e2030", "#89b4fa", "Note"),
+            ("warning", "⚠",  "#2a1f1a", "#fab387", "Warning"),
+        ):
+            text_val = self._topic.get(kind)
+            if not text_val:
+                continue
+            info_frame = QFrame()
+            info_frame.setStyleSheet(
+                f"QFrame {{ background: {bg_color}; "
+                f"border: 1px solid {border_color}; "
+                f"border-left: 4px solid {border_color}; "
+                f"border-radius: 6px; }}"
+            )
+            il = QVBoxLayout(info_frame)
+            il.setContentsMargins(14, 10, 14, 10)
+            il.setSpacing(4)
+            title_lbl2 = QLabel(f"{icon}  <b style='color:{border_color};'>{title_text}</b>")
+            title_lbl2.setTextFormat(Qt.RichText)
+            title_lbl2.setStyleSheet("border: none; font-size: 13px; background: transparent;")
+            il.addWidget(title_lbl2)
+            text_lbl = QLabel(_md_to_html(text_val, c))
+            text_lbl.setTextFormat(Qt.RichText)
+            text_lbl.setWordWrap(True)
+            text_lbl.setStyleSheet(
+                f"color: {c['fg']}; font-size: 13px; border: none; "
+                f"background: transparent; line-height: 1.5;"
+            )
+            il.addWidget(text_lbl)
+            bl.addWidget(info_frame)
+
+        # ── Optional: comparison table ──────────────────────────────────
+        table_data = self._topic.get("table")
+        if isinstance(table_data, dict):
+            headers = table_data.get("headers", [])
+            rows = table_data.get("rows", [])
+            if headers and rows:
+                table_frame = QFrame()
+                table_frame.setStyleSheet(
+                    f"QFrame {{ background: {c.get('input_bg', '#1e1e2e')}; "
+                    f"border: 1px solid {c['border']}; border-radius: 6px; }}"
+                )
+                tl = QVBoxLayout(table_frame)
+                tl.setContentsMargins(0, 0, 0, 0)
+                tl.setSpacing(0)
+
+                # Header row
+                hdr = QFrame()
+                hdr.setStyleSheet(
+                    f"background: {c['border']}55; border: none; "
+                    f"border-bottom: 1px solid {c['border']};"
+                )
+                hdrl = QHBoxLayout(hdr)
+                hdrl.setContentsMargins(12, 7, 12, 7)
+                for h in headers:
+                    hlbl = QLabel(h)
+                    hlbl.setStyleSheet(
+                        f"color: {c['accent']}; font-size: 13px; "
+                        f"font-weight: bold; border: none; background: transparent;"
+                    )
+                    hdrl.addWidget(hlbl, 1)
+                tl.addWidget(hdr)
+
+                # Data rows (zebra striping)
+                for i, row in enumerate(rows):
+                    row_frame = QFrame()
+                    row_bg = "transparent" if i % 2 == 0 else f"{c['border']}22"
+                    row_frame.setStyleSheet(f"background: {row_bg}; border: none;")
+                    rl = QHBoxLayout(row_frame)
+                    rl.setContentsMargins(12, 6, 12, 6)
+                    for cell in row:
+                        clbl = QLabel(_md_to_html(str(cell), c))
+                        clbl.setTextFormat(Qt.RichText)
+                        clbl.setWordWrap(True)
+                        clbl.setStyleSheet(
+                            f"color: {c['fg']}; font-size: 13px; border: none; "
+                            f"background: transparent;"
+                        )
+                        rl.addWidget(clbl, 1)
+                    tl.addWidget(row_frame)
+                bl.addWidget(table_frame)
+
+        # ── Optional: ASCII diagram (monospace, preserve whitespace) ─────
+        diagram = self._topic.get("diagram")
+        if diagram:
+            diag_lbl = QLabel(diagram)
+            diag_lbl.setFont(QFont("Consolas", 12))
+            diag_lbl.setTextFormat(Qt.PlainText)
+            diag_lbl.setStyleSheet(
+                f"color: {c['fg_muted']}; "
+                f"background: {c.get('input_bg', '#1e1e2e')}; "
+                f"border: 1px solid {c['border']}; border-radius: 6px; "
+                f"padding: 12px; font-family: Consolas, 'Courier New', monospace; "
+                f"font-size: 12px;"
+            )
+            bl.addWidget(diag_lbl)
 
         # Code snippet
         if self._topic.get("snippet"):
@@ -940,10 +1538,16 @@ class TopicCard(QFrame):
                     padding: 12px 14px;
                     font-family: 'Consolas', 'Fira Code', 'Courier New', monospace;
                     font-size: 15px;
-                    font-weight: bold;
                     line-height: 1.5;
                 }}
             """)
+            # Apply Python syntax highlighting (only if language is python / unset)
+            lang = (self._topic.get("language") or "python").lower()
+            if lang == "python" and PythonHighlighter is not None:
+                try:
+                    self._highlighter = PythonHighlighter(snippet_edit.document())
+                except Exception:
+                    pass
             lines = self._topic["snippet"].count("\n") + 1
             snippet_edit.setFixedHeight(min(max(lines * 24, 100), 520))
             sf_layout.addWidget(snippet_edit)

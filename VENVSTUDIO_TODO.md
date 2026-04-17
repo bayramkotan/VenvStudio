@@ -128,12 +128,6 @@ Her kütüphane için uzun bir dedike sayfa. Mevcut tek-snippet formatını **ge
 
 ## 🆕 YENİ TOPLANAN NOTLAR (v1.4.62 sonrası)
 
-### 🐛 B137 — Form yüklenmeden hareket ettirince çöküyor
-- Uygulama ilk açıldığında ana pencereyi form elemanları yüklenmeden sürüklemeye çalışınca crash oluyor
-- Muhtemelen env listesi async yüklenirken main thread'de event loop meşgul
-- **Çözüm fikri:** Splash screen / loading overlay göster, yükleme bitene kadar pencere interaktif olmasın
-- Alternatif: async ops'lar paintEvent'i bloklamasın (QTimer.singleShot ile batch'lere böl)
-
 ### 🐛 B138 — Windows EXE'de başlangıçta terminal yanıp sönüyor
 - Form yüklenince **3-5 kez terminal penceresi** açılıp kayboluyor (flash)
 - `subprocess.Popen/run` çağrıları `CREATE_NO_WINDOW` flag'i eksik
@@ -174,17 +168,96 @@ Her kütüphane için uzun bir dedike sayfa. Mevcut tek-snippet formatını **ge
 - Reset butonu → default'lara dön
 - `package_panel.py` ve `learn_page.py` catalog'u okurken önce override kontrol eder
 
-### 🐛 B140 — Fedora / openSUSE'de İkonlar Görünmüyor
-- Linux dağıtımlarında ikonlar boş kare veya hiç görünmüyor
-- Qt'nin icon theme'i `breeze`/`hicolor`/`adwaita` aramaya gidiyor ama bulamıyor
-- **Çözüm:**
-  1. Fallback icon theme embed et (app bundle içine)
-  2. `QIcon.setThemeSearchPaths()` ile bundled theme path'i ekle
-  3. Emoji font fallback → `NotoColorEmoji`, `Segoe UI Emoji`, `Apple Color Emoji`
-- **Alternatif:** SVG ikonlarını Qt Resources olarak embed et (`*.qrc`)
-- Dağıtım-spesifik install komutları (settings'te):
-  - Fedora: `sudo dnf install breeze-icon-theme adwaita-icon-theme`
-  - openSUSE: `sudo zypper install breeze5-icons adwaita-icon-theme`
+### 🐛 B140 — Fedora 43 + Qt 6.11'de Emoji/İkonlar Render Edilemiyor (AÇIK, ERTELENDİ)
+
+**Status**: Önceki v1.4.64'teki "fix" revert edildi — çalışmadı, ayrıca tüm platformlarda font rendering'i bozdu. v1.4.65 main.py ile eski (original) haline döndürüldü.
+
+**Etkilenen sistem** (teşhis edilen):
+- Fedora 43 (kernel 6.19.12)
+- PySide6: 6.11.0 / Qt: 6.11.0
+- Python: 3.14.3
+
+**CachyOS (Arch) ile çalışıyor, Windows OK** — sorun Fedora'ya özgü.
+
+#### Teşhis özetı
+
+1. **Font kurulu** — `fc-list` hem `Noto-COLRv1.ttf: Noto Color Emoji` hem `NotoEmoji-Regular.ttf: Noto Emoji` gösteriyor
+2. **fontconfig yanlış font seçiyordu** — `fc-match "sans-serif:charset=1F680"` eskiden `Symbola.ttf` dönüyordu. `sudo dnf remove gdouros-symbola-fonts` + `rm -rf ~/.cache/fontconfig && fc-cache -fv` sonrası artık `Noto-COLRv1.ttf` dönüyor ✅
+3. **Ama Qt hala emoji çizemiyor** — `QLabel("TEST: 🔄 ⭐ 📁")` + `QFont("Noto Color Emoji", 24)` ile test penceresi açıldı; "TEST:" görünüyor, emoji'ler boş/kutu
+4. **Kök neden muhtemelen**: PySide6 6.11'in Fedora build'i **COLRv1 color emoji glyph** render etmiyor. Fedora sadece COLRv1 paketliyor (COLRv0/CBDT yok). Qt eski emoji rendering backend'i bu yeni formatı henüz desteklemiyor olabilir.
+5. **İndirmiş olduğumuz CBDT versiyonu da işe yaramadı** — `~/.local/share/fonts/NotoColorEmoji_CBDT.ttf` yüklendikten sonra `fc-match` hala system COLRv1'i dönüyor (ismi aynı olduğu için sistem öncelikli). `fc-scan` ile family kontrolü yapılmadı.
+
+#### Sonraki oturumda denenecek yaklaşımlar
+
+**Yaklaşım 1: Unicode sembol sadeleştirme (önerilen, en güvenli)**
+- VenvStudio'daki renkli emoji ikonları (`📦 🔄 ⭐ 📁 ⚙ 🐍`) **tek-renk Unicode sembollere** değiştirilsin:
+  - 📦 → ◼ veya ▣
+  - 🔄 → ↻
+  - ⭐ → ★
+  - 📁 → ▤
+  - ⚙ → ⚙ (zaten Unicode sembol)
+  - 🐍 → Py (metin)
+  - ✅ → ✓
+  - ❌ → ✗
+  - ▶ → zaten çalışıyor
+- Test et: Qt basit Unicode sembolleri her sistemde render eder. `▶ ● ■ □ ◆ ★ ✓ ✗` gibi karakterler DejaVu Sans / Noto Sans'ta var.
+- Dosyalar: `main_window.py`, `package_panel.py`, `env_dialog.py`, `learn_page.py`, `settings_*.py` — tüm stylesheet/label/button text'leri gözden geçirilip emoji → sembol değişimi yapılır.
+- Avantaj: Tüm platformlarda garantili çalışır, cross-platform, font-free.
+- Dezavantaj: Renkli emoji'lerin estetik kaybı (Windows/macOS/CachyOS şu an güzel görünüyordu).
+
+**Yaklaşım 2: Font fallback tablosu (riskli, daha önce bozdu)**
+- `QFont.setFamilies([...])` ile family chain kurmak — **daha önce yapıldı, tüm platformlarda font'ları bozdu, revert edildi**. Bir daha yapılırsa çok dikkatli test edilmeli, özellikle CachyOS ve Windows'ta.
+
+**Yaklaşım 3: Embed emoji font (orta)**
+- CBDT formatlı Noto Color Emoji'yi **uygulama içine embed** et (`QFontDatabase.addApplicationFont(path)`)
+- Resources (`.qrc`) olarak paketlenir, sistem font'larına dokunmaz
+- Qt `addApplicationFont()` yüklenen font'a benzersiz family name verir → çakışma olmaz
+- Ama yine de Fedora'nın COLRv1 render bug'ı varsa embed eden COLRv0 yükler, Qt onu da renderleyememişse işe yaramaz
+
+**Yaklaşım 4: İkonları SVG olarak paketle (büyük refactor)**
+- Emoji kullanımını tamamen bırak, SVG icon set'e geç (Fluent UI, Lucide, Material Symbols gibi)
+- Her button/label'da `QIcon` kullan, text'e emoji gömme
+- En profesyonel çözüm ama büyük refactor — 100+ yer değişecek
+
+**Yaklaşım 5: Qt runtime env var**
+- `QT_HARFBUZZ=old` veya `QT_ENABLE_COLOR_FONTS=1` gibi env var'lar test edilmeli (Fedora Qt build'inin flags'larına göre çalışabilir/çalışmaz)
+
+#### Test komutu (hangi yaklaşım çalıştığını anlamak için)
+
+```python
+# Fedora'da çalıştır — Unicode sembol rendering test
+python -c "
+from PySide6.QtWidgets import QApplication, QLabel
+from PySide6.QtGui import QFont
+import sys
+app = QApplication(sys.argv)
+
+# Renkli emoji
+lbl1 = QLabel('Emoji: 🔄 ⭐ 📁')
+lbl1.setFont(QFont('Noto Sans', 24))
+lbl1.show()
+
+# Unicode semboller (renkli değil)
+lbl2 = QLabel('Symbols: ↻ ★ ▤ ⚙ ✓ ✗')
+lbl2.setFont(QFont('Noto Sans', 24))
+lbl2.show()
+
+app.exec()
+"
+```
+Eğer Fedora'da ikinci pencere (semboller) görünüyorsa, **Yaklaşım 1** kesin çözüm. İkisi de görünmüyorsa Qt'nin kendisiyle derin bir sorun var.
+
+#### Geçici workaround (kullanıcı için manuel)
+Fedora kullanıcısı şimdilik:
+1. `sudo dnf remove gdouros-symbola-fonts`
+2. `sudo dnf install -y twitter-twemoji-fonts` (monokrom SVG emoji font dener)
+3. `rm -rf ~/.cache/fontconfig && fc-cache -fv`
+
+#### Dosya yerleri
+- `main.py` — font setup (şu an **original v1.4.65 hali, dokunulmamış**, doğrudan Segoe UI set ediyor; Fedora spesifik hiçbir kod yok)
+- `src/utils/platform_utils.py` — `get_platform()` var, `_detect_linux_distro()` eklenebilir
+
+---
 
 ### ✨ F134 — İlk Kurulum Sihirbazı (Welcome Wizard)
 - İlk çalıştırmada wizard açılsın → sistem kontrolleri + gerekli paketleri kur
@@ -310,20 +383,24 @@ F130'da kısaca geçiyor, ayrı bir büyük kategori olsun: **"📊 Görselleşt
   - Performans ipuçları
   - Kitap önerileri (Fundamentals of Data Viz, Storytelling with Data)
 
-### ✨ F139 — Learn'den Install Yaparken Env Sorusu
-Şu an Learn sayfasında "⬇ Install [pkgs]" butonuna basınca current/default env'e kuruyor. **Önce hangi env diye sorsun:**
-- [ ] Install butonuna basılınca QDialog açılsın
-- [ ] Dialog içinde:
-  - Radio button: "Current selected env: X" (default, varsa)
-  - Radio button: "Default env: Y" (varsa ve current ile farklıysa)
-  - Dropdown: Tüm env'lerden seç
-  - Checkbox: "Create a new env for this" → tıklanırsa env name input'u göster
-- [ ] Pipx paketi ise otomatik tespit et (örnek: `streamlit`, `httpie`, `black`) → pipx install öner
-- [ ] Paketin uyumluluğunu kontrol et — env'in Python versiyonu paketin min gereksinimini karşılıyor mu
-- [ ] Install öncesi son onay ekranı: "Bu env'e X, Y, Z paketleri kurulacak. Devam?"
-- [ ] Install sonrası açılan env'in Packages sayfasına otomatik geçiş (opsiyonel, toggle)
-- Dosya: `src/gui/learn_install_dialog.py` — yeni dialog widget
-- `learn_page.py` → `install_requested.emit(pkgs)` yerine `install_requested.emit(pkgs, target_env)` (breaking change, main_window.py de güncellenmeli)
+### ✅ F139 — Learn'den Install Yaparken Env Sorusu (TAMAMLANDI v1.4.66)
+- [x] `src/gui/learn_install_dialog.py` — yeni `LearnInstallDialog` widget
+- [x] Dialog içinde:
+  - Radio: Current selected env (varsa, default olarak işaretli)
+  - Radio: Default env (varsa ve current'tan farklıysa)
+  - Radio: Dropdown'dan tüm env'lerden seç (env name + type + Python version gösterir)
+  - Radio: Yeni env oluştur (inline name input, validasyon: boşluk/path separator/duplicate yok)
+  - Radio: pipx install (sadece paket pipx-friendly ise görünür — streamlit, httpie, black, ruff, jupyter vb.)
+- [x] pipx-friendly tespit: `_PIPX_FRIENDLY` set (24+ common CLI tool)
+- [x] Paket listesi tepede yeşil monospace font ile gösteriliyor, 6+ ise "+ N more" şeklinde kısaltılıyor
+- [x] "Switch to Packages tab after install" checkbox (default: açık)
+- [x] Cancel + Install butonları, Catppuccin-style
+- [x] `main_window.py::_on_learn_install` refactored:
+  - Env listesini topluyor (type + python version dahil)
+  - Dialog'u açıyor
+  - `_perform_learn_install` → decision mode'a göre: MODE_EXISTING / MODE_NEW_VENV / MODE_PIPX
+  - MODE_NEW_VENV → önce env oluştur, sonra packages yükle
+  - MODE_PIPX → package_panel'in pipx handler'ına delege et
 
 ### 🐛 B141 — Windows pipx Launch App Yüklenince Tablo Güncellenmiyor
 - Launcher'dan pipx üzerinden bir uygulama yüklendiğinde Virtual Environments tablosundaki **pipx satırı** otomatik refresh olmuyor (Windows'ta gözlemlendi)
@@ -1096,3 +1173,24 @@ Olması gereken fark:
     - `env_dialog.py` — tool kurulunca registry'ye kaydet
     - `package_panel.py` — install komutlarında registry'den tool path oku
     - F81 (Settings > Toolchain Manager) — registry'yi görsel olarak yönet
+
+---
+
+## 🔚 SON SIRA (ertelendi)
+
+### 🐛 B137 — Form yüklenmeden hareket ettirince çöküyor (ERTELENDİ)
+- Uygulama ilk açıldığında ana pencereyi form elemanları yüklenmeden sürüklemeye çalışınca crash oluyor
+- Muhtemelen env listesi async yüklenirken main thread'de event loop meşgul
+- **Önceki işler:**
+  - v1.4.62'de `main.py`'ye global `sys.excepthook` + `threading.excepthook` eklendi
+  - Yani crash olursa artık traceback terminal'e + crash report'a düşecek
+  - `venv_manager._run` subprocess loglamasıyla hangi background worker'ın çalıştığı görünür
+- **Reproduce:** Bayram CachyOS'ta çalışıyor ve bu crash orada gözükmüyor. Fedora'da test yapılamadı (başka sorunlar vardı). Windows'ta EXE build'de görülmüş, terminal'den Python ile değil.
+- **Sonraki oturum için:**
+  1. Windows'ta EXE ile test → pencereyi hemen sürükle → crash report path'ini kontrol et (`%APPDATA%\VenvStudio\logs\crash_*.log`)
+  2. Traceback olmadan tahminle kod yazma — bekle, bana traceback gelsin, o zaman çöz
+  3. Traceback gelirse muhtemel çözümler:
+     - **Splash screen / loading overlay** — pencere tam hazır olana kadar interaktif olmasın
+     - `QTimer.singleShot(0, ...)` ile background loading'i batch'lere böl
+     - MainWindow `__init__` içindeki async operasyonları `show()` sonrasına ertele
+     - `setFixedSize()` veya `setEnabled(False)` ile pencereyi tam yüklenene kadar sabit tut

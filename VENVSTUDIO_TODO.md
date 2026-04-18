@@ -448,6 +448,45 @@ F130'da kısaca geçiyor, ayrı bir büyük kategori olsun: **"📊 Görselleşt
   - Install sonucu `banner_success` / `banner_error`
 - Handoff kural #12 kapsamında — verbose logging **her yerde** olmalı, launcher dahil
 
+### 🐛 B143 — Export Requirements pipx/conda env'lerinde fail ediyor
+- Virtual Environments tablosundan pipx veya conda satırı seçiliyken "Export" (requirements.txt) butonuna basınca hata:
+  ```
+  Error: pip not found in this environment.
+  ```
+- **Sebep**: Export kodu env-type agnostik — her env için `pip freeze` çalıştırıyor. Ama:
+  - **pipx** env'inde pip başka yerde (`~/.local/share/pipx/venvs/<app>/bin/pip`), kullanıcı app seçmeli
+  - **conda** env'inde pip micromamba tarafından yönetilir, farklı konumda
+  - **poetry** env'inde pyproject.toml'dan okumak gerek
+- **Beklenen çözüm**: env-type aware export
+  - **venv/uv** → `pip freeze > requirements.txt` (mevcut)
+  - **pipx** → `pipx list --short > pipx_apps.txt` veya `pipx runpip <app> freeze` per-app
+  - **conda** → `micromamba env export -n <name> > environment.yml` (conda format)
+  - **poetry** → `cp pyproject.toml requirements-poetry.toml` veya `poetry export -f requirements.txt`
+- UI: Export butonu dropdown'u env-type'a göre değişmeli
+  - venv: "Export requirements.txt"
+  - conda: "Export environment.yml" + "Export requirements.txt (pip-only)"
+  - pipx: "Export pipx_apps.txt"
+  - poetry: "Open pyproject.toml" + "Export requirements.txt (poetry export)"
+- **Dosya**: `src/gui/package_panel.py` veya `main_window.py`'deki export handler
+
+### 🐛 B144 — pipx'e uygun olmayan paket install çalıştırılıyor (MLflow gibi)
+- Launcher → MLflow UI → Launch'a basınca `pipx install mlflow` denendi ve fail etti
+- **Sebep**: MLflow bir **library-first** paket — CLI'si var ama pipx için uygun değil:
+  - Ağır dependency tree (sqlalchemy, pandas, scipy, docker, vb.)
+  - Library imports hem app hem kullanıcı kodundan kullanılıyor
+  - pipx normalde CLI-only (entry-point) app'ler için
+- Mevcut catalog muhtemelen MLflow'u pipx path'ine yönlendiriyor — yanlış
+- **Beklenen davranış**:
+  - MLflow, TensorBoard, Jupyter vb. gibi "library + CLI" paketler **venv'e** kurulmalı
+  - Catalog'da her paket için `preferred_backend: "pip" | "pipx" | "conda"` field'ı olmalı
+  - `_PIPX_FRIENDLY` set (learn_install_dialog'da) sadece saf CLI tool'lar için (streamlit-standalone mu, black mu vs.)
+- **Çözüm adımları**:
+  1. `constants.py` veya catalog'da her paket için `preferred_backend` ekle
+  2. Launcher ve Learn install akışı bu field'ı kontrol etsin
+  3. pipx fail olursa kullanıcıya "This package is better installed in a venv. Retry with venv?" diyalogu sun
+  4. Default: pip (safer fallback), pipx ancak explicit "CLI tool" olarak işaretlenmiş paketler için
+- **Related**: F140 (Launcher conflict/version dialog) — pre-install validation'ın bir parçası olabilir
+
 ---
 
 ### 🎓 F52 — EĞİTİMSEL UYGULAMALAR MENÜSÜ (v1.4.60+)

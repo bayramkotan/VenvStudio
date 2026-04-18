@@ -12,6 +12,14 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, QThread
 
+# Terminal banners — shown when conda/poetry/uv/pipx envs are created
+try:
+    from src.utils.logger import banner_start, banner_success, banner_error
+except Exception:
+    def banner_start(*a, **k): pass
+    def banner_success(*a, **k): pass
+    def banner_error(*a, **k): pass
+
 class CreateWorker(QThread):
     """Worker thread for async environment creation."""
     progress = Signal(str)
@@ -237,12 +245,6 @@ class EnvCreateDialog(QDialog):
         for pyver in ("3.13", "3.12", "3.11", "3.10", "3.9"):
             self.conda_python_combo.addItem(f"Python {pyver}", pyver)
         self.conda_python_combo.setCurrentIndex(1)  # default 3.13
-        # Re-render command hints when conda python choice changes,
-        # so the "micromamba create ... python=X.Y" line stays in sync.
-        self.conda_python_combo.currentIndexChanged.connect(
-            lambda _i: (self._on_env_type_changed(self.type_combo.currentIndex())
-                        if hasattr(self, "type_combo") else None)
-        )
         _conda_py_row.addWidget(self.conda_python_combo, 1)
         _conda_layout.addLayout(_conda_py_row)
 
@@ -476,20 +478,6 @@ class EnvCreateDialog(QDialog):
         def _title(icon, text, color='#cdd6f4'): return f"<p style='font-size:20px;font-weight:bold;color:{color};margin:10px 0 6px 0;letter-spacing:0.5px;'>{icon}&nbsp; {text}</p>"
         def _line(t): return f"<p style='margin:4px 0;font-size:15px;font-family:Consolas,monospace;color:#cdd6f4;background:#11111b;padding:4px 10px;border-radius:4px;'>{t}</p>"
         def _note(t): return f"<p style='margin:10px 0 2px 0;font-size:12px;color:#6c7086;font-style:italic;'>{t}</p>"
-
-        # Pick up the Python version selected in the dropdown so the
-        # reference commands match what will actually be used.
-        _pyv = self._selected_python_version_short() if hasattr(self, "_selected_python_version_short") else "3.13"
-        # For conda, also honour the conda-specific python selector if present.
-        _conda_pyv = _pyv
-        try:
-            if hasattr(self, "conda_python_combo"):
-                _val = self.conda_python_combo.currentData()
-                if _val:
-                    _conda_pyv = str(_val)
-        except Exception:
-            pass
-
         hints = {
             "venv": (
                 _title("🐍", "Python venv", "#89b4fa") +
@@ -509,7 +497,7 @@ class EnvCreateDialog(QDialog):
                 _note("10-100x faster than pip. Rust-powered.") +
                 _line(_cmd("uv") + " venv " + _path("myproject")) +
                 _note("With specific Python version:") +
-                _line(_cmd("uv") + " venv --python " + _ver(_pyv) + " " + _path("myproject")) +
+                _line(_cmd("uv") + " venv --python " + _ver("3.12") + " " + _path("myproject")) +
                 _note("Install packages:") +
                 _line(_cmd("uv") + " pip install " + _kw("numpy") + " " + _kw("pandas")) +
                 _note("Run without activating:") +
@@ -542,7 +530,7 @@ class EnvCreateDialog(QDialog):
             "conda": (
                 _title("🦎", "Conda (micromamba)", "#89dceb") +
                 _note("conda-forge — 25,000+ packages incl. R, RStudio") +
-                _line(_cmd("micromamba") + " create -n " + _path("myenv") + " python=" + _ver(_conda_pyv)) +
+                _line(_cmd("micromamba") + " create -n " + _path("myenv") + " python=" + _ver("3.12")) +
                 _note("Activate:") +
                 _line(_cmd("micromamba") + " activate " + _path("myenv")) +
                 _note("Install packages:") +
@@ -554,7 +542,7 @@ class EnvCreateDialog(QDialog):
         self.cmd_label.setHtml(hints.get(env_type, hints["venv"]))
 
     def _on_python_changed(self, index):
-        """Seçili Python'un tam yolunu göster ve command preview'i güncelle."""
+        """Seçili Python'un tam yolunu göster."""
         import shutil, sys
         data = self.python_combo.currentData()
         if data:
@@ -562,49 +550,6 @@ class EnvCreateDialog(QDialog):
         else:
             py = shutil.which("python") or shutil.which("python3") or sys.executable
             self.python_path_label.setText(f"📍 {py}")
-        # Re-render command reference hints so the displayed Python version
-        # matches the currently selected interpreter (e.g. uv venv --python 3.13)
-        if hasattr(self, "type_combo"):
-            try:
-                self._on_env_type_changed(self.type_combo.currentIndex())
-            except Exception:
-                pass
-
-    def _selected_python_version_short(self) -> str:
-        """Return the selected interpreter's X.Y version string, e.g. '3.13'.
-        Falls back to '3.13' if nothing detectable is selected.
-        """
-        import re, sys
-        # Prefer explicit combobox text: "Python 3.13.13" → "3.13"
-        if hasattr(self, "python_combo"):
-            try:
-                text = self.python_combo.currentText() or ""
-                m = re.search(r"(\d+\.\d+)(?:\.\d+)?", text)
-                if m:
-                    return m.group(1)
-            except Exception:
-                pass
-            # Or the path data — probe with --version if it's a resolvable path
-            try:
-                import shutil, subprocess
-                data = self.python_combo.currentData()
-                if data:
-                    py_exe = data if shutil.which(data) or "/" in data or "\\" in data else None
-                    if py_exe:
-                        try:
-                            from src.utils.platform_utils import subprocess_args
-                            kw = subprocess_args(capture_output=True, text=True, timeout=3)
-                        except Exception:
-                            kw = dict(capture_output=True, text=True, timeout=3)
-                        r = subprocess.run([py_exe, "--version"], **kw)
-                        out = (r.stdout or r.stderr or "").strip()
-                        m = re.search(r"(\d+\.\d+)", out)
-                        if m:
-                            return m.group(1)
-            except Exception:
-                pass
-        # Final fallback: current interpreter
-        return f"{sys.version_info.major}.{sys.version_info.minor}"
 
     def _refresh_tool_path_ui(self, env_type: str):
         """Check if tool is available and update status note."""
@@ -994,6 +939,16 @@ class EnvCreateDialog(QDialog):
             self.status_label.setStyleSheet("color: #89b4fa; font-size: 15px; font-weight: bold;")
             self.status_label.setText("⚙️ Preparing micromamba...")
 
+            # Terminal banner — conda env creation start
+            banner_start(
+                f"Creating environment '{name}'",
+                details=[
+                    f"Type: conda (micromamba)",
+                    f"Python: {python_version or 'none'}",
+                    f"Location: {env_path}",
+                ],
+            )
+
             def _do_conda_create(callback=None):
                 from src.core.micromamba_installer import (
                     get_micromamba_exe, download_micromamba,
@@ -1030,12 +985,21 @@ class EnvCreateDialog(QDialog):
                 self.name_input.setEnabled(True)
                 self.env_type_combo.setEnabled(True)
                 if success:
+                    banner_success(
+                        f"Environment '{name}' is ready!",
+                        details=[
+                            f"Type: conda",
+                            f"Path: {env_path}",
+                            f"Python: {python_version or 'none'}",
+                        ],
+                    )
                     self.status_label.setStyleSheet("color: #a6e3a1; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"✅ {message}")
                     self.env_created.emit(name)
                     from PySide6.QtCore import QTimer
                     QTimer.singleShot(800, self.accept)
                 else:
+                    banner_error(f"Could not create '{name}'", details=[str(message)])
                     self.status_label.setStyleSheet("color: #f38ba8; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"❌ {message}")
                     QMessageBox.critical(self, "Error", message)
@@ -1128,6 +1092,16 @@ class EnvCreateDialog(QDialog):
             self.env_type_combo.setEnabled(False)
             self.status_label.setStyleSheet("color: #89b4fa; font-size: 15px; font-weight: bold;")
             self.status_label.setText(f"⚙️ Creating {env_type} environment...")
+
+            # Terminal banner — uv/poetry/pipx env creation start
+            banner_start(
+                f"Creating environment '{name}'",
+                details=[
+                    f"Type: {env_type}",
+                    f"Python: {python_path or 'system default'}",
+                    f"Location: {env_path}",
+                ],
+            )
 
             _env_path = env_path
             _python  = python_path
@@ -1420,12 +1394,20 @@ class EnvCreateDialog(QDialog):
                 self.name_input.setEnabled(True)
                 self.env_type_combo.setEnabled(True)
                 if success:
+                    banner_success(
+                        f"Environment '{_name}' is ready!",
+                        details=[
+                            f"Type: {_etype}",
+                            f"Path: {_env_path}",
+                        ],
+                    )
                     self.status_label.setStyleSheet("color: #a6e3a1; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"✅ {message}")
                     self.env_created.emit(_name)
                     from PySide6.QtCore import QTimer
                     QTimer.singleShot(800, self.accept)
                 else:
+                    banner_error(f"Could not create '{_name}'", details=[str(message)])
                     self.status_label.setStyleSheet("color: #f38ba8; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"❌ Failed")
                     QMessageBox.critical(self, "Error", message)

@@ -258,6 +258,42 @@ def _has_rich() -> bool:
         return False
 
 
+def _visual_width(s: str) -> int:
+    """Approximate terminal cell width of `s`.
+    Emoji and CJK wide characters = 2 cells, others = 1.
+    Invisible joiners (VS16, ZWJ, combining marks) = 0.
+    """
+    width = 0
+    for ch in s:
+        cp = ord(ch)
+        if cp == 0x200D or 0xFE00 <= cp <= 0xFE0F or 0x0300 <= cp <= 0x036F:
+            continue
+        if (
+            0x1F300 <= cp <= 0x1F64F or
+            0x1F680 <= cp <= 0x1F6FF or
+            0x1F700 <= cp <= 0x1F77F or
+            0x1F780 <= cp <= 0x1F7FF or
+            0x1F800 <= cp <= 0x1F8FF or
+            0x1F900 <= cp <= 0x1F9FF or
+            0x1FA00 <= cp <= 0x1FA6F or
+            0x1FA70 <= cp <= 0x1FAFF or
+            0x2600  <= cp <= 0x26FF  or
+            0x2700  <= cp <= 0x27BF  or
+            0x2300  <= cp <= 0x23FF  or
+            0x2B00  <= cp <= 0x2BFF  or
+            0x3000  <= cp <= 0x303F  or
+            0x3040  <= cp <= 0x30FF  or
+            0x3400  <= cp <= 0x4DBF  or
+            0x4E00  <= cp <= 0x9FFF  or
+            0xFF00  <= cp <= 0xFF60  or
+            0xFFE0  <= cp <= 0xFFE6
+        ):
+            width += 2
+        else:
+            width += 1
+    return width
+
+
 def banner(title: str, style: str = "info", details: Optional[List[str]] = None,
            logger: Optional[logging.Logger] = None) -> None:
     """
@@ -331,13 +367,15 @@ def banner(title: str, style: str = "info", details: Optional[List[str]] = None,
     lines = [f"{cfg['icon']}  {title}"]
     if details:
         lines.extend(f"   • {d}" for d in details)
-    inner_width = min(max(max(len(line) for line in lines) + 4, 40), 78)
+    inner_width = min(max(max(_visual_width(line) for line in lines) + 4, 40), 78)
 
     top = f"{color}{bold}╭{'─' * (inner_width - 2)}╮{reset}"
     bot = f"{color}{bold}╰{'─' * (inner_width - 2)}╯{reset}"
     print(top)
     for i, line in enumerate(lines):
-        pad = inner_width - 2 - len(line) - 2  # - 2 for leading/trailing space
+        pad = inner_width - 2 - _visual_width(line) - 2  # - 2 for leading/trailing space
+        if pad < 0:
+            pad = 0
         if i == 0:
             print(f"{color}{bold}│{reset} {color}{bold}{line}{reset}{' ' * pad} {color}{bold}│{reset}")
         else:

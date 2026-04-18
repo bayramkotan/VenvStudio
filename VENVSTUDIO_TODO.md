@@ -402,6 +402,26 @@ F130'da kısaca geçiyor, ayrı bir büyük kategori olsun: **"📊 Görselleşt
   - MODE_NEW_VENV → önce env oluştur, sonra packages yükle
   - MODE_PIPX → package_panel'in pipx handler'ına delege et
 
+### ✅ B147 — Terminal Banner Görünümü Bozuk + Env Tipi Tutarsızlığı (TAMAMLANDI v1.4.68)
+- [x] `logger.py` — `_visual_width()` helper eklendi (emoji=2 cell, CJK=2 cell, ZWJ/VS16/combining=0)
+- [x] `banner()` ANSI fallback path'te `len()` → `_visual_width()` değiştirildi
+- [x] `env_dialog.py` — conda create (`_do_conda_create` öncesi + `_on_conda_done`)
+- [x] `env_dialog.py` — uv/poetry/pipx create (`_do_alt_create` öncesi + `_on_alt_done`)
+- Artık tüm env tipleri için banner_start/success/error terminal'de gözüküyor ve sağ kenar hizalı
+
+### 🐛 B148 — Poetry Env Oluştururken Random Suffix Eklenir
+- Kullanıcı env adı "pppp" girer → Poetry `pppp-GwxGrfX--py3.14` klasörü oluşturur
+- Environments tablosunda `pppp-GwxGrfX` görünür, kullanıcı şaşırır
+- **Sebep**: `poetry new <name>` + `poetry install` Poetry'nin varsayılan venv isolation davranışı — kendi hash-based suffix ekler (`POETRY_VIRTUALENVS_PATH`'de `.cache/pypoetry/virtualenvs/<name>-<hash>-py<ver>`)
+- **Çözüm seçenekleri**:
+  - **A) Display name override** (önerilen): `.venvstudio_env` marker dosyasında `"display_name": "pppp"` tut, tabloda onu göster, Path sütununda gerçek path'i göster. Silme/kopyala operasyonlarında gerçek path kullanılır.
+  - **B) `POETRY_VIRTUALENVS_IN_PROJECT=true` env var** ile Poetry'yi `<project>/.venv` kullanmaya zorla, suffix oluşturmasın. Ama bu global ayar, diğer Poetry projelerini etkiler. İsolation da kaybolur.
+  - **C) Yarın A+B hibrit**: Sadece VenvStudio'nun oluşturduğu env'ler için `POETRY_VIRTUALENVS_PATH=<venvstudio_dir>/<name>` ayarla, subprocess'e pass et
+- **Öncelik**: Orta — kullanıcıyı confuse ediyor ama işlevsel hata değil
+- **Etkilenen dosya**: `env_dialog.py` (_do_alt_create içindeki poetry bloğu), `venv_manager.py` (list_venvs — display_name okumalı), main_window table render
+
+---
+
 ### ✅ B141 — Windows pipx Launch App Yüklenince Tablo Güncellenmiyor (TAMAMLANDI v1.4.66)
 - [x] `package_panel._on_app_install_finished` — success branch'inde `env_refresh_requested.emit()` çağrılıyor artık
 - [x] Pipx path tespit edilirse `VenvManager.invalidate_all_caches()` çağrılıyor (pipx'te app'ler aynı cache tree'yi paylaşır)

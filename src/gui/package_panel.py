@@ -1570,6 +1570,14 @@ class PackagePanel(QWidget):
                 _cache_key = f"_conda_installed_cache_{self.pip_manager.venv_path}"
                 if hasattr(self, _cache_key):
                     delattr(self, _cache_key)
+                # B141: refresh env table too (conda pkg count changes)
+                try:
+                    from src.core.venv_manager import VenvManager
+                    _vm = VenvManager(self.pip_manager.venv_path.parent)
+                    _vm.invalidate_cache(self.pip_manager.venv_path)
+                except Exception:
+                    pass
+            self.env_refresh_requested.emit()
             # Refresh card states then launch
             self._update_launcher_status()
             from PySide6.QtCore import QTimer
@@ -1997,6 +2005,25 @@ class PackagePanel(QWidget):
             # otherwise installed_package_names won't contain the new package
             # and _launch_app will show the install dialog again.
             self._invalidate_pkg_cache()
+
+            # ── B141: Tell main_window to refresh the env table ─────────────
+            # When installing to a pipx env (and any other env type), the env
+            # row in the main table shows stale package count / size. Signal
+            # the parent so it re-queries list_venvs_fast with force=True.
+            try:
+                from src.core.venv_manager import VenvManager
+                _vm = VenvManager(self.pip_manager.venv_path.parent)  # base_dir
+                _vm.invalidate_cache(self.pip_manager.venv_path)
+                # For pipx we also invalidate the shared pipx tree — many apps share
+                # /pipx cache state.
+                venv_path_str = str(self.pip_manager.venv_path)
+                if "pipx" in venv_path_str.lower():
+                    _vm.invalidate_all_caches()
+            except Exception:
+                pass
+            self.env_refresh_requested.emit()
+            # ─────────────────────────────────────────────────────────────────
+
             self._async_refresh_packages(force=True)
             # Connect one-shot signal to launch after refresh completes
             def _launch_after_refresh():

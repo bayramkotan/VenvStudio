@@ -402,15 +402,12 @@ F130'da kısaca geçiyor, ayrı bir büyük kategori olsun: **"📊 Görselleşt
   - MODE_NEW_VENV → önce env oluştur, sonra packages yükle
   - MODE_PIPX → package_panel'in pipx handler'ına delege et
 
-### 🐛 B141 — Windows pipx Launch App Yüklenince Tablo Güncellenmiyor
-- Launcher'dan pipx üzerinden bir uygulama yüklendiğinde Virtual Environments tablosundaki **pipx satırı** otomatik refresh olmuyor (Windows'ta gözlemlendi)
-- Diğer env'ler OK ama pipx satırı stale kalıyor — paket sayısı, size eski değerinde
-- **Muhtemel sebep**: pipx'in kendi cache'i; VenvStudio `list_pipx_apps()` çağırmıyor
-- **Çözüm**:
-  - `package_panel.py` install sonrası `main_window._refresh_env_list(force=True)` çağırmalı
-  - Veya callback zinciri ile ana tabloya signal gönder: `app_installed.emit(env_type)`
-  - pipx için özellikle: `vm.invalidate_pipx_cache()` veya tüm cache invalidation
-- Linux/macOS'ta bu davranış test edilmeli (Windows spesifik olabilir)
+### ✅ B141 — Windows pipx Launch App Yüklenince Tablo Güncellenmiyor (TAMAMLANDI v1.4.66)
+- [x] `package_panel._on_app_install_finished` — success branch'inde `env_refresh_requested.emit()` çağrılıyor artık
+- [x] Pipx path tespit edilirse `VenvManager.invalidate_all_caches()` çağrılıyor (pipx'te app'ler aynı cache tree'yi paylaşır)
+- [x] `_on_system_install_finished` — conda installs için de aynı emit + cache invalidation eklendi
+- [x] `_on_install_finished` zaten doğru emit ediyordu (önceden)
+- Main window `env_refresh_requested` signal'ını `_refresh_env_list`'e bağlı tutuyor (mevcut wiring)
 
 ### ✨ F140 — Launcher'da Package Conflict/Version Ayarı
 - Launcher bir uygulamayı yüklerken paket çakışmaları olabiliyor (ör. `streamlit==1.30` ama mevcut env'de `streamlit==1.28`)
@@ -469,23 +466,59 @@ F130'da kısaca geçiyor, ayrı bir büyük kategori olsun: **"📊 Görselleşt
   - poetry: "Open pyproject.toml" + "Export requirements.txt (poetry export)"
 - **Dosya**: `src/gui/package_panel.py` veya `main_window.py`'deki export handler
 
-### 🐛 B144 — pipx'e uygun olmayan paket install çalıştırılıyor (MLflow gibi)
+### 🐛 B144 — pipx'e uygun olmayan paket install çalıştırılıyor (MLflow, Orange3, vb.)
 - Launcher → MLflow UI → Launch'a basınca `pipx install mlflow` denendi ve fail etti
-- **Sebep**: MLflow bir **library-first** paket — CLI'si var ama pipx için uygun değil:
-  - Ağır dependency tree (sqlalchemy, pandas, scipy, docker, vb.)
+- **YENİ KANIT**: Orange3 de pipx'te fail: `pipx install failed for: PyQtWebEngine` — Orange3 PyQt5 + PyQtWebEngine'e bağımlı, pipx isolation'da bu GUI dependency chain kurulmuyor
+- **Sebep**: MLflow, Orange3, Jupyter, TensorBoard, Spyder gibi paketler **library-first + GUI** — pipx için uygun değil:
+  - Ağır dependency tree (sqlalchemy, pandas, scipy, PyQt5, docker, vb.)
   - Library imports hem app hem kullanıcı kodundan kullanılıyor
-  - pipx normalde CLI-only (entry-point) app'ler için
-- Mevcut catalog muhtemelen MLflow'u pipx path'ine yönlendiriyor — yanlış
-- **Beklenen davranış**:
-  - MLflow, TensorBoard, Jupyter vb. gibi "library + CLI" paketler **venv'e** kurulmalı
-  - Catalog'da her paket için `preferred_backend: "pip" | "pipx" | "conda"` field'ı olmalı
-  - `_PIPX_FRIENDLY` set (learn_install_dialog'da) sadece saf CLI tool'lar için (streamlit-standalone mu, black mu vs.)
+  - GUI bileşenleri sistem kütüphanelerine (Qt, X11) ihtiyaç duyuyor
+  - pipx normalde saf CLI-only (entry-point) app'ler için: black, httpie, ruff, streamlit (standalone)
+- **Pipx-friendly tespit edilen (OK)**: `_PIPX_FRIENDLY` set'teki 24 CLI tool
+- **Pipx-düşmanı (bu listeye eklenmeli ve pipx'e yönlendirmemeli)**:
+  - `orange3` (PyQt5 + PyQtWebEngine)
+  - `mlflow` (sqlalchemy + pandas chain)
+  - `jupyter`, `jupyterlab`, `notebook` (ipywidgets + kernel system)
+  - `spyder` (PyQt5 + qtconsole)
+  - `tensorboard` (tensorflow chain)
+  - `dash`, `gradio`, `panel`, `streamlit` (web framework + runtime sistemleri)
+  - `voila` (jupyter-dependent)
 - **Çözüm adımları**:
-  1. `constants.py` veya catalog'da her paket için `preferred_backend` ekle
-  2. Launcher ve Learn install akışı bu field'ı kontrol etsin
-  3. pipx fail olursa kullanıcıya "This package is better installed in a venv. Retry with venv?" diyalogu sun
-  4. Default: pip (safer fallback), pipx ancak explicit "CLI tool" olarak işaretlenmiş paketler için
-- **Related**: F140 (Launcher conflict/version dialog) — pre-install validation'ın bir parçası olabilir
+  1. `constants.py` PACKAGE_CATALOG içinde her paket için `preferred_backend: "pip" | "pipx" | "conda"` field'ı ekle
+  2. Launcher'da Launch butonuna basılınca:
+     - Paket zaten yüklü mü (hem pipx hem pip env'inde kontrol)
+     - preferred_backend pipx ise ve env pipx değilse → uyarı
+     - preferred_backend pip ise ve env pipx ise → "Pipx env seçtin ama bu paket venv'e gider. Bir venv seç ya da yeni oluştur" dialogu
+  3. Pre-install dependency check: `pip install --dry-run <pkg>` ile pipx'in halledebileceği mi bak
+  4. pipx fail olursa fail mesajı tam göster + "Retry in a venv?" butonu sun
+  5. Default: pip (safer fallback), pipx ancak explicit "CLI tool" olarak işaretlenmiş paketler için
+- **Related**: F140 (Launcher conflict/version dialog) — pre-install validation'ın bir parçası
+
+### 🐛 B145 — Pipx env'de "Installed" görünen app Launch'ta sessiz fail
+- Pipx env seçili, Launch'da Orange3 "Installed" badge'i ile görünüyor (B141 refresh çalışıyor ✓)
+- "Launch Orange Data Mining" butonuna basınca status bar "Launched..." diyor, ama pencere açılmıyor, hata mesajı yok
+- **Muhtemel sebepler**:
+  - Launch komutu subprocess olarak çalıştırılıyor ama exit code kontrol edilmiyor
+  - `subprocess.Popen` ile başlatıldı ve hemen exit etti (import hatası, missing GUI lib, segfault)
+  - pipx venv'in Python'u kullanılıyor ama uygulamanın beklediği Python env değil
+  - Terminal'e hata düşmüyor (stdout/stderr redirect edilmemiş)
+- **Bu oturumda eklenen B142 fix ile birlikte**: Launcher komutu da terminal'e loglanmalı — hangi subprocess çalıştı, exit kodu, stderr
+- **Çözüm**:
+  1. `package_panel.py::_launch_app` — subprocess output'unu file'a veya log'a yaz
+  2. `Popen` kullanılıyorsa `.poll()` ile hemen exit edip etmediğini kontrol et (1-2 saniye sonra)
+  3. Exit non-zero ise stderr'i kullanıcıya QMessageBox ile göster
+  4. Pipx için özellikle: `pipx list` ile app'in gerçekten yüklü olduğunu doğrula, entry point path'ini logla
+  5. Banner_start/banner_error ekle (verbose logging kuralı #12)
+- **Terminal output kritik**: Kullanıcı `python main.py 2>&1 | tee /tmp/vs.log` ile çalıştırıp traceback görebilmeli
+
+### 🐛 B146 — Pipx launch app yüklendikten sonra badge doğru, ama "3 packages installed" count tuhaf
+- Screenshot'ta pipx env'de "3 packages installed" yazıyor ama sadece 2 app yüklü (Orange3, bir tane daha?)
+- Quick Launch sidebar'da sadece 2 satır görünüyor (pipx, Orange Data Mining)
+- pipx'in kendi venv metadata sistemi ile VenvStudio'nun package sayımı arasında fark olabilir
+- **Araştırılacak**:
+  - `list_pipx_apps()` app sayısını mı, bağımlılık sayısını mı döndürüyor?
+  - Pipx'in her app'i kendi venv'inde paket, VenvStudio toplam package count için hepsini topluyor olabilir
+- Öncelik düşük — sadece cosmetic, işlevsel etkisi yok
 
 ---
 

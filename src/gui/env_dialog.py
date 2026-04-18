@@ -63,8 +63,8 @@ class EnvCreateDialog(QDialog):
         self.worker = None
 
         self.setWindowTitle("Create New Environment")
-        self.setMinimumSize(1200, 680)
-        self.resize(1280, 720)
+        self.setMinimumSize(1060, 620)
+        self.resize(1120, 680)
         self.setModal(True)
         self._setup_ui()
 
@@ -170,7 +170,6 @@ class EnvCreateDialog(QDialog):
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("e.g., my-project, data-science, web-api")
         self.name_input.returnPressed.connect(self._create)
-        self.name_input.textChanged.connect(self._on_name_changed)
         self._name_form_label = QLabel("Name:")
         form_layout.addRow(self._name_form_label, self.name_input)
 
@@ -238,6 +237,12 @@ class EnvCreateDialog(QDialog):
         for pyver in ("3.13", "3.12", "3.11", "3.10", "3.9"):
             self.conda_python_combo.addItem(f"Python {pyver}", pyver)
         self.conda_python_combo.setCurrentIndex(1)  # default 3.13
+        # Re-render command hints when conda python choice changes,
+        # so the "micromamba create ... python=X.Y" line stays in sync.
+        self.conda_python_combo.currentIndexChanged.connect(
+            lambda _i: (self._on_env_type_changed(self.type_combo.currentIndex())
+                        if hasattr(self, "type_combo") else None)
+        )
         _conda_py_row.addWidget(self.conda_python_combo, 1)
         _conda_layout.addLayout(_conda_py_row)
 
@@ -352,13 +357,11 @@ class EnvCreateDialog(QDialog):
         self.progress_bar.setVisible(False)
         right_inner.addWidget(self.progress_bar)
 
-        # Progress message label (above hints) — shows LIVE command being executed
+        # Progress message label (above hints)
         self.progress_msg_label = QLabel("")
         self.progress_msg_label.setWordWrap(True)
         self.progress_msg_label.setStyleSheet(
-            "color: #f9e2af; font-size: 22px; font-weight: bold; "
-            "font-family: Consolas, monospace; padding: 10px 12px; "
-            "background: #181825; border: 2px solid #f9e2af; border-radius: 6px;"
+            "color: #89b4fa; font-size: 16px; font-weight: bold; padding: 3px 4px;"
         )
         self.progress_msg_label.setVisible(False)
         right_inner.addWidget(self.progress_msg_label)
@@ -368,8 +371,8 @@ class EnvCreateDialog(QDialog):
         self.cmd_label.setReadOnly(True)
         self.cmd_label.setStyleSheet(
             "background-color: #181825; border: 1px solid #313244; "
-            "border-radius: 8px; padding: 8px; color: #cdd6f4; "
-            "font-family: Consolas, monospace; font-size: 20px; font-weight: bold;"
+            "border-radius: 8px; padding: 4px; color: #cdd6f4; "
+            "font-family: Consolas, monospace; font-size: 15px;"
         )
         self.cmd_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.cmd_label.setHtml(
@@ -400,9 +403,6 @@ class EnvCreateDialog(QDialog):
         btn_layout.addWidget(self.create_btn)
 
         root.addLayout(btn_layout)
-
-        # Trigger initial hints render so commands are visible on first open
-        self._on_env_type_changed(0)
 
     def _on_env_type_changed(self, index):
         """Show/hide rows based on env type."""
@@ -469,32 +469,36 @@ class EnvCreateDialog(QDialog):
             self.subtitle_label.setText(subtitles.get(env_type, subtitles["venv"]))
 
         # Progress panel hints — rich HTML with syntax colors
-        def _cmd(t): return f"<span style='color:#89b4fa;font-family:Consolas,monospace;font-size:20px;font-weight:bold;'>{t}</span>"
-        def _path(t): return f"<span style='color:#a6e3a1;font-family:Consolas,monospace;font-size:20px;font-weight:bold;'>{t}</span>"
-        def _kw(t): return f"<span style='color:#cba6f7;font-family:Consolas,monospace;font-weight:bold;font-size:20px;'>{t}</span>"
-        def _ver(t): return f"<span style='color:#f9e2af;font-family:Consolas,monospace;font-size:20px;font-weight:bold;'>{t}</span>"
-        def _title(icon, text, color='#cdd6f4'): return f"<p style='font-size:22px;font-weight:bold;color:{color};margin:12px 0 8px 0;letter-spacing:0.5px;'>{icon}&nbsp; {text}</p>"
-        def _line(t): return f"<p style='margin:6px 0;font-size:20px;font-weight:bold;font-family:Consolas,monospace;color:#cdd6f4;background:#11111b;padding:8px 12px;border-radius:4px;'>{t}</p>"
-        def _note(t): return f"<p style='margin:12px 0 4px 0;font-size:13px;color:#6c7086;font-style:italic;'>{t}</p>"
+        def _cmd(t): return f"<span style='color:#89b4fa;font-family:Consolas,monospace;font-size:15px;'>{t}</span>"
+        def _path(t): return f"<span style='color:#a6e3a1;font-family:Consolas,monospace;font-size:15px;'>{t}</span>"
+        def _kw(t): return f"<span style='color:#cba6f7;font-family:Consolas,monospace;font-weight:bold;font-size:15px;'>{t}</span>"
+        def _ver(t): return f"<span style='color:#f9e2af;font-family:Consolas,monospace;font-size:15px;'>{t}</span>"
+        def _title(icon, text, color='#cdd6f4'): return f"<p style='font-size:20px;font-weight:bold;color:{color};margin:10px 0 6px 0;letter-spacing:0.5px;'>{icon}&nbsp; {text}</p>"
+        def _line(t): return f"<p style='margin:4px 0;font-size:15px;font-family:Consolas,monospace;color:#cdd6f4;background:#11111b;padding:4px 10px;border-radius:4px;'>{t}</p>"
+        def _note(t): return f"<p style='margin:10px 0 2px 0;font-size:12px;color:#6c7086;font-style:italic;'>{t}</p>"
 
-        # Dynamic env name + full path from live form state
-        _env_name = self.name_input.text().strip() if hasattr(self, "name_input") else ""
-        if not _env_name:
-            _env_name = "myproject" if env_type != "conda" else "myenv"
-        _base = self.location_label.text() if hasattr(self, "location_label") else ""
-        import os as _os
-        _full_path = _os.path.join(_base, _env_name) if _base else _env_name
-        _full_path_win = _full_path.replace("/", "\\")
+        # Pick up the Python version selected in the dropdown so the
+        # reference commands match what will actually be used.
+        _pyv = self._selected_python_version_short() if hasattr(self, "_selected_python_version_short") else "3.13"
+        # For conda, also honour the conda-specific python selector if present.
+        _conda_pyv = _pyv
+        try:
+            if hasattr(self, "conda_python_combo"):
+                _val = self.conda_python_combo.currentData()
+                if _val:
+                    _conda_pyv = str(_val)
+        except Exception:
+            pass
 
         hints = {
             "venv": (
                 _title("🐍", "Python venv", "#89b4fa") +
                 _note("Standard library virtual environment") +
-                _line(_kw("python") + " -m " + _cmd("venv") + " " + _path(_full_path)) +
+                _line(_kw("python") + " -m " + _cmd("venv") + " " + _path("myproject")) +
                 _note("Activate — Linux/macOS:") +
-                _line(_cmd("source") + " " + _path(f"{_full_path}/bin/activate")) +
+                _line(_cmd("source") + " " + _path("myproject/bin/activate")) +
                 _note("Activate — Windows:") +
-                _line(_path(f"{_full_path_win}\\Scripts\\activate")) +
+                _line(_path("myproject\\Scripts\\activate")) +
                 _note("Install packages:") +
                 _line(_cmd("pip") + " install " + _kw("numpy") + " " + _kw("pandas")) +
                 _note("Deactivate:") +
@@ -503,9 +507,9 @@ class EnvCreateDialog(QDialog):
             "uv": (
                 _title("⚡", "uv — Ultra Fast", "#f9e2af") +
                 _note("10-100x faster than pip. Rust-powered.") +
-                _line(_cmd("uv") + " venv " + _path(_full_path)) +
+                _line(_cmd("uv") + " venv " + _path("myproject")) +
                 _note("With specific Python version:") +
-                _line(_cmd("uv") + " venv --python " + _ver("3.12") + " " + _path(_full_path)) +
+                _line(_cmd("uv") + " venv --python " + _ver(_pyv) + " " + _path("myproject")) +
                 _note("Install packages:") +
                 _line(_cmd("uv") + " pip install " + _kw("numpy") + " " + _kw("pandas")) +
                 _note("Run without activating:") +
@@ -516,8 +520,8 @@ class EnvCreateDialog(QDialog):
                 _note("Dependency management + virtual environments") +
                 _line(_cmd("pip") + " install " + _kw("poetry")) +
                 _note("Create new project:") +
-                _line(_cmd("poetry") + " new " + _path(_full_path)) +
-                _line(_cmd("cd") + " " + _path(_full_path) + " &amp;&amp; " + _cmd("poetry") + " install") +
+                _line(_cmd("poetry") + " new " + _path("myproject")) +
+                _line(_cmd("cd") + " " + _path("myproject") + " &amp;&amp; " + _cmd("poetry") + " install") +
                 _note("Add dependencies:") +
                 _line(_cmd("poetry") + " add " + _kw("numpy") + " " + _kw("pandas")) +
                 _note("Run scripts:") +
@@ -529,7 +533,7 @@ class EnvCreateDialog(QDialog):
                 _line(_cmd("pip") + " install --user " + _kw("pipx")) +
                 _line(_cmd("pipx") + " ensurepath") +
                 _note("Install a CLI tool globally:") +
-                _line(_cmd("pipx") + " install " + _kw(_env_name)) +
+                _line(_cmd("pipx") + " install " + _kw("black")) +
                 _note("List installed apps:") +
                 _line(_cmd("pipx") + " list") +
                 _note("Run without installing:") +
@@ -538,9 +542,9 @@ class EnvCreateDialog(QDialog):
             "conda": (
                 _title("🦎", "Conda (micromamba)", "#89dceb") +
                 _note("conda-forge — 25,000+ packages incl. R, RStudio") +
-                _line(_cmd("micromamba") + " create -n " + _path(_env_name) + " python=" + _ver("3.12")) +
+                _line(_cmd("micromamba") + " create -n " + _path("myenv") + " python=" + _ver(_conda_pyv)) +
                 _note("Activate:") +
-                _line(_cmd("micromamba") + " activate " + _path(_env_name)) +
+                _line(_cmd("micromamba") + " activate " + _path("myenv")) +
                 _note("Install packages:") +
                 _line(_cmd("micromamba") + " install -c conda-forge " + _kw("numpy") + " " + _kw("r-base")) +
                 _note("List environments:") +
@@ -549,22 +553,8 @@ class EnvCreateDialog(QDialog):
         }
         self.cmd_label.setHtml(hints.get(env_type, hints["venv"]))
 
-        # Live command preview (shown before env creation starts)
-        # Only shown while worker is NOT running (worker will override during creation)
-        if self.worker is None:
-            preview_cmds = {
-                "venv":   f"python -m venv {_full_path}",
-                "uv":     f"uv venv {_full_path}",
-                "poetry": f"poetry new {_full_path}",
-                "pipx":   f"pipx install {_env_name}",
-                "conda":  f"micromamba create -n {_env_name} python=3.12",
-            }
-            cmd = preview_cmds.get(env_type, preview_cmds["venv"])
-            self.progress_msg_label.setVisible(True)
-            self.progress_msg_label.setText(f"▶ {cmd}")
-
     def _on_python_changed(self, index):
-        """Seçili Python'un tam yolunu göster."""
+        """Seçili Python'un tam yolunu göster ve command preview'i güncelle."""
         import shutil, sys
         data = self.python_combo.currentData()
         if data:
@@ -572,6 +562,49 @@ class EnvCreateDialog(QDialog):
         else:
             py = shutil.which("python") or shutil.which("python3") or sys.executable
             self.python_path_label.setText(f"📍 {py}")
+        # Re-render command reference hints so the displayed Python version
+        # matches the currently selected interpreter (e.g. uv venv --python 3.13)
+        if hasattr(self, "type_combo"):
+            try:
+                self._on_env_type_changed(self.type_combo.currentIndex())
+            except Exception:
+                pass
+
+    def _selected_python_version_short(self) -> str:
+        """Return the selected interpreter's X.Y version string, e.g. '3.13'.
+        Falls back to '3.13' if nothing detectable is selected.
+        """
+        import re, sys
+        # Prefer explicit combobox text: "Python 3.13.13" → "3.13"
+        if hasattr(self, "python_combo"):
+            try:
+                text = self.python_combo.currentText() or ""
+                m = re.search(r"(\d+\.\d+)(?:\.\d+)?", text)
+                if m:
+                    return m.group(1)
+            except Exception:
+                pass
+            # Or the path data — probe with --version if it's a resolvable path
+            try:
+                import shutil, subprocess
+                data = self.python_combo.currentData()
+                if data:
+                    py_exe = data if shutil.which(data) or "/" in data or "\\" in data else None
+                    if py_exe:
+                        try:
+                            from src.utils.platform_utils import subprocess_args
+                            kw = subprocess_args(capture_output=True, text=True, timeout=3)
+                        except Exception:
+                            kw = dict(capture_output=True, text=True, timeout=3)
+                        r = subprocess.run([py_exe, "--version"], **kw)
+                        out = (r.stdout or r.stderr or "").strip()
+                        m = re.search(r"(\d+\.\d+)", out)
+                        if m:
+                            return m.group(1)
+            except Exception:
+                pass
+        # Final fallback: current interpreter
+        return f"{sys.version_info.major}.{sys.version_info.minor}"
 
     def _refresh_tool_path_ui(self, env_type: str):
         """Check if tool is available and update status note."""
@@ -923,14 +956,6 @@ class EnvCreateDialog(QDialog):
             self.config.set_venv_base_dir(directory)
             self.venv_manager.set_base_dir(Path(directory))
             self.location_label.setText(directory)
-            # Refresh hints with new path
-            if hasattr(self, "env_type_combo"):
-                self._on_env_type_changed(self.env_type_combo.currentIndex())
-
-    def _on_name_changed(self, text):
-        """Live-refresh hints panel as user types env name."""
-        if hasattr(self, "env_type_combo"):
-            self._on_env_type_changed(self.env_type_combo.currentIndex())
 
     def _create(self):
         name = self.name_input.text().strip()
@@ -1008,10 +1033,8 @@ class EnvCreateDialog(QDialog):
                     self.status_label.setStyleSheet("color: #a6e3a1; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"✅ {message}")
                     self.env_created.emit(name)
-                    self.progress_bar.setVisible(True)
-                    self.progress_bar.setRange(0, 100)
-                    self.progress_bar.setValue(100)
-                    self._enter_success_mode()
+                    from PySide6.QtCore import QTimer
+                    QTimer.singleShot(800, self.accept)
                 else:
                     self.status_label.setStyleSheet("color: #f38ba8; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"❌ {message}")
@@ -1400,10 +1423,8 @@ class EnvCreateDialog(QDialog):
                     self.status_label.setStyleSheet("color: #a6e3a1; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"✅ {message}")
                     self.env_created.emit(_name)
-                    self.progress_bar.setVisible(True)
-                    self.progress_bar.setRange(0, 100)
-                    self.progress_bar.setValue(100)
-                    self._enter_success_mode()
+                    from PySide6.QtCore import QTimer
+                    QTimer.singleShot(800, self.accept)
                 else:
                     self.status_label.setStyleSheet("color: #f38ba8; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"❌ Failed")
@@ -1436,12 +1457,12 @@ class EnvCreateDialog(QDialog):
         venv_path = os.path.join(location, name)
 
         from src.utils.platform_utils import get_platform
-        def _c(t): return f"<span style='color:#89b4fa;font-family:Consolas,monospace;font-size:20px;font-weight:bold;'>{t}</span>"
-        def _p(t): return f"<span style='color:#a6e3a1;font-family:Consolas,monospace;font-size:20px;font-weight:bold;'>{t}</span>"
-        def _k(t): return f"<span style='color:#cba6f7;font-family:Consolas,monospace;font-weight:bold;font-size:20px;'>{t}</span>"
-        def _ln(t): return f"<p style='margin:6px 0;font-size:20px;font-weight:bold;font-family:Consolas,monospace;color:#cdd6f4;background:#11111b;padding:8px 12px;border-radius:4px;'>{t}</p>"
-        def _nt(t): return f"<p style='margin:12px 0 4px 0;font-size:13px;color:#6c7086;font-style:italic;'>{t}</p>"
-        def _ttl(icon,txt,col): return f"<p style='font-size:22px;font-weight:bold;color:{col};margin:12px 0 8px 0;'>{icon}&nbsp; {txt}</p>"
+        def _c(t): return f"<span style='color:#89b4fa;font-family:Consolas,monospace;font-size:15px;'>{t}</span>"
+        def _p(t): return f"<span style='color:#a6e3a1;font-family:Consolas,monospace;font-size:15px;'>{t}</span>"
+        def _k(t): return f"<span style='color:#cba6f7;font-family:Consolas,monospace;font-weight:bold;font-size:15px;'>{t}</span>"
+        def _ln(t): return f"<p style='margin:4px 0;font-size:15px;font-family:Consolas,monospace;color:#cdd6f4;background:#11111b;padding:4px 10px;border-radius:4px;'>{t}</p>"
+        def _nt(t): return f"<p style='margin:10px 0 2px 0;font-size:12px;color:#6c7086;font-style:italic;'>{t}</p>"
+        def _ttl(icon,txt,col): return f"<p style='font-size:20px;font-weight:bold;color:{col};margin:10px 0 6px 0;'>{icon}&nbsp; {txt}</p>"
         if get_platform() == "windows":
             activate_cmd = _ln(_p(venv_path + "\\Scripts\\Activate.ps1"))
             activate_note = _nt("Activate (Windows PowerShell):")
@@ -1476,43 +1497,6 @@ class EnvCreateDialog(QDialog):
 
     def _on_progress(self, message):
         self.status_label.setText(f"⏳ {message}")
-        # Map progress message → live command being executed
-        try:
-            import os
-            from src.utils.platform_utils import get_platform
-            name = self.name_input.text().strip() or "myenv"
-            location = self.location_label.text() if hasattr(self, "location_label") else ""
-            venv_path = os.path.join(location, name) if location else name
-            py_exe = "python"
-            data = self.python_combo.currentData() if hasattr(self, "python_combo") else None
-            if data:
-                py_exe = str(data)
-
-            is_win = get_platform() == "windows"
-            # Platform-specific paths inside the new venv
-            if is_win:
-                venv_python = f"{venv_path}\\Scripts\\python.exe"
-                venv_activate_cmd = f"{venv_path}\\Scripts\\activate"
-            else:
-                venv_python = f"{venv_path}/bin/python"
-                venv_activate_cmd = f"source {venv_path}/bin/activate"
-
-            msg_lower = message.lower()
-            live_cmd = None
-            if "creat" in msg_lower and "venv" in msg_lower:
-                live_cmd = f"{py_exe} -m venv {venv_path}"
-            elif "upgrad" in msg_lower and "pip" in msg_lower:
-                live_cmd = f"{venv_python} -m pip install --upgrade pip"
-            elif "install" in msg_lower and "pip" in msg_lower:
-                live_cmd = f"{venv_python} -m ensurepip --upgrade"
-            elif "activat" in msg_lower:
-                live_cmd = venv_activate_cmd
-
-            if live_cmd:
-                self.progress_msg_label.setVisible(True)
-                self.progress_msg_label.setText(f"▶ {live_cmd}")
-        except Exception:
-            pass
 
     def _on_finished(self, success, message):
         self.worker = None
@@ -1522,72 +1506,14 @@ class EnvCreateDialog(QDialog):
             name = self.name_input.text().strip()
             self.config.add_recent_env(name)
             self.env_created.emit(name)
-            self.status_label.setStyleSheet("color: #a6e3a1; font-size: 15px; font-weight: bold;")
             self.status_label.setText("✅ " + message)
             self.progress_bar.setRange(0, 100)
             self.progress_bar.setValue(100)
-            self._enter_success_mode()
+            QMessageBox.information(self, "Success", message)
+            self.accept()
         else:
-            self.status_label.setStyleSheet("color: #f38ba8; font-size: 15px; font-weight: bold;")
             self.status_label.setText("❌ " + message[:200])
             QMessageBox.critical(self, "Error", message)
-
-    def _enter_success_mode(self):
-        """After a successful env creation, keep dialog open so user can create more.
-        Create button → 'Create Another' (clears form)
-        Cancel button → 'Close'
-        """
-        self.create_btn.setText("  + Create Another  ")
-        self.create_btn.setEnabled(True)
-        try:
-            self.create_btn.clicked.disconnect()
-        except Exception:
-            pass
-        self.create_btn.clicked.connect(self._create_another)
-
-        self.cancel_btn.setText("Close")
-        self.cancel_btn.setObjectName("secondary")
-        self.cancel_btn.setStyleSheet("")
-        try:
-            self.cancel_btn.clicked.disconnect()
-        except Exception:
-            pass
-        self.cancel_btn.clicked.connect(self.accept)
-
-    def _create_another(self):
-        """Clear the form and restore normal Create button so another env can be made."""
-        # Clear inputs
-        self.name_input.clear()
-        # Reset status + progress
-        self.progress_bar.setVisible(False)
-        self.progress_bar.setRange(0, 0)
-        self.status_label.setStyleSheet("color: #585b70; font-size: 14px; font-weight: bold; padding: 2px 0;")
-        self.status_label.setText("Ready.")
-        self.progress_msg_label.setVisible(False)
-        # Re-enable controls (in case anything stayed disabled)
-        self.name_input.setEnabled(True)
-        self.env_type_combo.setEnabled(True)
-        if hasattr(self, "python_combo"):
-            self.python_combo.setEnabled(True)
-        # Restore Create button
-        self.create_btn.setText("  Create Environment  ")
-        try:
-            self.create_btn.clicked.disconnect()
-        except Exception:
-            pass
-        self.create_btn.clicked.connect(self._create)
-        # Restore Cancel button
-        self.cancel_btn.setText("Cancel")
-        try:
-            self.cancel_btn.clicked.disconnect()
-        except Exception:
-            pass
-        self.cancel_btn.clicked.connect(self._on_cancel)
-        # Refresh hints for current type
-        if hasattr(self, "env_type_combo"):
-            self._on_env_type_changed(self.env_type_combo.currentIndex())
-        # Focus the name input for quick entry
-        self.name_input.setFocus()
 
     def _on_cancel(self):
         if self.worker and self.worker.isRunning():

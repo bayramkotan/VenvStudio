@@ -518,16 +518,11 @@ def main():
         # font is in the fallback chain so icons like 🔄 ⭐ 📁 render.
         from PySide6.QtGui import QFontDatabase
 
-        font_db = QFontDatabase()
-        # QFontDatabase().families() in PySide6 is a static method on newer
-        # versions; call it safely
+        # QFontDatabase methods are static since Qt 6 — no instance needed.
         try:
             available_fonts = set(QFontDatabase.families())
         except Exception:
-            try:
-                available_fonts = set(font_db.families())
-            except Exception:
-                available_fonts = set()
+            available_fonts = set()
 
         # Pick the best UI font for the platform
         if sys.platform == "darwin":

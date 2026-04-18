@@ -195,25 +195,48 @@ LEARN_CATEGORIES = [
             {
                 "title": "Variables & Data Types",
                 "body": (
-                    "Python has dynamic typing: the type of a variable is determined at runtime. "
+                    "Python has **dynamic typing**: the type of a variable is determined at runtime. "
                     "You don't declare types — just assign.\n\n"
-                    "Built-in types:\n"
-                    "• `int`   — integers (unbounded)\n"
-                    "• `float` — floating point\n"
-                    "• `str`   — text (Unicode by default)\n"
-                    "• `bool`  — True / False\n"
-                    "• `list`  — mutable sequence\n"
-                    "• `tuple` — immutable sequence\n"
-                    "• `dict`  — hash map\n"
-                    "• `set`   — unique collection"
+                    "Every built-in type is either **mutable** (can change in place) or **immutable** "
+                    "(creates a new object on change). This distinction matters for performance and correctness."
+                ),
+                "table": {
+                    "headers": ["Type", "Category", "Example", "Mutable?"],
+                    "rows": [
+                        ["`int`",   "Number",     "`42`, `10**100`",             "— (immutable)"],
+                        ["`float`", "Number",     "`3.14`, `1.5e-10`",           "— (immutable)"],
+                        ["`str`",   "Text",       "`\"hello\"`, `f'{name}'`",     "— (immutable)"],
+                        ["`bool`",  "Boolean",    "`True`, `False`",             "— (immutable)"],
+                        ["`tuple`", "Sequence",   "`(1, 2, 3)`",                  "— (immutable)"],
+                        ["`list`",  "Sequence",   "`[1, 2, 3]`",                  "✓ mutable"],
+                        ["`dict`",  "Mapping",    "`{'a': 1}`",                   "✓ mutable"],
+                        ["`set`",   "Collection", "`{1, 2, 3}`",                  "✓ mutable"],
+                        ["`None`",  "Singleton",  "`None`",                       "— (immutable)"],
+                    ],
+                },
+                "diagram": (
+                    "  a = [1, 2, 3]        ← list at memory address 0x100\n"
+                    "  b = a                ← b points to the SAME list\n"
+                    "  a.append(4)          ← mutates the shared list\n"
+                    "  print(b)             ← [1, 2, 3, 4]  ← both see the change!\n"
+                    "\n"
+                    "  x = 10               ← int at 0x200\n"
+                    "  y = x                ← y points to 0x200 too\n"
+                    "  x = x + 1            ← x points to a NEW int 0x204\n"
+                    "  print(y)             ← 10  ← y unchanged (int is immutable)"
                 ),
                 "snippet": "# Numbers\nx = 42\npi = 3.14159\nbig = 10 ** 100  # unbounded ints\n\n# Strings\nname = \"Ada\"\nmsg = f\"Hello, {name}!\"    # f-string\nmulti = \"\"\"multi\nline\"\"\"\n\n# Collections\nfruits = [\"apple\", \"banana\"]       # list — mutable\ncoords = (3, 4)                     # tuple — immutable\nperson = {\"name\": \"Ada\", \"age\": 36} # dict\nunique = {1, 2, 3, 2}               # set → {1, 2, 3}\n\n# Type check\nprint(type(x))           # <class 'int'>\nprint(isinstance(x, int)) # True",
                 "tip": (
-                    "Use `f-strings` for all string formatting — they're faster and more readable "
+                    "Use **f-strings** for all string formatting — they're faster and more readable "
                     "than `%` or `.format()`."
+                ),
+                "warning": (
+                    "When you pass a mutable object (list, dict) to a function, the function can "
+                    "**modify the original**. Pass a copy with `list(x)` or `dict(x)` if you don't want that."
                 ),
                 "links": [
                     ("📖 Python Docs", "https://docs.python.org/3/tutorial/introduction.html"),
+                    ("📖 Data Types", "https://docs.python.org/3/library/stdtypes.html"),
                 ],
             },
             {
@@ -227,89 +250,239 @@ LEARN_CATEGORIES = [
                     "Use `for item in iterable:` instead of C-style `for i in range(len(items))`. "
                     "It's idiomatic and avoids off-by-one errors."
                 ),
+                "table": {
+                    "headers": ["Statement", "When to use", "Example"],
+                    "rows": [
+                        ["`if/elif/else`", "Branching on conditions",   "Role lookup, validation"],
+                        ["`for x in ...`", "Iterate over known items",  "List, dict, file lines"],
+                        ["`while`",        "Loop until condition false","Game loop, retry logic"],
+                        ["`match/case`",   "Pattern match (3.10+)",     "Parsing, state machines"],
+                        ["`break`",        "Exit loop early",           "Found target in search"],
+                        ["`continue`",     "Skip to next iteration",    "Filter bad rows in loop"],
+                        ["`else` on loop", "Runs if loop didn't break", "Flag 'not found' case"],
+                    ],
+                },
+                "tip": (
+                    "Python loops have an **unusual `else` clause** that runs when the loop "
+                    "completes without `break`. Perfect for search patterns: "
+                    "`for x in items: if match: break; else: print('not found')`."
+                ),
                 "links": [
                     ("📖 Control Flow", "https://docs.python.org/3/tutorial/controlflow.html"),
+                    ("📖 match statement", "https://peps.python.org/pep-0636/"),
                 ],
             },
             {
                 "title": "Functions & Arguments",
                 "body": (
-                    "Functions are first-class objects — you can pass them around, return them, "
+                    "Functions are **first-class objects** — you can pass them around, return them, "
                     "store them in variables. Arguments support **defaults**, `*args`, `**kwargs`."
                 ),
+                "table": {
+                    "headers": ["Argument kind", "Syntax", "Example call"],
+                    "rows": [
+                        ["Positional",       "`def f(a, b):`",            "`f(1, 2)`"],
+                        ["Default",          "`def f(a, b=10):`",         "`f(1)` → b=10"],
+                        ["Keyword-only",     "`def f(*, a, b):`",         "`f(a=1, b=2)`"],
+                        ["Positional-only",  "`def f(a, b, /):`",         "`f(1, 2)` (can't use names)"],
+                        ["Variadic args",    "`def f(*nums):`",           "`f(1, 2, 3)` → nums=(1,2,3)"],
+                        ["Variadic kwargs",  "`def f(**opts):`",          "`f(a=1)` → opts={'a':1}"],
+                        ["Type-hinted",      "`def f(x: int) -> str:`",   "Static check with mypy"],
+                    ],
+                },
                 "snippet": "# Basic function\ndef greet(name: str) -> str:\n    return f\"Hello, {name}!\"\n\n# Default arguments\ndef greet(name: str = \"world\") -> str:\n    return f\"Hello, {name}!\"\n\n# Keyword args\nprint(greet(name=\"Ada\"))\n\n# Variable arguments\ndef sum_all(*numbers):\n    return sum(numbers)\nsum_all(1, 2, 3, 4)  # 10\n\n# Keyword variadic\ndef make_dict(**kwargs):\n    return kwargs\nmake_dict(a=1, b=2)  # {'a': 1, 'b': 2}\n\n# Lambda (anonymous)\nsquare = lambda x: x ** 2\n\n# Type hints (recommended)\ndef add(a: int, b: int) -> int:\n    return a + b",
                 "warning": (
                     "**Never use mutable default arguments** like `def foo(items=[])`. "
                     "The default is created ONCE and reused across calls. Use `None` and `items = []` inside."
                 ),
+                "note": (
+                    "Functions can be **nested** (closures capture outer variables) and returned "
+                    "as values — the foundation for decorators, callbacks, and functional patterns."
+                ),
                 "links": [
                     ("📖 Functions", "https://docs.python.org/3/tutorial/controlflow.html#defining-functions"),
+                    ("📖 PEP 570", "https://peps.python.org/pep-0570/"),
                 ],
             },
             {
                 "title": "Classes & Objects (OOP)",
                 "body": (
-                    "Python supports object-oriented programming with classes. `self` refers to "
+                    "Python supports **object-oriented programming** with classes. `self` refers to "
                     "the instance; `cls` refers to the class. Constructor is `__init__`."
                 ),
+                "diagram": (
+                    "       ┌────────────────┐\n"
+                    "       │    Animal      │  ← base class\n"
+                    "       │  kingdom       │    class variable (shared)\n"
+                    "       │  __init__      │    constructor\n"
+                    "       │  speak()       │    method\n"
+                    "       └───────┬────────┘\n"
+                    "               │ inherits from\n"
+                    "       ┌───────┴────────┐\n"
+                    "       │                │\n"
+                    "  ┌─────┴────┐   ┌──────┴─────┐\n"
+                    "  │   Dog    │   │   Cat      │   ← subclasses override speak()\n"
+                    "  │ speak()  │   │  speak()   │\n"
+                    "  └──────────┘   └────────────┘"
+                ),
                 "snippet": "class Animal:\n    \"\"\"Base class for animals.\"\"\"\n\n    # Class variable (shared)\n    kingdom = \"Animalia\"\n\n    def __init__(self, name: str, age: int):\n        # Instance variables\n        self.name = name\n        self.age = age\n\n    def speak(self) -> str:\n        return \"...\"\n\n    def __repr__(self) -> str:\n        return f\"{type(self).__name__}({self.name!r}, {self.age})\"\n\n\nclass Dog(Animal):\n    def speak(self) -> str:\n        return \"Woof!\"\n\n\nclass Cat(Animal):\n    def speak(self) -> str:\n        return \"Meow!\"\n\n\nrex = Dog(\"Rex\", 5)\nprint(rex)              # Dog('Rex', 5)\nprint(rex.speak())       # Woof!\nprint(isinstance(rex, Animal))  # True",
+                "table": {
+                    "headers": ["Dunder method", "Triggered by", "Purpose"],
+                    "rows": [
+                        ["`__init__`",  "`Obj(...)` construction", "Initialize instance"],
+                        ["`__repr__`",  "`repr(obj)`, debug print", "Unambiguous dev repr"],
+                        ["`__str__`",   "`str(obj)`, `print(obj)`", "User-friendly text"],
+                        ["`__eq__`",    "`a == b`",                  "Equality comparison"],
+                        ["`__hash__`",  "`hash(obj)`, set/dict keys", "Hashability"],
+                        ["`__len__`",   "`len(obj)`",                "Length/count"],
+                        ["`__iter__`",  "`for x in obj`",            "Iteration protocol"],
+                        ["`__call__`",  "`obj()`",                   "Make instance callable"],
+                        ["`__enter__` / `__exit__`", "`with obj:`",  "Context manager"],
+                    ],
+                },
                 "tip": (
                     "Use `@dataclass` for data-heavy classes — auto-generates `__init__`, "
-                    "`__repr__`, `__eq__` for you."
+                    "`__repr__`, `__eq__` for you. See next topic."
                 ),
                 "links": [
                     ("📖 Classes", "https://docs.python.org/3/tutorial/classes.html"),
+                    ("📖 Data model", "https://docs.python.org/3/reference/datamodel.html"),
                 ],
             },
             {
                 "title": "Dataclasses",
                 "body": (
-                    "`@dataclass` decorator auto-generates boilerplate for data-carrier classes. "
-                    "Much cleaner than writing `__init__`, `__repr__`, `__eq__` manually."
+                    "`@dataclass` decorator auto-generates boilerplate for **data-carrier** classes. "
+                    "Much cleaner than writing `__init__`, `__repr__`, `__eq__` manually.\n\n"
+                    "Available since Python 3.7 (`dataclasses` module) — no external dependencies needed."
                 ),
+                "table": {
+                    "headers": ["Decorator arg", "What it does", "When to use"],
+                    "rows": [
+                        ["`frozen=True`",       "Immutable — no attribute changes after init", "Dict keys, set members, value objects"],
+                        ["`order=True`",        "Auto `<`, `<=`, `>`, `>=` from field order",  "Sortable records"],
+                        ["`slots=True`",        "Use `__slots__` — faster, less memory (3.10+)", "Many instances"],
+                        ["`kw_only=True`",      "All fields keyword-only (3.10+)",             "Avoid positional confusion"],
+                        ["`eq=False`",          "Don't generate `__eq__`",                     "Use reference equality"],
+                    ],
+                },
                 "snippet": "from dataclasses import dataclass, field\nfrom typing import List\n\n@dataclass\nclass Point:\n    x: float\n    y: float\n    label: str = \"origin\"\n\np = Point(1.0, 2.0)\nprint(p)  # Point(x=1.0, y=2.0, label='origin')\n\n# Mutable defaults need field(default_factory=...)\n@dataclass\nclass Config:\n    name: str\n    tags: List[str] = field(default_factory=list)\n\n# Frozen (immutable) dataclass\n@dataclass(frozen=True)\nclass Coord:\n    x: int\n    y: int\n\n# Can now use as dict key / in set\npoints = {Coord(0, 0), Coord(1, 1)}",
-                "packages": ["dataclasses"],
+                "tip": (
+                    "For **validation** + serialization, use **Pydantic** instead — stricter type checks, "
+                    "JSON/dict conversion, and FastAPI integration. Dataclasses stay in stdlib for simple cases."
+                ),
+                "warning": (
+                    "For mutable default values (`list`, `dict`, `set`), use `field(default_factory=list)` — "
+                    "**not** `= []`. Direct mutable defaults raise ValueError in dataclasses."
+                ),
+                "packages": ["pydantic"],
                 "links": [
                     ("📖 dataclasses", "https://docs.python.org/3/library/dataclasses.html"),
+                    ("🔥 Pydantic", "https://docs.pydantic.dev/"),
                 ],
             },
             {
                 "title": "Exception Handling",
                 "body": (
                     "Use `try`/`except`/`else`/`finally` to handle errors gracefully. "
-                    "Python has a rich exception hierarchy — catch specifically, not broadly."
+                    "Python has a rich exception hierarchy — **catch specifically**, not broadly."
+                ),
+                "diagram": (
+                    "  BaseException\n"
+                    "  ├── SystemExit         ← sys.exit()\n"
+                    "  ├── KeyboardInterrupt  ← Ctrl+C\n"
+                    "  └── Exception          ← catch-all for regular errors\n"
+                    "      ├── ArithmeticError\n"
+                    "      │   ├── ZeroDivisionError\n"
+                    "      │   └── OverflowError\n"
+                    "      ├── LookupError\n"
+                    "      │   ├── IndexError    ← list[99] out of range\n"
+                    "      │   └── KeyError      ← dict['nope'] not found\n"
+                    "      ├── OSError           ← file, socket, permission errors\n"
+                    "      ├── TypeError         ← wrong type used\n"
+                    "      ├── ValueError        ← right type, wrong value\n"
+                    "      └── ...many more"
                 ),
                 "snippet": "# Basic try/except\ntry:\n    result = 10 / 0\nexcept ZeroDivisionError as e:\n    print(f\"Math error: {e}\")\n\n# Multiple exceptions\ntry:\n    data = json.loads(user_input)\nexcept (json.JSONDecodeError, TypeError) as e:\n    print(f\"Bad input: {e}\")\n\n# finally always runs\ntry:\n    f = open(\"data.txt\")\n    data = f.read()\nfinally:\n    f.close()\n\n# Better: context manager\nwith open(\"data.txt\") as f:\n    data = f.read()\n# auto-closed, even on exception\n\n# Custom exception\nclass ValidationError(Exception):\n    pass\n\nraise ValidationError(\"Invalid email format\")",
                 "warning": (
                     "**Never use bare `except:`** — it catches `KeyboardInterrupt` and `SystemExit`, "
-                    "hiding real bugs. Always specify the exception type."
+                    "hiding real bugs. Always specify the exception type, or use `except Exception:` "
+                    "for a catch-all that still lets Ctrl+C work."
+                ),
+                "tip": (
+                    "Use `except ... as e:` and `logging.exception(e)` to capture full tracebacks — "
+                    "never silently swallow exceptions in production code."
                 ),
                 "links": [
                     ("📖 Errors", "https://docs.python.org/3/tutorial/errors.html"),
+                    ("📖 Exception hierarchy", "https://docs.python.org/3/library/exceptions.html"),
                 ],
             },
             {
                 "title": "List / Dict / Set Comprehensions",
                 "body": (
-                    "Comprehensions are concise, readable ways to transform collections. "
-                    "Much faster than equivalent `for` loops."
+                    "Comprehensions are **concise, readable** ways to transform collections. "
+                    "Much faster than equivalent `for` loops (runs at C speed internally)."
                 ),
+                "table": {
+                    "headers": ["Type", "Syntax", "Returns"],
+                    "rows": [
+                        ["List",      "`[expr for x in iter]`",           "`list`"],
+                        ["Dict",      "`{k: v for x in iter}`",            "`dict`"],
+                        ["Set",       "`{expr for x in iter}`",            "`set`"],
+                        ["Generator", "`(expr for x in iter)`",            "`generator` (lazy)"],
+                        ["Filtered",  "`[expr for x in iter if cond]`",    "filtered collection"],
+                        ["Nested",    "`[[expr for y in a] for x in b]`",  "2D list (etc.)"],
+                    ],
+                },
                 "snippet": "# List comprehension\nsquares = [x ** 2 for x in range(10)]\n# [0, 1, 4, 9, 16, 25, 36, 49, 64, 81]\n\n# With filter\nevens = [x for x in range(20) if x % 2 == 0]\n\n# Nested\nmatrix = [[i * j for j in range(5)] for i in range(5)]\n\n# Dict comprehension\nsquared = {x: x ** 2 for x in range(5)}\n# {0: 0, 1: 1, 2: 4, 3: 9, 4: 16}\n\n# Set comprehension\nunique_lens = {len(word) for word in [\"hi\", \"bye\", \"yo\"]}\n# {2, 3}\n\n# Generator expression (lazy, memory-efficient)\ntotal = sum(x ** 2 for x in range(1_000_000))",
                 "tip": (
                     "Prefer **generator expressions** `(x for x in ...)` over list comprehensions "
                     "when you just iterate once — saves memory for large data."
                 ),
+                "warning": (
+                    "**Don't nest more than 2 comprehensions** — readability drops fast. "
+                    "Use a regular `for` loop with descriptive variable names instead."
+                ),
                 "links": [
                     ("📖 Comprehensions", "https://docs.python.org/3/tutorial/datastructures.html#list-comprehensions"),
+                    ("📖 PEP 274 (Dict)", "https://peps.python.org/pep-0274/"),
                 ],
             },
             {
                 "title": "Decorators",
                 "body": (
-                    "Decorators wrap a function to add behavior without modifying its code. "
-                    "Common uses: **logging, timing, caching, authentication, retry logic**."
+                    "Decorators **wrap a function** to add behavior without modifying its code. "
+                    "Syntax sugar for `func = decorator(func)`.\n\n"
+                    "Common uses: **logging, timing, caching, authentication, retry logic, rate limiting.**"
+                ),
+                "diagram": (
+                    "  @timer                       ┌────────────────────┐\n"
+                    "  def slow():       ═══>       │  wrapper(*args)    │\n"
+                    "      time.sleep(1)             │   start = now()   │\n"
+                    "                                │   result = slow()  │  ← original function\n"
+                    "  # equivalent to:              │   log(now()-start) │\n"
+                    "  slow = timer(slow)           │   return result   │\n"
+                    "                                └────────────────────┘"
                 ),
                 "snippet": "import functools\nimport time\n\ndef timer(func):\n    @functools.wraps(func)\n    def wrapper(*args, **kwargs):\n        start = time.perf_counter()\n        result = func(*args, **kwargs)\n        elapsed = time.perf_counter() - start\n        print(f\"{func.__name__}: {elapsed:.3f}s\")\n        return result\n    return wrapper\n\n@timer\ndef slow():\n    time.sleep(1)\n    return 42\n\nslow()  # slow: 1.001s → 42\n\n# Built-in @functools.lru_cache — memoization\n@functools.lru_cache(maxsize=128)\ndef fib(n: int) -> int:\n    if n < 2: return n\n    return fib(n-1) + fib(n-2)\n\nfib(100)  # instant (would be slow without cache)",
+                "table": {
+                    "headers": ["Decorator", "From", "What it does"],
+                    "rows": [
+                        ["`@property`",            "builtin",              "Method as attribute"],
+                        ["`@staticmethod`",        "builtin",              "Method without `self`/`cls`"],
+                        ["`@classmethod`",         "builtin",              "Method receiving `cls`"],
+                        ["`@functools.lru_cache`", "`functools`",          "Memoize (cache results)"],
+                        ["`@functools.wraps`",     "`functools`",          "Preserve name/docstring in wrappers"],
+                        ["`@dataclass`",           "`dataclasses`",        "Auto-gen class boilerplate"],
+                        ["`@contextmanager`",      "`contextlib`",         "Convert generator to context manager"],
+                        ["`@pytest.fixture`",      "`pytest`",             "Provide test setup/teardown"],
+                    ],
+                },
+                "tip": (
+                    "Always use `@functools.wraps(func)` inside your wrapper — it preserves the "
+                    "original function's name, docstring, and signature (critical for debugging and IDEs)."
+                ),
                 "links": [
                     ("📖 Decorators", "https://peps.python.org/pep-0318/"),
                     ("📖 functools", "https://docs.python.org/3/library/functools.html"),
@@ -319,12 +492,30 @@ LEARN_CATEGORIES = [
                 "title": "Generators & Iterators",
                 "body": (
                     "Generators produce values **lazily** using `yield`. Iterating over a "
-                    "generator doesn't load all values into memory — perfect for huge datasets."
+                    "generator doesn't load all values into memory — perfect for **huge datasets, "
+                    "infinite sequences, and streaming pipelines**."
                 ),
                 "snippet": "# Generator function\ndef count_up_to(n):\n    i = 0\n    while i < n:\n        yield i\n        i += 1\n\nfor x in count_up_to(5):\n    print(x)  # 0, 1, 2, 3, 4\n\n# Read a huge log file line-by-line (O(1) memory)\ndef read_log(path):\n    with open(path) as f:\n        for line in f:\n            if \"ERROR\" in line:\n                yield line\n\n# Consume\nerrors = list(read_log(\"app.log\"))\n\n# Infinite generator\ndef fibonacci():\n    a, b = 0, 1\n    while True:\n        yield a\n        a, b = b, a + b\n\nimport itertools\nfirst_10 = list(itertools.islice(fibonacci(), 10))",
+                "table": {
+                    "headers": ["itertools function", "What it does", "Example"],
+                    "rows": [
+                        ["`chain(*iterables)`",    "Link iterables end-to-end", "`chain([1,2], [3,4])` → 1,2,3,4"],
+                        ["`islice(it, stop)`",     "Slice any iterable lazily", "First 10 of infinite seq"],
+                        ["`groupby(it, key)`",     "Group consecutive items",   "`groupby(sorted_data, key)`"],
+                        ["`product(*iters)`",      "Cartesian product",         "All combinations"],
+                        ["`combinations(it, r)`",  "All r-length picks",        "lottery numbers"],
+                        ["`permutations(it, r)`",  "All orderings",             "anagrams"],
+                        ["`takewhile(pred, it)`",  "Take until predicate False", "until first negative"],
+                        ["`accumulate(it)`",       "Running sum/product",       "cumulative sums"],
+                    ],
+                },
                 "tip": (
-                    "Use `itertools` for powerful iterator combinators: `chain`, `islice`, "
-                    "`groupby`, `product`, `combinations`, `takewhile`, `accumulate`."
+                    "Chain generators for **data pipelines**: "
+                    "`squared = (x*x for x in read_log())` — each step streams, no intermediate lists."
+                ),
+                "warning": (
+                    "Generators are **single-use** — once exhausted, they're empty. "
+                    "Call the generator function again to get a fresh iterator, or use `itertools.tee()`."
                 ),
                 "links": [
                     ("📖 Generators", "https://docs.python.org/3/howto/functional.html#generators"),
@@ -334,14 +525,35 @@ LEARN_CATEGORIES = [
             {
                 "title": "Type Hints & typing",
                 "body": (
-                    "Type hints make code self-documenting and enable static checkers like **mypy** "
-                    "to catch bugs before runtime. Hints have zero runtime cost."
+                    "Type hints make code **self-documenting** and enable static checkers like **mypy** "
+                    "to catch bugs before runtime. Hints have **zero runtime cost** — they're just annotations."
                 ),
+                "table": {
+                    "headers": ["Old (3.8-)", "Modern (3.9+/3.10+)", "Meaning"],
+                    "rows": [
+                        ["`List[int]`",           "`list[int]`",            "List of ints (3.9+)"],
+                        ["`Dict[str, int]`",      "`dict[str, int]`",       "str→int mapping (3.9+)"],
+                        ["`Tuple[int, str]`",     "`tuple[int, str]`",      "Fixed-shape tuple (3.9+)"],
+                        ["`Optional[int]`",       "`int | None`",           "Int or None (3.10+)"],
+                        ["`Union[int, str]`",     "`int \\| str`",          "Int or str (3.10+)"],
+                        ["`Callable[[int], str]`","`Callable[[int], str]`", "Function taking int, returning str"],
+                        ["`TypeVar('T')`",        "`def f[T](x: T) -> T`",  "Generic (3.12+)"],
+                    ],
+                },
                 "snippet": "from typing import List, Dict, Optional, Union, Callable, Tuple\nfrom pathlib import Path\n\n# Basic hints\ndef greet(name: str, times: int = 1) -> str:\n    return f\"Hello {name}\\n\" * times\n\n# Collections\ndef parse(nums: List[int]) -> Dict[str, int]:\n    return {\"sum\": sum(nums), \"count\": len(nums)}\n\n# Optional = Union[X, None]\ndef find_user(uid: int) -> Optional[dict]:\n    ...\n\n# Modern syntax (Python 3.10+)\ndef find_user(uid: int) -> dict | None:\n    ...\n\n# Callable\ndef apply(fn: Callable[[int], int], x: int) -> int:\n    return fn(x)\n\n# Tuple with fixed types\ndef min_max(nums: List[int]) -> Tuple[int, int]:\n    return min(nums), max(nums)",
+                "tip": (
+                    "Add `from __future__ import annotations` at the top of older Python files — "
+                    "lets you use modern `list[int]` / `int | None` syntax everywhere, regardless of Python version."
+                ),
+                "note": (
+                    "`mypy`, `pyright`, and `ruff` all check type hints. Use **strict mode** for new code "
+                    "and gradually tighten as you gain confidence. IDEs (VS Code, PyCharm) use these for autocomplete."
+                ),
                 "packages": ["mypy"],
                 "links": [
                     ("📖 typing", "https://docs.python.org/3/library/typing.html"),
                     ("🔍 mypy", "https://mypy.readthedocs.io/"),
+                    ("🧪 pyright", "https://github.com/microsoft/pyright"),
                 ],
             },
             {
@@ -364,28 +576,62 @@ LEARN_CATEGORIES = [
                     "  from .submodule.helpers import fetch"
                 ),
                 "snippet": "# Import a module\nimport math\nprint(math.pi)\n\n# Import specific name\nfrom math import pi, sqrt\n\n# Alias\nimport numpy as np\n\n# Relative import (inside a package)\nfrom .utils import clean\nfrom ..common import config\n\n# Guarded main block\nif __name__ == \"__main__\":\n    # Only runs when file is executed directly,\n    # NOT when imported\n    main()",
+                "table": {
+                    "headers": ["Import form", "Example", "When to use"],
+                    "rows": [
+                        ["Module",          "`import math`",                "Few calls — `math.sqrt(x)` is explicit"],
+                        ["Specific name",   "`from math import sqrt`",      "Many calls to same few names"],
+                        ["Alias",           "`import numpy as np`",         "Standard community conventions (np, pd, plt)"],
+                        ["All names",       "`from math import *`",         "❌ Avoid — pollutes namespace"],
+                        ["Relative",        "`from .utils import clean`",   "Inside a package"],
+                        ["Deferred",        "inside function body",         "Break circular imports, reduce startup time"],
+                    ],
+                },
                 "note": (
                     "The `if __name__ == \"__main__\":` idiom lets a file work both as a "
-                    "standalone script AND as an importable module."
+                    "**standalone script** AND as an **importable module**. Essential for library code."
+                ),
+                "warning": (
+                    "**Never use `from x import *`** in production code — it pollutes your namespace, "
+                    "breaks IDE autocomplete, and makes `grep`ing for usage impossible."
                 ),
                 "links": [
                     ("📖 Modules", "https://docs.python.org/3/tutorial/modules.html"),
+                    ("📖 PEP 328 relative imports", "https://peps.python.org/pep-0328/"),
                 ],
             },
             {
                 "title": "async / await (asyncio)",
                 "body": (
-                    "`async`/`await` enables **concurrent** I/O without threads. Perfect for network "
-                    "requests, web servers, database queries — anything that waits a lot."
+                    "`async`/`await` enables **concurrent I/O** without threads. Perfect for network "
+                    "requests, web servers, database queries — **anything that waits a lot**.\n\n"
+                    "Async is about **concurrency**, not parallelism: one event loop juggles many "
+                    "coroutines, switching between them whenever one awaits."
                 ),
+                "table": {
+                    "headers": ["Workload", "Use async?", "Why"],
+                    "rows": [
+                        ["HTTP requests to many URLs",  "✅ Yes",             "Waiting on network — async excels"],
+                        ["Read 1000s of files",         "⚠ Sometimes",       "Depends on OS — `aiofiles` can help"],
+                        ["Database queries",             "✅ Yes",             "asyncpg/SQLAlchemy async — huge wins"],
+                        ["Web server handlers",          "✅ Yes",             "FastAPI/Starlette scale to thousands"],
+                        ["CPU-intensive math",           "❌ No",              "Use `multiprocessing` or `threading`"],
+                        ["Simple scripts",               "❌ No",              "Overhead not worth it — stay sync"],
+                    ],
+                },
                 "snippet": "import asyncio\nimport aiohttp  # pip install aiohttp\n\nasync def fetch(session, url):\n    async with session.get(url) as resp:\n        return await resp.text()\n\nasync def main():\n    async with aiohttp.ClientSession() as session:\n        urls = [\n            \"https://python.org\",\n            \"https://pypi.org\",\n            \"https://github.com\",\n        ]\n        # Concurrent fetches\n        results = await asyncio.gather(\n            *(fetch(session, u) for u in urls)\n        )\n        for url, html in zip(urls, results):\n            print(f\"{url}: {len(html)} bytes\")\n\nasyncio.run(main())",
                 "tip": (
-                    "Use `asyncio.gather()` to run coroutines concurrently. "
-                    "`await` one-by-one runs sequentially — defeats the point."
+                    "Use `asyncio.gather()` to run coroutines **concurrently**. "
+                    "Awaiting one-by-one runs sequentially — defeats the point."
                 ),
-                "packages": ["aiohttp"],
+                "warning": (
+                    "**Never mix blocking calls** (`requests.get`, `time.sleep`) inside async code — "
+                    "they freeze the event loop. Use `aiohttp`/`httpx`, `asyncio.sleep` etc."
+                ),
+                "packages": ["aiohttp", "httpx"],
                 "links": [
                     ("📖 asyncio", "https://docs.python.org/3/library/asyncio.html"),
+                    ("🚀 httpx", "https://www.python-httpx.org/"),
                 ],
             },
         ],

@@ -183,7 +183,7 @@ def get_pipx_executable() -> Optional[str]:
     try:
         import subprocess
         r = subprocess.run([sys.executable, "-m", "pipx", "--version"],
-                           capture_output=True, text=True, timeout=5)
+                           **subprocess_args(capture_output=True, text=True, timeout=5))
         if r.returncode == 0:
             return sys.executable  # caller should use [exe, "-m", "pipx", ...]
     except Exception:
@@ -218,7 +218,7 @@ def get_pipx_home() -> Optional[str]:
         try:
             r = subprocess.run(
                 [pipx_exe, "environment", "--value", "PIPX_HOME"],
-                capture_output=True, text=True, timeout=10
+                **subprocess_args(capture_output=True, text=True, timeout=10)
             )
             if r.returncode == 0 and r.stdout.strip():
                 p = os.path.expanduser(r.stdout.strip())
@@ -431,7 +431,7 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                     subprocess.run(
                         [mamba_str, "shell", "init", "--shell", "cmd.exe",
                          "--root-prefix", mamba_root],
-                        capture_output=True, text=True, timeout=30,
+                        **subprocess_args(capture_output=True, text=True, timeout=30),
                     )
                     mamba_hook_bat = _find_mamba_hook_bat()
                 except Exception:
@@ -440,7 +440,7 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                     subprocess.run(
                         [mamba_str, "shell", "init", "--shell", "powershell",
                          "--root-prefix", mamba_root],
-                        capture_output=True, text=True, timeout=30,
+                        **subprocess_args(capture_output=True, text=True, timeout=30),
                     )
                 except Exception:
                     pass

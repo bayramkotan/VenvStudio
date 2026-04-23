@@ -431,30 +431,46 @@ F130'da kısaca geçiyor, ayrı bir büyük kategori olsun: **"📊 Görselleşt
 - **Öncelik**: Orta — kullanıcıyı confuse ediyor ama işlevsel hata değil
 - **Etkilenen dosya**: `env_dialog.py` (_do_alt_create içindeki poetry bloğu), `venv_manager.py` (list_venvs — display_name okumalı), main_window table render
 
-### 🔴 B150 — VenvStudio Sürekli Çöküyor (Yüksek Öncelik)
-- Özellikle ilk açılışta çöküyor
-- Yeni versiyonu yükleyince: kontrol yapıp çöküyor ve sürekli çöküyor
-- Workaround: `%appdata%/VenvStudio` klasörünü silmek — ondan sonra çökmeler duruyor
-- **Muhtemel sebep**: bozuk config JSON, eski cache, eski preset listesi uyumsuzluğu
-- **Çözüm**:
-  - Config yükleme sırasında her JSON dosyasını try/except ile sarmalı, bozuksa backup + reset
-  - Schema versioning — eski format tespit edince migrate et veya temiz başla
-  - Cache klasörünü yeni versiyon ilk açılışında sil/migrate et
-  - Startup sequence'te her adım için fallback
-- **Dosya**: `main.py` startup, `src/core/config.py`, `src/core/cache_manager.py`
+### ✅ B150 — VenvStudio Sürekli Çöküyor (ÇÖZÜLDÜ — v1.4.67)
+- Crash log analizi sonucu tüm crash'ler aynı hatayı gösteriyordu:
+  ```
+  File "settings_page.py", line 920, in _register_editor
+      venv_dir = VenvManager().base_dir
+  TypeError: VenvManager.__init__() missing 1 required positional argument: 'base_dir'
+  ```
+- En son crash: **2026-04-18 08:30** (v1.4.66)
+- Bu hata v1.4.67'de düzeltildi (`_get_editor_venv_dir()` helper eklendi, `VenvManager()` parametresiz çağrılmıyor artık)
+- v1.4.67 ve v1.4.68 ile kullanımda **yeni crash oluşmadı** (24 Nisan test edildi)
+- `%appdata%/VenvStudio` silmenin çözüm olarak görünmesi aslında tesadüf değil — eski config'te bir şey yoktu, sadece zamanla yeni sürüme geçilince hatalar kayboldu
+- **Kapatıldı — reproduce edilemiyor**
 
-### 🔴 B151 — Windows EXE Çok Yavaş + Terminal Pencereleri Açılıp Kapanıyor
-- Windows'ta EXE açılırken çok kasılıyor
-- EXE açılmadan ÖNCE bir sürü terminal açılıp kapanıyor (muhtemelen subprocess probe'ları)
-- **Sebep**:
-  - PyInstaller/Nuitka frozen EXE'de startup probe'ları subprocess olarak çağrılıyor, her biri `CREATE_NO_WINDOW` flag'sız
-  - Python detection, pip detection, tool detection paralel değil
-- **Çözüm**:
-  - Tüm startup subprocess'lerine `CREATE_NO_WINDOW` ekle (B96 fix'i tüm yerlerde değil, sadece scan_pythons'da yapılmış)
-  - Asenkron paralel probe: `concurrent.futures.ThreadPoolExecutor` ile
-  - Splash screen göster, ilk probe'lar arka planda koşarken
-  - Heavy imports'ları lazy load
-- **Dosya**: `main.py`, `src/core/cli_tools_manager.py`, `src/core/toolchain_manager.py`, `src/gui/settings_page.py::_scan_pythons`
+### ✅ B151 — Windows EXE Subprocess Terminal Flash (TAMAMLANDI v1.4.69)
+- Windows'ta uygulama açılırken bir sürü siyah terminal penceresi flash ediyordu
+- **Sebep**: `logger.logged_subprocess` wrapper + `platform_utils` pipx/mamba probe'ları + `main_window` pip list thread + `env_dialog` Python version probe hepsi `CREATE_NO_WINDOW` flag'siz subprocess çağırıyordu
+- **Fix** — 4 dosyada toplam 9 noktada `subprocess_args()` helper veya inline `creationflags=0x08000000`:
+  - `logger.py::logged_subprocess` — Windows'ta CREATE_NO_WINDOW flag'ı ekleniyor (`sys` import + conditional kwarg). **En kritik fix** — birçok subprocess bundan geçer.
+  - `platform_utils.py` — `get_pipx_executable` (`-m pipx --version`), `get_pipx_home` (`pipx environment`), mamba shell init (×2 cmd.exe + powershell) subprocess_args'a sarıldı
+  - `main_window.py` — pip list background thread + python3 -m venv --help check subprocess_args ile sarıldı
+  - `env_dialog.py` — Python version probe (dialog her açıldığında), Windows pip install --user branch'ı subprocess_args ile sarıldı; modül seviyesinde import eklendi
+- **Dokunulmayanlar** (kasıtlı):
+  - `open_terminal_at` Popen çağrıları — kullanıcı terminal açmak istiyor, flash kapatmak istemediği yer
+  - Linux-only gnome-terminal/konsole/xfce4-terminal Popen çağrıları — Linux'ta creationflags ignore ediliyor
+  - `main.py` 6 subprocess — `if sys.platform == "linux"` guard altında, Windows'ta asla çalışmıyor
+  - Kalan env_dialog subprocess'leri — Linux apt/pacman/dnf/zypper komutları (`sudo` kullanan, Windows'ta etkisiz)
+- **Test**: Windows EXE açılışında subprocess flash sayısı minimum olmalı artık
+- **Dosya**: `src/utils/logger.py`, `src/utils/platform_utils.py`, `src/gui/main_window.py`, `src/gui/env_dialog.py`
+
+### 🟡 B156 — Windows EXE Startup Latency (B151 sonrası kalan)
+- B151 terminal flash'ı düzeltti ama **startup latency** (EXE açılır açılmaz gelen kasılma) kalabilir
+- Splash screen yok — kullanıcı boşluğa bakıyor
+- Heavy imports (PySide6, pandas-like modüller) startup'ta senkron yükleniyor
+- **Çözüm önerileri**:
+  - Splash screen (QSplashScreen) — logo + "Loading..." progress
+  - Lazy load: Settings, Learn sayfası ilk tıklandığında yüklensin (QTimer.singleShot(0, ...))
+  - Paralel startup probes: `concurrent.futures.ThreadPoolExecutor(max_workers=4)` ile Python detection, pipx detection, tool detection eş zamanlı
+  - `main.py` içinde import sırasını optimize et — PySide sadece Qt lazım olunca gelsin
+- **Dosya**: `main.py`, `src/gui/main_window.py` (lazy page setup), potansiyel yeni: `src/gui/splash_screen.py`
+- **Öncelik**: Orta — B151 flash fix sonra test edip kalan latency hissini ölç
 
 ### 🟡 B152 — Fedora Linux Terminalde Emojiler OK, VenvStudio'da Görünmüyor
 - Fedora 43'te terminal'de emoji çıkıyor (Noto Color Emoji kurulu)

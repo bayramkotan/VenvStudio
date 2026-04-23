@@ -26,6 +26,7 @@ import os
 import platform
 import subprocess
 import sys
+import sys
 import threading
 import time
 import traceback
@@ -770,6 +771,11 @@ def logged_subprocess(
 
     logger.debug(f"SUBPROCESS{ctx_str}: {cmd_str} (timeout={timeout}s)")
     start = time.monotonic()
+
+    # B151: On Windows, add CREATE_NO_WINDOW so subprocesses don't flash a
+    # console window. Harmless on Linux/macOS (ignored unless platform-specific).
+    if sys.platform == "win32":
+        kwargs.setdefault("creationflags", 0x08000000)  # subprocess.CREATE_NO_WINDOW
 
     try:
         result = subprocess.run(

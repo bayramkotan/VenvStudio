@@ -20,6 +20,12 @@ except Exception:
     def banner_success(*a, **k): pass
     def banner_error(*a, **k): pass
 
+# B151: suppress Windows console flash on all subprocess calls
+try:
+    from src.utils.platform_utils import subprocess_args
+except Exception:
+    def subprocess_args(**kw): return kw
+
 class CreateWorker(QThread):
     """Worker thread for async environment creation."""
     progress = Signal(str)
@@ -113,8 +119,8 @@ class EnvCreateDialog(QDialog):
         _sys_py = shutil.which("python") or shutil.which("python3") or sys.executable
         _sys_ver = ""
         try:
-            r = subprocess.run([_sys_py, "--version"], capture_output=True,
-                               text=True, timeout=3)
+            r = subprocess.run([_sys_py, "--version"],
+                               **subprocess_args(capture_output=True, text=True, timeout=3))
             _sys_ver = (r.stdout.strip() or r.stderr.strip()).replace("Python ", "")
         except Exception:
             pass
@@ -804,13 +810,13 @@ class EnvCreateDialog(QDialog):
                             r = subprocess.run(
                                 ["sudo", python_path, "-m", "pip", "install", pkg,
                                  "--break-system-packages", "-q"],
-                                capture_output=True, text=True, timeout=120)
+                                **subprocess_args(capture_output=True, text=True, timeout=120))
                             if r.returncode != 0:
                                 return False, (r.stderr or r.stdout or "install failed")[:200]
                     else:
                         r = subprocess.run(
                             ["sudo", python_path, "-m", "pip", "install", pkg, "-q"],
-                            capture_output=True, text=True, timeout=120)
+                            **subprocess_args(capture_output=True, text=True, timeout=120))
                         if r.returncode != 0:
                             return False, (r.stderr or r.stdout or "sudo install failed")[:200]
             else:
@@ -833,13 +839,13 @@ class EnvCreateDialog(QDialog):
                         r = subprocess.run(
                             [python_path, "-m", "pip", "install", pkg,
                              "--break-system-packages", "--user", "-q"],
-                            capture_output=True, text=True, timeout=120)
+                            **subprocess_args(capture_output=True, text=True, timeout=120))
                         if r.returncode != 0:
                             return False, (r.stderr or r.stdout or "pip install failed")[:200]
                 else:
                     r = subprocess.run(
                         [python_path, "-m", "pip", "install", pkg, "--user", "-q"],
-                        capture_output=True, text=True, timeout=120)
+                        **subprocess_args(capture_output=True, text=True, timeout=120))
                     if r.returncode != 0:
                         return False, (r.stderr or r.stdout or "pip install failed")[:200]
 

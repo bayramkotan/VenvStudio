@@ -409,6 +409,17 @@ F130'da kısaca geçiyor, ayrı bir büyük kategori olsun: **"📊 Görselleşt
 - [x] `env_dialog.py` — uv/poetry/pipx create (`_do_alt_create` öncesi + `_on_alt_done`)
 - Artık tüm env tipleri için banner_start/success/error terminal'de gözüküyor ve sağ kenar hizalı
 
+### ✅ B149 — venv create exit=1 stderr='' olunca boş error mesajı (TAMAMLANDI v1.4.68)
+- Debian 13 (ve başka sistemlerde de olabilir): `python3 -m venv /path` komutu exit=1 döndürüyor ama **stderr boş**, hata mesajı stdout'a gidiyor
+- Sonuç: UI'da "Failed to create environment:" kutusu açılıyor, yanında hiçbir şey yok — kullanıcı ne olduğunu anlayamıyor
+- **Sebep**: `venv_manager.py::create_venv` sadece `result.stderr`'i kontrol ediyor ve gösteriyordu; stdout atılıyordu
+- **Fix**:
+  - Hata detection: `_combined = stderr + "\n" + stdout` — iki stream'i birleştir
+  - Hata mesaj gösterme: `_combined` içeriği göster, her iki stream'i de dahil et
+  - `"python3-venv"` ve `"ensurepip is not available"` substring'leri detection'a eklendi (yeni varyasyonları tetiklesinler)
+  - Fallback error mesajı: eğer stdout+stderr tamamen boşsa, failure komutu ve platform-specific ipuçları göster (Debian apt, Windows Store alias, macOS xcode-select)
+- Artık kullanıcı tam olarak ne hata olduğunu görecek, hangi platforma göre ne yapacağını bilecek
+
 ### 🐛 B148 — Poetry Env Oluştururken Random Suffix Eklenir
 - Kullanıcı env adı "pppp" girer → Poetry `pppp-GwxGrfX--py3.14` klasörü oluşturur
 - Environments tablosunda `pppp-GwxGrfX` görünür, kullanıcı şaşırır
@@ -419,6 +430,155 @@ F130'da kısaca geçiyor, ayrı bir büyük kategori olsun: **"📊 Görselleşt
   - **C) Yarın A+B hibrit**: Sadece VenvStudio'nun oluşturduğu env'ler için `POETRY_VIRTUALENVS_PATH=<venvstudio_dir>/<name>` ayarla, subprocess'e pass et
 - **Öncelik**: Orta — kullanıcıyı confuse ediyor ama işlevsel hata değil
 - **Etkilenen dosya**: `env_dialog.py` (_do_alt_create içindeki poetry bloğu), `venv_manager.py` (list_venvs — display_name okumalı), main_window table render
+
+### 🔴 B150 — VenvStudio Sürekli Çöküyor (Yüksek Öncelik)
+- Özellikle ilk açılışta çöküyor
+- Yeni versiyonu yükleyince: kontrol yapıp çöküyor ve sürekli çöküyor
+- Workaround: `%appdata%/VenvStudio` klasörünü silmek — ondan sonra çökmeler duruyor
+- **Muhtemel sebep**: bozuk config JSON, eski cache, eski preset listesi uyumsuzluğu
+- **Çözüm**:
+  - Config yükleme sırasında her JSON dosyasını try/except ile sarmalı, bozuksa backup + reset
+  - Schema versioning — eski format tespit edince migrate et veya temiz başla
+  - Cache klasörünü yeni versiyon ilk açılışında sil/migrate et
+  - Startup sequence'te her adım için fallback
+- **Dosya**: `main.py` startup, `src/core/config.py`, `src/core/cache_manager.py`
+
+### 🔴 B151 — Windows EXE Çok Yavaş + Terminal Pencereleri Açılıp Kapanıyor
+- Windows'ta EXE açılırken çok kasılıyor
+- EXE açılmadan ÖNCE bir sürü terminal açılıp kapanıyor (muhtemelen subprocess probe'ları)
+- **Sebep**:
+  - PyInstaller/Nuitka frozen EXE'de startup probe'ları subprocess olarak çağrılıyor, her biri `CREATE_NO_WINDOW` flag'sız
+  - Python detection, pip detection, tool detection paralel değil
+- **Çözüm**:
+  - Tüm startup subprocess'lerine `CREATE_NO_WINDOW` ekle (B96 fix'i tüm yerlerde değil, sadece scan_pythons'da yapılmış)
+  - Asenkron paralel probe: `concurrent.futures.ThreadPoolExecutor` ile
+  - Splash screen göster, ilk probe'lar arka planda koşarken
+  - Heavy imports'ları lazy load
+- **Dosya**: `main.py`, `src/core/cli_tools_manager.py`, `src/core/toolchain_manager.py`, `src/gui/settings_page.py::_scan_pythons`
+
+### 🟡 B152 — Fedora Linux Terminalde Emojiler OK, VenvStudio'da Görünmüyor
+- Fedora 43'te terminal'de emoji çıkıyor (Noto Color Emoji kurulu)
+- Aynı sistemde VenvStudio GUI'sinde emoji kutu olarak görünüyor
+- **Related**: B140 — aynı sorun, Qt 6.11 + Fedora PySide6 build'i COLRv1 renderleyemiyor
+- B140 altında detaylı dokümantasyon var, 5 çözüm önerisi mevcut
+- **Öncelik**: Düşük — CachyOS, Windows, diğer Linux'lar OK
+
+### 🔴 B153 — SUSE Linux: env Yaratıldıktan Sonra Çöküyor
+- openSUSE'de bir env oluşturulduktan sonra VenvStudio çöküyor
+- Log lazım — env create sonrası hangi callback/refresh çağrısı crash ediyor
+- **Araştırılacak**:
+  - `python main.py 2>&1 | tee /tmp/suse.log` ile terminal çıktısı
+  - Crash sonrası log kontrol
+  - `_refresh_env_list` veya `_on_env_selected` içinde SUSE-spesifik path/glob sorunu olabilir
+- **Muhtemel sebep**: openSUSE'nin alternatif Python path'leri (`/usr/lib64/python3.x`), glob pattern'ı uyumsuz
+
+### 🟡 B154 — Bazı Editör "Yüklü" Gösteriliyor Ama Aslında Kaldırılmış
+- Editor Integration panelinde (v1.4.67) bazı editörler "● Installed" gösterilirken aslında sistemden uninstall edilmiş
+- **Sebep**: `detect_editors()` fonksiyonu iki kriterle kontrol ediyor:
+  - Binary PATH'te var mı
+  - Config dir (örn. `~/.config/Code/`) var mı
+- Kullanıcı editörü kaldırsa bile config dir kalıyor — detection "installed" diyor
+- **Çözüm**:
+  - Sadece binary kontrolü yeterli olabilir (config dir opsiyonel)
+  - Veya: her ikisi de gerekli → config dir varsa binary'yi de zorunlu kıl
+  - "Config orphan" durumu için özel ikon: "○ Config exists but binary missing"
+- **Dosya**: `src/core/editor_integration.py::detect_editors`
+
+### 🟢 B155 — Terminal'den Başlatıldığında Ctrl+C / Ctrl+D VenvStudio'yu Kapatmıyor
+- `python main.py` ile başlatıldığında Ctrl+C veya Ctrl+D tuşu terminal'de etkisiz
+- Qt event loop sinyali yakalıyor ama çıkışa dönüştürmüyor
+- **Çözüm**:
+  - `main.py`'de SIGINT handler ekle: `signal.signal(signal.SIGINT, lambda *a: QApplication.quit())`
+  - Qt için özel: `QTimer` ile Python event loop'u tetikle (Qt'nin Python sinyalleri yakalama sorunu için klasik workaround)
+- **Dosya**: `main.py` startup bloğu
+
+---
+
+### ✨ F141 — First-Run Kurulum Sihirbazı (Paket Bağımlılıkları)
+- VenvStudio ilk açılışta tüm sistemlerde gerekli paketleri yüklemek için soracak
+- **Linux**:
+  - `python-is-python3` (Debian/Ubuntu'da çoğu script `python` bekler)
+  - `python3-venv`, `python3.X-venv` (tüm yüklü Python versiyonları için)
+  - `python3-pip`
+  - `python3-virtualenv` (opsiyonel)
+  - İkon teması (Adwaita/Papirus/Breeze)
+  - Terminal emulator check
+- **macOS**: Xcode Command Line Tools kontrolü (`xcode-select --install`)
+- **Windows**: python.org check — Store alias uyarısı, Python yoksa indir butonu
+- **Tüm sistemler**: Python yüklü değilse Python indirmek için soracak (exe, appimage installer'ı bile dahil)
+- Kutucuklu check listesi, "Hepsini Kur" / "Seç" / "Atla" butonları
+- `~/.venvstudio/first_run_completed` marker dosyası ile bir kez çalıştır
+- **F134** ile aynı konsept — birleştirilebilir
+
+### ✨ F142 — VenvStudio'nun Kendi Gereksinimlerini AppImage/EXE İçinde Tut + Settings'te Yükle
+- Bazı Linux distrolarında VenvStudio çalışması için şu komutları gerekiyor:
+  ```
+  pip install shiboken6 --break-system-packages -U
+  sudo pip install PySide6 --break-system-packages -U
+  ```
+- AppImage/EXE içinde PySide6 + shiboken6 wheel'leri embed edilmeli
+- Sistem Python'unda yoksa: Settings altında "Install missing dependencies" butonu
+- Buton: `pip install --break-system-packages shiboken6 PySide6` komutunu subprocess olarak çalıştırır
+- Hedef: kullanıcı VenvStudio'yu çalıştırabilsin, önceden terminal'de elle komut koşmak zorunda kalmasın
+
+### ✨ F143 — Settings'te Spyder Yorumcu Ayarı
+- Spyder yüklüyse Settings altına bir bölüm: "Spyder → Use VenvStudio-selected venv as interpreter"
+- Spyder config dosyası: `~/.config/spyder-py3/config/spyder.ini` (Linux), `%APPDATA%/spyder-py3/config/spyder.ini` (Windows)
+- `[main_interpreter]` section'ında `custom_interpreter = /path/to/venv/bin/python`
+- Editor Integration paneline Spyder satırı eklenmeli (mevcut 7 editörün yanına)
+
+### ✨ F144 — Presets'te Paket Bilgi Penceresi
+- Preset'lere tıklandığında yüklenecek kütüphanelerin **açıklamaları + isimleri alt alta** bir info/liste olsun
+- Launch'daki "Links ›" gibi benzer bir görünüm ama pencere açılsın
+- İçerik: paket adı, 1-2 satır açıklama, versiyon (varsa)
+- Örnek "ML Basics" presetine tıkla → popup: numpy (numerical computing), pandas (data analysis), scikit-learn (ML algorithms)...
+- **Dosya**: `src/gui/package_panel.py` Presets tab, `src/utils/constants.py::PACKAGE_CATALOG`
+
+### ✨ F145 — View → Dependencies → Launch Apps Tablosu
+- View menüsüne yeni menu item: "Dependencies"
+- Alt menü: "Launch Apps" — her Launcher app'inin bağımlılıklarını listeleyen tablo
+- Tablo: App Name | Required Packages | Versions
+- **Düzenlenebilir** olursa daha iyi (kullanıcı kendi versiyon constraint'i ekleyebilir)
+- **JSON'da tutulursa AppData altında transferi daha rahat**
+- Dosya: `~/.venvstudio/launch_deps.json` (user override) + default `src/utils/constants.py::LAUNCH_APPS`
+- Launch öncesi bu JSON okunup install komutuna versiyonlar eklenir
+
+### ✨ F146 — Open Terminal → Eğitici Komutlarla Aç
+- Env seçiliyken "Open Terminal" → normal terminal açılır
+- Yeni davranış: terminal açılıp env aktive edildikten sonra **eğitici komutlar prompt olarak** gelsin:
+  ```bash
+  # Try these commands:
+  pip list                    # list installed packages
+  pip show <package>          # info about a package
+  python --version
+  deactivate                  # exit the environment
+  ```
+- Bash/Zsh için `.bashrc` rcfile, Fish için `fish --init-command`, PowerShell için `-NoExit -Command`
+- Conda için: `conda list`, `micromamba list`
+- Poetry için: `poetry show --tree`, `poetry add <pkg>`
+- uv için: `uv pip list`, `uv pip install <pkg>`
+
+### ✨ F147 — Learn Bookmark (Quick Launch Bölgesine Eklenebilir)
+- Learn topic'inde bookmark/favorite butonu
+- Bookmark'lar sidebar'da Quick Launch'ın olduğu bölgede listelenir
+- Tek tıkla Learn topic'ine hızlı geçiş
+- `~/.venvstudio/learn_bookmarks.json` ile persistent
+
+### ✨ F148 — Learn'den Proje Hazırla Butonu (Editör Entegrasyonu)
+- Learn → bir topic seçili → kod snippet'inin yanında yeni buton: "Open in Editor" veya "Prepare Project"
+- İki mod:
+  - **Path seçerek**: Kullanıcı path belirler, snippet `.py` olarak yazılır + editör açılır
+  - **Direkt**: Geçici dosya açılır, kullanıcı editor içinde "Save As" ile yol belirler
+- Editör seçimi: Settings'teki default editor (Editor Integration panelinden)
+- Workflow: Learn topic → "Prepare Project" → VS Code açılır + kod dosyası hazır + VenvStudio venv'i aktif
+
+### ✨ F150 — "Verify Python/venv" Sırasında Progress Bar
+- Settings → Python Versions → Verify butonuna basınca Windows sanki donuyor gibi
+- Aslında arkada subprocess çalışıyor ama UI feedback yok
+- **Çözüm**: İşlem sırasında progress bar veya indeterminate spinner göster
+- "Verifying Python installations... (this may take a minute)" gibi status mesajı
+- İşlem async olmalı, UI donmamalı (QThread veya QRunnable)
+- **Dosya**: `src/gui/settings_page.py::_verify_python_installations`
 
 ---
 
@@ -1269,6 +1429,23 @@ Olması gereken fark:
 ---
 
 ## 🔚 SON SIRA (ertelendi)
+
+### ✨ F149 — Launch Uygulamalarının Üstünde Learn'e Link (GELECEK — Learn Tam Bitince)
+- Launch'daki her uygulama kartının üstünde bir "Learn" linki
+- Örneğin: Jupyter kartında "📖 Learn about Jupyter" → Learn → Jupyter topic'ine atar
+- **Şimdi değil — Learn tamamen bitince yapılacak** (yeterli topic içeriği olunca)
+- Jamovi, JASP, Ollama, JupyterLab... tüm Launch uygulamaları için Learn içerikleri lazım:
+  - "Jupyter nedir, nasıl kullanılır"
+  - "JASP — istatistiksel analiz için GUI"
+  - "Ollama — lokal LLM çalıştırma"
+  - "JupyterLab vs Jupyter Notebook farkı"
+  - "Jamovi — SPSS alternatifi istatistik GUI'si"
+  - "Spyder IDE nedir, kimler için uygun"
+  - "Streamlit nasıl demo yapılır"
+  - "Gradio ML model demo framework"
+  - vb.
+- Learn içeriği yeterince dolunca bu kart üstü link eklenecek
+- **Related**: F137 Stats/Math, F136 Python Basics zaten var — Launch uygulamaları için ayrı kategori gerekir
 
 ### 🐛 B137 — Form yüklenmeden hareket ettirince çöküyor (ERTELENDİ)
 - Uygulama ilk açıldığında ana pencereyi form elemanları yüklenmeden sürüklemeye çalışınca crash oluyor

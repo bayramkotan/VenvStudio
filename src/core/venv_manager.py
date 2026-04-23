@@ -290,7 +290,13 @@ class VenvManager:
             )
 
             if result.returncode != 0:
-                stderr_lower = (result.stderr or "").lower()
+                # B149: On Debian/Ubuntu, Python 3.14+, and some Windows configs
+                # the actual error message goes to STDOUT, not stderr. Combine
+                # both streams for both detection and user display so the user
+                # always sees what went wrong instead of an empty "Failed to
+                # create environment:" box.
+                _combined = ((result.stderr or "") + "\n" + (result.stdout or "")).strip()
+                stderr_lower = _combined.lower()
 
                 # ensurepip/default-pip failure — Python 3.14+ removed --default-pip
                 # Retry with --without-pip then install pip manually
@@ -307,7 +313,8 @@ class VenvManager:
                     if retry.returncode != 0:
                         if venv_path.exists():
                             shutil.rmtree(venv_path, ignore_errors=True)
-                        return False, f"Failed to create environment:\n{retry.stderr}"
+                        _retry_msg = ((retry.stderr or "") + "\n" + (retry.stdout or "")).strip()
+                        return False, f"Failed to create environment:\n{_retry_msg or '(no output)'}"
                     # Install pip manually via ensurepip
                     python_in_venv = get_python_executable(venv_path)
                     if callback:
@@ -317,7 +324,7 @@ class VenvManager:
                         capture_output=True, text=True, timeout=60,
                     )
 
-                elif "no module named venv" in stderr_lower:
+                elif "no module named venv" in stderr_lower or "python3-venv" in stderr_lower or "ensurepip is not available" in stderr_lower:
                     if venv_path.exists():
                         shutil.rmtree(venv_path, ignore_errors=True)
                     venv_installed = self._try_install_venv_package(python_exe, callback)
@@ -328,10 +335,11 @@ class VenvManager:
                         if retry.returncode != 0:
                             if venv_path.exists():
                                 shutil.rmtree(venv_path, ignore_errors=True)
-                            return False, f"Failed to create environment after installing python3-venv:\n{retry.stderr}"
+                            _retry_msg = ((retry.stderr or "") + "\n" + (retry.stdout or "")).strip()
+                            return False, f"Failed to create environment after installing python3-venv:\n{_retry_msg or '(no output)'}"
                     else:
                         return False, (
-                            f"Failed to create environment:\n{result.stderr}\n\n"
+                            f"Failed to create environment:\n{_combined or '(no output)'}\n\n"
                             f"💡 The 'venv' module may be missing.\n"
                             f"Install it with your package manager:\n"
                             f"  Debian/Ubuntu/Pardus: sudo apt install python3-venv\n"
@@ -341,7 +349,22 @@ class VenvManager:
                 else:
                     if venv_path.exists():
                         shutil.rmtree(venv_path, ignore_errors=True)
-                    return False, f"Failed to create environment:\n{result.stderr}"
+                    # Show combined stdout+stderr; if both empty, fall back to
+                    # a helpful message listing the exact command that failed.
+                    if _combined:
+                        return False, f"Failed to create environment (exit {result.returncode}):\n{_combined}"
+                    return False, (
+                        f"Failed to create environment (exit {result.returncode}).\n"
+                        f"The command produced no output — this is unusual.\n\n"
+                        f"Command: {' '.join(str(c) for c in cmd)}\n\n"
+                        f"💡 Common causes:\n"
+                        f"  • Debian/Ubuntu/Pardus: 'python3-venv' package not installed\n"
+                        f"    → sudo apt install python3-venv\n"
+                        f"  • Windows: Python Store alias blocking — disable under\n"
+                        f"    Settings → Apps → App execution aliases\n"
+                        f"  • macOS: Xcode Command Line Tools missing\n"
+                        f"    → xcode-select --install"
+                    )
 
             pip_exe = get_pip_executable(venv_path)
             python_in_venv = get_python_executable(venv_path)

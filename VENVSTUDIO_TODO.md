@@ -409,7 +409,7 @@ F130'da kısaca geçiyor, ayrı bir büyük kategori olsun: **"📊 Görselleşt
 - [x] `env_dialog.py` — uv/poetry/pipx create (`_do_alt_create` öncesi + `_on_alt_done`)
 - Artık tüm env tipleri için banner_start/success/error terminal'de gözüküyor ve sağ kenar hizalı
 
-### ✅ B158 — Open Folder Context Menu Kaybı + subprocess_args Import Hatası (TAMAMLANDI v1.4.70)
+### ✅ B158 — Open Folder Context Menu Kaybı + subprocess_args Import Hatası (TAMAMLANDI v1.4.71)
 - **Kayıp 1**: v1.4.69 push sırasında `main_window.py`'de "📁 Open Folder" context menu action yanlışlıkla silindi (e409244 commit'indeki kod sonraki rewrite'larda kayboldu)
 - **Fix**: e409244 commit'inden kod geri alındı:
   - Context menu'ye "📁 Open Folder" QAction (Open Terminal'dan sonra)
@@ -529,13 +529,14 @@ F130'da kısaca geçiyor, ayrı bir büyük kategori olsun: **"📊 Görselleşt
   - "Config orphan" durumu için özel ikon: "○ Config exists but binary missing"
 - **Dosya**: `src/core/editor_integration.py::detect_editors`
 
-### 🟢 B155 — Terminal'den Başlatıldığında Ctrl+C / Ctrl+D VenvStudio'yu Kapatmıyor
-- `python main.py` ile başlatıldığında Ctrl+C veya Ctrl+D tuşu terminal'de etkisiz
-- Qt event loop sinyali yakalıyor ama çıkışa dönüştürmüyor
-- **Çözüm**:
-  - `main.py`'de SIGINT handler ekle: `signal.signal(signal.SIGINT, lambda *a: QApplication.quit())`
-  - Qt için özel: `QTimer` ile Python event loop'u tetikle (Qt'nin Python sinyalleri yakalama sorunu için klasik workaround)
-- **Dosya**: `main.py` startup bloğu
+### ✅ B155 — Terminal'den Başlatıldığında Ctrl+C / Ctrl+D VenvStudio'yu Kapatmıyor (TAMAMLANDI v1.4.71)
+- `python main.py` ile başlatıldığında Ctrl+C veya Ctrl+D tuşu terminal'de etkisizdi — Qt event loop Python sinyalini yakalamıyordu
+- **Fix** — `main.py`'de `QApplication` oluşturulduktan hemen sonra:
+  - `signal.signal(SIGINT, lambda *_: app.quit())` — Ctrl+C QApplication.quit tetikler
+  - `signal.signal(SIGTERM, lambda *_: app.quit())` — bonus: `kill <pid>` de çalışır
+  - QTimer noop hack (200ms interval) — Qt event loop Python yorumlayıcısına periyodik kontrol şansı verir, sinyal gecikmesini önler
+  - Main thread değilse (embedded) sessizce atla (ValueError/OSError try/except)
+- Terminal'den başlatanlar için klasik Qt/Python problemi çözümü
 
 ---
 

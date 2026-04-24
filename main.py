@@ -496,6 +496,25 @@ def main():
         qInstallMessageHandler(_qt_message_handler)
         app.setApplicationName(APP_NAME)
 
+        # ── B155: Allow Ctrl+C / Ctrl+D to close VenvStudio when launched from
+        # a terminal. Qt's event loop normally blocks Python's signal handling,
+        # so we (a) wire SIGINT/SIGTERM to QApplication.quit and (b) wake the
+        # interpreter periodically so incoming signals actually get processed.
+        import signal as _signal
+        try:
+            _signal.signal(_signal.SIGINT,  lambda *_: app.quit())
+            _signal.signal(_signal.SIGTERM, lambda *_: app.quit())
+        except (ValueError, OSError):
+            # Not in main thread (e.g. embedded) — skip silently
+            pass
+        # Noop timer forces Qt back to the Python interpreter every 200ms so
+        # pending signals (Ctrl+C) are delivered. Without this the handler may
+        # only run after the next UI event.
+        from PySide6.QtCore import QTimer as _QTimer
+        _sigtimer = _QTimer()
+        _sigtimer.start(200)
+        _sigtimer.timeout.connect(lambda: None)
+
         # ── Single instance check ──
         _single_instance_server = _ensure_single_instance()
         if _single_instance_server is None:

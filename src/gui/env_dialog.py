@@ -1002,13 +1002,13 @@ class EnvCreateDialog(QDialog):
                     self.status_label.setStyleSheet("color: #a6e3a1; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"✅ {message}")
                     self.env_created.emit(name)
-                    from PySide6.QtCore import QTimer
-                    QTimer.singleShot(800, self.accept)
+                    # Keep dialog open so user can see commands. Cancel → Close.
+                    self.cancel_btn.setText("Close")
                 else:
                     banner_error(f"Could not create '{name}'", details=[str(message)])
                     self.status_label.setStyleSheet("color: #f38ba8; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"❌ {message}")
-                    QMessageBox.critical(self, "Error", message)
+                    self.cancel_btn.setText("Close")
 
             from src.gui.package_panel import WorkerThread
             self.worker = WorkerThread(_do_conda_create)
@@ -1410,13 +1410,13 @@ class EnvCreateDialog(QDialog):
                     self.status_label.setStyleSheet("color: #a6e3a1; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"✅ {message}")
                     self.env_created.emit(_name)
-                    from PySide6.QtCore import QTimer
-                    QTimer.singleShot(800, self.accept)
+                    # Keep dialog open so user can see commands. Cancel → Close.
+                    self.cancel_btn.setText("Close")
                 else:
                     banner_error(f"Could not create '{_name}'", details=[str(message)])
                     self.status_label.setStyleSheet("color: #f38ba8; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"❌ Failed")
-                    QMessageBox.critical(self, "Error", message)
+                    self.cancel_btn.setText("Close")
 
             from src.gui.package_panel import WorkerThread
             self.worker = WorkerThread(_do_alt_create)
@@ -1497,8 +1497,9 @@ class EnvCreateDialog(QDialog):
             self.status_label.setText("✅ " + message)
             self.progress_bar.setRange(0, 100)
             self.progress_bar.setValue(100)
-            QMessageBox.information(self, "Success", message)
-            self.accept()
+            # Don't auto-close — keep dialog open so user can read the
+            # educational commands on the right. Cancel button becomes Close.
+            self.cancel_btn.setText("Close")
         else:
             self.status_label.setText("❌ " + message[:200])
             QMessageBox.critical(self, "Error", message)

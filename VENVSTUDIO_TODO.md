@@ -409,6 +409,25 @@ F130'da kısaca geçiyor, ayrı bir büyük kategori olsun: **"📊 Görselleşt
 - [x] `env_dialog.py` — uv/poetry/pipx create (`_do_alt_create` öncesi + `_on_alt_done`)
 - Artık tüm env tipleri için banner_start/success/error terminal'de gözüküyor ve sağ kenar hizalı
 
+### ✅ B157 — Linux venv Detection Yanlış Distro + Yanlış Paket Önerisi (TAMAMLANDI v1.4.69)
+- **Sorun**: CachyOS'ta VenvStudio "python3-venv missing" popup'ı gösterdi — ama zaten vardı
+- **3 ayrı hata bir arada**:
+  1. **Detection hatalı**: `subprocess.run(["python3", ...])` çağrılıyor. Arch/CachyOS'ta `/usr/bin/python3` symlink'i olmayabilir, sadece `/usr/bin/python` var. FileNotFoundError → popup tetikleniyor
+  2. **Yanlış install komutu**: Distro ne olursa olsun `sudo apt-get install python3-venv` deniyor (CachyOS'ta apt yok tabii)
+  3. **Yanlış manual instructions**: `sudo pacman -S python-virtualenv` öneriyordu — Arch'ta venv zaten `python` paketinin içinde, ayrı paket yok
+- **Fix**:
+  - `shutil.which("python3") or shutil.which("python")` ile doğru executable bulunuyor
+  - `_detect_linux_distro()` helper'ı eklendi — `/etc/os-release` okuyup ID ve ID_LIKE alanlarına bakıyor
+  - Distro-aware install komutu:
+    - **Arch family** (arch, cachyos, manjaro, endeavouros): `pacman -S --needed python` (venv zaten içinde)
+    - **Fedora family** (fedora, rhel, centos): `dnf install python3-virtualenv`
+    - **openSUSE**: `zypper install python3-virtualenv`
+    - **Debian family** (debian, ubuntu, pardus, mint): `apt install python3-venv`
+    - **Fallback**: PATH'te hangi package manager varsa onu kullan
+  - Manual instructions mesajı da distro-aware
+  - `apt-get` yerine `apt` kullanılıyor (modern Debian/Ubuntu)
+- **Dosya**: `src/gui/main_window.py::_check_linux_venv_module` + yeni `_detect_linux_distro` helper
+
 ### ✅ B149 — venv create exit=1 stderr='' olunca boş error mesajı (TAMAMLANDI v1.4.68)
 - Debian 13 (ve başka sistemlerde de olabilir): `python3 -m venv /path` komutu exit=1 döndürüyor ama **stderr boş**, hata mesajı stdout'a gidiyor
 - Sonuç: UI'da "Failed to create environment:" kutusu açılıyor, yanında hiçbir şey yok — kullanıcı ne olduğunu anlayamıyor

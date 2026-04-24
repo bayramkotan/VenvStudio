@@ -409,6 +409,16 @@ F130'da kısaca geçiyor, ayrı bir büyük kategori olsun: **"📊 Görselleşt
 - [x] `env_dialog.py` — uv/poetry/pipx create (`_do_alt_create` öncesi + `_on_alt_done`)
 - Artık tüm env tipleri için banner_start/success/error terminal'de gözüküyor ve sağ kenar hizalı
 
+### ✅ B158 — Open Folder Context Menu Kaybı + subprocess_args Import Hatası (TAMAMLANDI v1.4.70)
+- **Kayıp 1**: v1.4.69 push sırasında `main_window.py`'de "📁 Open Folder" context menu action yanlışlıkla silindi (e409244 commit'indeki kod sonraki rewrite'larda kayboldu)
+- **Fix**: e409244 commit'inden kod geri alındı:
+  - Context menu'ye "📁 Open Folder" QAction (Open Terminal'dan sonra)
+  - Yeni `_open_env_folder()` method — `platform_utils.open_folder()` çağırıyor
+  - `_open_package_manager` ve `_open_terminal` real_path sync (pipx/poetry gerçek path için)
+- **Hata 2**: v1.4.69 startup'ta `NameError: name 'subprocess_args' is not defined` — `_check_linux_venv_module` fonksiyonunda `subprocess_args` kullanıyordu ama import eksikti
+- **Fix**: `_check_linux_venv_module` fonksiyonu içine `from src.utils.platform_utils import subprocess_args` eklendi
+- **Dosya**: `src/gui/main_window.py`
+
 ### ✅ B157 — Linux venv Detection Yanlış Distro + Yanlış Paket Önerisi (TAMAMLANDI v1.4.69)
 - **Sorun**: CachyOS'ta VenvStudio "python3-venv missing" popup'ı gösterdi — ama zaten vardı
 - **3 ayrı hata bir arada**:

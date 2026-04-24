@@ -1255,6 +1255,11 @@ class MainWindow(QMainWindow):
         a_terminal.triggered.connect(self._open_terminal)
         menu.addAction(a_terminal)
 
+        a_folder = QAction("📁 Open Folder", self)
+        a_folder.setToolTip("Open the environment folder in your file manager")
+        a_folder.triggered.connect(self._open_env_folder)
+        menu.addAction(a_folder)
+
         a_default = QAction("⭐ Make Default", self)
         a_default.triggered.connect(self._make_default_env)
         menu.addAction(a_default)
@@ -1889,7 +1894,8 @@ class MainWindow(QMainWindow):
         name = self._get_selected_env_name()
         if not name:
             return
-        venv_path = self.venv_manager.base_dir / name
+        # Use real path (handles pipx: ~/.local/share/pipx, poetry: ~/.cache/pypoetry/...)
+        venv_path = self._get_env_path(name) or (self.venv_manager.base_dir / name)
         self.package_panel.set_venv(venv_path)
         self._switch_page(0)
 
@@ -1897,9 +1903,36 @@ class MainWindow(QMainWindow):
         name = self._get_selected_env_name()
         if not name:
             return
+        self._log.info(f"_open_terminal: env={name!r}")
+        # Ensure package_panel has the correct real path for this env before
+        # delegating (pipx/poetry live outside base_dir).
+        real_path = self._get_env_path(name) or (self.venv_manager.base_dir / name)
+        cur = getattr(self.package_panel, "_current_venv_path", None)
+        if cur is None or Path(cur) != Path(real_path):
+            self._log.debug(f"_open_terminal: syncing package_panel to {real_path}")
+            self.package_panel.set_venv(real_path)
         # Delegate to package_panel which handles all env types correctly
         self.package_panel._open_terminal_here()
         self.statusBar().showMessage(f"Opened terminal for '{name}'")
+
+    def _open_env_folder(self):
+        """Open the selected environment's folder in the system file manager."""
+        name = self._get_selected_env_name()
+        if not name:
+            return
+        real_path = self._get_env_path(name) or (self.venv_manager.base_dir / name)
+        self._log.info(f"_open_env_folder: env={name!r} path={real_path}")
+        try:
+            from src.utils.platform_utils import open_folder
+            ok, msg = open_folder(real_path)
+            if ok:
+                self.statusBar().showMessage(f"📁 {msg}")
+            else:
+                self._log.warning(f"_open_env_folder failed: {msg}")
+                QMessageBox.warning(self, "Open Folder", msg)
+        except Exception as e:
+            self._log.error(f"_open_env_folder error: {e}")
+            QMessageBox.critical(self, "Error", f"Could not open folder:\n{e}")
 
     def _open_settings(self):
         """Navigate to the settings page."""
@@ -2005,6 +2038,7 @@ class MainWindow(QMainWindow):
             return
 
         import subprocess, shutil
+        from src.utils.platform_utils import subprocess_args
         # Resolve Python executable — Arch/CachyOS has `python` but often no
         # `python3` symlink; Debian/Ubuntu has both.
         py_exe = shutil.which("python3") or shutil.which("python")

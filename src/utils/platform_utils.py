@@ -686,47 +686,48 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                     clean_env.pop(ld_var, None)
 
                 try:
+                    _snew = {"start_new_session": True}
                     if term == "gnome-terminal":
                         subprocess.Popen(
                             [term_exe, "--", system_bash, "--rcfile", _rc_path, "-i"],
-                            env=clean_env
+                            env=clean_env, **_snew
                         )
                     elif term in ("konsole", "yakuake"):
                         subprocess.Popen(
                             [term_exe, "--noclose", "-e", system_bash, "--rcfile", _rc_path, "-i"],
-                            env=clean_env
+                            env=clean_env, **_snew
                         )
                     elif term in ("xfce4-terminal", "mate-terminal", "lxterminal", "tilix"):
                         # These expect a single -e argument with shell+args as string
                         subprocess.Popen(
                             [term_exe, "-e", f"{system_bash} --rcfile '{_rc_path}' -i"],
-                            env=clean_env
+                            env=clean_env, **_snew
                         )
                     elif term == "kitty":
                         subprocess.Popen(
                             [term_exe, system_bash, "--rcfile", _rc_path, "-i"],
-                            env=clean_env
+                            env=clean_env, **_snew
                         )
                     elif term == "alacritty":
                         subprocess.Popen(
                             [term_exe, "-e", system_bash, "--rcfile", _rc_path, "-i"],
-                            env=clean_env
+                            env=clean_env, **_snew
                         )
                     elif term == "wezterm":
                         subprocess.Popen(
                             [term_exe, "start", "--", system_bash, "--rcfile", _rc_path, "-i"],
-                            env=clean_env
+                            env=clean_env, **_snew
                         )
                     elif term == "foot":
                         subprocess.Popen(
                             [term_exe, system_bash, "--rcfile", _rc_path, "-i"],
-                            env=clean_env
+                            env=clean_env, **_snew
                         )
                     else:
                         # xterm, x-terminal-emulator and others
                         subprocess.Popen(
                             [term_exe, "-e", f"{system_bash} --rcfile '{_rc_path}' -i"],
-                            env=clean_env
+                            env=clean_env, **_snew
                         )
                     return True
                 except Exception:
@@ -739,7 +740,7 @@ def open_terminal_at(path: Path, terminal_type: str = "",
 
             # Auto-detect: try common terminals in order of preference
             auto_order = [
-                "gnome-terminal", "konsole", "xfce4-terminal",
+                "gnome-terminal", "konsole", "yakuake", "xfce4-terminal",
                 "tilix", "mate-terminal", "alacritty", "kitty",
                 "wezterm", "foot", "lxterminal", "xterm", "x-terminal-emulator",
             ]
@@ -829,16 +830,31 @@ def open_folder(path) -> tuple[bool, str]:
                 "pcmanfm",      # LXDE
                 "nemo",         # Cinnamon
                 "caja",         # MATE
+                "Thunar",       # openSUSE capitalised variant
+                "xdg-open",     # retry (some distros have it in /usr/local/bin)
             ]
+            _seen = set()
             for tool in candidates:
+                if tool in _seen:
+                    continue
+                _seen.add(tool)
                 exe = shutil.which(tool)
+                if not exe:
+                    # Also search /usr/bin and /usr/local/bin directly (openSUSE PATH issues)
+                    for _d in ("/usr/bin", "/usr/local/bin", "/usr/bin/X11"):
+                        _c = os.path.join(_d, tool)
+                        if os.path.isfile(_c) and os.access(_c, os.X_OK):
+                            exe = _c
+                            break
                 if not exe:
                     continue
                 try:
                     if tool == "gio":
-                        subprocess.Popen([exe, "open", str(target)], env=clean_env)
+                        subprocess.Popen([exe, "open", str(target)], env=clean_env,
+                                         start_new_session=True)
                     else:
-                        subprocess.Popen([exe, str(target)], env=clean_env)
+                        subprocess.Popen([exe, str(target)], env=clean_env,
+                                         start_new_session=True)
                     return True, f"Opened {target} with {tool}"
                 except Exception:
                     continue

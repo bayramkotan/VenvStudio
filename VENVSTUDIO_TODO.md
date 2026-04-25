@@ -4,6 +4,25 @@
 
 ## 🔴 EN ÖNCELİKLİ (Sonraki Sprint)
 
+### 🔴 REFACTOR — Büyük Dosyaları Parçala (500+ satır)
+Settings dosyaları gibi Mixin/modül pattern uygulanacak. Öncelik sırasına göre:
+
+| Dosya | Satır | Hedef Bölünme |
+|-------|-------|---------------|
+| `src/gui/package_panel.py` | **4791** | `package_panel_launcher.py`, `package_panel_catalog.py`, `package_panel_install.py`, `package_panel_export.py` |
+| `src/gui/main_window.py` | **2754** | `main_window_workers.py` (Worker thread'ler), `main_window_env.py` (env işlemleri), `main_window_learn.py` (learn akışı), `main_window_toolbar.py` (toolbar/sidebar) |
+| `src/gui/learn_page.py` | **2051** | `learn_content.py` (LEARN_CATEGORIES verisi), `learn_page_renderer.py` (render), `learn_page_ui.py` (UI setup) |
+| `src/core/venv_manager.py` | **1837** | `venv_manager_clone.py`, `venv_manager_rename.py`, `venv_manager_cache.py` |
+| `src/gui/env_dialog.py` | **1538** | `env_dialog_conda.py`, `env_dialog_poetry.py`, `env_dialog_pipx.py` |
+| `src/utils/i18n.py` | **1492** | Veri dosyası — `i18n_tr.py`, `i18n_en.py`, `i18n_de.py` vb. dillere böl |
+| `src/gui/settings_toolchain.py` | **1286** | Zaten mixin — gerekirse `settings_toolchain_install.py` / `settings_toolchain_ui.py` |
+| `src/utils/platform_utils.py` | **850** | `platform_utils_terminal.py`, `platform_utils_path.py` |
+| `src/core/system_tools_installer.py` | **938** | `system_tools_linux.py`, `system_tools_windows.py`, `system_tools_macos.py` |
+
+**Kural:** Her bölünmede mevcut dışa açık API (metod adları, import yolları) değişmez — sadece dosya içi organizasyon değişir. `__init__.py` re-export'ları güncellenir.
+
+
+
 ### 🧠 F130 — AI / ML AKADEMİSİ (Learn Sayfasına Derinlik)
 **Hedef:** Çocukların bile anlayabileceği bir dille AI/ML kavramlarını görsel+interaktif anlatmak. Learn sayfasına yeni iki büyük bölüm eklenecek.
 

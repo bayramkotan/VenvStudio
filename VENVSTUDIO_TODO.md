@@ -1449,7 +1449,20 @@ Olması gereken fark:
   - "Create new env" altına Type seçimi eklendi (venv/uv/conda/poetry)
   - `LearnInstallDecision`'a `new_env_type` field'ı eklendi
 
-- **B160** — 🔴 openSUSE/SUSE: Open Folder / Open Terminal donuyor
+- **B160** — ✅ TAMAMLANDI (v1.4.74): openSUSE/SUSE Open Folder/Terminal donuyor
+  - `platform_utils.py` — tüm Linux `subprocess.Popen` çağrılarına `start_new_session=True` eklendi
+  - `open_folder`: openSUSE için `/usr/bin`, `/usr/local/bin` manuel path araması eklendi
+  - `auto_order`'a `yakuake` eklendi
+
+- **B163** — 🔴 Noto Color Emoji dialog "No" deyince config'e kaydedilmiyor olabilir
+  - Her açılışta tekrar soruyor mu? Kontrol edilmeli
+  - Config key: muhtemelen `noto_emoji_dismissed` veya benzeri — yoksa eklenmeli
+  - İlgili dosya: startup kontrol kodu (muhtemelen `main.py` veya `main_window.py`)
+
+- **B164** — 🔴 Kali Linux: VenvStudio her başlatıldığında `postgresql.service` authentication isteniyor
+  - VenvStudio startup'ta bir şey postgresql servisini tetikliyor
+  - Şüpheli: `system_tools_installer.py` veya toolchain manager servis durumu kontrolü
+  - Çözüm: servis durum kontrollerini `subprocess` ile değil pasif yöntemle yap (socket/file check)
   - Wayland ortamında `xdg-open` + terminal komutu askıda kalıyor
   - `open_terminal_at` ve `_open_env_folder` fonksiyonları etkileniyor
   - Çözüm: openSUSE'de varsayılan terminal ve file manager tespiti + Wayland için `nohup` / `setsid` kullanımı

@@ -1337,20 +1337,142 @@ class VenvManager:
                 "    pipx list"
             )
         if source_type == "poetry":
-            banner_warning(
-                f"Cloning a Poetry env is not supported",
-                details=["Poetry envs are tied to pyproject.toml", "Use: poetry install in new project"],
-            )
-            return False, (
-                "Cloning a Poetry environment is not supported directly.\n\n"
-                "Poetry environments are tied to a project's pyproject.toml.\n"
-                "To replicate the environment:\n\n"
-                "    cd <your-project>\n"
-                "    poetry lock\n"
-                "    poetry install\n\n"
-                "Or copy pyproject.toml + poetry.lock to the new project and run:\n\n"
-                "    poetry install"
-            )
+            # ── Poetry clone: pip freeze from real venv → new poetry project → install ─
+            try:
+                import shutil as _sh
+                poetry_bin = _sh.which("poetry") or _sh.which("poetry.exe")
+                if not poetry_bin:
+                    banner_warning(
+                        "poetry not found — cannot clone Poetry env",
+                        details=["Install poetry via Settings → Toolchain Manager"],
+                    )
+                    return False, (
+                        "poetry not found in PATH.\n\n"
+                        "Install it via Settings → Toolchain Manager, or manually:\n"
+                        "    pip install poetry"
+                    )
+
+                # Resolve real venv path (may be in .cache/pypoetry/virtualenvs/)
+                source_path_obj = Path(source_path) if source_path else (self.base_dir / source_name)
+                real_venv = source_path_obj
+                # If source_path is a poetry virtualenvs path, use it directly
+                # Otherwise look for pyvenv.cfg to confirm it's a real venv
+                if not (real_venv / "pyvenv.cfg").exists():
+                    banner_error(
+                        f"Could not find valid Poetry venv at {real_venv}",
+                        details=["pyvenv.cfg not found"],
+                    )
+                    return False, f"Could not find valid Poetry environment at {real_venv}"
+
+                # Get Python from the real venv
+                _po_py = real_venv / ("Scripts" if sys.platform == "win32" else "bin") / (
+                    "python.exe" if sys.platform == "win32" else "python"
+                )
+                if not _po_py.exists():
+                    return False, f"Python interpreter not found in Poetry env at {_po_py}"
+
+                # pip freeze from real venv
+                if callback:
+                    callback(f"Reading packages from '{source_name}' (pip freeze)...")
+                _pip = real_venv / ("Scripts" if sys.platform == "win32" else "bin") / (
+                    "pip.exe" if sys.platform == "win32" else "pip"
+                )
+                if _pip.exists():
+                    _freeze_r = _run([str(_pip), "freeze"],
+                                     capture_output=True, text=True, timeout=30)
+                else:
+                    _freeze_r = _run([str(_po_py), "-m", "pip", "freeze"],
+                                     capture_output=True, text=True, timeout=30)
+                requirements = _freeze_r.stdout if _freeze_r.returncode == 0 else ""
+
+                # Detect Python version
+                _pyver_str = ""
+                try:
+                    _pv = _run([str(_po_py), "--version"],
+                               capture_output=True, text=True, timeout=5)
+                    _pyver_str = (_pv.stdout.strip() or _pv.stderr.strip()).replace("Python ", "")
+                except Exception:
+                    pass
+
+                # Create new poetry project
+                target_path = self.base_dir / target_name
+                if callback:
+                    callback(f"Creating new Poetry project '{target_name}'...")
+                target_path.mkdir(parents=True, exist_ok=True)
+                _new_r = _run([poetry_bin, "new", str(target_path)],
+                              capture_output=True, text=True, timeout=120,
+                              cwd=str(target_path.parent))
+                if _new_r.returncode != 0:
+                    # Try init if new fails (dir already exists etc.)
+                    _init_r = _run([poetry_bin, "init", "--no-interaction", "--name", target_name],
+                                   capture_output=True, text=True, timeout=60,
+                                   cwd=str(target_path))
+                    if _init_r.returncode != 0:
+                        shutil.rmtree(target_path, ignore_errors=True)
+                        return False, f"poetry new/init failed:\n{_new_r.stderr[:400]}"
+
+                # Use same Python version
+                if _pyver_str:
+                    _use_r = _run([poetry_bin, "env", "use", str(_po_py)],
+                                  capture_output=True, text=True, timeout=60,
+                                  cwd=str(target_path))
+
+                # Install packages
+                if requirements.strip():
+                    if callback:
+                        callback(f"Installing packages into '{target_name}'...")
+                    req_file = target_path / "requirements_clone.txt"
+                    req_file.write_text(requirements)
+                    _inst_r = _run([poetry_bin, "run", "pip", "install", "-r", str(req_file)],
+                                   capture_output=True, text=True, timeout=600,
+                                   cwd=str(target_path))
+                    req_file.unlink(missing_ok=True)
+                    if _inst_r.returncode != 0:
+                        # Non-fatal — env created but some packages may have failed
+                        if callback:
+                            callback("⚠ Some packages may not have installed — check manually")
+                else:
+                    # No packages — just run poetry install to create the venv
+                    _run([poetry_bin, "install", "--no-root"],
+                         capture_output=True, text=True, timeout=120,
+                         cwd=str(target_path))
+
+                # Get real venv path
+                _po_venv_path = None
+                try:
+                    _einfo = _run([poetry_bin, "env", "info", "--path"],
+                                  capture_output=True, text=True, timeout=30,
+                                  cwd=str(target_path))
+                    _ep = _einfo.stdout.strip()
+                    if _ep and Path(_ep).exists():
+                        _po_venv_path = _ep
+                except Exception:
+                    pass
+
+                # Write marker
+                import json as _json, datetime as _dt
+                with open(target_path / ".venvstudio_env", "w") as _f:
+                    _json.dump({
+                        "type": "poetry",
+                        "name": target_name,
+                        "python_version": _pyver_str,
+                        "poetry_venv_path": _po_venv_path or "",
+                        "created": _dt.datetime.now().isoformat(),
+                    }, _f, indent=2)
+
+                banner_success(
+                    f"Poetry env cloned to '{target_name}'",
+                    details=[
+                        f"Source: {real_venv}",
+                        f"Target project: {target_path}",
+                        f"Python: {_pyver_str or 'unknown'}",
+                    ],
+                )
+                return True, f"Poetry environment '{source_name}' cloned to '{target_name}' successfully"
+
+            except Exception as e:
+                banner_error(f"Could not clone Poetry env '{source_name}'", details=[str(e)])
+                return False, f"Error cloning Poetry environment: {e}"
 
         source_path_obj = Path(source_path) if source_path else (self.base_dir / source_name)
         if not source_path_obj.exists():
@@ -1641,9 +1763,8 @@ class VenvManager:
                 "⏳ This may take a while (packages reinstalled)",
             ],
         )
-        # Check env-type support via clone's guards first
-        if env_type in ("pipx", "poetry"):
-            # Delegate to clone_venv so user gets the helpful error
+        # pipx full rename not supported — clone_venv will return helpful error
+        if env_type == "pipx":
             return self.clone_venv(old_name, new_name, callback=callback,
                                    source_path=old_path, source_type=env_type)
 

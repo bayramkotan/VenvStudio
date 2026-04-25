@@ -1430,19 +1430,27 @@ class MainWindow(QMainWindow):
         has_selection = len(rows) > 0
         self.btn_manage_pkgs.setEnabled(has_selection)
         self.btn_terminal.setEnabled(has_selection)
-        self.btn_clone.setEnabled(has_selection)
-        self.btn_rename.setEnabled(has_selection)
-        if hasattr(self, "btn_rename_full"):
-            self.btn_rename_full.setEnabled(has_selection)
-        # pipx cannot be deleted — must use Toolchain Manager
+        # Resolve env_type for button visibility rules
         _sel_type = ""
         if has_selection:
             _rows = self.env_table.selectionModel().selectedRows()
             if _rows:
                 _ti = self.env_table.item(_rows[0].row(), 1)
                 if _ti:
-                    _sel_type = _ti.text().strip().lower()
-        self.btn_delete.setEnabled(has_selection and "pipx" not in _sel_type)
+                    _sel_type = _ti.data(Qt.UserRole) or _ti.text().strip().lower()
+        _is_pipx   = _sel_type == "pipx"
+        _is_poetry = _sel_type == "poetry"
+        # Clone: hide for pipx
+        self.btn_clone.setVisible(not _is_pipx)
+        self.btn_clone.setEnabled(has_selection)
+        # Rename: hide for pipx and poetry
+        _show_rename = not _is_pipx and not _is_poetry
+        self.btn_rename.setVisible(_show_rename)
+        self.btn_rename.setEnabled(has_selection and _show_rename)
+        if hasattr(self, "btn_rename_full"):
+            self.btn_rename_full.setVisible(_show_rename)
+            self.btn_rename_full.setEnabled(has_selection and _show_rename)
+        self.btn_delete.setEnabled(has_selection)
         self.btn_export.setEnabled(has_selection)
         if hasattr(self, "btn_make_default"):
             self.btn_make_default.setEnabled(has_selection)
@@ -1528,6 +1536,14 @@ class MainWindow(QMainWindow):
         if not name:
             return
 
+        # Resolve env_type for this row
+        _ctx_type = ""
+        _type_item = self.env_table.item(index.row(), 1)
+        if _type_item:
+            _ctx_type = _type_item.data(Qt.UserRole) or _type_item.text().strip().lower()
+        _ctx_is_pipx   = _ctx_type == "pipx"
+        _ctx_is_poetry = _ctx_type == "poetry"
+
         a_manage = QAction("📦 Manage Packages", self)
         a_manage.triggered.connect(self._on_env_double_click)
         menu.addAction(a_manage)
@@ -1549,19 +1565,21 @@ class MainWindow(QMainWindow):
 
         menu.addSeparator()
 
-        a_clone = QAction("📋 Clone", self)
-        a_clone.triggered.connect(self._clone_env)
-        menu.addAction(a_clone)
+        if not _ctx_is_pipx:
+            a_clone = QAction("📋 Clone", self)
+            a_clone.triggered.connect(self._clone_env)
+            menu.addAction(a_clone)
 
-        a_rename = QAction("✏️ Rename (Name Only)", self)
-        a_rename.setToolTip("Rename folder only — fast, but pip/python paths may break on Windows")
-        a_rename.triggered.connect(self._rename_env_only)
-        menu.addAction(a_rename)
+        if not _ctx_is_pipx and not _ctx_is_poetry:
+            a_rename = QAction("✏️ Rename (Name Only)", self)
+            a_rename.setToolTip("Rename folder only — fast, but pip/python paths may break on Windows")
+            a_rename.triggered.connect(self._rename_env_only)
+            menu.addAction(a_rename)
 
-        a_rename_full = QAction("🔄 Rename (Full)", self)
-        a_rename_full.setToolTip("Clone with new name + delete old — slow but safe, all packages reinstalled")
-        a_rename_full.triggered.connect(self._rename_env_full)
-        menu.addAction(a_rename_full)
+            a_rename_full = QAction("🔄 Rename (Full)", self)
+            a_rename_full.setToolTip("Clone with new name + delete old — slow but safe, all packages reinstalled")
+            a_rename_full.triggered.connect(self._rename_env_full)
+            menu.addAction(a_rename_full)
 
         export_sub = menu.addMenu("📤 Export")
         export_sub.addAction("📄 requirements.txt", self._export_requirements)

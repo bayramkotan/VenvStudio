@@ -3,7 +3,14 @@ VenvStudio - Constants and Popular Package Catalog
 """
 
 APP_NAME = "VenvStudio"
-APP_VERSION = "1.4.72"
+APP_VERSION = "1.4.73"
+
+# ─── Shared Package Cache ─────────────────────────────────────────────────────
+# Default path for pip/uv shared download cache.
+# pip  → --cache-dir <path>
+# uv   → UV_CACHE_DIR env var
+import os as _os
+DEFAULT_SHARED_CACHE_DIR = str(_os.path.join(_os.path.expanduser("~"), ".venvstudio", "pkg-cache"))
 APP_DESCRIPTION = "Lightweight Python Virtual Environment Manager"
 APP_AUTHOR = "VenvStudio Team"
 

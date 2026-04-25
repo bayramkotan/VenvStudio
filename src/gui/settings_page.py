@@ -206,6 +206,7 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         self._theme_frames = []  # CLI/pip card frame attribute names
         self._setup_ui()
         self._load_current_settings()
+        self._load_cache_settings()
 
     # ── Helper: ℹ️ info button ──────────────────────────────────────────────
     def _make_info_btn(self, tooltip: str):
@@ -627,6 +628,63 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         path_info = QLabel("All new virtual environments will be created in this directory.")
         path_info.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         paths_layout.addRow("", path_info)
+
+        # ── Shared Package Cache ──────────────────────────────────────────────
+        from src.utils.constants import DEFAULT_SHARED_CACHE_DIR
+
+        _cache_header = QHBoxLayout()
+        self.shared_cache_cb = QCheckBox("Enable shared package cache (pip / uv)")
+        self.shared_cache_cb.setToolTip(
+            "When enabled, pip and uv will use a single shared download cache.\n"
+            "Downloaded packages are stored here and reused across all pip/uv environments,\n"
+            "saving bandwidth and speeding up installs.\n\n"
+            "Only applies to pip and uv environments — conda/poetry/pipx are unaffected."
+        )
+        _cache_header.addWidget(self.shared_cache_cb)
+        _cache_header.addStretch()
+        paths_layout.addRow(_cache_header)
+
+        _cache_path_layout = QHBoxLayout()
+        self.shared_cache_input = QLineEdit()
+        self.shared_cache_input.setPlaceholderText(DEFAULT_SHARED_CACHE_DIR)
+        self.shared_cache_input.setReadOnly(True)
+        self.shared_cache_input.setEnabled(False)
+        _cache_path_layout.addWidget(self.shared_cache_input, 1)
+
+        self._cache_browse_btn = QPushButton("Browse...")
+        self._cache_browse_btn.setObjectName("secondary")
+        self._cache_browse_btn.setFixedWidth(100)
+        self._cache_browse_btn.setEnabled(False)
+        self._cache_browse_btn.clicked.connect(self._browse_cache_dir)
+        _cache_path_layout.addWidget(self._cache_browse_btn)
+
+        self._cache_reset_btn = QPushButton("Reset")
+        self._cache_reset_btn.setObjectName("secondary")
+        self._cache_reset_btn.setFixedWidth(70)
+        self._cache_reset_btn.setEnabled(False)
+        self._cache_reset_btn.clicked.connect(self._reset_cache_dir)
+        _cache_path_layout.addWidget(self._cache_reset_btn)
+
+        self._cache_clear_btn = QPushButton("\U0001f5d1 Clear Cache")
+        self._cache_clear_btn.setObjectName("danger")
+        self._cache_clear_btn.setFixedWidth(110)
+        self._cache_clear_btn.setEnabled(False)
+        self._cache_clear_btn.setToolTip("Delete all cached packages from the shared cache directory.")
+        self._cache_clear_btn.clicked.connect(self._clear_cache_dir)
+        _cache_path_layout.addWidget(self._cache_clear_btn)
+
+        paths_layout.addRow("Cache Directory:", _cache_path_layout)
+
+        _cache_note = QLabel(
+            "Shared cache speeds up repeated installs and saves disk space on downloads. "
+            "pip/uv environments only — conda, poetry and pipx are not affected."
+        )
+        _cache_note.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
+        _cache_note.setWordWrap(True)
+        paths_layout.addRow("", _cache_note)
+
+        # Toggle enables/disables cache path controls
+        self.shared_cache_cb.toggled.connect(self._on_shared_cache_toggled)
 
         paths_group.setLayout(paths_layout)
         layout.addWidget(paths_group)

@@ -1418,14 +1418,34 @@ Olması gereken fark:
     - conda: `conda create --clone` veya `conda list --export` + `conda install --file`
     - pipx: marker klasörü kopyala
 
-- **F90** — Hardlink / Softlink Paylaşımlı Paket Deposu
-  - Büyük kütüphaneler (torch, tensorflow, opencv) her env'e ayrı kurulunca disk israfı
-  - Merkezi depo: `~/.venvstudio/shared-packages/` veya kullanıcı tanımlı path
-  - Yeni env'e paket kurulurken depoda varsa hardlink/symlink kullan
-  - Avantaj: 5 env × 2GB torch = 10GB yerine 2GB + 4 link
-  - Settings'ten açıp kapatılabilir
-  - Stratejiler: hardlink (aynı disk), symlink (farklı disk), copy (fallback)
-  - Versiyon çakışması yönetimi gerekli (torch 2.1 vs 2.2)
+- **B159** — ✅ TAMAMLANDI (v1.4.73): Learn sayfası → Install butonu 3 ayrı hata:
+  - `QTimer` import eksikti → `from PySide6.QtCore import QTimer` eklendi
+  - `_install_packages_by_name` → `_install_packages` olarak düzeltildi
+  - `LearnInstallDialog` hiç kullanılmıyordu → `_on_learn_install` tamamen yeniden yazıldı
+  - `dlg.Accepted` → `QDialog.Accepted` olarak düzeltildi
+
+- **B162** — ✅ TAMAMLANDI (v1.4.73): LearnInstallDialog UI iyileştirmeleri
+  - "Current env" ve "Default env" radio butonları kaldırıldı
+  - Dropdown'da Python path yerine kısa versiyon gösteriyor (e.g. `Python 3.12`)
+  - "Create new env" altına Type seçimi eklendi (venv/uv/conda/poetry)
+  - `LearnInstallDecision`'a `new_env_type` field'ı eklendi
+
+- **B160** — 🔴 openSUSE/SUSE: Open Folder / Open Terminal donuyor
+  - Wayland ortamında `xdg-open` + terminal komutu askıda kalıyor
+  - `open_terminal_at` ve `_open_env_folder` fonksiyonları etkileniyor
+  - Çözüm: openSUSE'de varsayılan terminal ve file manager tespiti + Wayland için `nohup` / `setsid` kullanımı
+
+- **B161** — 🔴 CLI/TUI araçları Settings'te dropdown'a taşınacak
+  - Şu an hepsi aynı sayfada listeleniyor — kalabalık görünüyor
+  - Her araç için dropdown (seç → detaylar + install butonu alta gelsin)
+  - `settings_page.py` veya `settings_toolchain.py`'de ilgili bölüm
+
+- **F90** — ✅ TAMAMLANDI (v1.4.73): Shared Package Cache (pip / uv)
+  - Settings → Paths'e toggle + cache dir + Browse + Reset + Clear Cache eklendi
+  - pip: `--cache-dir <path>`, uv: `UV_CACHE_DIR` env var inject
+  - conda/poetry/pipx etkilenmiyor
+  - Config keys: `shared_cache_enabled` (bool), `shared_cache_dir` (str)
+  - Default path: `~/.venvstudio/pkg-cache`
 
 - **F91** — Proje Görsel Haritası (Architecture Map)
   - Dosya/modül yapısı görselleştirmesi

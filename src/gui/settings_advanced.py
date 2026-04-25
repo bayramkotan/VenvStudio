@@ -332,6 +332,12 @@ class AdvancedMixin:
         new_dir = self.venv_dir_input.text()
         self.config.set_venv_base_dir(new_dir)
 
+        # Shared package cache (pip/uv only)
+        if hasattr(self, "shared_cache_cb"):
+            self.config.set("shared_cache_enabled", self.shared_cache_cb.isChecked())
+            _cache_path = self.shared_cache_input.text().strip()
+            self.config.set("shared_cache_dir", _cache_path)
+
         # General
         self.config.set("auto_upgrade_pip", self.auto_pip_cb.isChecked())
         self.config.set("confirm_delete", self.confirm_delete_cb.isChecked())
@@ -442,5 +448,60 @@ class AdvancedMixin:
                 self.config.set(key, DEFAULT_SETTINGS[key])
         self._load_current_settings()
 
+
+    # ── Shared Cache helpers ─────────────────────────────────────────────────
+
+    def _on_shared_cache_toggled(self, checked: bool):
+        """Enable/disable cache path controls based on toggle."""
+        for w in (self.shared_cache_input, self._cache_browse_btn,
+                  self._cache_reset_btn, self._cache_clear_btn):
+            w.setEnabled(checked)
+
+    def _browse_cache_dir(self):
+        """Browse for shared cache directory."""
+        from PySide6.QtWidgets import QFileDialog
+        path = QFileDialog.getExistingDirectory(
+            self, "Select Shared Cache Directory",
+            self.shared_cache_input.text() or str(Path.home()),
+        )
+        if path:
+            self.shared_cache_input.setText(path)
+
+    def _reset_cache_dir(self):
+        """Reset cache dir to default."""
+        from src.utils.constants import DEFAULT_SHARED_CACHE_DIR
+        self.shared_cache_input.setText(DEFAULT_SHARED_CACHE_DIR)
+
+    def _clear_cache_dir(self):
+        """Delete all files in the shared cache directory."""
+        import shutil
+        from PySide6.QtWidgets import QMessageBox
+        cache_path = Path(self.shared_cache_input.text().strip() or "")
+        if not cache_path.exists():
+            QMessageBox.information(self, "Clear Cache", "Cache directory does not exist — nothing to clear.")
+            return
+        reply = QMessageBox.question(
+            self, "Clear Shared Cache",
+            f"Delete all cached packages from:\n{cache_path}\n\nThis cannot be undone.",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if reply == QMessageBox.Yes:
+            try:
+                shutil.rmtree(cache_path, ignore_errors=True)
+                cache_path.mkdir(parents=True, exist_ok=True)
+                QMessageBox.information(self, "Clear Cache", "✅ Cache cleared successfully.")
+            except Exception as e:
+                QMessageBox.critical(self, "Clear Cache", f"Failed to clear cache:\n{e}")
+
+    def _load_cache_settings(self):
+        """Load shared cache settings into UI widgets."""
+        if not hasattr(self, "shared_cache_cb"):
+            return
+        from src.utils.constants import DEFAULT_SHARED_CACHE_DIR
+        _enabled = self.config.get("shared_cache_enabled", False)
+        _path = self.config.get("shared_cache_dir", "") or DEFAULT_SHARED_CACHE_DIR
+        self.shared_cache_cb.setChecked(_enabled)
+        self.shared_cache_input.setText(_path)
+        self._on_shared_cache_toggled(_enabled)
 
     # ── Package Manager helpers ───────────────────────────────────────────────

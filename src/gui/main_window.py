@@ -8,6 +8,7 @@ from pathlib import Path
 from datetime import datetime
 
 from PySide6.QtWidgets import (
+    QDialog,
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QFrame, QTableWidget, QTableWidgetItem,
     QHeaderView, QMessageBox, QFileDialog,
@@ -1013,20 +1014,86 @@ class MainWindow(QMainWindow):
             self._hide_cmd_panel()
 
     def _on_learn_install(self, packages: list):
-        """Called when Learn page requests package install — switch to Packages tab."""
-        from PySide6.QtWidgets import QMessageBox
+        """Called when Learn page requests package install — show LearnInstallDialog."""
+        from PySide6.QtCore import QTimer
+        from src.gui.learn_install_dialog import LearnInstallDialog, LearnInstallDecision
         if not packages:
             return
-        pkg_str = ", ".join(packages)
-        reply = QMessageBox.question(
-            self, "Install Packages",
-            f"Install the following packages into the current environment?\n\n{pkg_str}",
-            QMessageBox.Yes | QMessageBox.No,
+
+        # Build env list for dialog
+        envs = []
+        for row in range(self.env_table.rowCount()):
+            _ni = self.env_table.item(row, 0)
+            _ti = self.env_table.item(row, 1)
+            _pi = self.env_table.item(row, 2)
+            if _ni:
+                _name = _ni.text().strip()
+                _type = (_ti.data(Qt.UserRole) or _ti.text().strip()) if _ti else "venv"
+                _path_str = _ni.toolTip() if _ni.toolTip() else ""
+                _python = _pi.text().strip() if _pi else "?"
+                envs.append({
+                    "name": _name,
+                    "type": _type,
+                    "path": Path(_path_str) if _path_str else None,
+                    "python": _python,
+                })
+
+        if not envs:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "No Environments",
+                                "No environments found. Create one first.")
+            return
+
+        _current = self._get_selected_env_name() or ""
+        _default = self.config.get("default_env", "") if hasattr(self, "config") else ""
+        _colors = self._c() if hasattr(self, "_c") else None
+
+        dlg = LearnInstallDialog(
+            packages=packages,
+            envs=envs,
+            current_env_name=_current,
+            default_env_name=_default,
+            colors=_colors,
+            parent=self,
         )
-        if reply == QMessageBox.Yes:
-            self._switch_page(0)
+        if dlg.exec() != QDialog.Accepted or dlg.decision is None:
+            return
+
+        d = dlg.decision
+
+        if d.mode == LearnInstallDecision.MODE_NEW_VENV:
+            # Open create env dialog pre-filled, then install after creation
+            if hasattr(self, "_new_env"):
+                self._new_env()
+            return
+
+        if d.mode == LearnInstallDecision.MODE_PIPX:
+            # Switch to package panel — pipx env — and install
+            for row in range(self.env_table.rowCount()):
+                _ti = self.env_table.item(row, 1)
+                if _ti and (_ti.data(Qt.UserRole) or _ti.text()).strip() == "pipx":
+                    self.env_table.selectRow(row)
+                    self._on_env_selected(row)
+                    break
+            if d.switch_after:
+                self._switch_page(0)
             if hasattr(self, "package_panel"):
-                QTimer.singleShot(300, lambda: self.package_panel._install_packages_by_name(packages))
+                QTimer.singleShot(400, lambda: self.package_panel._install_packages(packages))
+            return
+
+        # MODE_EXISTING — switch to target env then install
+        target = d.env_name
+        for row in range(self.env_table.rowCount()):
+            _ni = self.env_table.item(row, 0)
+            if _ni and _ni.text().strip() == target:
+                self.env_table.selectRow(row)
+                self._on_env_selected(row)
+                break
+
+        if d.switch_after:
+            self._switch_page(0)
+        if hasattr(self, "package_panel"):
+            QTimer.singleShot(400, lambda: self.package_panel._install_packages(packages))
 
     def _on_ql_env_changed(self, idx):
         """Sol sidebar QL dropdown değişti — her şeyi sync et."""

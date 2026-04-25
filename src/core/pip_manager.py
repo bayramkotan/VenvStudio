@@ -32,6 +32,7 @@ class PipManager:
         self._ssl_available = None  # cached SSL check
         self._backend = backend  # "pip" or "uv"
         self._uv_exe = None  # cached uv path
+        self._shared_cache_dir: str = ""  # set by package_panel if shared cache enabled
 
     def _find_uv(self) -> Optional[str]:
         """Find uv executable — check venv, system Scripts, then PATH."""
@@ -162,6 +163,9 @@ class PipManager:
                 _cert_path = _cp
                 break
 
+        # Resolve shared cache dir
+        _cache_dir = (self._shared_cache_dir or "").strip()
+
         # Use uv if selected and available
         if self._backend == "uv":
             uv_exe = self._find_uv()
@@ -175,6 +179,9 @@ class PipManager:
             # Add --cert if SSL cert found
             if _cert_path and args and args[0] in ("install", "download", "list", "search"):
                 cmd.extend(["--cert", _cert_path])
+            # Add --cache-dir for pip if shared cache is enabled
+            if _cache_dir and args and args[0] in ("install", "download"):
+                cmd.extend(["--cache-dir", _cache_dir])
 
         # SSL sertifika dosyasını her zaman ayarla
         sp_kwargs = subprocess_args(capture_output=True, text=True, timeout=timeout)
@@ -213,6 +220,10 @@ class PipManager:
                     env["SSL_CERT_FILE"] = cp
                     env["REQUESTS_CA_BUNDLE"] = cp
                     break
+        # uv: inject UV_CACHE_DIR if shared cache enabled
+        if _cache_dir and self._backend == "uv":
+            env["UV_CACHE_DIR"] = _cache_dir
+
         sp_kwargs["env"] = env
 
         return subprocess.run(cmd, **sp_kwargs)

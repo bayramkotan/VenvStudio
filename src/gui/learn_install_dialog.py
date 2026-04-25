@@ -17,7 +17,7 @@ from typing import List, Optional
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QRadioButton, QComboBox, QLineEdit, QCheckBox, QFrame,
-    QButtonGroup, QWidget, QSizePolicy,
+    QButtonGroup, QWidget, QSizePolicy, QFormLayout,
 )
 from PySide6.QtCore import Qt
 
@@ -44,11 +44,12 @@ class LearnInstallDecision:
     MODE_PIPX = "pipx"
 
     def __init__(self, mode: str, env_name: str = "", env_path: Optional[Path] = None,
-                 new_env_name: str = "", switch_after: bool = True):
+                 new_env_name: str = "", new_env_type: str = "venv", switch_after: bool = True):
         self.mode = mode                  # "existing" | "new_venv" | "pipx"
         self.env_name = env_name          # target existing env name
         self.env_path = env_path          # target existing env path (may be None)
         self.new_env_name = new_env_name  # for MODE_NEW_VENV
+        self.new_env_type = new_env_type  # for MODE_NEW_VENV: venv/uv/conda/poetry
         self.switch_after = switch_after  # switch to Packages tab after install
 
 
@@ -143,64 +144,67 @@ class LearnInstallDialog(QDialog):
         # ── Options ────────────────────────────────────────────────
         self._group = QButtonGroup(self)
 
-        # Radio: Current env
-        if self._current:
-            self.rb_current = QRadioButton(f"✔ Current env: {self._current}")
-            self.rb_current.setStyleSheet(self._radio_style())
-            self.rb_current.setChecked(True)
-            self._group.addButton(self.rb_current, 0)
-            layout.addWidget(self.rb_current)
-        else:
-            self.rb_current = None
+        self.rb_current = None
+        self.rb_default = None
 
-        # Radio: Default env (if different)
-        if self._default and self._default != self._current:
-            self.rb_default = QRadioButton(f"⭐ Default env: {self._default}")
-            self.rb_default.setStyleSheet(self._radio_style())
-            self._group.addButton(self.rb_default, 1)
-            if not self._current:
-                self.rb_default.setChecked(True)
-            layout.addWidget(self.rb_default)
-        else:
-            self.rb_default = None
-
-        # Radio: Pick from dropdown
+        # Radio: Pick from existing env (dropdown)
         pick_row = QHBoxLayout()
-        self.rb_pick = QRadioButton("Pick an env:")
+        self.rb_pick = QRadioButton("Install into existing env:")
         self.rb_pick.setStyleSheet(self._radio_style())
+        self.rb_pick.setChecked(True)
         self._group.addButton(self.rb_pick, 2)
         pick_row.addWidget(self.rb_pick)
+        layout.addLayout(pick_row)
 
         self.env_dropdown = QComboBox()
         self.env_dropdown.setStyleSheet(
             f"QComboBox {{ background: {c['card']}; color: {c['fg']}; "
             f"border: 1px solid {c['border']}; border-radius: 4px; "
-            f"padding: 4px 8px; font-size: 13px; min-width: 220px; }}"
+            f"padding: 4px 8px; font-size: 13px; margin-left: 24px; }}"
         )
         for env in self._envs:
-            label = f"{env['name']}  ({env.get('type', 'venv')}, Python {env.get('python', '?')})"
+            _type = env.get("type", "venv")
+            _py = env.get("python", "?")
+            # Show clean version e.g. "ml  (venv, Python 3.12)"
+            _py_short = _py.split("/")[-1].split("\\")[-1] if "/" in _py or "\\" in _py else _py
+            label = f"{env['name']}  ({_type}, Python {_py_short})"
             self.env_dropdown.addItem(label, env)
         self.env_dropdown.currentIndexChanged.connect(self._on_dropdown_changed)
-        pick_row.addWidget(self.env_dropdown, 1)
-        layout.addLayout(pick_row)
+        layout.addWidget(self.env_dropdown)
 
-        # Radio: Create new venv
-        new_row = QHBoxLayout()
+        # Radio: Create new env
         self.rb_new = QRadioButton("➕ Create a new env:")
         self.rb_new.setStyleSheet(self._radio_style())
         self._group.addButton(self.rb_new, 3)
-        new_row.addWidget(self.rb_new)
+        layout.addWidget(self.rb_new)
+
+        # New env form (name + type)
+        _new_form_widget = QWidget()
+        _new_form_widget.setStyleSheet("margin-left: 24px;")
+        _new_form = QFormLayout(_new_form_widget)
+        _new_form.setSpacing(8)
+        _new_form.setContentsMargins(0, 4, 0, 4)
+
+        _input_style = (
+            f"QLineEdit, QComboBox {{ background: {c['card']}; color: {c['fg']}; "
+            f"border: 1px solid {c['border']}; border-radius: 4px; "
+            f"padding: 4px 8px; font-size: 13px; }}"
+        )
 
         self.new_name_input = QLineEdit()
         self.new_name_input.setPlaceholderText("e.g. ml-project")
-        self.new_name_input.setStyleSheet(
-            f"QLineEdit {{ background: {c['card']}; color: {c['fg']}; "
-            f"border: 1px solid {c['border']}; border-radius: 4px; "
-            f"padding: 4px 8px; font-size: 13px; min-width: 220px; }}"
-        )
+        self.new_name_input.setStyleSheet(_input_style)
         self.new_name_input.textEdited.connect(lambda _: self.rb_new.setChecked(True))
-        new_row.addWidget(self.new_name_input, 1)
-        layout.addLayout(new_row)
+        _new_form.addRow("Name:", self.new_name_input)
+
+        self.new_type_combo = QComboBox()
+        self.new_type_combo.setStyleSheet(_input_style)
+        for _t in ("venv", "uv", "conda", "poetry"):
+            self.new_type_combo.addItem(_t, _t)
+        self.new_type_combo.currentIndexChanged.connect(lambda _: self.rb_new.setChecked(True))
+        _new_form.addRow("Type:", self.new_type_combo)
+
+        layout.addWidget(_new_form_widget)
 
         # Radio: pipx (only if friendly)
         if self._is_pipx_friendly:
@@ -268,12 +272,18 @@ class LearnInstallDialog(QDialog):
 
         layout.addLayout(btn_row)
 
-        # Preselect dropdown to match current/default if available
+        # Preselect dropdown: current env first, then default, else index 0
         if self.env_dropdown.count():
-            for i, env in enumerate(self._envs):
-                if env["name"] == self._current:
-                    self.env_dropdown.setCurrentIndex(i)
-                    break
+            _preselect = self._current or self._default
+            _found = False
+            if _preselect:
+                for i, env in enumerate(self._envs):
+                    if env["name"] == _preselect:
+                        self.env_dropdown.setCurrentIndex(i)
+                        _found = True
+                        break
+            if not _found:
+                self.env_dropdown.setCurrentIndex(0)
 
     def _radio_style(self) -> str:
         c = self._c
@@ -418,10 +428,12 @@ class LearnInstallDialog(QDialog):
             if any(e["name"] == name for e in self._envs):
                 self.new_name_input.setFocus()
                 return None
+            _new_type = self.new_type_combo.currentData() if hasattr(self, "new_type_combo") else "venv"
             return LearnInstallDecision(
                 LearnInstallDecision.MODE_NEW_VENV,
                 new_env_name=name,
                 switch_after=switch,
+                new_env_type=_new_type,
             )
 
         # pipx

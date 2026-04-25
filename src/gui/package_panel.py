@@ -2825,6 +2825,16 @@ $s.Save()
 
         self.pip_manager = PipManager(venv_path, backend=backend)
         self._current_venv_path = venv_path
+        # Inject shared cache dir if enabled (pip/uv only)
+        if self.pip_manager and self._current_env_type in ("venv", "uv"):
+            try:
+                _cfg = getattr(self, "config", None)
+                if _cfg and _cfg.get("shared_cache_enabled", False):
+                    from src.utils.constants import DEFAULT_SHARED_CACHE_DIR
+                    _cp = _cfg.get("shared_cache_dir", "") or DEFAULT_SHARED_CACHE_DIR
+                    self.pip_manager._shared_cache_dir = _cp
+            except Exception:
+                pass
 
         if hasattr(self, "_env_bar_terminal_btn"):
             self._env_bar_terminal_btn.setEnabled(True)
@@ -3108,6 +3118,16 @@ $s.Save()
                 backend = "pipx"
 
             self.pip_manager = PipManager(venv_path, backend=backend)
+        # Inject shared cache dir if enabled (pip/uv only)
+        if self.pip_manager and self._current_env_type in ("venv", "uv"):
+            try:
+                _cfg = getattr(self, "config", None)
+                if _cfg and _cfg.get("shared_cache_enabled", False):
+                    from src.utils.constants import DEFAULT_SHARED_CACHE_DIR
+                    _cp = _cfg.get("shared_cache_dir", "") or DEFAULT_SHARED_CACHE_DIR
+                    self.pip_manager._shared_cache_dir = _cp
+            except Exception:
+                pass
 
             if hasattr(self, "_env_bar_terminal_btn"):
                 self._env_bar_terminal_btn.setEnabled(True)

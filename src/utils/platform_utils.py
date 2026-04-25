@@ -687,7 +687,13 @@ def open_terminal_at(path: Path, terminal_type: str = "",
 
                 try:
                     _snew = {"start_new_session": True}
-                    if term == "gnome-terminal":
+                    if term == "xdg-terminal":
+                        # openSUSE: xdg-terminal [command] — pass shell with rcfile
+                        subprocess.Popen(
+                            [term_exe, f"{system_bash} --rcfile '{_rc_path}' -i"],
+                            env=clean_env, **_snew
+                        )
+                    elif term == "gnome-terminal":
                         subprocess.Popen(
                             [term_exe, "--", system_bash, "--rcfile", _rc_path, "-i"],
                             env=clean_env, **_snew
@@ -697,10 +703,16 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                             [term_exe, "--noclose", "-e", system_bash, "--rcfile", _rc_path, "-i"],
                             env=clean_env, **_snew
                         )
-                    elif term in ("xfce4-terminal", "mate-terminal", "lxterminal", "tilix"):
+                    elif term in ("xfce4-terminal", "mate-terminal", "cinnamon-terminal", "lxterminal", "tilix"):
                         # These expect a single -e argument with shell+args as string
                         subprocess.Popen(
                             [term_exe, "-e", f"{system_bash} --rcfile '{_rc_path}' -i"],
+                            env=clean_env, **_snew
+                        )
+                    elif term == "kgx":
+                        # GNOME Console (openSUSE and others)
+                        subprocess.Popen(
+                            [term_exe, "--", system_bash, "--rcfile", _rc_path, "-i"],
                             env=clean_env, **_snew
                         )
                     elif term == "kitty":
@@ -740,9 +752,28 @@ def open_terminal_at(path: Path, terminal_type: str = "",
 
             # Auto-detect: try common terminals in order of preference
             auto_order = [
-                "gnome-terminal", "konsole", "yakuake", "xfce4-terminal",
-                "tilix", "mate-terminal", "alacritty", "kitty",
-                "wezterm", "foot", "lxterminal", "xterm", "x-terminal-emulator",
+                # GNOME
+                "gnome-terminal",   # Ubuntu, Fedora, Debian GNOME
+                "kgx",              # openSUSE GNOME (GNOME Console)
+                # KDE
+                "konsole",          # KDE Plasma
+                "yakuake",          # KDE drop-down
+                # XFCE
+                "xfce4-terminal",   # XFCE
+                # Other DEs
+                "mate-terminal",    # MATE
+                "lxterminal",       # LXDE
+                "tilix",            # GNOME tiling
+                "cinnamon-terminal", # Cinnamon (rare, falls through)
+                # GPU-accelerated / cross-DE
+                "alacritty",
+                "kitty",
+                "wezterm",
+                "foot",             # Wayland-native
+                # Fallbacks
+                "xterm",
+                "x-terminal-emulator",  # Debian alternatives system
+                "xdg-terminal",         # openSUSE fallback (requires xdg-terminal-exec)
             ]
             for term in auto_order:
                 if _launch_linux_terminal(term):

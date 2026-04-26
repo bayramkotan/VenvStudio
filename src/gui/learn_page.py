@@ -179,6 +179,39 @@ LEARN_CATEGORIES = [
                     ("📖 packaging.python.org", "https://packaging.python.org/en/latest/tutorials/packaging-projects/"),
                 ],
             },
+            {
+                "title": "Virtual Environments — venv vs uv vs conda",
+                "body": (
+                    "There are three main ways to create virtual environments in Python. venv is built-in and reliable. uv is 10-100x faster and handles packages too. conda manages non-Python dependencies as well (C libraries, CUDA). For most projects venv or uv is the right choice."
+                ),
+                "tip": "Quick comparison:\n  venv    built-in, no install needed\n          python -m venv .venv\n\n  uv      fastest, modern, replaces pip+venv\n          uv venv && uv pip install X\n\n  conda   for scientific/ML with C dependencies\n          conda create -n myenv python=3.12",
+                "links": [("🌐 venv docs", "https://docs.python.org/3/library/venv.html"), ("🌐 uv docs", "https://docs.astral.sh/uv/"), ("🌐 conda docs", "https://docs.conda.io")],
+            },
+            {
+                "title": "pyproject.toml — Modern Project Config",
+                "body": (
+                    "pyproject.toml is the single config file for modern Python projects. It replaces setup.py, setup.cfg, and requirements.txt in one clean file. It defines project name, version, dependencies, build system, and tool settings (ruff, mypy, pytest)."
+                ),
+                "snippet": "[project]\nname = \"myapp\"\nversion = \"0.1.0\"\nrequires-python = \">=3.11\"\ndependencies = [\n    \"requests>=2.31\",\n    \"pandas>=2.0\",\n]\n\n[project.optional-dependencies]\ndev = [\"pytest\", \"ruff\", \"mypy\"]\n\n[tool.ruff]\nline-length = 88\n\n[tool.pytest.ini_options]\ntestpaths = [\"tests\"]",
+                "links": [("📖 PEP 518", "https://peps.python.org/pep-0518/"), ("📖 pypa.io guide", "https://packaging.python.org/en/latest/guides/writing-pyproject-toml/")],
+            },
+            {
+                "title": "Debugging Python — pdb & breakpoint()",
+                "body": (
+                    "Python has a built-in debugger. Add `breakpoint()` anywhere in your code — execution stops there and you get an interactive console. Inspect variables, step through code line by line, and find bugs fast. No IDE required."
+                ),
+                "tip": "pdb commands:\n  n        next line\n  s        step into function\n  c        continue to next breakpoint\n  p x      print variable x\n  pp x     pretty-print x\n  l        list surrounding code\n  q        quit debugger\n\nIn Python 3.7+: just add breakpoint() anywhere",
+                "snippet": "def calculate(data):\n    total = 0\n    for item in data:\n        breakpoint()  # execution pauses here\n        total += item['value']\n    return total\n\n# Run normally: python script.py\n# Debugger opens automatically at breakpoint()",
+                "links": [("📖 pdb docs", "https://docs.python.org/3/library/pdb.html")],
+            },
+            {
+                "title": "Git Basics for Python Projects",
+                "body": (
+                    "Every Python project should be version-controlled with Git. A good .gitignore keeps __pycache__, .venv, and .env out of your repository. Commit often with clear messages — git history is your undo button."
+                ),
+                "tip": "Essential .gitignore entries:\n  __pycache__/\n  *.pyc\n  .venv/\n  .env\n  *.egg-info/\n  dist/\n  .pytest_cache/\n\nUseful git commands:\n  git init && git add . && git commit -m 'init'\n  git log --oneline\n  git diff HEAD~1\n  git stash / git stash pop",
+                "links": [("🌐 git-scm.com", "https://git-scm.com/doc"), ("🌐 gitignore.io", "https://www.toptal.com/developers/gitignore")],
+            },
         ],
     },
 
@@ -885,6 +918,43 @@ LEARN_CATEGORIES = [
                     ("🌐 jax.readthedocs.io", "https://jax.readthedocs.io"),
                 ],
             },
+            {
+                "title": "Numba — JIT Compilation for Python",
+                "body": (
+                    "Numba compiles Python functions to machine code at runtime using LLVM. Add the `@jit` decorator and slow loops become as fast as C. No C extension writing required. Supports NumPy arrays natively."
+                ),
+                "tip": "@nb.jit(nopython=True)   compile to native code\n@nb.jit(parallel=True)   auto-parallelize loops\n@nb.cuda.jit             run on GPU\n\nBest for: numerical loops, array math\nNot for: string manipulation, I/O, pandas",
+                "snippet": "import numba as nb\nimport numpy as np\nimport time\n\n@nb.jit(nopython=True)\ndef sum_squares_fast(arr):\n    total = 0.0\n    for x in arr:\n        total += x * x\n    return total\n\narr = np.random.randn(10_000_000)\n\n# Pure Python: ~3s, Numba: ~0.03s\nt0 = time.time()\nresult = sum_squares_fast(arr)  # first call compiles\nresult = sum_squares_fast(arr)  # second call: fast\nprint(f'Result: {result:.2f}, Time: {time.time()-t0:.3f}s')",
+                "packages": ["numba"],
+                "links": [("🌐 numba.pydata.org", "https://numba.pydata.org")],
+            },
+            {
+                "title": "Xarray — Labeled N-Dimensional Arrays",
+                "body": (
+                    "Xarray adds labels (coordinates and dimensions) to NumPy arrays. Instead of arr[0, 3, :] you write arr.sel(time='2020-01', lat=45.0). Essential for climate data, satellite imagery, and any multi-dimensional scientific dataset."
+                ),
+                "tip": "Xarray vs NumPy:\n  NumPy:  temp[0, 3, :]          cryptic indices\n  Xarray: ds.temp.sel(time='2020-01', lat=45)  clear!\n\nKey operations:\n  ds.sel(lat=slice(30, 60))   range selection\n  ds.mean(dim='time')         reduce along axis\n  ds.resample(time='1Y')      time resampling\n  ds.to_dataframe()           convert to pandas",
+                "packages": ["xarray", "numpy"],
+                "links": [("🌐 xarray.dev", "https://docs.xarray.dev")],
+            },
+            {
+                "title": "NetworkX — Graph & Network Analysis",
+                "body": (
+                    "NetworkX creates and analyzes graphs: social networks, dependency trees, road maps, molecule structures. Compute shortest paths, centrality, clustering, and community detection. Visualize with matplotlib."
+                ),
+                "snippet": "import networkx as nx\nimport matplotlib.pyplot as plt\n\nG = nx.Graph()\nG.add_edges_from([\n    ('Alice', 'Bob'), ('Alice', 'Charlie'),\n    ('Bob', 'Diana'), ('Charlie', 'Diana'),\n    ('Diana', 'Eve'),\n])\n\nprint('Nodes:', G.number_of_nodes())\nprint('Edges:', G.number_of_edges())\nprint('Shortest path Alice->Eve:', nx.shortest_path(G, 'Alice', 'Eve'))\nprint('Centrality:', nx.betweenness_centrality(G))\n\nnx.draw(G, with_labels=True, node_color='lightblue',\n        node_size=1500, font_size=10)\nplt.show()",
+                "packages": ["networkx", "matplotlib"],
+                "links": [("🌐 networkx.org", "https://networkx.org")],
+            },
+            {
+                "title": "Dask — Parallel Computing at Scale",
+                "body": (
+                    "Dask scales Python computations beyond single-machine RAM. It mirrors the pandas and NumPy APIs, so your existing code works with minimal changes. Dask splits large datasets into chunks and processes them in parallel."
+                ),
+                "tip": "Dask vs pandas:\n  import pandas as pd        ->  import dask.dataframe as dd\n  df = pd.read_csv(file)     ->  df = dd.read_csv('data/*.csv')\n  df.groupby('x').mean()     ->  same! (lazy)\n  # just add .compute()          df.groupby('x').mean().compute()\n\nWhen to use Dask:\n  - DataFrame doesn't fit in RAM\n  - Processing many files in parallel\n  - Scaling NumPy to clusters",
+                "packages": ["dask"],
+                "links": [("🌐 dask.org", "https://www.dask.org")],
+            },
         ],
     },
 
@@ -932,6 +1002,7 @@ LEARN_CATEGORIES = [
                 ),
                 "snippet": "import numpy as np\nfrom scipy.integrate import odeint\n\ndef oscillator(state, t, omega0=2*np.pi, zeta=0.1):\n    x, v = state\n    return [v, -2*zeta*omega0*v - omega0**2 * x]\n\nt = np.linspace(0, 10, 1000)\n\n# Compare three damping regimes\nfor zeta, label in [(0.1, 'Underdamped'), (1.0, 'Critical'), (2.0, 'Overdamped')]:\n    sol = odeint(oscillator, [1.0, 0.0], t, args=(2*np.pi, zeta))\n    print(f\"{label:15s} — x(t=5) = {sol[500, 0]:+.4f}\")",
                 "packages": ["scipy", "numpy"],
+                "links": [("📖 scipy.integrate", "https://docs.scipy.org/doc/scipy/reference/integrate.html")],
             },
             {
                 "title": "Diagonal Lattice Theorem",
@@ -953,6 +1024,34 @@ LEARN_CATEGORIES = [
                 ),
                 "snippet": "import numpy as np\n\n# Estimate π by sampling points in unit square\ndef estimate_pi(n_samples=1_000_000):\n    pts = np.random.rand(n_samples, 2)\n    inside = np.sum(np.sum(pts**2, axis=1) <= 1.0)\n    return 4 * inside / n_samples\n\nprint(f\"π ≈ {estimate_pi():.5f} (true: {np.pi:.5f})\")\n\n# Integrate f(x,y) = sin(x) * cos(y) over [0, π]²\ndef mc_integral(f, bounds, n=100_000):\n    d = len(bounds)\n    samples = np.random.rand(n, d)\n    for i, (lo, hi) in enumerate(bounds):\n        samples[:, i] = samples[:, i] * (hi - lo) + lo\n    volume = np.prod([hi - lo for lo, hi in bounds])\n    return volume * np.mean([f(*s) for s in samples])\n\nresult = mc_integral(\n    lambda x, y: np.sin(x) * np.cos(y),\n    [(0, np.pi), (0, np.pi)]\n)\nprint(f\"Integral ≈ {result:.4f} (true: 0)\")",
                 "packages": ["numpy"],
+                "links": [("📖 Wikipedia — Monte Carlo", "https://en.wikipedia.org/wiki/Monte_Carlo_integration")],
+            },
+            {
+                "title": "Ordinary Differential Equations with SciPy",
+                "body": (
+                    "Most physical systems are described by ODEs: springs, pendulums, population dynamics, chemical reactions. scipy.integrate.solve_ivp solves them numerically."
+                ),
+                "snippet": "import numpy as np\nimport matplotlib.pyplot as plt\nfrom scipy.integrate import solve_ivp\n\n# Damped pendulum: d2theta/dt2 = -b*dtheta/dt - (g/L)*sin(theta)\ndef pendulum(t, y, b=0.5, g=9.81, L=1.0):\n    theta, omega = y\n    return [omega, -b*omega - (g/L)*np.sin(theta)]\n\nsol = solve_ivp(pendulum, [0, 20], [np.pi/4, 0],\n                t_eval=np.linspace(0, 20, 1000), method='RK45')\n\nplt.plot(sol.t, np.degrees(sol.y[0]))\nplt.xlabel('Time (s)'); plt.ylabel('Angle (deg)')\nplt.title('Damped Pendulum')\nplt.show()",
+                "packages": ["scipy", "matplotlib"],
+                "links": [("📖 solve_ivp docs", "https://docs.scipy.org/doc/scipy/reference/generated/scipy.integrate.solve_ivp.html")],
+            },
+            {
+                "title": "Monte Carlo Methods",
+                "body": (
+                    "Monte Carlo uses random sampling to solve problems that are deterministic in principle. Estimate pi, compute integrals, price financial options, simulate physical systems. The more samples, the better the estimate."
+                ),
+                "snippet": "import numpy as np\nimport matplotlib.pyplot as plt\n\n# Estimate pi: throw random darts at a unit square\nnp.random.seed(42)\nsamples = [1000, 10000, 100000, 1000000]\n\nfor n in samples:\n    x = np.random.uniform(-1, 1, n)\n    y = np.random.uniform(-1, 1, n)\n    inside = (x**2 + y**2) <= 1\n    pi_est = 4 * inside.sum() / n\n    print(f'n={n:>8,}: pi ~ {pi_est:.6f} (error: {abs(pi_est - np.pi):.6f})')\n\n# Visualize last run\nfig, ax = plt.subplots(figsize=(6,6))\nax.scatter(x[:5000], y[:5000], c=inside[:5000], s=0.5, cmap='RdYlGn')\ncircle = plt.Circle((0,0), 1, fill=False, color='blue')\nax.add_patch(circle); ax.set_aspect('equal')\nplt.title(f'Monte Carlo pi estimation: {pi_est:.4f}')\nplt.show()",
+                "packages": ["numpy", "matplotlib"],
+                "links": [("📖 Wikipedia — Monte Carlo method", "https://en.wikipedia.org/wiki/Monte_Carlo_method")],
+            },
+            {
+                "title": "Fourier Transform & Signal Analysis",
+                "body": (
+                    "The Fourier transform decomposes any signal into its frequency components. Essential for audio processing, image filtering, vibration analysis, and communications. NumPy's FFT is fast and easy to use."
+                ),
+                "snippet": "import numpy as np\nimport matplotlib.pyplot as plt\n\n# Composite signal: 5 Hz + 12 Hz + noise\nfs = 1000   # sample rate\nt = np.linspace(0, 1, fs)\nsignal = (2.0 * np.sin(2*np.pi*5*t) +\n          0.5 * np.sin(2*np.pi*12*t) +\n          np.random.normal(0, 0.3, fs))\n\n# FFT\nfreqs = np.fft.rfftfreq(len(t), 1/fs)\nspectrum = np.abs(np.fft.rfft(signal))\n\nfig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10,6))\nax1.plot(t[:200], signal[:200]); ax1.set_title('Time Domain')\nax2.plot(freqs[:100], spectrum[:100]); ax2.set_title('Frequency Domain')\nax2.axvline(5,  color='r', ls='--', label='5 Hz')\nax2.axvline(12, color='g', ls='--', label='12 Hz')\nax2.legend(); plt.tight_layout(); plt.show()",
+                "packages": ["numpy", "matplotlib"],
+                "links": [("📖 numpy.fft docs", "https://numpy.org/doc/stable/reference/routines.fft.html"), ("📖 scipy.signal", "https://docs.scipy.org/doc/scipy/reference/signal.html")],
             },
         ],
     },
@@ -1038,6 +1137,7 @@ LEARN_CATEGORIES = [
                 ),
                 "snippet": "import numpy as np\n\ndef sigmoid(z): return 1 / (1 + np.exp(-z))\ndef sigmoid_grad(a): return a * (1 - a)\n\nnp.random.seed(42)\n# XOR dataset\nX = np.array([[0,0],[0,1],[1,0],[1,1]], dtype=float)\ny = np.array([[0],[1],[1],[0]], dtype=float)\n\n# Weights\nW1 = np.random.randn(2, 4) * 0.5\nb1 = np.zeros((1, 4))\nW2 = np.random.randn(4, 1) * 0.5\nb2 = np.zeros((1, 1))\n\nlr = 0.5\nfor epoch in range(5000):\n    # Forward\n    z1 = X @ W1 + b1\n    a1 = sigmoid(z1)\n    z2 = a1 @ W2 + b2\n    a2 = sigmoid(z2)\n\n    # Loss (MSE)\n    loss = np.mean((a2 - y)**2)\n\n    # Backward\n    d2 = 2*(a2-y) * sigmoid_grad(a2)\n    d1 = (d2 @ W2.T) * sigmoid_grad(a1)\n    W2 -= lr * a1.T @ d2; b2 -= lr * d2.mean(0)\n    W1 -= lr * X.T  @ d1; b1 -= lr * d1.mean(0)\n\n    if epoch % 1000 == 0:\n        print(f'Epoch {epoch:5d}  loss={loss:.6f}')\n\nprint('\\nPredictions:', a2.round(2).T)",
                 "packages": ["numpy"],
+                "links": [("📖 3Blue1Brown — Neural Networks", "https://www.youtube.com/playlist?list=PLZHQObOWTQDNU6R1_67000Dx_ZCJB-3pi")],
             },
             {
                 "title": "PyTorch — Tensors & Autograd",
@@ -1059,6 +1159,7 @@ LEARN_CATEGORIES = [
                 ),
                 "snippet": "from sklearn.pipeline import Pipeline\nfrom sklearn.preprocessing import StandardScaler, OneHotEncoder\nfrom sklearn.compose import ColumnTransformer\nfrom sklearn.ensemble import GradientBoostingClassifier\nfrom sklearn.datasets import fetch_openml\nfrom sklearn.model_selection import cross_val_score\nimport numpy as np\n\n# Titanic dataset\n# data = fetch_openml('titanic', version=1, as_frame=True)\n# Simulate similar structure\nnp.random.seed(42)\nn = 500\nX_num = np.random.randn(n, 2)\nX_cat = np.random.choice(['A','B','C'], size=(n, 1))\nimport pandas as pd\nX = pd.DataFrame(np.hstack([X_num, X_cat]), columns=['age','fare','class'])\nX['age'] = X['age'].astype(float); X['fare'] = X['fare'].astype(float)\ny = (X['age'] + X['fare'] > 0).astype(int)\n\nnumeric = Pipeline([('scaler', StandardScaler())])\ncategorical = Pipeline([('ohe', OneHotEncoder(handle_unknown='ignore'))])\npreprocessor = ColumnTransformer([\n    ('num', numeric, ['age','fare']),\n    ('cat', categorical, ['class']),\n])\npipeline = Pipeline([('prep', preprocessor), ('clf', GradientBoostingClassifier())])\nscores = cross_val_score(pipeline, X, y, cv=5)\nprint(f'CV accuracy: {scores.mean():.3f} ± {scores.std():.3f}')",
                 "packages": ["scikit-learn", "pandas"],
+                "links": [("📖 sklearn Pipeline", "https://scikit-learn.org/stable/modules/generated/sklearn.pipeline.Pipeline.html")],
             },
             {
                 "title": "Model Evaluation & Hyperparameter Tuning",
@@ -1069,6 +1170,7 @@ LEARN_CATEGORIES = [
                 ),
                 "snippet": "from sklearn.datasets import load_breast_cancer\nfrom sklearn.model_selection import GridSearchCV, StratifiedKFold\nfrom sklearn.svm import SVC\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.pipeline import Pipeline\n\nX, y = load_breast_cancer(return_X_y=True)\n\npipe = Pipeline([\n    ('scaler', StandardScaler()),\n    ('svc', SVC(probability=True)),\n])\n\nparam_grid = {\n    'svc__C': [0.1, 1, 10],\n    'svc__gamma': ['scale', 'auto'],\n    'svc__kernel': ['rbf', 'linear'],\n}\n\ncv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)\ngrid = GridSearchCV(pipe, param_grid, cv=cv, scoring='roc_auc', n_jobs=-1, verbose=1)\ngrid.fit(X, y)\n\nprint(f'Best AUC: {grid.best_score_:.4f}')\nprint(f'Best params: {grid.best_params_}')",
                 "packages": ["scikit-learn"],
+                "links": [("📖 sklearn GridSearchCV", "https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GridSearchCV.html")],
             },
             {
                 "title": "Model Serialization & Deployment",
@@ -1156,6 +1258,33 @@ LEARN_CATEGORIES = [
                     ("🌐 pola.rs", "https://pola.rs"),
                 ],
             },
+            {
+                "title": "Exploratory Data Analysis (EDA)",
+                "body": (
+                    "EDA is the first step in any data project: understand the data before modeling. Check distributions, find missing values, detect outliers, and discover correlations. pandas-profiling or sweetviz generate full EDA reports automatically."
+                ),
+                "snippet": "import pandas as pd\nimport matplotlib.pyplot as plt\nimport seaborn as sns\n\n# Load and inspect\ndf = sns.load_dataset('titanic')\nprint(df.shape)\nprint(df.dtypes)\nprint(df.isnull().sum())\nprint(df.describe())\n\n# Distribution of survivors by class and sex\nfig, axes = plt.subplots(1, 2, figsize=(12, 4))\nsns.countplot(data=df, x='class', hue='survived', ax=axes[0])\nsns.boxplot(data=df, x='class', y='age', ax=axes[1])\nplt.tight_layout(); plt.show()\n\n# Correlation heatmap\nnumeric = df.select_dtypes(include='number')\nsns.heatmap(numeric.corr(), annot=True, cmap='coolwarm')\nplt.show()",
+                "packages": ["pandas", "seaborn", "matplotlib"],
+                "links": [("🌐 pandas-profiling", "https://github.com/ydataai/ydata-profiling"), ("🌐 sweetviz", "https://github.com/fbdesignpro/sweetviz")],
+            },
+            {
+                "title": "Feature Engineering",
+                "body": (
+                    "Feature engineering transforms raw data into inputs that machine learning models understand better. Often more impactful than choosing the algorithm. Includes encoding categoricals, scaling numerics, creating interaction features, and handling dates."
+                ),
+                "snippet": "import pandas as pd\nimport numpy as np\nfrom sklearn.preprocessing import StandardScaler, LabelEncoder\n\nnp.random.seed(42)\ndf = pd.DataFrame({\n    'price':    np.random.uniform(100, 1000, 100),\n    'category': np.random.choice(['A','B','C'], 100),\n    'date':     pd.date_range('2023-01-01', periods=100),\n    'size':     np.random.uniform(50, 200, 100),\n})\n\n# Date features\ndf['year']    = df['date'].dt.year\ndf['month']   = df['date'].dt.month\ndf['weekday'] = df['date'].dt.weekday\ndf['is_weekend'] = df['weekday'] >= 5\n\n# Interaction feature\ndf['price_per_sqm'] = df['price'] / df['size']\n\n# One-hot encode category\ndf = pd.get_dummies(df, columns=['category'], prefix='cat')\n\n# Scale numerics\nscaler = StandardScaler()\ndf[['price','size']] = scaler.fit_transform(df[['price','size']])\nprint(df.head())",
+                "packages": ["pandas", "scikit-learn"],
+                "links": [("📖 sklearn preprocessing", "https://scikit-learn.org/stable/modules/preprocessing.html")],
+            },
+            {
+                "title": "Pandas GroupBy & Aggregation",
+                "body": (
+                    "GroupBy splits data into groups, applies a function, and combines the results. It is the pandas equivalent of SQL GROUP BY. Master it and you can answer most business questions in one or two lines."
+                ),
+                "snippet": "import pandas as pd\nimport numpy as np\n\nnp.random.seed(42)\ndf = pd.DataFrame({\n    'region':  np.random.choice(['North','South','East','West'], 200),\n    'product': np.random.choice(['A','B','C'], 200),\n    'sales':   np.random.exponential(100, 200),\n    'returns': np.random.exponential(10, 200),\n})\n\n# Simple groupby\nprint(df.groupby('region')['sales'].mean())\n\n# Multi-level groupby\nprint(df.groupby(['region','product'])['sales'].agg(['mean','sum','count']))\n\n# Multiple aggregations at once\nresult = df.groupby('region').agg(\n    total_sales=('sales', 'sum'),\n    avg_sales=('sales', 'mean'),\n    return_rate=('returns', lambda x: x.sum() / df.loc[x.index, 'sales'].sum()),\n).round(2)\nprint(result.sort_values('total_sales', ascending=False))",
+                "packages": ["pandas"],
+                "links": [("📖 pandas GroupBy docs", "https://pandas.pydata.org/docs/user_guide/groupby.html")],
+            },
         ],
     },
 
@@ -1202,6 +1331,7 @@ LEARN_CATEGORIES = [
                 ),
                 "snippet": "import numpy as np\n\n# Solar units\nL_sun = 3.828e26  # W\nR_sun = 6.96e8    # m\nT_sun = 5778      # K\n\n# Main sequence mass-luminosity relation\ndef luminosity(M_solar):\n    \"\"\"L ~ M^3.5 for M > 0.43 M_sun.\"\"\"\n    return M_solar ** 3.5\n\n# Main sequence mass-radius relation\ndef radius(M_solar):\n    \"\"\"Rough fit for main sequence.\"\"\"\n    return M_solar ** 0.8\n\n# Main sequence lifetime (fuel / burn rate)\ndef lifetime_gyr(M_solar):\n    return 10 * (M_solar ** -2.5)\n\nprint(f\"{'M/M_sun':>8s} {'L/L_sun':>10s} {'R/R_sun':>10s} {'life (Gyr)':>12s}\")\nfor M in [0.5, 1.0, 2.0, 5.0, 20.0]:\n    print(f\"{M:8.2f} {luminosity(M):10.2f} {radius(M):10.2f} {lifetime_gyr(M):12.4f}\")",
                 "packages": ["numpy"],
+                "links": [("🌐 astropy.org", "https://www.astropy.org")],
             },
             {
                 "title": "FITS Files — Astronomical Data Format",
@@ -1225,6 +1355,7 @@ LEARN_CATEGORIES = [
                 ),
                 "snippet": "import numpy as np\nimport matplotlib.pyplot as plt\nfrom scipy.signal import find_peaks\n\n# Simulate a stellar spectrum (blackbody + absorption lines)\nwl = np.linspace(380, 750, 1000)  # nm\n\n# Planck function (T = 6000 K, like the Sun)\nh, c, k = 6.626e-34, 3e8, 1.38e-23\nT = 6000\nlambda_m = wl * 1e-9\nB = (2*h*c**2 / lambda_m**5) / (np.exp(h*c/(lambda_m*k*T)) - 1)\nB /= B.max()\n\n# Add Hydrogen Balmer absorption lines\nfor line_nm, depth in [(656.3, 0.3), (486.1, 0.2), (434.0, 0.15)]:\n    sigma = 2.0\n    B -= depth * np.exp(-0.5*((wl - line_nm)/sigma)**2)\n\nplt.plot(wl, B, 'b-', lw=0.8)\nplt.xlabel('Wavelength (nm)')\nplt.ylabel('Relative Flux')\nplt.title('Simulated Solar Spectrum (G2V)')\nplt.axvline(656.3, color='r', lw=0.5, label='Hα')\nplt.legend()\nplt.show()",
                 "packages": ["numpy", "matplotlib", "scipy"],
+                "links": [("🌐 specutils docs", "https://specutils.readthedocs.io")],
             },
             {
                 "title": "N-Body Gravity Simulation",
@@ -1245,6 +1376,7 @@ LEARN_CATEGORIES = [
                 ),
                 "snippet": "import numpy as np\nimport matplotlib.pyplot as plt\n\n# Simulate a pulsar signal\nfs = 10000   # sample rate (Hz)\nduration = 1 # second\nt = np.linspace(0, duration, fs * duration)\n\n# Pulsar period = 33 ms (like Crab pulsar)\nperiod = 0.033\npulse = np.zeros_like(t)\nfor i, ti in enumerate(t):\n    phase = (ti % period) / period\n    if phase < 0.05:  # 5% duty cycle\n        pulse[i] = np.exp(-((phase - 0.025)/0.01)**2)\n\n# Add noise\nnoise = np.random.normal(0, 0.3, len(t))\nsignal = pulse + noise\n\n# FFT spectrum\nfreqs = np.fft.rfftfreq(len(t), 1/fs)\nspectrum = np.abs(np.fft.rfft(signal))\n\nplt.figure(figsize=(12,4))\nplt.subplot(1,2,1); plt.plot(t[:1000], signal[:1000]); plt.title('Signal')\nplt.subplot(1,2,2); plt.semilogy(freqs[:200], spectrum[:200]); plt.title('Spectrum')\nplt.tight_layout(); plt.show()",
                 "packages": ["numpy", "matplotlib"],
+                "links": [("🌐 scipy.signal", "https://docs.scipy.org/doc/scipy/reference/signal.html")],
             },
             {
                 "title": "Exoplanet Transit Detection",
@@ -1330,6 +1462,7 @@ LEARN_CATEGORIES = [
                 ),
                 "snippet": "import pygame\n\npygame.init()\nscreen = pygame.display.set_mode((400, 300))\nclock = pygame.time.Clock()\n\n# Load sprite sheet (each frame 64x64)\n# sheet = pygame.image.load('character.png').convert_alpha()\n# Simulate with colored rects\nCOLORS = [(255,0,0),(0,255,0),(0,0,255),(255,255,0)]\nFRAME_W, FRAME_H = 64, 64\nFPS = 8  # animation fps\n\nframe = 0\ntimer = 0\n\nrunning = True\nwhile running:\n    dt = clock.tick(60) / 1000\n    for event in pygame.event.get():\n        if event.type == pygame.QUIT: running = False\n\n    timer += dt\n    if timer >= 1/FPS:\n        frame = (frame + 1) % len(COLORS)\n        timer = 0\n\n    screen.fill((30, 30, 40))\n    # Draw current frame (colored rect as placeholder)\n    pygame.draw.rect(screen, COLORS[frame], (168, 118, FRAME_W, FRAME_H))\n    pygame.draw.rect(screen, (255,255,255), (168, 118, FRAME_W, FRAME_H), 2)\n    pygame.display.flip()\npygame.quit()",
                 "packages": ["pygame"],
+                "links": [("📖 pygame Sprite docs", "https://www.pygame.org/docs/ref/sprite.html")],
             },
             {
                 "title": "Tilemap & Tiled Integration",
@@ -1351,6 +1484,7 @@ LEARN_CATEGORIES = [
                 ),
                 "snippet": "import pygame\nimport numpy as np\n\npygame.init()\npygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)\n\n# Generate a beep sound programmatically (440 Hz sine wave)\nfs = 44100\nduration = 0.3  # seconds\nt = np.linspace(0, duration, int(fs * duration), False)\nwave = (np.sin(2 * np.pi * 440 * t) * 32767).astype(np.int16)\nstereo = np.column_stack([wave, wave])\n\nsound = pygame.sndarray.make_sound(stereo)\n\n# Play sound\nscreen = pygame.display.set_mode((300, 200))\npygame.display.set_caption('Press SPACE to beep')\nclock = pygame.time.Clock()\n\nrunning = True\nwhile running:\n    for event in pygame.event.get():\n        if event.type == pygame.QUIT: running = False\n        if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:\n            sound.play()\n    clock.tick(60)\npygame.quit()",
                 "packages": ["pygame", "numpy"],
+                "links": [("📖 pygame.mixer docs", "https://www.pygame.org/docs/ref/mixer.html")],
             },
             {
                 "title": "Game State Machine",
@@ -1361,6 +1495,7 @@ LEARN_CATEGORIES = [
                 ),
                 "snippet": "import pygame\nfrom enum import Enum, auto\n\nclass State(Enum):\n    MENU = auto()\n    PLAYING = auto()\n    PAUSED = auto()\n    GAME_OVER = auto()\n\npygame.init()\nscreen = pygame.display.set_mode((400, 300))\nclock = pygame.time.Clock()\nfont = pygame.font.SysFont(None, 36)\n\nstate = State.MENU\nscore = 0\n\nrunning = True\nwhile running:\n    for event in pygame.event.get():\n        if event.type == pygame.QUIT: running = False\n        if event.type == pygame.KEYDOWN:\n            if state == State.MENU and event.key == pygame.K_RETURN:\n                state = State.PLAYING; score = 0\n            elif state == State.PLAYING and event.key == pygame.K_ESCAPE:\n                state = State.PAUSED\n            elif state == State.PAUSED and event.key == pygame.K_ESCAPE:\n                state = State.PLAYING\n            elif state == State.GAME_OVER and event.key == pygame.K_RETURN:\n                state = State.MENU\n\n    if state == State.PLAYING:\n        score += 1\n        if score > 300: state = State.GAME_OVER\n\n    screen.fill((20,20,30))\n    labels = {State.MENU: 'MENU — Press ENTER', State.PLAYING: f'PLAYING — score {score}',\n              State.PAUSED: 'PAUSED — ESC to resume', State.GAME_OVER: 'GAME OVER — ENTER'}\n    txt = font.render(labels[state], True, (200,200,200))\n    screen.blit(txt, (20, 130))\n    pygame.display.flip(); clock.tick(60)\npygame.quit()",
                 "packages": ["pygame"],
+                "links": [("📖 Wikipedia — FSM", "https://en.wikipedia.org/wiki/Finite-state_machine")],
             },
         ],
     },
@@ -1430,6 +1565,7 @@ LEARN_CATEGORIES = [
                 ),
                 "snippet": "from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QSlider\nfrom PySide6.QtCore import Signal, QObject, Qt\nimport sys\n\nclass Counter(QObject):\n    value_changed = Signal(int)  # custom signal\n\n    def __init__(self):\n        super().__init__()\n        self._val = 0\n\n    def increment(self):\n        self._val += 1\n        self.value_changed.emit(self._val)  # emit signal\n\napp = QApplication(sys.argv)\nwindow = QWidget()\nlayout = QVBoxLayout(window)\n\nlabel = QLabel('Count: 0')\nbtn   = QPushButton('Click me')\ncounter = Counter()\n\n# Connect signal to slot (any callable)\ncounter.value_changed.connect(lambda v: label.setText(f'Count: {v}'))\nbtn.clicked.connect(counter.increment)\n\nlayout.addWidget(label)\nlayout.addWidget(btn)\nwindow.show()\nsys.exit(app.exec())",
                 "packages": ["PySide6"],
+                "links": [("📖 Qt Signals & Slots", "https://doc.qt.io/qt-6/signalsandslots.html")],
             },
             {
                 "title": "Threading — Keep UI Responsive",
@@ -1440,6 +1576,7 @@ LEARN_CATEGORIES = [
                 ),
                 "snippet": "from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QProgressBar\nfrom PySide6.QtCore import QThread, Signal\nimport time, sys\n\nclass Worker(QThread):\n    progress = Signal(int)\n    finished = Signal(str)\n\n    def run(self):\n        for i in range(1, 11):\n            time.sleep(0.3)          # simulate work\n            self.progress.emit(i * 10)\n        self.finished.emit('Done!')\n\napp = QApplication(sys.argv)\nwin = QWidget()\nlayout = QVBoxLayout(win)\n\nlabel = QLabel('Press Start')\nbar   = QProgressBar(); bar.setRange(0, 100)\nbtn   = QPushButton('Start')\n\nworker = Worker()\nworker.progress.connect(bar.setValue)\nworker.finished.connect(label.setText)\nbtn.clicked.connect(worker.start)\nbtn.clicked.connect(lambda: btn.setEnabled(False))\n\nlayout.addWidget(label); layout.addWidget(bar); layout.addWidget(btn)\nwin.show(); sys.exit(app.exec())",
                 "packages": ["PySide6"],
+                "links": [("📖 QThread docs", "https://doc.qt.io/qt-6/qthread.html")],
             },
             {
                 "title": "System Tray & Notifications",
@@ -1450,6 +1587,7 @@ LEARN_CATEGORIES = [
                 ),
                 "snippet": "from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QMainWindow\nfrom PySide6.QtGui import QIcon, QPixmap, QColor\nimport sys\n\napp = QApplication(sys.argv)\napp.setQuitOnLastWindowClosed(False)  # keep alive when window closed\n\n# Create a simple colored icon\npx = QPixmap(32, 32); px.fill(QColor('#89b4fa'))\nicon = QIcon(px)\n\ntray = QSystemTrayIcon(icon, app)\ntray.setToolTip('My Tray App')\n\nmenu = QMenu()\nshow_act  = menu.addAction('Show Window')\nquit_act  = menu.addAction('Quit')\ntray.setContextMenu(menu)\n\nwin = QMainWindow()\nwin.setWindowTitle('Tray Demo')\nwin.resize(300, 200)\n\nshow_act.triggered.connect(win.show)\nquit_act.triggered.connect(app.quit)\ntray.activated.connect(lambda r: win.show() if r == QSystemTrayIcon.Trigger else None)\n\ntray.show()\ntray.showMessage('Ready', 'App is running in tray!', QSystemTrayIcon.Information, 2000)\nwin.show()\nsys.exit(app.exec())",
                 "packages": ["PySide6"],
+                "links": [("📖 QSystemTrayIcon", "https://doc.qt.io/qt-6/qsystemtrayicon.html")],
             },
             {
                 "title": "Tkinter — Built-in GUI",
@@ -1460,6 +1598,7 @@ LEARN_CATEGORIES = [
                 ),
                 "snippet": "import tkinter as tk\nfrom tkinter import ttk, messagebox\n\nroot = tk.Tk()\nroot.title('Tkinter Demo')\nroot.geometry('300x200')\n\n# ttk styled frame\nframe = ttk.Frame(root, padding=20)\nframe.pack(fill='both', expand=True)\n\nttk.Label(frame, text='Enter your name:').pack(anchor='w')\nentry = ttk.Entry(frame)\nentry.pack(fill='x', pady=4)\n\ndef greet():\n    name = entry.get().strip() or 'World'\n    messagebox.showinfo('Hello', f'Hello, {name}!')\n\nttk.Button(frame, text='Greet', command=greet).pack(pady=8)\n\n# Progress bar example\nbar = ttk.Progressbar(frame, mode='indeterminate')\nbar.pack(fill='x')\nbar.start(10)\n\nroot.mainloop()",
                 "packages": [],
+                "links": [("📖 Tkinter docs", "https://docs.python.org/3/library/tkinter.html"), ("🌐 TkDocs", "https://tkdocs.com")],
             },
             {
                 "title": "File Dialogs & Settings Persistence",
@@ -1532,6 +1671,41 @@ LEARN_CATEGORIES = [
                     ("🌐 httpx.org", "https://www.python-httpx.org"),
                 ],
             },
+            {
+                "title": "Django — Full-Stack Web Framework",
+                "body": (
+                    "Django is Python's batteries-included web framework. It comes with an ORM, admin panel, authentication, forms, and templating out of the box. Perfect for content sites, dashboards, and any project that needs a database-backed web app fast."
+                ),
+                "tip": "Django project structure:\n  myproject/\n    manage.py\n    myproject/settings.py\n    myapp/models.py     <- database tables\n    myapp/views.py      <- request handlers\n    myapp/urls.py       <- URL routing\n    myapp/templates/    <- HTML templates\n\nKey commands:\n  django-admin startproject mysite\n  python manage.py startapp blog\n  python manage.py makemigrations\n  python manage.py migrate\n  python manage.py runserver",
+                "packages": ["Django"],
+                "links": [("🌐 djangoproject.com", "https://www.djangoproject.com")],
+            },
+            {
+                "title": "WebSockets & Real-Time Apps",
+                "body": (
+                    "WebSockets provide a persistent two-way connection between browser and server. Use them for live dashboards, chat apps, collaborative tools, and streaming ML results. FastAPI supports WebSockets natively. For scaling, use websockets or socket.io."
+                ),
+                "snippet": "# FastAPI WebSocket example\nfrom fastapi import FastAPI, WebSocket\nfrom fastapi.responses import HTMLResponse\n\napp = FastAPI()\n\n@app.websocket('/ws')\nasync def websocket_endpoint(ws: WebSocket):\n    await ws.accept()\n    while True:\n        data = await ws.receive_text()\n        await ws.send_text(f'Echo: {data}')\n\n# Client (JavaScript):\n# const ws = new WebSocket('ws://localhost:8000/ws')\n# ws.onmessage = e => console.log(e.data)\n# ws.send('Hello!')",
+                "packages": ["fastapi", "uvicorn"],
+                "links": [("📖 FastAPI WebSockets", "https://fastapi.tiangolo.com/advanced/websockets/"), ("🌐 websockets lib", "https://websockets.readthedocs.io")],
+            },
+            {
+                "title": "REST API Design Best Practices",
+                "body": (
+                    "A well-designed REST API uses HTTP methods correctly, returns consistent JSON, and includes proper status codes and error messages. These patterns make your API predictable and easy to use."
+                ),
+                "tip": "HTTP methods:\n  GET    /items          list all items\n  GET    /items/{id}     get one item\n  POST   /items          create new item\n  PUT    /items/{id}     replace item\n  PATCH  /items/{id}     update fields\n  DELETE /items/{id}     delete item\n\nStatus codes:\n  200 OK        201 Created    204 No Content\n  400 Bad Request  401 Unauthorized  404 Not Found\n  422 Validation Error  500 Server Error",
+                "links": [("📖 REST best practices", "https://restfulapi.net"), ("📖 HTTP status codes", "https://httpstatuses.io")],
+            },
+            {
+                "title": "Celery — Background Tasks & Job Queues",
+                "body": (
+                    "Celery runs Python tasks asynchronously in the background. Sending emails, processing images, running ML inference, calling slow APIs — offload them to Celery workers so your web server stays responsive. Uses Redis or RabbitMQ as a message broker."
+                ),
+                "tip": "Celery workflow:\n  1. Define task with @celery.task decorator\n  2. Call task.delay(args) from your web view\n  3. Celery worker picks it up and runs it\n  4. Result stored in backend (Redis/DB)\n\nStart worker:\n  celery -A myapp worker --loglevel=info\n\nMonitor tasks:\n  celery -A myapp flower  (web dashboard)",
+                "packages": ["celery", "redis"],
+                "links": [("🌐 docs.celeryq.dev", "https://docs.celeryq.dev")],
+            },
         ],
     },
 
@@ -1593,6 +1767,41 @@ LEARN_CATEGORIES = [
                     ("🌐 pre-commit.com", "https://pre-commit.com"),
                 ],
             },
+            {
+                "title": "pytest — Fixtures & Parametrize",
+                "body": (
+                    "pytest fixtures share setup code between tests. @pytest.mark.parametrize runs the same test with multiple inputs automatically. Together they eliminate test boilerplate and make your test suite DRY."
+                ),
+                "snippet": "import pytest\n\n# Fixture: shared setup, auto-cleaned up\n@pytest.fixture\ndef db_connection():\n    conn = create_test_db()\n    yield conn          # test runs here\n    conn.close()        # cleanup after test\n\n# Parametrize: same test, many inputs\n@pytest.mark.parametrize('inp, expected', [\n    (2,  4),\n    (3,  9),\n    (-1, 1),\n    (0,  0),\n])\ndef test_square(inp, expected):\n    assert inp ** 2 == expected\n\n# Run: pytest -v\n# Coverage: pytest --cov=src",
+                "packages": ["pytest", "pytest-cov"],
+                "links": [("📖 pytest fixtures", "https://docs.pytest.org/en/stable/reference/fixtures.html"), ("📖 parametrize", "https://docs.pytest.org/en/stable/how-to/parametrize.html")],
+            },
+            {
+                "title": "Hypothesis — Property-Based Testing",
+                "body": (
+                    "Instead of writing specific test cases, Hypothesis generates hundreds of random inputs and finds edge cases you never thought of. It's especially powerful for finding off-by-one errors, overflow bugs, and encoding issues."
+                ),
+                "snippet": "from hypothesis import given, strategies as st\n\ndef encode_decode(s):\n    return s.encode('utf-8').decode('utf-8')\n\n@given(st.text())\ndef test_encode_decode_roundtrip(s):\n    assert encode_decode(s) == s  # must hold for ALL strings\n\n# Hypothesis tries: empty string, unicode, null bytes,\n# very long strings, special chars -- automatically!\n\n@given(\n    st.lists(st.integers(), min_size=1)\n)\ndef test_sort_idempotent(lst):\n    once = sorted(lst)\n    twice = sorted(sorted(lst))\n    assert once == twice",
+                "packages": ["hypothesis"],
+                "links": [("🌐 hypothesis.works", "https://hypothesis.works")],
+            },
+            {
+                "title": "CI/CD with GitHub Actions",
+                "body": (
+                    "GitHub Actions runs your tests automatically on every push and pull request. Define a workflow YAML file in .github/workflows/ and GitHub runs it on their servers for free. Catch bugs before they reach main."
+                ),
+                "snippet": "# .github/workflows/tests.yml\nname: Tests\non: [push, pull_request]\n\njobs:\n  test:\n    runs-on: ubuntu-latest\n    strategy:\n      matrix:\n        python-version: ['3.11', '3.12', '3.13']\n    steps:\n      - uses: actions/checkout@v4\n      - uses: actions/setup-python@v5\n        with:\n          python-version: ${{ matrix.python-version }}\n      - run: pip install -e '.[dev]'\n      - run: pytest --cov=src\n      - run: ruff check .",
+                "links": [("📖 GitHub Actions docs", "https://docs.github.com/en/actions"), ("🌐 actions/setup-python", "https://github.com/actions/setup-python")],
+            },
+            {
+                "title": "Code Coverage — What to Measure",
+                "body": (
+                    "Coverage measures which lines of your code are executed during tests. High coverage does not guarantee bug-free code, but it shows which parts are untested. Aim for 80%+ on critical business logic; 100% coverage on everything is usually overkill."
+                ),
+                "tip": "pytest-cov commands:\n  pytest --cov=src                  basic report\n  pytest --cov=src --cov-report=html  HTML report\n  pytest --cov=src --cov-fail-under=80  fail if < 80%\n\nWhat to focus on:\n  - Core business logic: aim for 90%+\n  - Error handling paths: often untested\n  - Utility functions: easy to reach 100%\n  - UI code: hard to test, lower priority",
+                "packages": ["pytest-cov"],
+                "links": [("🌐 pytest-cov", "https://pytest-cov.readthedocs.io"), ("🌐 coverage.py", "https://coverage.readthedocs.io")],
+            },
         ],
     },
 
@@ -1652,6 +1861,41 @@ LEARN_CATEGORIES = [
                 "links": [
                     ("🌐 playwright.dev/python", "https://playwright.dev/python/"),
                 ],
+            },
+            {
+                "title": "subprocess — Run System Commands",
+                "body": (
+                    "subprocess runs shell commands from Python and captures their output. Use it to call external tools, run scripts, process files with command-line utilities, or automate system administration tasks."
+                ),
+                "snippet": "import subprocess\n\n# Run command, capture output\nresult = subprocess.run(\n    ['git', 'log', '--oneline', '-5'],\n    capture_output=True, text=True, check=True\n)\nprint(result.stdout)\n\n# Run shell pipeline\nresult = subprocess.run(\n    'find . -name \"*.py\" | wc -l',\n    shell=True, capture_output=True, text=True\n)\nprint('Python files:', result.stdout.strip())\n\n# check=True raises CalledProcessError on non-zero exit\n# capture_output=True captures stdout + stderr\n# text=True decodes bytes to str",
+                "links": [("📖 subprocess docs", "https://docs.python.org/3/library/subprocess.html")],
+            },
+            {
+                "title": "Docker + Python — Containerizing Apps",
+                "body": (
+                    "Docker packages your Python app and all its dependencies into a container that runs identically everywhere. No more 'works on my machine'. Write a Dockerfile, build an image, and deploy anywhere."
+                ),
+                "tip": "Docker tips:\n  python:3.12-slim    smaller image than python:3.12\n  .dockerignore       exclude .venv, __pycache__, .git\n  --no-cache-dir      smaller image (no pip cache)\n  docker compose up   run multi-container apps",
+                "snippet": "# Dockerfile\nFROM python:3.12-slim\n\nWORKDIR /app\n\n# Install dependencies first (Docker layer cache)\nCOPY pyproject.toml .\nRUN pip install --no-cache-dir .\n\n# Copy source code\nCOPY src/ ./src/\n\nEXPOSE 8000\nCMD [\"uvicorn\", \"src.main:app\", \"--host\", \"0.0.0.0\"]\n\n# Build and run:\n# docker build -t myapp .\n# docker run -p 8000:8000 myapp",
+                "links": [("🌐 Docker docs", "https://docs.docker.com"), ("🌐 Docker Hub Python", "https://hub.docker.com/_/python")],
+            },
+            {
+                "title": "schedule & APScheduler — Task Scheduling",
+                "body": (
+                    "Run Python functions on a schedule: every minute, daily at 9am, every Monday. schedule is simple and synchronous. APScheduler is more powerful with cron expressions and persistent job storage."
+                ),
+                "snippet": "import schedule\nimport time\n\ndef backup_database():\n    print('Running backup...')\n\ndef send_daily_report():\n    print('Sending report...')\n\ndef cleanup_temp_files():\n    print('Cleaning up...')\n\nschedule.every(10).minutes.do(backup_database)\nschedule.every().day.at('09:00').do(send_daily_report)\nschedule.every().monday.at('08:00').do(send_daily_report)\nschedule.every().hour.do(cleanup_temp_files)\n\nwhile True:\n    schedule.run_pending()\n    time.sleep(60)",
+                "packages": ["schedule"],
+                "links": [("🌐 schedule docs", "https://schedule.readthedocs.io"), ("🌐 APScheduler", "https://apscheduler.readthedocs.io")],
+            },
+            {
+                "title": "Fabric & Paramiko — Remote Automation",
+                "body": (
+                    "Fabric runs Python code and shell commands on remote servers over SSH. Automate deployments, run database migrations, restart services, and manage servers from a single Python script — no Ansible or Bash required."
+                ),
+                "snippet": "from fabric import Connection\n\n# Connect to remote server\nc = Connection('user@myserver.com', connect_kwargs={'key_filename': '~/.ssh/id_rsa'})\n\n# Run commands\nresult = c.run('python --version')\nc.run('cd /app && git pull origin main')\nc.run('pip install -e .')\nc.run('systemctl restart myapp')\n\n# Upload/download files\nc.put('config.env', '/app/.env')\nc.get('/app/logs/error.log', 'local_errors.log')\n\n# Run as sudo\nc.sudo('systemctl reload nginx')",
+                "packages": ["fabric"],
+                "links": [("🌐 fabfile.org", "https://www.fabfile.org")],
             },
         ],
     },
@@ -1723,6 +1967,7 @@ LEARN_CATEGORIES = [
                 ),
                 "snippet": "import ctypes\nimport ctypes.util\n\n# Load system math library\nlibm = ctypes.CDLL(ctypes.util.find_library('m') or 'libm.so.6')\n\n# Set argument and return types\nlibm.sin.argtypes = [ctypes.c_double]\nlibm.sin.restype  = ctypes.c_double\nlibm.sqrt.argtypes = [ctypes.c_double]\nlibm.sqrt.restype  = ctypes.c_double\n\nimport math\nprint(f'sin(π/6) = {libm.sin(math.pi/6):.6f}')   # 0.5\nprint(f'sqrt(2)  = {libm.sqrt(2.0):.6f}')         # 1.414...\n\n# Create a struct\nclass Point(ctypes.Structure):\n    _fields_ = [('x', ctypes.c_double), ('y', ctypes.c_double)]\n\np = Point(3.0, 4.0)\ndist = libm.sqrt(p.x**2 + p.y**2)\nprint(f'Distance from origin: {dist:.2f}')  # 5.0",
                 "packages": [],
+                "links": [("📖 ctypes docs", "https://docs.python.org/3/library/ctypes.html"), ("🌐 cffi docs", "https://cffi.readthedocs.io")],
             },
             {
                 "title": "Polars — Rust-Powered DataFrames",
@@ -1808,6 +2053,44 @@ LEARN_CATEGORIES = [
                     ("🌐 docs.astral.sh/uv", "https://docs.astral.sh/uv/"),
                 ],
             },
+            {
+                "title": "rich — Beautiful Terminal Output",
+                "body": (
+                    "rich makes terminal output beautiful with colors, tables, progress bars, and syntax highlighting."
+                ),
+                "snippet": "from rich import print\nfrom rich.table import Table\nfrom rich.console import Console\nfrom rich.progress import track\nimport time\n\nprint('[bold green]Success![/bold green] [blue]Saved[/blue]')\n\ntable = Table(title='Results')\ntable.add_column('Name', style='cyan'); table.add_column('Score', style='green')\ntable.add_row('Alice', '0.95'); Console().print(table)\n\nfor _ in track(range(20), description='Processing...'): time.sleep(0.05)",
+                "packages": ["rich"],
+                "links": [("🌐 rich docs", "https://rich.readthedocs.io")],
+            },
+            {
+                "title": "Loguru — Better Logging",
+                "body": (
+                    "Loguru replaces Python logging with a simpler API. Colored output, file rotation, and automatic exception tracebacks."
+                ),
+                "snippet": "from loguru import logger\nlogger.info('Server started'); logger.warning('Deprecated')\nlogger.add('app.log', rotation='10 MB', retention='7 days', level='INFO')\n\n@logger.catch\ndef risky(): raise ValueError('oops')\nrisky()  # full traceback logged automatically",
+                "packages": ["loguru"],
+                "links": [("🌐 loguru docs", "https://loguru.readthedocs.io")],
+            },
+            {
+                "title": "Typer — CLI from Type Hints",
+                "body": (
+                    "Typer builds CLIs from Python type hints. Write a typed function and Typer generates --help and argument parsing."
+                ),
+                "snippet": "import typer\nfrom pathlib import Path\napp = typer.Typer()\n\n@app.command()\ndef process(\n    f: Path = typer.Argument(..., help='Input file'),\n    verbose: bool = typer.Option(False, '-v'),\n    limit: int = typer.Option(1000),\n):\n    if verbose: typer.echo(f'Processing {f}')\n    typer.echo(f'Done! {limit} rows.')\n\nif __name__ == '__main__': app()",
+                "packages": ["typer"],
+                "links": [("🌐 typer.tiangolo.com", "https://typer.tiangolo.com")],
+            },
+            {
+                "title": "dotenv — Manage Secrets Safely",
+                "body": (
+                    "Never hardcode API keys. Store them in a .env file, load with python-dotenv, and add .env to .gitignore."
+                ),
+                "snippet": "# .env (never commit!): OPENAI_API_KEY=sk-...\n\nfrom dotenv import load_dotenv\nimport os\n\nload_dotenv()\napi_key = os.getenv('OPENAI_API_KEY')\ndb_url  = os.getenv('DATABASE_URL', 'sqlite:///local.db')\ndebug   = os.getenv('DEBUG', 'false').lower() == 'true'",
+                "packages": ["python-dotenv"],
+                "links": [("🌐 python-dotenv", "https://saurabh-kumar.com/python-dotenv/")],
+            },
+        ],
+    },
 
     # ═══════════════════════════════════════════════════════════════════════════
     # Core Libraries
@@ -1895,6 +2178,42 @@ LEARN_CATEGORIES = [
                 "packages": ["Pillow"],
                 "links": [("🌐 pillow.readthedocs.io", "https://pillow.readthedocs.io")],
             },
+            {
+                "title": "rich — Beautiful Terminal Output",
+                "body": (
+                    "rich makes terminal output beautiful with colors, tables, progress bars, syntax-highlighted code, and markdown rendering. Replace ugly print() statements with rich.print() for instant improvement."
+                ),
+                "snippet": "from rich import print\nfrom rich.console import Console\nfrom rich.table import Table\nfrom rich.progress import track\nimport time\n\nconsole = Console()\n\n# Colored output\nprint('[bold green]Success![/bold green] [blue]File saved[/blue]')\n\n# Table\ntable = Table(title='Results')\ntable.add_column('Name', style='cyan')\ntable.add_column('Score', style='green')\ntable.add_row('Alice', '0.95')\ntable.add_row('Bob',   '0.87')\nconsole.print(table)\n\n# Progress bar\nfor item in track(range(20), description='Processing...'):\n    time.sleep(0.05)",
+                "packages": ["rich"],
+                "links": [("🌐 rich docs", "https://rich.readthedocs.io")],
+            },
+            {
+                "title": "Loguru — Better Logging",
+                "body": (
+                    "Loguru replaces Python's standard logging module with a much simpler API. Colored output, file rotation, structured logs, and exception tracebacks — all in one line of setup."
+                ),
+                "snippet": "from loguru import logger\n\n# Basic usage — works immediately\nlogger.debug('Debug message')\nlogger.info('Server started on port 8000')\nlogger.warning('Deprecated API called')\nlogger.error('Database connection failed')\n\n# Log to file with rotation\nlogger.add('logs/app.log',\n    rotation='10 MB',    # new file every 10MB\n    retention='7 days',  # keep 7 days\n    compression='zip',   # compress old files\n    level='INFO',\n)\n\n# Automatic exception logging\n@logger.catch\ndef risky_function():\n    raise ValueError('Something went wrong')\n\nrisky_function()  # full traceback in logs",
+                "packages": ["loguru"],
+                "links": [("🌐 loguru docs", "https://loguru.readthedocs.io")],
+            },
+            {
+                "title": "Typer — CLI Apps with Type Hints",
+                "body": (
+                    "Typer builds command-line interfaces from Python type hints. Write a function with typed parameters — Typer generates --help, argument parsing, and tab completion automatically. Built on top of Click."
+                ),
+                "snippet": "import typer\nfrom pathlib import Path\n\napp = typer.Typer()\n\n@app.command()\ndef process(\n    input_file: Path = typer.Argument(..., help='Input CSV file'),\n    output: Path = typer.Option('out.csv', help='Output file'),\n    verbose: bool = typer.Option(False, '--verbose', '-v'),\n    limit: int = typer.Option(1000, help='Max rows to process'),\n):\n    if verbose:\n        typer.echo(f'Processing {input_file} -> {output}')\n    # ... your logic here\n    typer.echo(f'Done! Processed {limit} rows.')\n\nif __name__ == '__main__':\n    app()\n\n# python script.py --help   (auto-generated!)\n# python script.py data.csv --verbose --limit 500",
+                "packages": ["typer"],
+                "links": [("🌐 typer.tiangolo.com", "https://typer.tiangolo.com")],
+            },
+            {
+                "title": "dotenv — Environment Variables",
+                "body": (
+                    "Never hardcode secrets (API keys, passwords, database URLs) in your code. Store them in a .env file, load with python-dotenv, and add .env to .gitignore. This pattern works for development and production."
+                ),
+                "snippet": "# .env file (NEVER commit to git!)\n# DATABASE_URL=postgresql://user:pass@localhost/db\n# OPENAI_API_KEY=sk-...\n# DEBUG=true\n\nfrom dotenv import load_dotenv\nimport os\n\nload_dotenv()  # loads .env into os.environ\n\ndb_url   = os.getenv('DATABASE_URL')\napi_key  = os.getenv('OPENAI_API_KEY')\ndebug    = os.getenv('DEBUG', 'false').lower() == 'true'\n\n# Different .env per environment:\n# load_dotenv('.env.production')\n# load_dotenv('.env.test')\n\n# .gitignore must include:\n# .env\n# .env.*",
+                "packages": ["python-dotenv"],
+                "links": [("🌐 python-dotenv", "https://saurabh-kumar.com/python-dotenv/")],
+            },
         ],
     },
 
@@ -1949,6 +2268,43 @@ LEARN_CATEGORIES = [
                 ),
                 "snippet": "import numpy as np\nimport pandas as pd\nimport yfinance as yf\nimport matplotlib.pyplot as plt\n\ntickers = ['AAPL', 'MSFT', 'BND', 'GLD']\nprices = yf.download(tickers, start='2020-01-01', progress=False)['Close']\nreturns = prices.pct_change().dropna()\n\nweights = np.array([0.25, 0.25, 0.25, 0.25])\nport_ret = returns @ weights\n\nann_ret  = port_ret.mean() * 252\nann_vol  = port_ret.std() * np.sqrt(252)\nsharpe   = ann_ret / ann_vol\n\ncum = (1 + port_ret).cumprod()\nmax_dd = ((cum - cum.cummax()) / cum.cummax()).min()\nvar_95 = np.percentile(port_ret, 5)\n\nprint(f'Annual Return: {ann_ret:.1%}')\nprint(f'Annual Vol:    {ann_vol:.1%}')\nprint(f'Sharpe Ratio:  {sharpe:.2f}')\nprint(f'Max Drawdown:  {max_dd:.1%}')\nprint(f'VaR (95%):     {var_95:.2%} per day')\n\ncum.plot(title='Portfolio Cumulative Return')\nplt.show()",
                 "packages": ["yfinance", "matplotlib"],
+                "links": [("🌐 QuantStats", "https://github.com/ranaroussi/quantstats"), ("📖 Sharpe ratio", "https://en.wikipedia.org/wiki/Sharpe_ratio")],
+            },
+            {
+                "title": "Technical Analysis with pandas-ta",
+                "body": (
+                    "pandas-ta adds 130+ technical indicators as DataFrame methods. RSI, MACD, Bollinger Bands, EMA — one line each. Combine with yfinance to build full trading signal pipelines."
+                ),
+                "snippet": "import pandas as pd\nimport pandas_ta as ta\nimport yfinance as yf\n\ndf = yf.download('BTC-USD', period='6mo', progress=False)\ndf.columns = [c[0].lower() for c in df.columns]\n\ndf['rsi']   = ta.rsi(df['close'], length=14)\ndf['ema20'] = ta.ema(df['close'], length=20)\ndf['ema50'] = ta.ema(df['close'], length=50)\n\nmacd = ta.macd(df['close'])\nbb   = ta.bbands(df['close'], length=20)\ndf   = pd.concat([df, macd, bb], axis=1)\n\n# Signal: EMA crossover\ndf['signal'] = (df['ema20'] > df['ema50']).astype(int)\nprint(df[['close','rsi','ema20','ema50','signal']].tail())",
+                "packages": ["pandas_ta", "yfinance"],
+                "links": [("🌐 github.com/twopirllc/pandas-ta", "https://github.com/twopirllc/pandas-ta")],
+            },
+            {
+                "title": "Backtesting a Trading Strategy",
+                "body": (
+                    "Backtesting checks how a strategy would have performed on historical data. Always be aware of lookahead bias (using future data accidentally) and overfitting. A strategy that works on past data is not guaranteed to work in the future."
+                ),
+                "snippet": "import pandas as pd\nimport numpy as np\nimport yfinance as yf\nimport matplotlib.pyplot as plt\n\ndf = yf.download('SPY', start='2018-01-01', progress=False)\ndf.columns = [c[0].lower() for c in df.columns]\n\n# EMA crossover signal\ndf['ema20'] = df['close'].ewm(span=20).mean()\ndf['ema50'] = df['close'].ewm(span=50).mean()\ndf['signal'] = (df['ema20'] > df['ema50']).astype(int)\ndf['position'] = df['signal'].shift(1)  # avoid lookahead!\n\ndf['market_ret']   = df['close'].pct_change()\ndf['strategy_ret'] = df['market_ret'] * df['position']\n\ncum_m = (1 + df['market_ret']).cumprod()\ncum_s = (1 + df['strategy_ret']).cumprod()\n\nsharpe = df['strategy_ret'].mean() / df['strategy_ret'].std() * np.sqrt(252)\nprint(f'Strategy: {cum_s.iloc[-1]-1:.1%}  |  Buy&Hold: {cum_m.iloc[-1]-1:.1%}')\nprint(f'Sharpe: {sharpe:.2f}')",
+                "packages": ["yfinance", "matplotlib"],
+                "links": [("🌐 backtesting.py", "https://kernc.github.io/backtesting.py/")],
+            },
+            {
+                "title": "darts — Time Series Made Easy",
+                "body": (
+                    "darts is a unified time series library: ARIMA, Prophet, N-BEATS, Transformer, and 30+ other models all share the same API. Train any model with .fit(series), forecast with .predict(n)."
+                ),
+                "snippet": "from darts import TimeSeries\nfrom darts.models import ExponentialSmoothing, ARIMA\nfrom darts.datasets import AirPassengersDataset\nimport matplotlib.pyplot as plt\n\nseries = AirPassengersDataset().load()\ntrain, val = series[:-36], series[-36:]\n\n# Every model has the same API\nfor ModelClass in [ExponentialSmoothing, ARIMA]:\n    model = ModelClass()\n    model.fit(train)\n    pred = model.predict(36)\n    mae = (pred - val).abs().mean().values()[0]\n    print(f'{ModelClass.__name__}: MAE={mae:.2f}')\n\nseries.plot(label='Actual')\npred.plot(label='Forecast')\nplt.legend(); plt.show()",
+                "packages": ["darts", "matplotlib"],
+                "links": [("🌐 unit8co.github.io/darts", "https://unit8co.github.io/darts/")],
+            },
+            {
+                "title": "QuantStats — Portfolio Tearsheet",
+                "body": (
+                    "QuantStats generates professional portfolio performance reports. One function call creates a full tearsheet: Sharpe, Sortino, max drawdown, monthly returns heatmap, rolling metrics — everything a quant needs."
+                ),
+                "snippet": "import quantstats as qs\nimport yfinance as yf\n\n# Download returns\nspy = yf.download('SPY', start='2020-01-01', progress=False)['Close']\nreturns = spy.pct_change().dropna()\n\n# Key metrics\nprint(f'Sharpe:       {qs.stats.sharpe(returns):.2f}')\nprint(f'Max Drawdown: {qs.stats.max_drawdown(returns):.1%}')\nprint(f'CAGR:         {qs.stats.cagr(returns):.1%}')\nprint(f'Volatility:   {qs.stats.volatility(returns):.1%}')\n\n# Full HTML tearsheet\n# qs.reports.html(returns, output='report.html')\n\n# Plot\nqs.plots.drawdown(returns)",
+                "packages": ["quantstats", "yfinance"],
+                "links": [("🌐 github.com/ranaroussi/quantstats", "https://github.com/ranaroussi/quantstats")],
             },
         ],
     },
@@ -2018,10 +2374,146 @@ LEARN_CATEGORIES = [
                 "packages": ["transformers", "torch"],
                 "links": [("🌐 huggingface.co", "https://huggingface.co")],
             },
+            {
+                "title": "LangChain — LLM Application Framework",
+                "body": (
+                    "LangChain chains prompts, models, tools, and memory. Build chatbots, document QA, agents, and pipelines. Works with OpenAI, Ollama, Anthropic, and 50+ providers."
+                ),
+                "snippet": "from langchain_openai import ChatOpenAI\nfrom langchain_core.prompts import ChatPromptTemplate\nfrom langchain_core.output_parsers import StrOutputParser\n\nllm = ChatOpenAI(model='gpt-4o-mini', temperature=0)\n\nprompt = ChatPromptTemplate.from_messages([\n    ('system', 'You are an expert in {language} programming.'),\n    ('user', 'Explain {concept} in one paragraph.'),\n])\n\nchain = prompt | llm | StrOutputParser()\n\nresult = chain.invoke({'language': 'Python', 'concept': 'generators'})\nprint(result)",
+                "packages": ["langchain", "langchain-openai"],
+                "links": [("🌐 python.langchain.com", "https://python.langchain.com")],
+            },
+            {
+                "title": "Prompt Engineering Best Practices",
+                "body": (
+                    "How you phrase your prompt dramatically affects LLM output quality. Good prompts are specific, provide examples, define the output format, and set the context. Bad prompts get generic, off-target responses."
+                ),
+                "snippet": "from openai import OpenAI\nclient = OpenAI()\n\n# Bad prompt\nresponse = client.chat.completions.create(\n    model='gpt-4o-mini',\n    messages=[{'role': 'user', 'content': 'Tell me about Python'}],\n)\nprint('BAD:', response.choices[0].message.content[:100])\n\n# Good prompt: specific, structured, examples\nprompt = '''You are a Python tutor writing for beginners.\n\nExplain list comprehensions in exactly 3 bullet points.\nEach bullet must:\n- Start with an action verb\n- Be max 15 words\n- Include a tiny code example\n\nExample format:\n- Create lists: [x*2 for x in range(5)] doubles each element'''\n\nresponse = client.chat.completions.create(\n    model='gpt-4o-mini',\n    messages=[{'role': 'user', 'content': prompt}],\n)\nprint('GOOD:', response.choices[0].message.content)",
+                "packages": ["openai"],
+                "links": [("🌐 OpenAI Prompt Guide", "https://platform.openai.com/docs/guides/prompt-engineering"), ("🌐 Anthropic Prompt Guide", "https://docs.anthropic.com/en/docs/build-with-claude/prompt-engineering/overview")],
+            },
+            {
+                "title": "Vector Databases — ChromaDB & Pinecone",
+                "body": (
+                    "Vector databases store and search embeddings efficiently. Unlike regular databases that match exact values, vector DBs find semantically similar items. ChromaDB runs locally in Python. Pinecone and Weaviate are cloud-hosted."
+                ),
+                "snippet": "import chromadb\nfrom sentence_transformers import SentenceTransformer\n\nclient = chromadb.Client()\ncollection = client.create_collection('my_docs')\n\n# Add documents\ndocs = [\n    'Python is great for data science.',\n    'Machine learning needs lots of data.',\n    'The Eiffel Tower is in Paris.',\n    'France is known for its cuisine.',\n]\nmodel = SentenceTransformer('all-MiniLM-L6-v2')\nembeddings = model.encode(docs).tolist()\n\ncollection.add(\n    documents=docs,\n    embeddings=embeddings,\n    ids=[f'doc_{i}' for i in range(len(docs))]\n)\n\n# Query\nquery = 'What is good for AI programming?'\nresults = collection.query(\n    query_embeddings=model.encode([query]).tolist(),\n    n_results=2,\n)\nprint('Query:', query)\nfor doc in results['documents'][0]:\n    print(' ->', doc)",
+                "packages": ["chromadb", "sentence-transformers"],
+                "links": [("🌐 chromadb.io", "https://www.trychroma.com")],
+            },
         ],
     },
+
+    {
+        "id": "data_ml_apps",
+        "icon": "🚀",
+        "title": "Data & ML Apps",
+        "desc": "JupyterLab, Spyder, Streamlit, Gradio, MLflow, TensorBoard and more",
+        "color": "#f38ba8",
+        "topics": [
+            {
+                "title": "JupyterLab — How to Use",
+                "body": (
+                    "JupyterLab is a browser-based IDE for notebooks. Launch with `jupyter lab` and it opens at http://localhost:8888. The interface has a file browser on the left, a main work area in the center, and a context panel on the right. Drag tabs to arrange notebooks, terminals, and CSV viewers side by side."
+                ),
+                "diagram": "  JupyterLab Layout\n  +----------+------------------+---------+\n  | File     |  Notebook        | Context |\n  | Browser  |  [ Code Cell ]   | Variable|\n  |          |  Output: plot    | Inspector\n  | /project |------------------+---------+\n  | notebook |  Terminal                  |\n  | data.csv |  $ python script.py        |\n  +----------+----------------------------+",
+                "tip": "Key shortcuts (press Esc to enter command mode):\n  Shift+Enter   Run cell and advance\n  B             Insert cell Below\n  D D           Delete cell\n  M / Y         Switch to Markdown / Code\n  Ctrl+Shift+C  Command Palette",
+                "packages": ["jupyterlab"],
+                "links": [("🌐 jupyter.org", "https://jupyter.org"), ("📖 Docs", "https://jupyterlab.readthedocs.io")],
+            },
+            {
+                "title": "Spyder IDE — How to Use",
+                "body": (
+                    "Spyder is a scientific Python IDE designed to feel like MATLAB. The Variable Explorer shows all live variables as a table. Split scripts into cells with `# %%` and run them independently with Ctrl+Enter. Select any code and press F9 to run just that selection."
+                ),
+                "diagram": "  Spyder Layout\n  +-----------------+-----------------+\n  | Editor          | Variable Explorer|\n  | # %% Section 1  | df  DataFrame   |\n  | import numpy    | x   array  100  |\n  | # %% Section 2  | res float  3.14 |\n  | print(x.mean()) +-----------------+\n  +-----------------| Plots (inline)  |\n  | IPython Console | [figure here]   |\n  | In [1]: 0.023   |                 |\n  +-----------------+-----------------+",
+                "tip": "Shortcuts:\n  Ctrl+Enter   Run current # %% cell\n  F5           Run entire file\n  F9           Run selected code\n  Ctrl+I       Show help for selected function\n  Ctrl+1       Toggle comment",
+                "packages": ["spyder"],
+                "links": [("🌐 spyder-ide.org", "https://www.spyder-ide.org")],
+            },
+            {
+                "title": "Streamlit — How to Use",
+                "body": (
+                    "Streamlit turns a plain Python script into a web app with no HTML needed. Add `st.slider()`, `st.selectbox()`, `st.line_chart()` to your script. Run `streamlit run app.py`. Every widget interaction reruns the script top-to-bottom automatically."
+                ),
+                "diagram": "  How Streamlit Executes\n\n  Your script (app.py)         Browser\n  st.title('Dashboard')  ->   == Dashboard ==\n  n = st.slider(50,500)  ->   [---O---] 150\n  df = generate(n)             user drags\n  st.line_chart(df)      ->   /\\/  chart\n  st.dataframe(df)       ->   | table |\n\n  Widget change -> script reruns -> UI updates",
+                "tip": "Streamlit tips:\n  @st.cache_data          cache slow functions\n  st.sidebar.slider()     add to sidebar panel\n  st.columns(3)           side-by-side layout\n  st.session_state        persist data across reruns\n  Community Cloud = free hosting at share.streamlit.io",
+                "packages": ["streamlit"],
+                "links": [("🌐 streamlit.io", "https://streamlit.io"), ("🌐 Community Cloud", "https://streamlit.io/cloud")],
+            },
+            {
+                "title": "Gradio — How to Use",
+                "body": (
+                    "Gradio creates a web UI for any Python function in minutes. Define inputs (image, text, slider) and outputs (label, plot, audio) — Gradio builds the interface automatically. Share your demo permanently via Hugging Face Spaces for free."
+                ),
+                "diagram": "  def predict(image, threshold): ...\n\n  +------------------------+-----------+\n  | INPUT                  | OUTPUT    |\n  | [ Upload Image  ]      | Cat: 0.97 |\n  | Threshold [--O-] 0.5   |           |\n  | [ Submit ]             |           |\n  +------------------------+-----------+\n\n  gr.Interface()   simple: one function\n  gr.Blocks()      advanced: tabs, rows, columns",
+                "tip": "Gradio tips:\n  demo.launch(share=True)   generate public URL\n  demo.queue()              handle multiple users\n  gr.Examples([...])        add example inputs\n  Hugging Face Spaces = free permanent hosting",
+                "packages": ["gradio"],
+                "links": [("🌐 gradio.app", "https://www.gradio.app"), ("🌐 HF Spaces", "https://huggingface.co/spaces")],
+            },
+            {
+                "title": "MLflow — How to Use",
+                "body": (
+                    "MLflow tracks every training run: parameters, metrics, artifacts, and models. Launch the UI with `mlflow ui` to compare runs in a table or chart. You never lose a result again. MLflow also handles model versioning and deployment as a REST API."
+                ),
+                "diagram": "  MLflow Workflow\n\n  Code                  Tracking UI (port 5000)\n  mlflow.start_run()    Run 1: lr=0.01  acc=0.82\n  log_param(lr=0.01)    Run 2: lr=0.001 acc=0.91  <- best\n  log_metric(acc=0.91)  Run 3: lr=0.1   acc=0.74\n  log_model(model)      -------------------------\n                        Compare charts\n                        Register best model\n                        mlflow models serve ...",
+                "tip": "MLflow tips:\n  mlflow ui                   launch tracking UI\n  mlflow.autolog()            auto-log sklearn/keras/xgboost\n  mlflow.set_experiment(name) organize by project\n  mlflow models serve -m ...  deploy as REST API",
+                "packages": ["mlflow"],
+                "links": [("🌐 mlflow.org", "https://mlflow.org")],
+            },
+            {
+                "title": "TensorBoard — How to Use",
+                "body": (
+                    "TensorBoard visualizes what happens during training. Your code writes logs to a folder; TensorBoard reads and displays them live. The Scalars tab shows loss and accuracy curves, Histograms shows weight distributions epoch by epoch, and Graphs shows the full model architecture."
+                ),
+                "diagram": "  Launch: tensorboard --logdir=runs\n  Open:   http://localhost:6006\n\n  [ Scalars ] [ Images ] [ Graphs ] [ Histograms ]\n\n  Loss/train        Loss/val\n  1.0 |\\            1.0 |\\\n  0.5 |  \\_          0.5 |  \\_\n  0.0 |    \\___     0.0 |     \\__\n       0  50 100         0  50 100 epoch",
+                "tip": "TensorBoard tips:\n  add_scalar(tag, value, step)   log a metric\n  add_image(tag, tensor, step)   log an image\n  add_histogram(tag, weights)    weight distribution\n  add_graph(model, input)        model architecture\n\nWorks with PyTorch (torch.utils.tensorboard) and TensorFlow.",
+                "packages": ["tensorboard"],
+                "links": [("🌐 tensorboard.dev", "https://www.tensorflow.org/tensorboard")],
+            },
+            {
+                "title": "Marimo — How to Use",
+                "body": (
+                    "Marimo is a reactive notebook: change a variable in one cell and all dependent cells update automatically. Unlike Jupyter, there is no hidden state. A Marimo notebook is a plain .py file — run it as a script or deploy it as a web app. `marimo edit app.py` for the editor, `marimo run app.py` for a clean app."
+                ),
+                "diagram": "  Reactive vs Manual Execution\n\n  Jupyter (manual):      Marimo (reactive):\n  x = 5                  x = 5\n  y = x * 2              y = x * 2  <- auto-updates\n  [run manually]         print(y)   <- auto-updates\n\n  marimo edit app.py     full editor, code visible\n  marimo run  app.py     app mode, only UI visible\n\n  mo.ui.slider()   mo.ui.dropdown()   mo.ui.table()",
+                "tip": "Marimo tips:\n  mo.ui.slider(1, 100)   reactive slider widget\n  mo.ui.dropdown([])     reactive dropdown\n  mo.md(f'...')          live Markdown with values\n  mo.pyplot(fig)         display matplotlib figure\n  marimo run app.py      clean app, no code visible",
+                "packages": ["marimo"],
+                "links": [("🌐 marimo.io", "https://marimo.io")],
+            },
+            {
+                "title": "Datasette — How to Use",
+                "body": (
+                    "Datasette turns any SQLite database into a web application instantly. Run `datasette mydata.db` and get a browsable table UI, a SQL query editor, and automatic JSON/CSV endpoints. No backend code needed. Perfect for sharing data with non-technical colleagues."
+                ),
+                "diagram": "  datasette products.db\n  http://localhost:8001\n\n  /products              table view with pagination\n  /products.json         automatic JSON API\n  /products.csv          automatic CSV export\n\n  SQL editor in browser:\n  SELECT name, price FROM products\n  WHERE category = 'Electronics'\n  ORDER BY price DESC\n  [ Run ]  [ Export CSV ]",
+                "tip": "Datasette tips:\n  datasette serve data.db --open   launch + open browser\n  datasette publish cloudrun data.db  deploy to cloud\n  datasette install datasette-vega  add charts plugin\n  datasette install datasette-maps  add map plugin",
+                "packages": ["datasette"],
+                "links": [("🌐 datasette.io", "https://datasette.io")],
+            },
+            {
+                "title": "Ollama — How to Use",
+                "body": (
+                    "Ollama runs large language models on your own computer with no API key or cloud required. Install Ollama, pull a model, and start chatting in the terminal or via REST API. Install Open WebUI to get a browser interface identical to ChatGPT, completely private and offline."
+                ),
+                "diagram": "  Setup:\n  1. Install: ollama.com\n  2. Pull:    ollama pull llama3.2\n  3. Chat:    ollama run  llama3.2\n\n  Recommended models:\n  llama3.2    2GB  fast, everyday tasks\n  mistral     4GB  balanced quality/speed\n  deepseek-coder    excellent for coding\n\n  Open WebUI (browser UI like ChatGPT):\n  pip install open-webui\n  open-webui serve  ->  http://localhost:8080",
+                "tip": "Ollama commands:\n  ollama pull llama3.2   download a model\n  ollama run  llama3.2   chat in terminal\n  ollama list            show installed models\n  ollama rm   llama3.2   remove a model\n  ollama serve           start API server",
+                "packages": ["ollama"],
+                "links": [("🌐 ollama.com", "https://ollama.com"), ("🌐 Open WebUI", "https://openwebui.com")],
+            },
+            {
+                "title": "Quarto — How to Use",
+                "body": (
+                    "Quarto converts .qmd files (Python code + Markdown) into HTML reports, PDFs, Word documents, or slide decks. Write your analysis once, publish it in any format. Run `quarto preview` for live reload in the browser as you edit. Use `quarto publish gh-pages` to host on GitHub Pages for free."
+                ),
+                "diagram": "  report.qmd file:\n  ---\n  title: My Analysis\n  format: html\n  ---\n\n  ## Results\n  ```python\n  import pandas as pd\n  df.describe()\n  ```\n\n  quarto render report.qmd       -> report.html\n  quarto render --to pdf         -> report.pdf\n  quarto render --to revealjs    -> slide deck\n  quarto publish gh-pages        -> GitHub Pages",
+                "tip": "Quarto tips:\n  quarto preview report.qmd    live browser preview\n  echo: false                  hide code, show output\n  execute: cache: true         cache slow cells\n  quarto create project website  create a full site",
+                "packages": ["jupyter"],
+                "links": [("🌐 quarto.org", "https://quarto.org"), ("📖 Gallery", "https://quarto.org/docs/gallery/")],
+            },
         ],
     },
+
 ]
 
 

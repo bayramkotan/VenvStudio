@@ -1454,6 +1454,32 @@ Olması gereken fark:
   - `open_folder`: openSUSE için `/usr/bin`, `/usr/local/bin` manuel path araması eklendi
   - `auto_order`'a `yakuake` eklendi
 
+- **B169** — 🔴 Settings → Manual Install → PM'e göre farklı içerik
+  - Şu an Poetry seçiliyken "uv install..." gibi yanlış komutlar çıkıyor
+  - Her PM için doğru install/uninstall komutu gösterilmeli:
+    - pip:    pip install X / pip uninstall X
+    - uv:     uv pip install X / uv pip uninstall X
+    - conda:  conda install X / conda remove X
+    - poetry: poetry add X / poetry remove X
+    - pipx:   pipx install X / pipx uninstall X
+  - İlgili dosya: `src/gui/package_panel.py` → Manual Install tab
+
+- **B170** — ✅ TAMAMLANDI (v1.4.79): CLI/TUI Tools Uninstall tüm sistemlerde
+  - get_tool_version: PATH + bin_dir + pip show fallback
+  - Uninstall butonu her zaman görünür, yüklü değilse disabled
+  - Yüklü olan araçlarda Uninstall butonu aktif olmalı
+  - Tüm sistemlerde (Linux/Windows/macOS) ve tüm araçlar için (Starship, Oh My Posh, Rich, Textual, Prompt Toolkit)
+  - Yüklü değilse Uninstall butonu gizli/disabled
+  - İlgili dosyalar: `src/gui/settings_page.py`, `src/gui/settings_toolchain.py`, `src/gui/settings_appearance.py`
+
+- **F133** — 🔴 Harici Python projesi içine env kurma
+  - Kullanıcı mevcut bir Python projesinin klasörünü seçebilmeli
+  - O klasör içine env oluşturulabilmeli (.venv/ veya kullanıcının seçtiği isim)
+  - Recent Envs altında bu env'ler de görünsün
+  - Packages sayfasında tıklandığında detaylar (paketler, path, python version) görünsün
+  - Environments sayfasında "External / Project Envs" bölümü veya filtresi olsun
+  - İlgili dosyalar: `src/gui/env_dialog.py`, `src/gui/main_window.py`, `src/core/venv_manager.py`
+
 - **B166** — 🔴 Settings → Save butonunda progress bar/feedback yok
   - Kaydetme işlemi sırasında form takılmış gibi görünüyor
   - Çözüm: Save butonuna basınca buton disabled + "Saving..." text, işlem bitince "✅ Saved!" toast veya status label

@@ -181,8 +181,14 @@ class AppearanceMixin:
 
             uninst_btn = QPushButton("\U0001f5d1\ufe0f Uninstall")
             uninst_btn.setObjectName("danger")
-            uninst_btn
             uninst_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_uninstall(t, sb, sl))
+            controls.addWidget(uninst_btn)
+
+        else:
+            # Not installed — show disabled Uninstall for consistency
+            uninst_btn = QPushButton("\U0001f5d1\ufe0f Uninstall")
+            uninst_btn.setObjectName("danger")
+            uninst_btn.setEnabled(False)
             controls.addWidget(uninst_btn)
 
         layout.addLayout(controls)
@@ -221,13 +227,12 @@ class AppearanceMixin:
         install_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_install(t, sb, sl))
         header.addWidget(install_btn)
 
-        if installed:
-            uninst_btn = QPushButton("🗑️")
-            uninst_btn.setObjectName("danger")
-            uninst_btn
-            uninst_btn.setMinimumWidth(32)
-            uninst_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_uninstall(t, sb, sl))
-            header.addWidget(uninst_btn)
+        uninst_btn = QPushButton("🗑️ Uninstall")
+        uninst_btn.setObjectName("danger")
+        uninst_btn.setEnabled(installed)
+        uninst_btn.setVisible(True)
+        uninst_btn.clicked.connect(lambda _, t=tool_id, sb=install_btn, sl=status_lbl: self._cli_uninstall(t, sb, sl))
+        header.addWidget(uninst_btn)
 
         layout.addLayout(header)
 

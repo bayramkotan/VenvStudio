@@ -155,21 +155,50 @@ def get_tool_version(tool: str) -> Optional[str]:
     """Return installed version string or None."""
     try:
         if tool == "starship":
-            r = subprocess.run(["starship", "--version"], capture_output=True, text=True, timeout=5)
-            return r.stdout.strip().split("\n")[0] if r.returncode == 0 else None
+            # Try PATH first, then VenvStudio bin dir
+            for cmd in ["starship", str(_get_bin_dir() / "starship")]:
+                try:
+                    r = subprocess.run([cmd, "--version"], capture_output=True, text=True, timeout=5)
+                    if r.returncode == 0:
+                        return r.stdout.strip().split("\n")[0]
+                except (FileNotFoundError, OSError):
+                    continue
+            return None
         elif tool == "oh-my-posh":
             exe = "oh-my-posh" if SYSTEM != "Windows" else "oh-my-posh.exe"
-            r = subprocess.run([exe, "--version"], capture_output=True, text=True, timeout=5)
-            return r.stdout.strip() if r.returncode == 0 else None
-        elif tool in PIP_TOOLS:
-            import importlib.util
-            spec = importlib.util.find_spec(tool.replace("-", "_"))
-            if spec:
-                import importlib.metadata
+            for cmd in [exe, str(_get_bin_dir() / exe)]:
                 try:
-                    return importlib.metadata.version(PIP_TOOLS[tool]["pip"])
-                except Exception:
+                    r = subprocess.run([cmd, "--version"], capture_output=True, text=True, timeout=5)
+                    if r.returncode == 0:
+                        return r.stdout.strip()
+                except (FileNotFoundError, OSError):
+                    continue
+            return None
+        elif tool in PIP_TOOLS:
+            pkg_name = PIP_TOOLS[tool]["pip"]
+            # 1. Try importlib.metadata (fast, works if installed in same Python)
+            try:
+                import importlib.metadata
+                return importlib.metadata.version(pkg_name)
+            except Exception:
+                pass
+            # 2. Try importlib.util.find_spec
+            import importlib.util
+            if importlib.util.find_spec(tool.replace("-", "_")):
+                return "installed"
+            # 3. Fall back to pip show (slower but cross-environment)
+            try:
+                r = subprocess.run(
+                    [sys.executable, "-m", "pip", "show", pkg_name],
+                    capture_output=True, text=True, timeout=10
+                )
+                if r.returncode == 0:
+                    for line in r.stdout.splitlines():
+                        if line.startswith("Version:"):
+                            return line.split(":", 1)[1].strip()
                     return "installed"
+            except Exception:
+                pass
         return None
     except Exception:
         return None

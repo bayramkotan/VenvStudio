@@ -620,20 +620,32 @@ def main():
                 install_cmd = _emoji_install_command_for_distro(distro)
                 show_emoji = config.get("show_emoji_missing_warning", True)
                 if show_emoji and install_cmd:
-                    from PySide6.QtWidgets import QMessageBox, QCheckBox
+                    from PySide6.QtWidgets import QMessageBox
                     box = QMessageBox(
                         QMessageBox.Warning,
                         "Emoji Font Missing",
                         "VenvStudio uses emoji characters (🔄 ⭐ 📁 🐍) for icons, "
                         "but no emoji font was detected on your system.\n\n"
-                        f"To install, run in terminal:\n\n    {install_cmd}\n\n"
-                        "Then restart VenvStudio.",
+                        f"Install now? (requires admin password)\n\n"
+                        f"Command: {install_cmd}",
                     )
-                    dont_show = QCheckBox("Don't show this again")
-                    box.setCheckBox(dont_show)
-                    box.addButton(QMessageBox.Ok)
+                    yes_btn = box.addButton("Yes", QMessageBox.AcceptRole)
+                    no_btn = box.addButton("No", QMessageBox.RejectRole)
                     box.exec()
-                    if dont_show.isChecked():
+                    clicked = box.clickedButton()
+                    if clicked is yes_btn:
+                        # Run install command
+                        try:
+                            import subprocess as _sp
+                            _sp.Popen(
+                                ["bash", "-c", install_cmd],
+                                start_new_session=True,
+                            )
+                        except Exception as _ie:
+                            logger.warning(f"Emoji font install failed: {_ie}")
+                        config.set("show_emoji_missing_warning", False)
+                    elif clicked is no_btn:
+                        # Don't ask again
                         config.set("show_emoji_missing_warning", False)
             except Exception as _e:
                 logger.debug(f"Emoji warning dialog failed: {_e}")

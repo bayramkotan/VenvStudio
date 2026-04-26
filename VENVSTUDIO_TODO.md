@@ -1449,15 +1449,20 @@ Olması gereken fark:
   - "Create new env" altına Type seçimi eklendi (venv/uv/conda/poetry)
   - `LearnInstallDecision`'a `new_env_type` field'ı eklendi
 
-- **B160** — ✅ TAMAMLANDI (v1.4.74): openSUSE/SUSE Open Folder/Terminal donuyor
+- **B160** — ✅ TAMAMLANDI (v1.4.74-v1.4.76): openSUSE/SUSE Open Folder/Terminal donuyor
   - `platform_utils.py` — tüm Linux `subprocess.Popen` çağrılarına `start_new_session=True` eklendi
   - `open_folder`: openSUSE için `/usr/bin`, `/usr/local/bin` manuel path araması eklendi
   - `auto_order`'a `yakuake` eklendi
 
-- **B163** — 🔴 Noto Color Emoji dialog "No" deyince config'e kaydedilmiyor olabilir
-  - Her açılışta tekrar soruyor mu? Kontrol edilmeli
-  - Config key: muhtemelen `noto_emoji_dismissed` veya benzeri — yoksa eklenmeli
-  - İlgili dosya: startup kontrol kodu (muhtemelen `main.py` veya `main_window.py`)
+- **B165** — 🟡 Wayland: `qt.qpa.wayland.textinput` uyarıları terminale dökülüyor
+  - `qt.qpa.wayland.textinput: ...zwp_text_input_v3_leave...` ve `remaining: 0` mesajları
+  - Qt'nin Wayland implementasyonundaki bug, VenvStudio'nun hatası değil
+  - Çözüm: `main.py`'de `os.environ["QT_LOGGING_RULES"] = "qt.qpa.wayland*=false"` set et
+  - Sadece Wayland'da set edilmeli (`WAYLAND_DISPLAY` env var kontrolü ile)
+
+- **B163** — ✅ TAMAMLANDI (v1.4.77): Noto emoji dialog her açılışta tekrar soruyordu
+  - Yes/No her ikisinde de `show_emoji_missing_warning = False` kaydediliyor
+  - Settings'e "⬇️ Install Noto Color Emoji" butonu eklendi
 
 - **B164** — 🔴 Kali Linux: VenvStudio her başlatıldığında `postgresql.service` authentication isteniyor
   - VenvStudio startup'ta bir şey postgresql servisini tetikliyor
@@ -1467,10 +1472,10 @@ Olması gereken fark:
   - `open_terminal_at` ve `_open_env_folder` fonksiyonları etkileniyor
   - Çözüm: openSUSE'de varsayılan terminal ve file manager tespiti + Wayland için `nohup` / `setsid` kullanımı
 
-- **B161** — 🔴 CLI/TUI araçları Settings'te dropdown'a taşınacak
-  - Şu an hepsi aynı sayfada listeleniyor — kalabalık görünüyor
-  - Her araç için dropdown (seç → detaylar + install butonu alta gelsin)
-  - `settings_page.py` veya `settings_toolchain.py`'de ilgili bölüm
+- **B161** — ✅ TAMAMLANDI (v1.4.77): CLI/TUI araçları dropdown'a taşındı
+  - "🛠 CLI / TUI Tools:" checkbox + QComboBox + QStackedWidget
+  - Oh My Posh ilk sırada, yüklü araçlarda ✅ suffix
+  - Checkbox işaretlenmeden dropdown ve card görünmüyor
 
 - **F90** — ✅ TAMAMLANDI (v1.4.73): Shared Package Cache (pip / uv)
   - Settings → Paths'e toggle + cache dir + Browse + Reset + Clear Cache eklendi

@@ -449,6 +449,50 @@ class AdvancedMixin:
         self._load_current_settings()
 
 
+    # ── Noto Color Emoji install ─────────────────────────────────────────────
+
+    def _install_noto_emoji(self):
+        """Install Noto Color Emoji font via distro package manager."""
+        import sys
+        if sys.platform != "linux":
+            return
+        try:
+            from PySide6.QtWidgets import QMessageBox
+            from main import _detect_linux_distro, _emoji_install_command_for_distro
+            distro = _detect_linux_distro()
+            install_cmd = _emoji_install_command_for_distro(distro)
+            if not install_cmd:
+                QMessageBox.warning(self, "Noto Color Emoji",
+                    "Could not determine install command for your distro.\n\n"
+                    "Install manually: fonts-noto-color-emoji (Debian/Ubuntu) "
+                    "or noto-fonts-emoji (Arch/Fedora)")
+                return
+
+            reply = QMessageBox.question(
+                self, "Install Noto Color Emoji",
+                f"This will run:\n\n    {install_cmd}\n\n"
+                "Admin password may be required. Continue?",
+                QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes,
+            )
+            if reply != QMessageBox.Yes:
+                return
+
+            import subprocess
+            subprocess.Popen(
+                ["bash", "-c", install_cmd],
+                start_new_session=True,
+            )
+            QMessageBox.information(
+                self, "Noto Color Emoji",
+                "Install command launched in background.\n\n"
+                "Restart VenvStudio after installation completes."
+            )
+            # Don't show the startup warning again
+            self.config.set("show_emoji_missing_warning", False)
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Error", f"Failed to launch install:\n{e}")
+
     # ── Shared Cache helpers ─────────────────────────────────────────────────
 
     def _on_shared_cache_toggled(self, checked: bool):

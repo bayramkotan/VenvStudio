@@ -16,6 +16,7 @@ from src.utils.platform_utils import find_system_pythons, get_platform, subproce
 from src.utils.constants import APP_NAME, APP_VERSION
 from src.utils.i18n import tr
 import os, subprocess, shutil
+import sys
 from pathlib import Path
 
 from .settings_appearance import AppearanceMixin
@@ -1414,43 +1415,96 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         font_group.setLayout(font_inner)
         cli_layout.addWidget(font_group)
 
-        # ── Tool cards ──
+        # ── Noto Color Emoji ──
+        if sys.platform == "linux":
+            emoji_group = QGroupBox("😀 Noto Color Emoji Font")
+            emoji_inner = QHBoxLayout()
+            emoji_inner.setSpacing(8)
+
+            emoji_label = QLabel("Required for emoji icons (🔄 ⭐ 📁 🐍) to display correctly.")
+            emoji_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
+            emoji_label.setWordWrap(True)
+            emoji_inner.addWidget(emoji_label, 1)
+
+            self._install_emoji_btn = QPushButton("⬇️ Install Noto Color Emoji")
+            self._install_emoji_btn.setObjectName("secondary")
+            self._install_emoji_btn.clicked.connect(self._install_noto_emoji)
+            emoji_inner.addWidget(self._install_emoji_btn)
+
+            emoji_group.setLayout(emoji_inner)
+            cli_layout.addWidget(emoji_group)
+
+        # ── Tool selector dropdown ──
         from src.core.cli_tools_manager import (
-            STARSHIP_PRESETS, STARSHIP_PRESET_NAMES, OMP_THEMES, PIP_TOOLS, is_tool_installed
+            STARSHIP_PRESETS, STARSHIP_PRESET_NAMES, OMP_THEMES, is_tool_installed
         )
 
-        # Starship
-        cli_layout.addWidget(self._make_cli_card(
+        _tool_selector_row = QHBoxLayout()
+        _tool_selector_lbl = QLabel("🛠 CLI / TUI Tools:")
+        _tool_selector_lbl.setStyleSheet(f"font-size: {self._c()['fs_small']}px; color: {self._c()['fg']}; font-weight: bold;")
+        _tool_selector_row.addWidget(_tool_selector_lbl)
+
+        self.cli_tool_selector = QComboBox()
+        self.cli_tool_selector.setStyleSheet(
+            f"QComboBox {{ background: {self._c()['card']}; color: {self._c()['fg']}; "
+            f"border: 1px solid {self._c()['border']}; border-radius: 4px; "
+            f"padding: 4px 10px; font-size: {self._c()['fs_small']}px; min-width: 220px; }}"
+        )
+        _tools = [
+            ("oh-my-posh",      "🎨 Oh My Posh"),
+            ("starship",        "🚀 Starship"),
+            ("rich",            "✨ Rich"),
+            ("textual",         "🖼️ Textual"),
+            ("prompt_toolkit",  "⌨️ Prompt Toolkit"),
+        ]
+        for _tid, _tname in _tools:
+            _installed = is_tool_installed(_tid)
+            _suffix = " ✅" if _installed else ""
+            self.cli_tool_selector.addItem(f"{_tname}{_suffix}", _tid)
+
+        self.cli_tool_selector.setEnabled(False)
+
+        # ── Tool card stack — must be created before checkbox connects to it ──
+        from PySide6.QtWidgets import QStackedWidget
+        self.cli_tool_stack = QStackedWidget()
+
+        self.cli_tool_cb = QCheckBox()
+        self.cli_tool_cb.setToolTip("Enable tool selector")
+        self.cli_tool_cb.toggled.connect(self.cli_tool_selector.setEnabled)
+        self.cli_tool_cb.toggled.connect(self.cli_tool_stack.setVisible)
+        _tool_selector_row.insertWidget(0, self.cli_tool_cb)
+        _tool_selector_row.addWidget(self.cli_tool_selector, 1)
+        _tool_selector_row.addStretch()
+        cli_layout.addLayout(_tool_selector_row)
+
+        self.cli_tool_stack.addWidget(self._make_cli_card(
+            "oh-my-posh", "🎨 Oh My Posh",
+            "A prompt theme engine for any shell",
+            "Theme:", OMP_THEMES, "theme"
+        ))
+        self.cli_tool_stack.addWidget(self._make_cli_card(
             "starship", "🚀 Starship",
             "The minimal, blazing-fast, and infinitely customizable prompt for any shell",
             "Preset:", STARSHIP_PRESET_NAMES, "preset",
             preset_descriptions=STARSHIP_PRESETS
         ))
-
-        # Oh My Posh
-        cli_layout.addWidget(self._make_cli_card(
-            "oh-my-posh", "🎨 Oh My Posh",
-            "A prompt theme engine for any shell",
-            "Theme:", OMP_THEMES, "theme"
-        ))
-
-        # Rich
-        cli_layout.addWidget(self._make_pip_card(
+        self.cli_tool_stack.addWidget(self._make_pip_card(
             "rich", "✨ Rich",
             "Rich text and beautiful formatting in the terminal",
         ))
-
-        # Textual
-        cli_layout.addWidget(self._make_pip_card(
+        self.cli_tool_stack.addWidget(self._make_pip_card(
             "textual", "🖼️ Textual",
             "Rapid framework for terminal-based user interfaces (TUI)",
         ))
-
-        # Prompt Toolkit
-        cli_layout.addWidget(self._make_pip_card(
+        self.cli_tool_stack.addWidget(self._make_pip_card(
             "prompt_toolkit", "⌨️ Prompt Toolkit",
             "Library for building interactive CLI applications",
         ))
+
+        self.cli_tool_selector.currentIndexChanged.connect(self.cli_tool_stack.setCurrentIndex)
+        self.cli_tool_stack.setCurrentIndex(0)
+        self.cli_tool_stack.setVisible(False)
+        cli_layout.addWidget(self.cli_tool_stack)
 
         cli_group.setLayout(cli_layout)
         layout.addWidget(cli_group)

@@ -458,9 +458,37 @@ class AdvancedMixin:
             return
         try:
             from PySide6.QtWidgets import QMessageBox
-            from main import _detect_linux_distro, _emoji_install_command_for_distro
-            distro = _detect_linux_distro()
-            install_cmd = _emoji_install_command_for_distro(distro)
+
+            def _detect_distro():
+                try:
+                    with open("/etc/os-release", "r") as f:
+                        data = f.read()
+                    info = {}
+                    for line in data.splitlines():
+                        if "=" in line:
+                            k, _, v = line.partition("=")
+                            info[k.strip()] = v.strip().strip('"').strip("'")
+                    like = (info.get("ID_LIKE", "") + " " + info.get("ID", "")).lower()
+                    if "fedora" in like or "rhel" in like: return "fedora"
+                    if "suse" in like or "opensuse" in like: return "suse"
+                    if "ubuntu" in like or "debian" in like or "pardus" in like: return "debian"
+                    if "arch" in like or "manjaro" in like or "cachyos" in like: return "arch"
+                    if "alpine" in like: return "alpine"
+                    return info.get("ID", "linux")
+                except Exception:
+                    return "linux"
+
+            def _emoji_cmd(distro):
+                return {
+                    "fedora": "sudo dnf install -y google-noto-color-emoji-fonts",
+                    "suse":   "sudo zypper install -y noto-coloremoji-fonts",
+                    "debian": "sudo apt install -y fonts-noto-color-emoji",
+                    "arch":   "sudo pacman -S --noconfirm noto-fonts-emoji",
+                    "alpine": "sudo apk add font-noto-emoji",
+                }.get(distro, "Install a package named 'fonts-noto-color-emoji'")
+
+            distro = _detect_distro()
+            install_cmd = _emoji_cmd(distro)
             if not install_cmd:
                 QMessageBox.warning(self, "Noto Color Emoji",
                     "Could not determine install command for your distro.\n\n"

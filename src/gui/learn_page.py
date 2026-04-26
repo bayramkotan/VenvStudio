@@ -1018,6 +1018,69 @@ LEARN_CATEGORIES = [
                     ("🌐 langchain.com", "https://www.langchain.com"),
                 ],
             },
+            {
+                "title": "Scikit-learn — Classical ML",
+                "body": (
+                    "scikit-learn is the go-to library for classical machine learning. "
+                    "Consistent API: fit/predict/score for every model. "
+                    "Decision trees, SVMs, random forests, k-means, and more."
+                ),
+                "snippet": "from sklearn.datasets import load_iris\nfrom sklearn.model_selection import train_test_split\nfrom sklearn.ensemble import RandomForestClassifier\nfrom sklearn.metrics import classification_report, confusion_matrix\nimport numpy as np\n\n# Load built-in dataset\niris = load_iris()\nX, y = iris.data, iris.target\nX_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)\n\n# Train Random Forest\nrf = RandomForestClassifier(n_estimators=100, random_state=42)\nrf.fit(X_train, y_train)\n\n# Evaluate\ny_pred = rf.predict(X_test)\nprint(classification_report(y_test, y_pred, target_names=iris.target_names))\n\n# Feature importance\nfor name, imp in zip(iris.feature_names, rf.feature_importances_):\n    print(f'{name:25s}: {imp:.3f}')",
+                "packages": ["scikit-learn"],
+                "links": [("🌐 scikit-learn.org", "https://scikit-learn.org")],
+            },
+            {
+                "title": "Neural Networks from Scratch",
+                "body": (
+                    "Build a 2-layer neural network with just NumPy. "
+                    "Forward pass, backpropagation, gradient descent — "
+                    "understanding these fundamentals makes framework docs click."
+                ),
+                "snippet": "import numpy as np\n\ndef sigmoid(z): return 1 / (1 + np.exp(-z))\ndef sigmoid_grad(a): return a * (1 - a)\n\nnp.random.seed(42)\n# XOR dataset\nX = np.array([[0,0],[0,1],[1,0],[1,1]], dtype=float)\ny = np.array([[0],[1],[1],[0]], dtype=float)\n\n# Weights\nW1 = np.random.randn(2, 4) * 0.5\nb1 = np.zeros((1, 4))\nW2 = np.random.randn(4, 1) * 0.5\nb2 = np.zeros((1, 1))\n\nlr = 0.5\nfor epoch in range(5000):\n    # Forward\n    z1 = X @ W1 + b1\n    a1 = sigmoid(z1)\n    z2 = a1 @ W2 + b2\n    a2 = sigmoid(z2)\n\n    # Loss (MSE)\n    loss = np.mean((a2 - y)**2)\n\n    # Backward\n    d2 = 2*(a2-y) * sigmoid_grad(a2)\n    d1 = (d2 @ W2.T) * sigmoid_grad(a1)\n    W2 -= lr * a1.T @ d2; b2 -= lr * d2.mean(0)\n    W1 -= lr * X.T  @ d1; b1 -= lr * d1.mean(0)\n\n    if epoch % 1000 == 0:\n        print(f'Epoch {epoch:5d}  loss={loss:.6f}')\n\nprint('\\nPredictions:', a2.round(2).T)",
+                "packages": ["numpy"],
+            },
+            {
+                "title": "PyTorch — Tensors & Autograd",
+                "body": (
+                    "PyTorch is the most popular deep learning framework in research. "
+                    "Dynamic computation graphs, intuitive debugging, and a rich ecosystem. "
+                    "Autograd computes gradients automatically."
+                ),
+                "snippet": "import torch\nimport torch.nn as nn\n\n# Tensors\nx = torch.tensor([[1., 2.], [3., 4.]], requires_grad=True)\ny = (x ** 2).sum()\ny.backward()              # compute gradients\nprint('Gradient:', x.grad) # dy/dx = 2x\n\n# Simple linear regression with autograd\ntorch.manual_seed(0)\nX = torch.randn(100, 1)\ny = 3 * X + 2 + 0.1 * torch.randn(100, 1)\n\nmodel = nn.Linear(1, 1)\noptimizer = torch.optim.SGD(model.parameters(), lr=0.1)\nloss_fn = nn.MSELoss()\n\nfor epoch in range(200):\n    pred = model(X)\n    loss = loss_fn(pred, y)\n    optimizer.zero_grad()\n    loss.backward()\n    optimizer.step()\n\nw, b = model.weight.item(), model.bias.item()\nprint(f'Learned: y = {w:.3f}x + {b:.3f}  (true: 3x + 2)')",
+                "packages": ["torch"],
+                "links": [("🌐 pytorch.org", "https://pytorch.org")],
+            },
+            {
+                "title": "Data Preprocessing Pipeline",
+                "body": (
+                    "Raw data is messy. sklearn's Pipeline chains preprocessing steps "
+                    "and a model into one object — preventing data leakage and simplifying "
+                    "cross-validation."
+                ),
+                "snippet": "from sklearn.pipeline import Pipeline\nfrom sklearn.preprocessing import StandardScaler, OneHotEncoder\nfrom sklearn.compose import ColumnTransformer\nfrom sklearn.ensemble import GradientBoostingClassifier\nfrom sklearn.datasets import fetch_openml\nfrom sklearn.model_selection import cross_val_score\nimport numpy as np\n\n# Titanic dataset\n# data = fetch_openml('titanic', version=1, as_frame=True)\n# Simulate similar structure\nnp.random.seed(42)\nn = 500\nX_num = np.random.randn(n, 2)\nX_cat = np.random.choice(['A','B','C'], size=(n, 1))\nimport pandas as pd\nX = pd.DataFrame(np.hstack([X_num, X_cat]), columns=['age','fare','class'])\nX['age'] = X['age'].astype(float); X['fare'] = X['fare'].astype(float)\ny = (X['age'] + X['fare'] > 0).astype(int)\n\nnumeric = Pipeline([('scaler', StandardScaler())])\ncategorical = Pipeline([('ohe', OneHotEncoder(handle_unknown='ignore'))])\npreprocessor = ColumnTransformer([\n    ('num', numeric, ['age','fare']),\n    ('cat', categorical, ['class']),\n])\npipeline = Pipeline([('prep', preprocessor), ('clf', GradientBoostingClassifier())])\nscores = cross_val_score(pipeline, X, y, cv=5)\nprint(f'CV accuracy: {scores.mean():.3f} ± {scores.std():.3f}')",
+                "packages": ["scikit-learn", "pandas"],
+            },
+            {
+                "title": "Model Evaluation & Hyperparameter Tuning",
+                "body": (
+                    "Never trust a single train/test split. "
+                    "k-Fold cross-validation and GridSearchCV/RandomizedSearchCV "
+                    "find the best hyperparameters without overfitting to the test set."
+                ),
+                "snippet": "from sklearn.datasets import load_breast_cancer\nfrom sklearn.model_selection import GridSearchCV, StratifiedKFold\nfrom sklearn.svm import SVC\nfrom sklearn.preprocessing import StandardScaler\nfrom sklearn.pipeline import Pipeline\n\nX, y = load_breast_cancer(return_X_y=True)\n\npipe = Pipeline([\n    ('scaler', StandardScaler()),\n    ('svc', SVC(probability=True)),\n])\n\nparam_grid = {\n    'svc__C': [0.1, 1, 10],\n    'svc__gamma': ['scale', 'auto'],\n    'svc__kernel': ['rbf', 'linear'],\n}\n\ncv = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)\ngrid = GridSearchCV(pipe, param_grid, cv=cv, scoring='roc_auc', n_jobs=-1, verbose=1)\ngrid.fit(X, y)\n\nprint(f'Best AUC: {grid.best_score_:.4f}')\nprint(f'Best params: {grid.best_params_}')",
+                "packages": ["scikit-learn"],
+            },
+            {
+                "title": "Model Serialization & Deployment",
+                "body": (
+                    "Trained models must be saved and served. "
+                    "joblib for sklearn models, torch.save for PyTorch, "
+                    "ONNX for cross-framework export. FastAPI makes a simple inference server."
+                ),
+                "snippet": "import joblib\nfrom sklearn.ensemble import RandomForestClassifier\nfrom sklearn.datasets import load_iris\nimport numpy as np\n\n# Train\nX, y = load_iris(return_X_y=True)\nmodel = RandomForestClassifier(n_estimators=50, random_state=42)\nmodel.fit(X, y)\n\n# Save\njoblib.dump(model, '/tmp/iris_rf.joblib')\nprint('Model saved.')\n\n# Load and predict\nloaded = joblib.load('/tmp/iris_rf.joblib')\nsample = np.array([[5.1, 3.5, 1.4, 0.2]])\nprob = loaded.predict_proba(sample)[0]\nnames = load_iris().target_names\nprint('Prediction probabilities:')\nfor name, p in zip(names, prob):\n    print(f'  {name}: {p:.3f}')\n\n# FastAPI serving example:\n# from fastapi import FastAPI\n# app = FastAPI()\n# @app.post('/predict')\n# def predict(features: list[float]):\n#     return {'class': names[loaded.predict([features])[0]]}'",
+                "packages": ["scikit-learn", "joblib"],
+                "links": [("🌐 fastapi.tiangolo.com", "https://fastapi.tiangolo.com")],
+            },
         ],
     },
 
@@ -1140,6 +1203,62 @@ LEARN_CATEGORIES = [
                 "snippet": "import numpy as np\n\n# Solar units\nL_sun = 3.828e26  # W\nR_sun = 6.96e8    # m\nT_sun = 5778      # K\n\n# Main sequence mass-luminosity relation\ndef luminosity(M_solar):\n    \"\"\"L ~ M^3.5 for M > 0.43 M_sun.\"\"\"\n    return M_solar ** 3.5\n\n# Main sequence mass-radius relation\ndef radius(M_solar):\n    \"\"\"Rough fit for main sequence.\"\"\"\n    return M_solar ** 0.8\n\n# Main sequence lifetime (fuel / burn rate)\ndef lifetime_gyr(M_solar):\n    return 10 * (M_solar ** -2.5)\n\nprint(f\"{'M/M_sun':>8s} {'L/L_sun':>10s} {'R/R_sun':>10s} {'life (Gyr)':>12s}\")\nfor M in [0.5, 1.0, 2.0, 5.0, 20.0]:\n    print(f\"{M:8.2f} {luminosity(M):10.2f} {radius(M):10.2f} {lifetime_gyr(M):12.4f}\")",
                 "packages": ["numpy"],
             },
+            {
+                "title": "FITS Files — Astronomical Data Format",
+                "body": (
+                    "FITS (Flexible Image Transport System) is the standard file format "
+                    "for astronomical data. astropy.io.fits reads images, spectra, "
+                    "and tables from telescopes worldwide."
+                ),
+                "snippet": "from astropy.io import fits\nimport numpy as np\nimport matplotlib.pyplot as plt\n\n# Open a FITS file (e.g. Hubble image)\n# hdu = fits.open('hubble_image.fits')\n# hdu.info()  # list extensions\n\n# Create a synthetic FITS image\ndata = np.random.normal(1000, 50, (256, 256))\n# Add a fake star\nfor i in range(256):\n    for j in range(256):\n        r = np.sqrt((i-128)**2 + (j-128)**2)\n        data[i, j] += 50000 * np.exp(-r**2 / (2*5**2))\n\nhdu = fits.PrimaryHDU(data)\nhdu.header['TELESCOP'] = 'MySim'\nhdu.header['FILTER']   = 'V'\nhdu.writeto('/tmp/star.fits', overwrite=True)\n\n# Read it back\nwith fits.open('/tmp/star.fits') as hdul:\n    img = hdul[0].data\n    print(hdul[0].header['TELESCOP'])\n\nplt.imshow(img, cmap='inferno', origin='lower')\nplt.colorbar(label='Counts')\nplt.title('Simulated Star')\nplt.show()",
+                "packages": ["astropy", "matplotlib"],
+                "links": [
+                    ("📖 FITS Standard", "https://fits.gsfc.nasa.gov/"),
+                ],
+            },
+            {
+                "title": "Spectroscopy — Analyzing Stellar Spectra",
+                "body": (
+                    "Spectrographs split starlight into wavelengths. "
+                    "By analyzing absorption/emission lines we determine "
+                    "temperature, chemical composition, and radial velocity."
+                ),
+                "snippet": "import numpy as np\nimport matplotlib.pyplot as plt\nfrom scipy.signal import find_peaks\n\n# Simulate a stellar spectrum (blackbody + absorption lines)\nwl = np.linspace(380, 750, 1000)  # nm\n\n# Planck function (T = 6000 K, like the Sun)\nh, c, k = 6.626e-34, 3e8, 1.38e-23\nT = 6000\nlambda_m = wl * 1e-9\nB = (2*h*c**2 / lambda_m**5) / (np.exp(h*c/(lambda_m*k*T)) - 1)\nB /= B.max()\n\n# Add Hydrogen Balmer absorption lines\nfor line_nm, depth in [(656.3, 0.3), (486.1, 0.2), (434.0, 0.15)]:\n    sigma = 2.0\n    B -= depth * np.exp(-0.5*((wl - line_nm)/sigma)**2)\n\nplt.plot(wl, B, 'b-', lw=0.8)\nplt.xlabel('Wavelength (nm)')\nplt.ylabel('Relative Flux')\nplt.title('Simulated Solar Spectrum (G2V)')\nplt.axvline(656.3, color='r', lw=0.5, label='Hα')\nplt.legend()\nplt.show()",
+                "packages": ["numpy", "matplotlib", "scipy"],
+            },
+            {
+                "title": "N-Body Gravity Simulation",
+                "body": (
+                    "Simulate gravitational interactions between N bodies — "
+                    "planets, stars, or dark matter particles. "
+                    "Uses Leapfrog integration for energy conservation."
+                ),
+                "snippet": "import numpy as np\nimport matplotlib.pyplot as plt\n\nG = 6.674e-11  # gravitational constant\n\ndef nbody_step(pos, vel, mass, dt):\n    n = len(mass)\n    acc = np.zeros_like(pos)\n    for i in range(n):\n        for j in range(n):\n            if i == j: continue\n            r = pos[j] - pos[i]\n            dist = np.linalg.norm(r) + 1e-10\n            acc[i] += G * mass[j] * r / dist**3\n    vel += acc * dt\n    pos += vel * dt\n    return pos, vel\n\n# Sun + Earth system (AU units, G=4π²)\nG = 4 * np.pi**2\nmass = np.array([1.0, 3e-6])           # solar masses\npos  = np.array([[0.,0.], [1.,0.]])    # AU\nvel  = np.array([[0.,0.], [0., 2*np.pi]])  # AU/yr\n\ntrajectory = [pos.copy()]\nfor _ in range(1000):\n    pos, vel = nbody_step(pos, vel, mass, dt=0.001)\n    trajectory.append(pos.copy())\n\ntraj = np.array(trajectory)\nplt.plot(traj[:,1,0], traj[:,1,1], 'b-', lw=0.5)\nplt.plot(0, 0, 'yo', ms=12, label='Sun')\nplt.axis('equal'); plt.legend(); plt.title('Earth Orbit (1 year)')\nplt.show()",
+                "packages": ["numpy", "matplotlib"],
+            },
+            {
+                "title": "Radio Astronomy — Signal Processing",
+                "body": (
+                    "Radio telescopes detect faint signals and require heavy DSP. "
+                    "FFT-based spectral analysis, folding pulsar signals, and "
+                    "removing radio-frequency interference (RFI)."
+                ),
+                "snippet": "import numpy as np\nimport matplotlib.pyplot as plt\n\n# Simulate a pulsar signal\nfs = 10000   # sample rate (Hz)\nduration = 1 # second\nt = np.linspace(0, duration, fs * duration)\n\n# Pulsar period = 33 ms (like Crab pulsar)\nperiod = 0.033\npulse = np.zeros_like(t)\nfor i, ti in enumerate(t):\n    phase = (ti % period) / period\n    if phase < 0.05:  # 5% duty cycle\n        pulse[i] = np.exp(-((phase - 0.025)/0.01)**2)\n\n# Add noise\nnoise = np.random.normal(0, 0.3, len(t))\nsignal = pulse + noise\n\n# FFT spectrum\nfreqs = np.fft.rfftfreq(len(t), 1/fs)\nspectrum = np.abs(np.fft.rfft(signal))\n\nplt.figure(figsize=(12,4))\nplt.subplot(1,2,1); plt.plot(t[:1000], signal[:1000]); plt.title('Signal')\nplt.subplot(1,2,2); plt.semilogy(freqs[:200], spectrum[:200]); plt.title('Spectrum')\nplt.tight_layout(); plt.show()",
+                "packages": ["numpy", "matplotlib"],
+            },
+            {
+                "title": "Exoplanet Transit Detection",
+                "body": (
+                    "When a planet crosses its star, brightness dips slightly. "
+                    "This transit photometry method discovered thousands of exoplanets. "
+                    "Simulate and detect transits using lightkurve."
+                ),
+                "snippet": "import numpy as np\nimport matplotlib.pyplot as plt\n\n# Simulate a transit light curve\nt = np.linspace(0, 10, 1000)  # days\n\n# Planet parameters\nperiod = 3.5      # days\nt0 = 1.5          # first transit\ndepth = 0.01      # 1% dip (Earth-like around Sun = 0.008%)\nduration = 0.1    # days\n\nflux = np.ones_like(t)\nfor center in np.arange(t0, 10, period):\n    in_transit = np.abs(t - center) < duration/2\n    # Trapezoidal shape\n    flux[in_transit] -= depth * (1 - (np.abs(t[in_transit] - center) / (duration/2))**2)\n\n# Add photon noise\nflux += np.random.normal(0, 0.002, len(t))\n\nplt.figure(figsize=(12,4))\nplt.plot(t, flux, 'k.', ms=2, alpha=0.7)\nplt.axhline(1-depth, color='r', ls='--', label=f'Transit depth {depth:.1%}')\nplt.xlabel('Time (days)'); plt.ylabel('Relative Flux')\nplt.title('Simulated Exoplanet Transit'); plt.legend()\nplt.show()",
+                "packages": ["numpy", "matplotlib"],
+                "links": [
+                    ("🌐 lightkurve.org", "https://lightkurve.org"),
+                ],
+            },
         ],
     },
 
@@ -1191,6 +1310,58 @@ LEARN_CATEGORIES = [
                     ("🌐 api.arcade.academy", "https://api.arcade.academy/"),
                 ],
             },
+            {
+                "title": "Collision Detection & Physics",
+                "body": (
+                    "Collision detection is the backbone of any game. "
+                    "Pygame provides rect-based AABB collision. "
+                    "For more realistic physics use pymunk (2D Chipmunk binding)."
+                ),
+                "snippet": "import pygame\nimport pymunk\nimport pymunk.pygame_util\n\npygame.init()\nscreen = pygame.display.set_mode((600, 400))\nclock = pygame.time.Clock()\n\nspace = pymunk.Space()\nspace.gravity = (0, -900)\n\n# Ground\nground = pymunk.Segment(space.static_body, (0, 50), (600, 50), 5)\nground.friction = 0.8\nspace.add(ground)\n\n# Falling ball\nbody = pymunk.Body(1, pymunk.moment_for_circle(1, 0, 20))\nbody.position = (300, 350)\nshape = pymunk.Circle(body, 20)\nshape.elasticity = 0.8\nspace.add(body, shape)\n\ndraw_options = pymunk.pygame_util.DrawOptions(screen)\n\nrunning = True\nwhile running:\n    for event in pygame.event.get():\n        if event.type == pygame.QUIT: running = False\n    screen.fill((20, 20, 30))\n    space.step(1/60)\n    space.debug_draw(draw_options)\n    pygame.display.flip()\n    clock.tick(60)\npygame.quit()",
+                "packages": ["pygame", "pymunk"],
+                "links": [("🌐 pymunk.org", "https://www.pymunk.org")],
+            },
+            {
+                "title": "Sprite Sheets & Animation",
+                "body": (
+                    "Sprite sheets pack multiple animation frames into one image. "
+                    "Load once, blit different regions each frame — faster than loading "
+                    "individual files."
+                ),
+                "snippet": "import pygame\n\npygame.init()\nscreen = pygame.display.set_mode((400, 300))\nclock = pygame.time.Clock()\n\n# Load sprite sheet (each frame 64x64)\n# sheet = pygame.image.load('character.png').convert_alpha()\n# Simulate with colored rects\nCOLORS = [(255,0,0),(0,255,0),(0,0,255),(255,255,0)]\nFRAME_W, FRAME_H = 64, 64\nFPS = 8  # animation fps\n\nframe = 0\ntimer = 0\n\nrunning = True\nwhile running:\n    dt = clock.tick(60) / 1000\n    for event in pygame.event.get():\n        if event.type == pygame.QUIT: running = False\n\n    timer += dt\n    if timer >= 1/FPS:\n        frame = (frame + 1) % len(COLORS)\n        timer = 0\n\n    screen.fill((30, 30, 40))\n    # Draw current frame (colored rect as placeholder)\n    pygame.draw.rect(screen, COLORS[frame], (168, 118, FRAME_W, FRAME_H))\n    pygame.draw.rect(screen, (255,255,255), (168, 118, FRAME_W, FRAME_H), 2)\n    pygame.display.flip()\npygame.quit()",
+                "packages": ["pygame"],
+            },
+            {
+                "title": "Tilemap & Tiled Integration",
+                "body": (
+                    "Tilemaps build worlds from reusable tiles. "
+                    "Design levels in Tiled editor (free), export as TMX, "
+                    "and load with pytiled-parser or arcade's built-in loader."
+                ),
+                "snippet": "# With Arcade's built-in Tiled support:\nimport arcade\n\nclass TiledGame(arcade.Window):\n    def __init__(self):\n        super().__init__(800, 600, 'Tiled Map Demo')\n        self.tile_map = None\n        self.scene = None\n        self.camera = arcade.Camera(800, 600)\n\n    def setup(self):\n        # Load a .tmx file exported from Tiled editor\n        # self.tile_map = arcade.load_tilemap('map.tmx', scaling=2.0)\n        # self.scene = arcade.Scene.from_tilemap(self.tile_map)\n        pass\n\n    def on_draw(self):\n        self.clear()\n        self.camera.use()\n        # self.scene.draw()\n        arcade.draw_text('Load a .tmx tilemap!', 200, 300,\n                         arcade.color.WHITE, 24)\n\nTiledGame().setup()\nif __name__ == '__main__':\n    arcade.run()",
+                "packages": ["arcade"],
+                "links": [("🌐 mapeditor.org", "https://www.mapeditor.org/")],
+            },
+            {
+                "title": "Sound & Music with Pygame",
+                "body": (
+                    "pygame.mixer handles sound effects and background music. "
+                    "Load OGG/WAV files for sound effects, MP3/OGG for music. "
+                    "Control volume, channels, and loop count."
+                ),
+                "snippet": "import pygame\nimport numpy as np\n\npygame.init()\npygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)\n\n# Generate a beep sound programmatically (440 Hz sine wave)\nfs = 44100\nduration = 0.3  # seconds\nt = np.linspace(0, duration, int(fs * duration), False)\nwave = (np.sin(2 * np.pi * 440 * t) * 32767).astype(np.int16)\nstereo = np.column_stack([wave, wave])\n\nsound = pygame.sndarray.make_sound(stereo)\n\n# Play sound\nscreen = pygame.display.set_mode((300, 200))\npygame.display.set_caption('Press SPACE to beep')\nclock = pygame.time.Clock()\n\nrunning = True\nwhile running:\n    for event in pygame.event.get():\n        if event.type == pygame.QUIT: running = False\n        if event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:\n            sound.play()\n    clock.tick(60)\npygame.quit()",
+                "packages": ["pygame", "numpy"],
+            },
+            {
+                "title": "Game State Machine",
+                "body": (
+                    "A State Machine (FSM) cleanly separates Menu, Playing, Paused, "
+                    "and GameOver states. Each state handles its own events, updates, "
+                    "and rendering — no tangled if/else chains."
+                ),
+                "snippet": "import pygame\nfrom enum import Enum, auto\n\nclass State(Enum):\n    MENU = auto()\n    PLAYING = auto()\n    PAUSED = auto()\n    GAME_OVER = auto()\n\npygame.init()\nscreen = pygame.display.set_mode((400, 300))\nclock = pygame.time.Clock()\nfont = pygame.font.SysFont(None, 36)\n\nstate = State.MENU\nscore = 0\n\nrunning = True\nwhile running:\n    for event in pygame.event.get():\n        if event.type == pygame.QUIT: running = False\n        if event.type == pygame.KEYDOWN:\n            if state == State.MENU and event.key == pygame.K_RETURN:\n                state = State.PLAYING; score = 0\n            elif state == State.PLAYING and event.key == pygame.K_ESCAPE:\n                state = State.PAUSED\n            elif state == State.PAUSED and event.key == pygame.K_ESCAPE:\n                state = State.PLAYING\n            elif state == State.GAME_OVER and event.key == pygame.K_RETURN:\n                state = State.MENU\n\n    if state == State.PLAYING:\n        score += 1\n        if score > 300: state = State.GAME_OVER\n\n    screen.fill((20,20,30))\n    labels = {State.MENU: 'MENU — Press ENTER', State.PLAYING: f'PLAYING — score {score}',\n              State.PAUSED: 'PAUSED — ESC to resume', State.GAME_OVER: 'GAME OVER — ENTER'}\n    txt = font.render(labels[state], True, (200,200,200))\n    screen.blit(txt, (20, 130))\n    pygame.display.flip(); clock.tick(60)\npygame.quit()",
+                "packages": ["pygame"],
+            },
         ],
     },
 
@@ -1239,6 +1410,67 @@ LEARN_CATEGORIES = [
                     ("🌐 textual.textualize.io", "https://textual.textualize.io"),
                 ],
             },
+            {
+                "title": "Layouts & Responsive UI",
+                "body": (
+                    "PySide6 layouts automatically resize widgets when the window grows. "
+                    "QHBoxLayout, QVBoxLayout, QGridLayout, and QFormLayout are the four pillars. "
+                    "Combine them to build complex UIs."
+                ),
+                "snippet": "from PySide6.QtWidgets import (\n    QApplication, QWidget, QHBoxLayout, QVBoxLayout,\n    QGridLayout, QLabel, QPushButton, QLineEdit, QSizePolicy\n)\nimport sys\n\napp = QApplication(sys.argv)\nwindow = QWidget()\nwindow.setWindowTitle('Layout Demo')\nwindow.resize(400, 300)\n\nmain = QVBoxLayout(window)\n\n# Top bar\ntop = QHBoxLayout()\ntop.addWidget(QLabel('Search:'))\ntop.addWidget(QLineEdit())\ntop.addWidget(QPushButton('Go'))\nmain.addLayout(top)\n\n# Grid of buttons\ngrid = QGridLayout()\nfor r in range(3):\n    for c in range(3):\n        btn = QPushButton(f'({r},{c})')\n        grid.addWidget(btn, r, c)\nmain.addLayout(grid)\n\n# Stretch to push everything up\nmain.addStretch()\nwindow.show()\nsys.exit(app.exec())",
+                "packages": ["PySide6"],
+                "links": [("📖 Qt Layouts", "https://doc.qt.io/qt-6/layout.html")],
+            },
+            {
+                "title": "Signals & Slots — Event System",
+                "body": (
+                    "Qt's signal/slot mechanism connects events to handlers without tight coupling. "
+                    "Built-in signals (clicked, textChanged) or define custom signals "
+                    "with Signal()."
+                ),
+                "snippet": "from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QSlider\nfrom PySide6.QtCore import Signal, QObject, Qt\nimport sys\n\nclass Counter(QObject):\n    value_changed = Signal(int)  # custom signal\n\n    def __init__(self):\n        super().__init__()\n        self._val = 0\n\n    def increment(self):\n        self._val += 1\n        self.value_changed.emit(self._val)  # emit signal\n\napp = QApplication(sys.argv)\nwindow = QWidget()\nlayout = QVBoxLayout(window)\n\nlabel = QLabel('Count: 0')\nbtn   = QPushButton('Click me')\ncounter = Counter()\n\n# Connect signal to slot (any callable)\ncounter.value_changed.connect(lambda v: label.setText(f'Count: {v}'))\nbtn.clicked.connect(counter.increment)\n\nlayout.addWidget(label)\nlayout.addWidget(btn)\nwindow.show()\nsys.exit(app.exec())",
+                "packages": ["PySide6"],
+            },
+            {
+                "title": "Threading — Keep UI Responsive",
+                "body": (
+                    "Never run long tasks on the main thread — it freezes the UI. "
+                    "Use QThread or concurrent.futures. "
+                    "Communicate results back via signals."
+                ),
+                "snippet": "from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QProgressBar\nfrom PySide6.QtCore import QThread, Signal\nimport time, sys\n\nclass Worker(QThread):\n    progress = Signal(int)\n    finished = Signal(str)\n\n    def run(self):\n        for i in range(1, 11):\n            time.sleep(0.3)          # simulate work\n            self.progress.emit(i * 10)\n        self.finished.emit('Done!')\n\napp = QApplication(sys.argv)\nwin = QWidget()\nlayout = QVBoxLayout(win)\n\nlabel = QLabel('Press Start')\nbar   = QProgressBar(); bar.setRange(0, 100)\nbtn   = QPushButton('Start')\n\nworker = Worker()\nworker.progress.connect(bar.setValue)\nworker.finished.connect(label.setText)\nbtn.clicked.connect(worker.start)\nbtn.clicked.connect(lambda: btn.setEnabled(False))\n\nlayout.addWidget(label); layout.addWidget(bar); layout.addWidget(btn)\nwin.show(); sys.exit(app.exec())",
+                "packages": ["PySide6"],
+            },
+            {
+                "title": "System Tray & Notifications",
+                "body": (
+                    "QSystemTrayIcon lets your app live in the system tray. "
+                    "Show notifications, context menus, and hide/show the main window "
+                    "on tray icon click."
+                ),
+                "snippet": "from PySide6.QtWidgets import QApplication, QSystemTrayIcon, QMenu, QMainWindow\nfrom PySide6.QtGui import QIcon, QPixmap, QColor\nimport sys\n\napp = QApplication(sys.argv)\napp.setQuitOnLastWindowClosed(False)  # keep alive when window closed\n\n# Create a simple colored icon\npx = QPixmap(32, 32); px.fill(QColor('#89b4fa'))\nicon = QIcon(px)\n\ntray = QSystemTrayIcon(icon, app)\ntray.setToolTip('My Tray App')\n\nmenu = QMenu()\nshow_act  = menu.addAction('Show Window')\nquit_act  = menu.addAction('Quit')\ntray.setContextMenu(menu)\n\nwin = QMainWindow()\nwin.setWindowTitle('Tray Demo')\nwin.resize(300, 200)\n\nshow_act.triggered.connect(win.show)\nquit_act.triggered.connect(app.quit)\ntray.activated.connect(lambda r: win.show() if r == QSystemTrayIcon.Trigger else None)\n\ntray.show()\ntray.showMessage('Ready', 'App is running in tray!', QSystemTrayIcon.Information, 2000)\nwin.show()\nsys.exit(app.exec())",
+                "packages": ["PySide6"],
+            },
+            {
+                "title": "Tkinter — Built-in GUI",
+                "body": (
+                    "Tkinter ships with Python — no install needed. "
+                    "Great for simple tools and scripts. "
+                    "Supports ttk themed widgets for a modern look."
+                ),
+                "snippet": "import tkinter as tk\nfrom tkinter import ttk, messagebox\n\nroot = tk.Tk()\nroot.title('Tkinter Demo')\nroot.geometry('300x200')\n\n# ttk styled frame\nframe = ttk.Frame(root, padding=20)\nframe.pack(fill='both', expand=True)\n\nttk.Label(frame, text='Enter your name:').pack(anchor='w')\nentry = ttk.Entry(frame)\nentry.pack(fill='x', pady=4)\n\ndef greet():\n    name = entry.get().strip() or 'World'\n    messagebox.showinfo('Hello', f'Hello, {name}!')\n\nttk.Button(frame, text='Greet', command=greet).pack(pady=8)\n\n# Progress bar example\nbar = ttk.Progressbar(frame, mode='indeterminate')\nbar.pack(fill='x')\nbar.start(10)\n\nroot.mainloop()",
+                "packages": [],
+            },
+            {
+                "title": "File Dialogs & Settings Persistence",
+                "body": (
+                    "QFileDialog opens native file pickers. "
+                    "QSettings stores user preferences in the OS-native location "
+                    "(Registry on Windows, ~/.config on Linux, plist on macOS)."
+                ),
+                "snippet": "from PySide6.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QLabel, QFileDialog\nfrom PySide6.QtCore import QSettings\nimport sys\n\napp = QApplication(sys.argv)\nwin = QWidget(); win.resize(400, 200)\nlayout = QVBoxLayout(win)\n\nsettings = QSettings('MyCompany', 'MyApp')\nlast_dir = settings.value('last_dir', '')\n\nlabel = QLabel('Last dir: ' + (last_dir or '(none)'))\nlayout.addWidget(label)\n\ndef open_file():\n    path, _ = QFileDialog.getOpenFileName(win, 'Open File', last_dir, '*.py')\n    if path:\n        import os; d = os.path.dirname(path)\n        settings.setValue('last_dir', d)\n        label.setText('Opened: ' + path)\n\nbtn = QPushButton('Open File'); btn.clicked.connect(open_file)\nlayout.addWidget(label); layout.addWidget(btn)\nwin.show(); sys.exit(app.exec())",
+                "packages": ["PySide6"],
+            }
         ],
     },
 
@@ -1471,6 +1703,49 @@ LEARN_CATEGORIES = [
                     ("🌐 docs.astral.sh/uv", "https://docs.astral.sh/uv/"),
                 ],
             },
+            {
+                "title": "Maturin — Build & Publish Rust Extensions",
+                "body": (
+                    "Maturin builds PyO3 projects and publishes them to PyPI. "
+                    "One command creates wheels for Linux, macOS, and Windows. "
+                    "The fastest path from Rust code to `pip install`."
+                ),
+                "snippet": "# Terminal workflow:\n# pip install maturin\n# maturin new mylib --bindings pyo3\n# cd mylib\n# maturin develop          # install locally in editable mode\n# maturin build --release  # build .whl\n# maturin publish          # upload to PyPI\n\n# src/lib.rs (auto-generated):\n# use pyo3::prelude::*;\n# #[pyfunction]\n# fn sum_as_string(a: usize, b: usize) -> PyResult<String> {\n#     Ok((a + b).to_string())\n# }\n# #[pymodule]\n# fn mylib(_py: Python, m: &PyModule) -> PyResult<()> {\n#     m.add_function(wrap_pyfunction!(sum_as_string, m)?)?;\n#     Ok(())\n# }\n\n# After maturin develop:\nimport mylib  # your compiled Rust code!\nprint(mylib.sum_as_string(3, 4))  # '7'",
+                "packages": ["maturin"],
+                "links": [("🌐 maturin.rs", "https://www.maturin.rs")],
+            },
+            {
+                "title": "cffi & ctypes — Call C/C++ from Python",
+                "body": (
+                    "Not everything needs Rust. ctypes is in stdlib, "
+                    "cffi is more ergonomic. Both let you call compiled C libraries "
+                    "without writing a wrapper — great for legacy codebases."
+                ),
+                "snippet": "import ctypes\nimport ctypes.util\n\n# Load system math library\nlibm = ctypes.CDLL(ctypes.util.find_library('m') or 'libm.so.6')\n\n# Set argument and return types\nlibm.sin.argtypes = [ctypes.c_double]\nlibm.sin.restype  = ctypes.c_double\nlibm.sqrt.argtypes = [ctypes.c_double]\nlibm.sqrt.restype  = ctypes.c_double\n\nimport math\nprint(f'sin(π/6) = {libm.sin(math.pi/6):.6f}')   # 0.5\nprint(f'sqrt(2)  = {libm.sqrt(2.0):.6f}')         # 1.414...\n\n# Create a struct\nclass Point(ctypes.Structure):\n    _fields_ = [('x', ctypes.c_double), ('y', ctypes.c_double)]\n\np = Point(3.0, 4.0)\ndist = libm.sqrt(p.x**2 + p.y**2)\nprint(f'Distance from origin: {dist:.2f}')  # 5.0",
+                "packages": [],
+            },
+            {
+                "title": "Polars — Rust-Powered DataFrames",
+                "body": (
+                    "Polars is a DataFrame library written in Rust — typically 5–50× "
+                    "faster than pandas for large datasets. "
+                    "Lazy evaluation builds a query plan and optimizes it before executing."
+                ),
+                "snippet": "import polars as pl\nimport numpy as np\n\n# Create a DataFrame\nnp.random.seed(42)\nn = 1_000_000\ndf = pl.DataFrame({\n    'id':       np.arange(n),\n    'category': np.random.choice(['A','B','C','D'], n),\n    'value':    np.random.exponential(10, n),\n    'score':    np.random.normal(50, 15, n).clip(0, 100),\n})\n\n# Lazy query — optimized before execution\nresult = (\n    df.lazy()\n    .filter(pl.col('score') > 40)\n    .group_by('category')\n    .agg([\n        pl.col('value').mean().alias('avg_value'),\n        pl.col('score').median().alias('med_score'),\n        pl.len().alias('count'),\n    ])\n    .sort('avg_value', descending=True)\n    .collect()\n)\nprint(result)",
+                "packages": ["polars"],
+                "links": [("🌐 pola.rs", "https://pola.rs")],
+            },
+            {
+                "title": "Ruff — Rust-Powered Python Linter",
+                "body": (
+                    "Ruff replaces flake8, isort, pyupgrade, and more — "
+                    "10–100× faster because it's written in Rust. "
+                    "Configured in pyproject.toml, CI-friendly, and editor-integrated."
+                ),
+                "snippet": "# Install\n# pip install ruff\n\n# Run on current directory\n# ruff check .\n# ruff check . --fix   # auto-fix safe issues\n# ruff format .        # format like Black\n\n# pyproject.toml configuration:\n# [tool.ruff]\n# line-length = 88\n# target-version = 'py311'\n# select = ['E', 'F', 'I', 'UP', 'N']  # rules to enable\n# ignore = ['E501']                    # rules to ignore\n\n# [tool.ruff.isort]\n# known-first-party = ['mypackage']\n\n# Example: run ruff programmatically\nimport subprocess, sys\nresult = subprocess.run(\n    [sys.executable, '-m', 'ruff', 'check', '--select=F', '.'],\n    capture_output=True, text=True\n)\nprint(result.stdout or 'No issues found!')",
+                "packages": ["ruff"],
+                "links": [("🌐 docs.astral.sh/ruff", "https://docs.astral.sh/ruff/")],
+            },
         ],
     },
 
@@ -1533,6 +1808,218 @@ LEARN_CATEGORIES = [
                     ("🌐 docs.astral.sh/uv", "https://docs.astral.sh/uv/"),
                 ],
             },
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Core Libraries
+    # ═══════════════════════════════════════════════════════════════════════════
+    {
+        "id": "core_libs",
+        "icon": "📦",
+        "title": "Core Libraries",
+        "desc": "NumPy, Pandas, Matplotlib, Seaborn, Plotly, Requests, Pillow",
+        "color": "#89b4fa",
+        "topics": [
+            {
+                "title": "NumPy — Arrays & Vectorized Math",
+                "body": (
+                    "NumPy is the foundation of scientific Python. "
+                    "ndarray gives you C-speed array operations in pure Python syntax. "
+                    "Broadcasting lets you operate on arrays of different shapes without loops."
+                ),
+                "snippet": "import numpy as np\n\na = np.array([1, 2, 3, 4, 5])\nb = np.arange(0, 10, 2)          # [0 2 4 6 8]\nc = np.linspace(0, 1, 5)         # [0. .25 .5 .75 1.]\nz = np.zeros((3, 4))\nr = np.random.randn(100, 2)\n\n# Vectorized ops (no loops!)\nprint(a * 2)\nprint(np.sqrt(a))\nprint(a @ a)                     # dot product = 55\n\n# Broadcasting\nm = np.array([[1,2],[3,4],[5,6]])\nprint(m + np.array([10, 20]))    # add [10,20] to each row\n\n# Slicing\nprint(m[:, 0])                   # first column\nprint(m[m > 3])                  # boolean mask\n\n# Aggregations\nprint(m.mean(axis=0))\nprint(m.sum(), m.max(), m.std())",
+                "packages": ["numpy"],
+                "links": [("🌐 numpy.org", "https://numpy.org")],
+            },
+            {
+                "title": "Pandas — DataFrames & Data Wrangling",
+                "body": (
+                    "Pandas is the Excel of Python — but programmable. "
+                    "DataFrame is a table with labeled rows and columns. "
+                    "Load, clean, transform, merge, and analyze tabular data in minutes."
+                ),
+                "snippet": "import pandas as pd\nimport numpy as np\n\ndf = pd.DataFrame({\n    'name':   ['Alice', 'Bob', 'Charlie', 'Diana'],\n    'age':    [25, 30, 35, 28],\n    'salary': [60000, 80000, 90000, 75000],\n    'dept':   ['Eng', 'Sales', 'Eng', 'HR'],\n})\n\nprint(df.head(2))\nprint(df.describe())\n\n# Filter\neng = df[df['dept'] == 'Eng']\nprint(df[['name', 'salary']])\n\n# GroupBy\nprint(df.groupby('dept')['salary'].mean())\n\n# New column\ndf['bonus'] = df['salary'] * 0.1\n\n# Handle missing\ndf2 = df.copy(); df2.loc[0, 'age'] = np.nan\ndf2['age'].fillna(df2['age'].median(), inplace=True)\n\n# Sort\nprint(df.sort_values('salary', ascending=False))",
+                "packages": ["pandas"],
+                "links": [("🌐 pandas.pydata.org", "https://pandas.pydata.org")],
+            },
+            {
+                "title": "Matplotlib — Plotting Fundamentals",
+                "body": (
+                    "Matplotlib is the bedrock of Python visualization. "
+                    "Full control over every pixel — axes, ticks, colors, annotations. "
+                    "pyplot provides a MATLAB-like interface for quick plots."
+                ),
+                "snippet": "import matplotlib.pyplot as plt\nimport numpy as np\n\nx = np.linspace(0, 2*np.pi, 300)\n\nfig, axes = plt.subplots(2, 2, figsize=(10, 8))\nfig.suptitle('Matplotlib Gallery', fontsize=14, fontweight='bold')\n\naxes[0,0].plot(x, np.sin(x), 'b-', label='sin')\naxes[0,0].plot(x, np.cos(x), 'r--', label='cos')\naxes[0,0].legend(); axes[0,0].set_title('Trig Functions')\n\nnp.random.seed(42)\nxs, ys = np.random.randn(200), np.random.randn(200)\naxes[0,1].scatter(xs, ys, c=xs+ys, cmap='viridis', alpha=0.6)\naxes[0,1].set_title('Scatter')\n\ncats = ['A','B','C','D']\naxes[1,0].bar(cats, [23,45,12,67], color='steelblue')\naxes[1,0].set_title('Bar Chart')\n\naxes[1,1].hist(np.random.randn(1000), bins=30, color='salmon', edgecolor='white')\naxes[1,1].set_title('Histogram')\n\nplt.tight_layout()\nplt.show()",
+                "packages": ["matplotlib"],
+                "links": [("🌐 matplotlib.org", "https://matplotlib.org")],
+            },
+            {
+                "title": "Seaborn — Statistical Visualization",
+                "body": (
+                    "Seaborn builds on Matplotlib with beautiful defaults and "
+                    "high-level functions for statistical plots. "
+                    "Heatmaps, violin plots, pair plots — one line each."
+                ),
+                "snippet": "import seaborn as sns\nimport matplotlib.pyplot as plt\n\nsns.set_theme(style='darkgrid', palette='muted')\ntips = sns.load_dataset('tips')\n\nfig, axes = plt.subplots(1, 3, figsize=(14, 4))\n\nsns.histplot(tips['total_bill'], kde=True, ax=axes[0])\naxes[0].set_title('Distribution')\n\nsns.boxplot(data=tips, x='day', y='total_bill', hue='sex', ax=axes[1])\naxes[1].set_title('Box Plot')\n\ncorr = tips[['total_bill','tip','size']].corr()\nsns.heatmap(corr, annot=True, fmt='.2f', cmap='coolwarm', ax=axes[2])\naxes[2].set_title('Correlation')\n\nplt.tight_layout()\nplt.show()\n\n# One-liner pair plot:\n# sns.pairplot(tips, hue='sex'); plt.show()",
+                "packages": ["seaborn"],
+                "links": [("🌐 seaborn.pydata.org", "https://seaborn.pydata.org")],
+            },
+            {
+                "title": "Plotly — Interactive Charts",
+                "body": (
+                    "Plotly creates interactive charts that zoom, pan, and hover. "
+                    "plotly.express is the high-level API — one line for most chart types. "
+                    "Works in Jupyter, browsers, and Dash apps."
+                ),
+                "snippet": "import plotly.express as px\nimport plotly.graph_objects as go\nimport numpy as np\n\n# Gapminder bubble chart\ndf = px.data.gapminder().query('year == 2007')\nfig = px.scatter(\n    df, x='gdpPercap', y='lifeExp',\n    size='pop', color='continent',\n    hover_name='country', log_x=True,\n    title='GDP vs Life Expectancy (2007)',\n)\nfig.show()\n\n# 3D surface\nx = np.linspace(-3, 3, 60)\ny = np.linspace(-3, 3, 60)\nX, Y = np.meshgrid(x, y)\nZ = np.sin(np.sqrt(X**2 + Y**2))\nfig2 = go.Figure(go.Surface(z=Z, x=X, y=Y, colorscale='Viridis'))\nfig2.update_layout(title='3D Surface: sinc function')\nfig2.show()",
+                "packages": ["plotly"],
+                "links": [("🌐 plotly.com/python", "https://plotly.com/python/")],
+            },
+            {
+                "title": "Requests — HTTP for Humans",
+                "body": (
+                    "The most downloaded Python package. "
+                    "GET, POST, auth, sessions, timeouts — all with a clean API. "
+                    "For async HTTP use httpx."
+                ),
+                "snippet": "import requests\n\n# Simple GET\nr = requests.get('https://httpbin.org/get', params={'q': 'python'})\nprint(r.status_code)   # 200\nprint(r.json())\n\n# POST with JSON body\nr = requests.post('https://httpbin.org/post',\n    json={'name': 'Alice', 'score': 99},\n    headers={'Authorization': 'Bearer mytoken'},\n    timeout=10,\n)\nprint(r.json()['json'])\n\n# Session (reuses TCP connection + cookies)\nwith requests.Session() as s:\n    s.headers['User-Agent'] = 'MyBot/1.0'\n    r1 = s.get('https://httpbin.org/cookies/set?foo=bar')\n    r2 = s.get('https://httpbin.org/cookies')\n    print(r2.json())\n\n# Download a file\nwith requests.get('https://httpbin.org/image/png', stream=True) as r:\n    with open('/tmp/img.png', 'wb') as f:\n        for chunk in r.iter_content(8192):\n            f.write(chunk)",
+                "packages": ["requests"],
+                "links": [("🌐 docs.python-requests.org", "https://docs.python-requests.org")],
+            },
+            {
+                "title": "Pillow — Image Processing",
+                "body": (
+                    "Pillow (PIL fork) opens, edits, and saves images. "
+                    "Resize, crop, rotate, filter, draw text — all without ImageMagick."
+                ),
+                "snippet": "from PIL import Image, ImageDraw, ImageFilter\n\nimg = Image.new('RGB', (400, 300), color=(30, 30, 46))\ndraw = ImageDraw.Draw(img)\n\ndraw.ellipse([50, 50, 150, 150], fill=(137, 180, 250))\ndraw.rectangle([200, 80, 350, 200], outline=(166, 227, 161), width=3)\ndraw.line([0, 250, 400, 250], fill=(243, 139, 168), width=2)\ndraw.text((160, 260), 'Hello Pillow!', fill=(205, 214, 244))\n\nblurred = img.filter(ImageFilter.GaussianBlur(radius=2))\n\nimport numpy as np\narr = np.array(img)\nimg2 = Image.fromarray(arr)\n\nthumb = img.copy()\nthumb.thumbnail((200, 150))\nprint(thumb.size)\n\nimg.save('/tmp/demo.png')\nimg.show()",
+                "packages": ["Pillow"],
+                "links": [("🌐 pillow.readthedocs.io", "https://pillow.readthedocs.io")],
+            },
+        ],
+    },
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # Data & Finance
+    # ═══════════════════════════════════════════════════════════════════════════
+    {
+        "id": "finance",
+        "icon": "📈",
+        "title": "Data & Finance",
+        "desc": "yfinance, pandas-ta, Prophet, ARIMA, portfolio analysis",
+        "color": "#a6e3a1",
+        "topics": [
+            {
+                "title": "yfinance — Stock & Market Data",
+                "body": (
+                    "yfinance downloads historical OHLCV data, dividends, splits, "
+                    "and company info from Yahoo Finance. "
+                    "Free, no API key required."
+                ),
+                "snippet": "import yfinance as yf\nimport matplotlib.pyplot as plt\n\naapl = yf.download('AAPL', start='2023-01-01', end='2024-01-01', progress=False)\nprint(aapl.tail())\n\n# Multiple tickers\ntickers = yf.download(['AAPL','MSFT','GOOGL'], start='2023-01-01', progress=False)\nclosing = tickers['Close']\n\nnorm = closing / closing.iloc[0] * 100\nnorm.plot(figsize=(10,5), title='Normalized Price (base=100)')\nplt.ylabel('Index'); plt.grid(alpha=0.3); plt.show()\n\n# Company info\ntic = yf.Ticker('AAPL')\ninfo = tic.info\nprint('Market Cap: $' + str(round(info.get('marketCap',0)/1e9, 1)) + 'B')\nprint('P/E Ratio:', info.get('trailingPE','N/A'))",
+                "packages": ["yfinance", "matplotlib"],
+                "links": [("🌐 github.com/ranaroussi/yfinance", "https://github.com/ranaroussi/yfinance")],
+            },
+            {
+                "title": "Time Series — ARIMA & Forecasting",
+                "body": (
+                    "ARIMA (AutoRegressive Integrated Moving Average) is the classical "
+                    "approach to time series forecasting. "
+                    "statsmodels provides ARIMA, SARIMA, and SARIMAX."
+                ),
+                "snippet": "import pandas as pd\nimport numpy as np\nimport matplotlib.pyplot as plt\nfrom statsmodels.tsa.arima.model import ARIMA\n\nnp.random.seed(42)\ndates = pd.date_range('2020-01', periods=60, freq='ME')\ntrend = np.linspace(100, 200, 60)\nseason = 20 * np.sin(2 * np.pi * np.arange(60) / 12)\nnoise = np.random.normal(0, 5, 60)\nseries = pd.Series(trend + season + noise, index=dates)\n\nmodel = ARIMA(series, order=(1,1,1), seasonal_order=(1,1,1,12))\nresult = model.fit()\n\nforecast = result.get_forecast(steps=12)\nfc = forecast.predicted_mean\nci = forecast.conf_int()\n\nplt.figure(figsize=(12,4))\nplt.plot(series, label='Actual')\nplt.plot(fc, label='Forecast', color='red')\nplt.fill_between(ci.index, ci.iloc[:,0], ci.iloc[:,1], alpha=0.2, color='red')\nplt.title('SARIMA Forecast'); plt.legend(); plt.show()",
+                "packages": ["statsmodels", "matplotlib"],
+                "links": [("🌐 statsmodels.org", "https://www.statsmodels.org")],
+            },
+            {
+                "title": "Prophet — Facebook's Forecasting Tool",
+                "body": (
+                    "Prophet handles holidays, seasonality, and missing data automatically. "
+                    "Works great for business time series (sales, traffic, demand). "
+                    "Requires a DataFrame with ds (date) and y (value) columns."
+                ),
+                "snippet": "from prophet import Prophet\nimport pandas as pd\nimport numpy as np\nimport matplotlib.pyplot as plt\n\nnp.random.seed(0)\ndates = pd.date_range('2021-01-01', periods=365*2, freq='D')\ntrend = np.linspace(100, 300, len(dates))\nseason_w = 15 * np.sin(2*np.pi*np.arange(len(dates))/7)\nseason_y = 40 * np.sin(2*np.pi*np.arange(len(dates))/365)\nnoise = np.random.normal(0, 8, len(dates))\n\ndf = pd.DataFrame({'ds': dates, 'y': trend + season_w + season_y + noise})\n\nmodel = Prophet(yearly_seasonality=True, weekly_seasonality=True,\n                changepoint_prior_scale=0.05)\nmodel.fit(df)\n\nfuture = model.make_future_dataframe(periods=90)\nforecast = model.predict(future)\n\nmodel.plot(forecast)\nplt.title('Prophet Forecast')\nplt.show()",
+                "packages": ["prophet", "matplotlib"],
+                "links": [("🌐 facebook.github.io/prophet", "https://facebook.github.io/prophet/")],
+            },
+            {
+                "title": "Portfolio Analysis & Risk Metrics",
+                "body": (
+                    "Sharpe ratio, drawdown, VaR, correlation — the essential metrics "
+                    "for evaluating a portfolio. Pure Python/pandas, no paid data needed."
+                ),
+                "snippet": "import numpy as np\nimport pandas as pd\nimport yfinance as yf\nimport matplotlib.pyplot as plt\n\ntickers = ['AAPL', 'MSFT', 'BND', 'GLD']\nprices = yf.download(tickers, start='2020-01-01', progress=False)['Close']\nreturns = prices.pct_change().dropna()\n\nweights = np.array([0.25, 0.25, 0.25, 0.25])\nport_ret = returns @ weights\n\nann_ret  = port_ret.mean() * 252\nann_vol  = port_ret.std() * np.sqrt(252)\nsharpe   = ann_ret / ann_vol\n\ncum = (1 + port_ret).cumprod()\nmax_dd = ((cum - cum.cummax()) / cum.cummax()).min()\nvar_95 = np.percentile(port_ret, 5)\n\nprint(f'Annual Return: {ann_ret:.1%}')\nprint(f'Annual Vol:    {ann_vol:.1%}')\nprint(f'Sharpe Ratio:  {sharpe:.2f}')\nprint(f'Max Drawdown:  {max_dd:.1%}')\nprint(f'VaR (95%):     {var_95:.2%} per day')\n\ncum.plot(title='Portfolio Cumulative Return')\nplt.show()",
+                "packages": ["yfinance", "matplotlib"],
+            },
+        ],
+    },
+
+    # ═══════════════════════════════════════════════════════════════════════════
+    # AI / LLM
+    # ═══════════════════════════════════════════════════════════════════════════
+    {
+        "id": "llm",
+        "icon": "🤖",
+        "title": "AI / LLM",
+        "desc": "OpenAI, Ollama, LangChain, HuggingFace, embeddings, RAG",
+        "color": "#cba6f7",
+        "topics": [
+            {
+                "title": "OpenAI API — Chat Completions",
+                "body": (
+                    "The OpenAI Python SDK lets you call GPT-4o, o1, and others. "
+                    "Chat completions, streaming, function calling, vision — all in a clean API. "
+                    "Set OPENAI_API_KEY in your environment."
+                ),
+                "snippet": "from openai import OpenAI\n\nclient = OpenAI()  # reads OPENAI_API_KEY from env\n\n# Simple chat\nresponse = client.chat.completions.create(\n    model='gpt-4o-mini',\n    messages=[\n        {'role': 'system', 'content': 'You are a helpful Python tutor.'},\n        {'role': 'user',   'content': 'Explain list comprehensions briefly.'},\n    ],\n    max_tokens=100,\n)\nprint(response.choices[0].message.content)\n\n# Streaming\nstream = client.chat.completions.create(\n    model='gpt-4o-mini',\n    messages=[{'role': 'user', 'content': 'Count to 5.'}],\n    stream=True,\n)\nfor chunk in stream:\n    if chunk.choices[0].delta.content:\n        print(chunk.choices[0].delta.content, end='', flush=True)\nprint()",
+                "packages": ["openai"],
+                "links": [("🌐 platform.openai.com/docs", "https://platform.openai.com/docs")],
+            },
+            {
+                "title": "Ollama — Run LLMs Locally",
+                "body": (
+                    "Ollama runs open-source LLMs (Llama 3, Mistral, Phi-3, Gemma) "
+                    "locally on your machine — no API key, no cloud, no cost. "
+                    "Python SDK mirrors the OpenAI API for easy switching."
+                ),
+                "snippet": "# First: install Ollama from ollama.com and run:\n# ollama pull llama3.2\n\nimport ollama\n\nresponse = ollama.chat(\n    model='llama3.2',\n    messages=[{'role': 'user', 'content': 'What is a Python decorator?'}],\n)\nprint(response['message']['content'])\n\n# Streaming\nfor chunk in ollama.chat(\n    model='llama3.2',\n    messages=[{'role': 'user', 'content': 'Write a haiku about Python.'}],\n    stream=True,\n):\n    print(chunk['message']['content'], end='', flush=True)\nprint()\n\n# List available models\nmodels = ollama.list()\nfor m in models['models']:\n    size_gb = m.get('size', 0) / 1e9\n    print(m['name'] + ' -- ' + str(round(size_gb, 1)) + ' GB')",
+                "packages": ["ollama"],
+                "links": [("🌐 ollama.com", "https://ollama.com")],
+            },
+            {
+                "title": "Embeddings & Semantic Search",
+                "body": (
+                    "Embeddings convert text into vectors. Similar meaning = similar vectors. "
+                    "Use sentence-transformers for local embeddings, "
+                    "then cosine similarity or a vector DB to find related documents."
+                ),
+                "snippet": "from sentence_transformers import SentenceTransformer\nimport numpy as np\n\nmodel = SentenceTransformer('all-MiniLM-L6-v2')  # 80MB, runs locally\n\ndocs = [\n    'Python is great for data science.',\n    'Machine learning requires lots of data.',\n    'The Eiffel Tower is in Paris.',\n    'Neural networks are a type of ML model.',\n]\n\nembeddings = model.encode(docs)\nprint('Embedding shape:', embeddings.shape)  # (4, 384)\n\nquery = 'What programming language is good for AI?'\nq_emb = model.encode([query])\n\ndef cosine_sim(a, b):\n    return np.dot(a, b) / (np.linalg.norm(a) * np.linalg.norm(b))\n\nsimilarities = [cosine_sim(q_emb[0], d) for d in embeddings]\nranked = sorted(zip(similarities, docs), reverse=True)\n\nprint('Query:', query)\nfor score, doc in ranked[:3]:\n    print(f'  {score:.3f} -- {doc}')",
+                "packages": ["sentence-transformers"],
+                "links": [("🌐 sbert.net", "https://www.sbert.net")],
+            },
+            {
+                "title": "RAG — Retrieval Augmented Generation",
+                "body": (
+                    "RAG grounds LLM answers in your own documents. "
+                    "Chunk docs, embed, store in vector DB, retrieve relevant chunks, "
+                    "then send to LLM with the question. Reduces hallucination dramatically."
+                ),
+                "snippet": "from sentence_transformers import SentenceTransformer\nimport numpy as np\n\ndocs = [\n    'Python was created by Guido van Rossum in 1991.',\n    'Python 3.0 was released in December 2008.',\n    'Python is named after Monty Python, not the snake.',\n    'The Zen of Python: Beautiful is better than ugly.',\n    'pip is the package installer for Python.',\n    'Virtual environments isolate project dependencies.',\n]\n\nmodel = SentenceTransformer('all-MiniLM-L6-v2')\ndoc_embs = model.encode(docs)\n\ndef retrieve(query, top_k=2):\n    q_emb = model.encode([query])[0]\n    scores = doc_embs @ q_emb / (\n        np.linalg.norm(doc_embs, axis=1) * np.linalg.norm(q_emb)\n    )\n    idx = np.argsort(scores)[::-1][:top_k]\n    return [docs[i] for i in idx]\n\nquery = 'When was Python created?'\ncontext = retrieve(query)\nprint('Retrieved context:')\nfor c in context:\n    print('  -', c)\n\nprompt = 'Context:\\n' + '\\n'.join(context) + '\\n\\nQuestion: ' + query + '\\nAnswer:'\nprint('\\nPrompt sent to LLM:\\n' + prompt)\n# response = llm.invoke(prompt)  # plug in OpenAI/Ollama here",
+                "packages": ["sentence-transformers"],
+                "links": [("🌐 huggingface.co/docs/hub/rag", "https://huggingface.co/docs/hub/rag")],
+            },
+            {
+                "title": "HuggingFace Transformers — Local Models",
+                "body": (
+                    "HuggingFace hosts 500,000+ models. "
+                    "transformers library lets you run them locally: "
+                    "text generation, classification, NER, summarization, translation."
+                ),
+                "snippet": "from transformers import pipeline\n\n# Sentiment analysis\nsentiment = pipeline('sentiment-analysis',\n    model='distilbert-base-uncased-finetuned-sst-2-english')\nprint(sentiment('I love using Python for machine learning!'))\n# [{'label': 'POSITIVE', 'score': 0.9998}]\n\n# Text summarization\nsummarizer = pipeline('summarization', model='sshleifer/distilbart-cnn-12-6')\ntext = (\n    'Python is a high-level, general-purpose programming language. '\n    'Its design philosophy emphasizes code readability. '\n    'Python is dynamically typed and supports multiple paradigms.'\n)\nsummary = summarizer(text, max_length=60, min_length=20, do_sample=False)\nprint(summary[0]['summary_text'])\n\n# Named entity recognition\nner = pipeline('ner', grouped_entities=True)\nresult = ner('Guido van Rossum created Python at CWI in Amsterdam.')\nfor entity in result:\n    print(entity['entity_group'].ljust(10), entity['word'])",
+                "packages": ["transformers", "torch"],
+                "links": [("🌐 huggingface.co", "https://huggingface.co")],
+            },
+        ],
+    },
         ],
     },
 ]
@@ -1544,12 +2031,14 @@ class TopicCard(QFrame):
     """Expandable topic card with snippet + links."""
 
     install_requested = Signal(list)  # list of package names
+    bookmark_toggled = Signal(str, bool)  # (topic_title, is_bookmarked)
 
-    def __init__(self, topic: dict, colors: dict, parent=None):
+    def __init__(self, topic: dict, colors: dict, bookmarked: bool = False, parent=None):
         super().__init__(parent)
         self._topic = topic
         self._c = colors
         self._expanded = False
+        self._bookmarked = bookmarked
         self._setup()
 
     def _setup(self):
@@ -1584,6 +2073,8 @@ class TopicCard(QFrame):
         )
         title_lbl.setWordWrap(True)
         hl.addWidget(title_lbl, 1)
+
+
 
         self._arrow = QLabel("›")
         self._arrow.setStyleSheet(
@@ -1827,6 +2318,19 @@ class TopicCard(QFrame):
             link_btn.clicked.connect(lambda _, u=url: self._open_url(u))
             bottom.addWidget(link_btn)
 
+        # Bookmark this button
+        self._bm_btn = QPushButton("✅ Bookmarked" if self._bookmarked else "🔖 Bookmark this")
+        self._bm_btn.setFixedHeight(28)
+        self._bm_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent; color: {c['fg_muted']}; "
+            f"border: 1px solid {c['border']}; border-radius: 6px; "
+            f"font-size: {c['fs_tiny']}px; padding: 0 12px; }}"
+            f"QPushButton:hover {{ border-color: {c['accent']}; color: {c['fg']}; }}"
+        )
+        self._bm_btn.setCursor(Qt.PointingHandCursor)
+        self._bm_btn.clicked.connect(self._toggle_bookmark)
+        bottom.addWidget(self._bm_btn)
+
         bottom.addStretch()
 
         # Install & Try button
@@ -1864,6 +2368,12 @@ class TopicCard(QFrame):
         import webbrowser
         webbrowser.open(url)
 
+    def _toggle_bookmark(self):
+        self._bookmarked = not self._bookmarked
+        if hasattr(self, '_bm_btn'):
+            self._bm_btn.setText("✅ Bookmarked" if self._bookmarked else "🔖 Bookmark this")
+        self.bookmark_toggled.emit(self._topic["title"], self._bookmarked)
+
     def mousePressEvent(self, event):
         self._toggle()
         super().mousePressEvent(event)
@@ -1878,11 +2388,13 @@ class CategoryPanel(QWidget):
     """Panel showing all topics for a category."""
 
     install_requested = Signal(list)
+    bookmark_toggled = Signal(str, bool)  # (topic_title, is_bookmarked)
 
-    def __init__(self, category: dict, colors: dict, parent=None):
+    def __init__(self, category: dict, colors: dict, bookmarks: set = None, parent=None):
         super().__init__(parent)
         self._cat = category
         self._c = colors
+        self._bookmarks = bookmarks or set()
         self._setup()
 
     def _setup(self):
@@ -1936,8 +2448,10 @@ class CategoryPanel(QWidget):
 
         # Topics
         for topic in self._cat.get("topics", []):
-            card = TopicCard(topic, c)
+            is_bm = topic["title"] in self._bookmarks
+            card = TopicCard(topic, c, bookmarked=is_bm)
             card.install_requested.connect(self.install_requested)
+            card.bookmark_toggled.connect(self.bookmark_toggled)
             layout.addWidget(card)
 
         layout.addStretch()
@@ -1947,11 +2461,75 @@ class LearnPage(QWidget):
     """Main Learn page — sidebar categories + content area."""
 
     install_packages_requested = Signal(list)
+    bookmark_changed = Signal(list)  # emits full bookmarks list on any change
 
-    def __init__(self, colors_fn, parent=None):
+    def __init__(self, colors_fn, config=None, parent=None):
         super().__init__(parent)
         self._colors_fn = colors_fn
+        self._config = config
+        _raw = (config.get("bookmarked_topics", []) if config else []) or []
+        self._bookmarks = set(_raw)
         self._setup()
+
+    def _on_bookmark_toggled(self, title: str, is_bookmarked: bool):
+        if is_bookmarked:
+            self._bookmarks.add(title)
+        else:
+            self._bookmarks.discard(title)
+        bm_list = list(self._bookmarks)
+        if self._config:
+            self._config.set("bookmarked_topics", bm_list)
+        self.bookmark_changed.emit(bm_list)
+
+    def _jump_to_topic(self, topic_title: str):
+        """Switch to the category containing this topic and expand the card."""
+        for i, cat in enumerate(LEARN_CATEGORIES):
+            for topic in cat.get("topics", []):
+                if topic["title"] == topic_title:
+                    self._switch_cat(i)
+                    # Find and expand the card after the panel renders
+                    from PySide6.QtCore import QTimer
+                    QTimer.singleShot(100, lambda t=topic_title: self._expand_topic_card(t))
+                    return
+
+    def _expand_topic_card(self, topic_title: str):
+        """Find the TopicCard with the given title and expand it."""
+        panel = self._stack.currentWidget()
+        if not panel:
+            return
+        # Walk the widget tree to find TopicCard widgets
+        for card in panel.findChildren(TopicCard):
+            if card._topic.get("title") == topic_title:
+                if not card._expanded:
+                    card._toggle()
+                # Scroll to the card
+                scroll_area = panel
+                from PySide6.QtCore import QTimer
+                QTimer.singleShot(50, lambda c=card, s=scroll_area: self._scroll_to_card(c, s))
+                return
+
+    def _scroll_to_card(self, card, scroll_area):
+        """Scroll the scroll area to make the card visible."""
+        try:
+            from PySide6.QtWidgets import QScrollArea
+            # Find the QScrollArea parent
+            w = scroll_area
+            while w:
+                if isinstance(w, QScrollArea):
+                    pos = card.mapTo(w.widget(), card.rect().topLeft())
+                    w.verticalScrollBar().setValue(pos.y() - 20)
+                    break
+                w = w.parent()
+        except Exception:
+            pass
+
+    def remove_bookmark(self, title: str):
+        """Remove a bookmark externally (called from main_window sidebar)."""
+        self._bookmarks.discard(title)
+        bm_list = list(self._bookmarks)
+        if self._config:
+            self._config.set("bookmarked_topics", bm_list)
+        self.bookmark_changed.emit(bm_list)
 
     def _c(self) -> dict:
         return self._colors_fn()
@@ -2026,8 +2604,9 @@ class LearnPage(QWidget):
             panel = QScrollArea()
             panel.setWidgetResizable(True)
             panel.setStyleSheet("QScrollArea { border: none; background: transparent; }")
-            content = CategoryPanel(cat, c)
+            content = CategoryPanel(cat, c, bookmarks=self._bookmarks)
             content.install_requested.connect(self.install_packages_requested)
+            content.bookmark_toggled.connect(self._on_bookmark_toggled)
             inner = QWidget()
             il = QVBoxLayout(inner)
             il.setContentsMargins(24, 24, 24, 24)

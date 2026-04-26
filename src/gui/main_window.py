@@ -537,6 +537,40 @@ class MainWindow(QMainWindow):
         ql_layout.addWidget(self.ql_buttons_widget)
 
         sidebar_layout.addWidget(self.quick_launch_frame)
+
+        # ── Bookmark frame — shown only on Learn page ─────────────────────────
+        self.bookmark_frame = QFrame()
+        bm_layout = QVBoxLayout(self.bookmark_frame)
+        bm_layout.setContentsMargins(4, 8, 4, 4)
+        bm_layout.setSpacing(4)
+
+        bm_sep = QFrame()
+        bm_sep.setFrameShape(QFrame.HLine)
+        bm_sep.setStyleSheet(f"background-color: {self._c()['border']}; max-height: 1px;")
+        bm_layout.addWidget(bm_sep)
+
+        bm_title = QLabel("  📌 Bookmarks")
+        bm_title.setStyleSheet(
+            f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px; "
+            "padding: 2px 0; font-weight: bold;"
+        )
+        bm_layout.addWidget(bm_title)
+
+        self.bm_list_widget = QWidget()
+        self.bm_list_layout = QVBoxLayout(self.bm_list_widget)
+        self.bm_list_layout.setContentsMargins(0, 0, 0, 0)
+        self.bm_list_layout.setSpacing(2)
+        bm_layout.addWidget(self.bm_list_widget)
+
+        self._bm_empty_lbl = QLabel("  No bookmarks yet.\n  Use 'Bookmark this'\n  inside any topic.")
+        self._bm_empty_lbl.setStyleSheet(
+            f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px; padding: 4px 8px;"
+        )
+        self._bm_empty_lbl.setWordWrap(True)
+        self.bm_list_layout.addWidget(self._bm_empty_lbl)
+
+        self.bookmark_frame.hide()
+        sidebar_layout.addWidget(self.bookmark_frame)
         sidebar_layout.addStretch()
 
         self.footer_label = QLabel("  LGPL-3.0 License")
@@ -561,9 +595,15 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.settings_page)             # Page 2
 
         # Learn page
-        self.learn_page = LearnPage(self._c)
+        self.learn_page = LearnPage(self._c, config=self.config)
         self.learn_page.install_packages_requested.connect(self._on_learn_install)
+        self.learn_page.bookmark_changed.connect(self._refresh_bookmarks)
         self.stack.addWidget(self.learn_page)               # Page 3
+        # Load existing bookmarks into sidebar on startup
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(200, lambda: self._refresh_bookmarks(
+            list(self.learn_page._bookmarks)
+        ))
 
         main_layout.addWidget(self.stack, 1)
 
@@ -1009,6 +1049,12 @@ class MainWindow(QMainWindow):
         # Quick launch only on Packages page
         if hasattr(self, "quick_launch_frame"):
             self.quick_launch_frame.setVisible(index == 0)
+        if hasattr(self, "bookmark_frame"):
+            if index == 3:
+                self.bookmark_frame.show()
+            else:
+                self.bookmark_frame.hide()
+
         # Educational cmd panel — hide on any tab switch (re-shown on next action)
         if hasattr(self, "_hide_cmd_panel"):
             self._hide_cmd_panel()
@@ -1094,6 +1140,63 @@ class MainWindow(QMainWindow):
             self._switch_page(0)
         if hasattr(self, "package_panel"):
             QTimer.singleShot(400, lambda: self.package_panel._install_packages(packages))
+
+    def _refresh_bookmarks(self, bookmarks: list):
+        """Update Quick Launch bookmark buttons."""
+        if not hasattr(self, 'bm_list_layout'):
+            return
+        # Clear existing
+        while self.bm_list_layout.count():
+            item = self.bm_list_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        if not bookmarks:
+            self._bm_empty_lbl = QLabel("  No bookmarks yet.\n  Use 🏷️ in Learn to bookmark topics.")
+            self._bm_empty_lbl.setStyleSheet(
+                f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px; padding: 4px 8px;"
+            )
+            self._bm_empty_lbl.setWordWrap(True)
+            self.bm_list_layout.addWidget(self._bm_empty_lbl)
+            return
+
+        for title in bookmarks:
+            btn = QPushButton(f"  🔖 {title}")
+            btn.setFixedHeight(30)
+            btn.setStyleSheet(
+                f"QPushButton {{ background: transparent; color: {self._c()['fg']}; "
+                f"border: none; border-radius: 6px; text-align: left; "
+                f"font-size: {self._c()['fs_tiny']}px; padding: 0 8px; }}"
+                f"QPushButton:hover {{ background: {self._c()['accent']}22; }}"
+            )
+            btn.setCursor(Qt.PointingHandCursor)
+            # Navigate to Learn page on click
+            btn.clicked.connect(lambda _, t=title: self._open_bookmark(t))
+            btn.setContextMenuPolicy(Qt.CustomContextMenu)
+            btn.customContextMenuRequested.connect(
+                lambda pos, t=title, b=btn: self._bookmark_context_menu(b, t)
+            )
+            self.bm_list_layout.addWidget(btn)
+
+    def _open_bookmark(self, topic_title: str):
+        """Switch to Learn page and navigate to the topic."""
+        self._switch_page(3)
+        if hasattr(self, 'learn_page'):
+            self.learn_page._jump_to_topic(topic_title)
+
+    def _bookmark_context_menu(self, btn, title: str):
+        """Right-click context menu on a bookmark button."""
+        from PySide6.QtWidgets import QMenu
+        menu = QMenu(self)
+        act_go     = menu.addAction("📖 Go to topic")
+        menu.addSeparator()
+        act_remove = menu.addAction("🗑 Remove bookmark")
+        chosen = menu.exec(btn.mapToGlobal(btn.rect().bottomLeft()))
+        if chosen == act_go:
+            self._open_bookmark(title)
+        elif chosen == act_remove:
+            if hasattr(self, 'learn_page'):
+                self.learn_page.remove_bookmark(title)
 
     def _on_ql_env_changed(self, idx):
         """Sol sidebar QL dropdown değişti — her şeyi sync et."""

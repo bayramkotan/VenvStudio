@@ -1454,6 +1454,40 @@ Olması gereken fark:
   - `open_folder`: openSUSE için `/usr/bin`, `/usr/local/bin` manuel path araması eklendi
   - `auto_order`'a `yakuake` eklendi
 
+- **B166** — 🔴 Settings → Save butonunda progress bar/feedback yok
+  - Kaydetme işlemi sırasında form takılmış gibi görünüyor
+  - Çözüm: Save butonuna basınca buton disabled + "Saving..." text, işlem bitince "✅ Saved!" toast veya status label
+  - İlgili dosya: `settings_advanced.py` → `_save_settings`
+
+- **B167** — 🟡 Settings → Python Versions → "System Scan" butonu ne yapıyor?
+  - Kullanıcıya açıklama yok — tooltip veya açıklama label eklenmeli
+  - Davranışı dokümante edilmeli: hangi path'leri tarar, sonucu nereye yazar?
+  - İlgili dosya: `settings_python.py`
+
+- **B168** — 🟡 Settings → General → Checkbox'lar düzgün çalışıyor mu?
+  - Checkbox'ların config'e doğru kaydedilip kaydedilmediği test edilmeli
+  - Özellikle "restart required" olan ayarlar için uyarı gösterilmeli mi?
+  - İlgili dosya: `settings_advanced.py` → `_save_settings`
+
+- **F131** — ✅ TAMAMLANDI (v1.4.78): Learn 72 → 114 topic, 3 yeni kategori (Core Libraries, Data & Finance, AI/LLM)
+  - ✅ 72 → 98 topic tamamlandı (v1.4.77)
+  - Eklenecek yeni kategoriler:
+    - 📦 Core Libraries: NumPy, Pandas, Matplotlib, Seaborn, Plotly, Requests, Pillow
+    - 📈 Data & Finance: yfinance, pandas-datareader, TA-Lib, Prophet, statsmodels
+    - 🤖 AI / LLM: OpenAI, LangChain, LlamaIndex, HuggingFace, Ollama, ChromaDB
+    - ⏱ Time Series: pandas resample, ARIMA, Prophet, darts, sktime
+
+- **F132** — ✅ TAMAMLANDI (v1.4.78): Learn Bookmark sistemi
+  - Her topic card'ında 🔖 butonu (toggle — basınca ekle/çıkar)
+  - Bookmark'lar config'e kaydedilir (`bookmarked_topics` key, list of topic titles)
+  - Quick Launch sayfasında "📌 Bookmarks" bölümü — kayıtlı topic'lere direkt erişim
+  - Quick Launch'ta Learn ve Settings boş kalıyor — bu bölüm dolduracak
+  - İlgili dosyalar: `learn_page.py`, `main_window.py` (Quick Launch bölümü)
+  - Mevcut konu sayısı yetersiz
+  - Eklenecek kategoriler/konular belirlenmeli
+  - Her konuya daha fazla alt başlık, kod örneği, install butonu
+  - İlgili dosya: `src/gui/learn_page.py`, `src/gui/learn_content/`
+
 - **B165** — 🟡 Wayland: `qt.qpa.wayland.textinput` uyarıları terminale dökülüyor
   - `qt.qpa.wayland.textinput: ...zwp_text_input_v3_leave...` ve `remaining: 0` mesajları
   - Qt'nin Wayland implementasyonundaki bug, VenvStudio'nun hatası değil

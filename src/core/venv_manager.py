@@ -1263,7 +1263,12 @@ class VenvManager:
             print(f"[VenvStudio] Cache write error: {e}")
 
     def _cache_key(self, venv_path: Path) -> str:
-        return str(venv_path.resolve()).replace("\\", "/").replace("\\\\", "/")
+        """Consistent cache key — always forward slashes, no leading slash on Windows."""
+        key = str(venv_path.resolve()).replace("\\", "/").replace("\\\\", "/")
+        # pathlib.resolve() on Windows sometimes returns /C:/... — strip leading slash
+        if len(key) > 2 and key[0] == "/" and key[2] == ":":
+            key = key[1:]
+        return key
 
     def _read_cache(self, venv_path: Path) -> Optional[Dict[str, Any]]:
         all_cache = self._load_all_cache()

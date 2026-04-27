@@ -244,7 +244,7 @@ class CatalogMixin:
     def _load_custom_catalog(self):
         """Load custom catalog packages from config into the table."""
         custom_pkgs = self.config.get("custom_catalog", [])
-        print(f"[DEBUG] Loading custom catalog: {custom_pkgs}")
+
         self.custom_catalog_table.setRowCount(len(custom_pkgs))
         for i, pkg in enumerate(custom_pkgs):
             self.custom_catalog_table.setItem(i, 0, QTableWidgetItem(pkg.get("name", "")))
@@ -300,7 +300,7 @@ class CatalogMixin:
                     "desc": desc,
                     "category": cat if cat else "⭐ Custom",
                 })
-        print(f"[DEBUG] Saving custom catalog: {pkgs}")
+
         self.config.set("custom_catalog", pkgs)
         verify = self.config.get("custom_catalog", [])
         print(f"[DEBUG] Verify after save: {verify}")

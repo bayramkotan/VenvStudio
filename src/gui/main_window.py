@@ -193,51 +193,21 @@ class MainWindow(QMainWindow):
         # ── Screen change safety: re-apply theme when moving between monitors ──
         self._connect_screen_changed()
 
-        # Phase 1: Show UI immediately from cache — no subprocess, no disk scan
-        self._refresh_env_list(force=False)
+        self.venv_manager.sync_cache_with_disk()
+        self.venv_manager.ensure_pipx_env()
+        self._apply_linux_emoji_fix()
+        self._check_linux_venv_module()
+        self._refresh_env_list()
 
-        # Phase 2: Heavy init in background — sync cache, pipx, emoji fix, venv check
         from PySide6.QtCore import QTimer
-        QTimer.singleShot(100, self._startup_background_init)
+        QTimer.singleShot(300, self._open_default_env)
 
-        # Open default env after UI is ready
-        QTimer.singleShot(200, self._open_default_env)
-
-        # Auto-check for updates (if enabled)
         if self.config.get("check_updates", False):
-            QTimer.singleShot(4000, self._auto_check_update)
+            QTimer.singleShot(3000, self._auto_check_update)
 
         self._log.info("MainWindow.__init__ complete")
 
-    def _startup_background_init(self):
-        """Heavy startup tasks deferred to after UI is visible."""
-        import threading
 
-        def _bg():
-            try:
-                self._apply_linux_emoji_fix()
-            except Exception:
-                pass
-            try:
-                self._check_linux_venv_module()
-            except Exception:
-                pass
-            try:
-                self.venv_manager.sync_cache_with_disk()
-            except Exception:
-                pass
-            try:
-                self.venv_manager.ensure_pipx_env()
-            except Exception:
-                pass
-            # Refresh env list once background init is done
-            from PySide6.QtCore import QMetaObject, Qt
-            QMetaObject.invokeMethod(
-                self, "_refresh_env_list",
-                Qt.ConnectionType.QueuedConnection
-            )
-
-        threading.Thread(target=_bg, daemon=True).start()
     def _auto_check_update(self):
         """Silently check for updates on startup — runs in background thread."""
         class _UpdateWorker(QThread):
@@ -1271,6 +1241,29 @@ class MainWindow(QMainWindow):
         page_names = {0: "Packages", 1: "Environments", 2: "Settings", 3: "Learn"}
         self._log.debug(f"_switch_page → {page_names.get(index, index)}")
 
+        # Lazy-build PackagePanel on first visit
+        if index == 0 and self.package_panel is None:
+            from src.gui.package_panel import PackagePanel
+            self.package_panel = PackagePanel(config=self.config)
+            self.package_panel.env_refresh_requested.connect(self._refresh_env_list)
+            self.package_panel._ql_update_callback = self._update_ql_buttons
+            self.package_panel._ql_env_changed_callback = self._sync_ql_selector
+            self.stack.removeWidget(self._packages_placeholder)
+            self.stack.insertWidget(0, self.package_panel)
+            self._packages_placeholder.deleteLater()
+            # Load env list into panel
+            if hasattr(self, '_last_env_list'):
+                if self.package_panel is not None: self.package_panel.populate_env_list(self._last_env_list)
+            # Open selected env if any
+            if self.selected_env:
+                from pathlib import Path as _Path
+                _env = _Path(self.selected_env) if isinstance(self.selected_env, str) else self.selected_env
+                self.package_panel.set_venv(_env)
+            # Force repaint so panel is visible immediately
+            self.package_panel.update()
+            from PySide6.QtWidgets import QApplication
+            QApplication.processEvents()
+
         # Lazy-build Settings page on first visit
         if index == 2 and self.settings_page is None:
             from src.gui.settings_page import SettingsPage
@@ -1378,7 +1371,7 @@ class MainWindow(QMainWindow):
             if d.switch_after:
                 self._switch_page(0)
             if hasattr(self, "package_panel"):
-                QTimer.singleShot(400, lambda: self.package_panel._install_packages(packages))
+                QTimer.singleShot(400, lambda: self.package_panel._install_packages(packages) if self.package_panel else None)
             return
 
         # MODE_EXISTING — switch to target env then install
@@ -1393,7 +1386,7 @@ class MainWindow(QMainWindow):
         if d.switch_after:
             self._switch_page(0)
         if hasattr(self, "package_panel"):
-            QTimer.singleShot(400, lambda: self.package_panel._install_packages(packages))
+            QTimer.singleShot(400, lambda: self.package_panel._install_packages(packages) if self.package_panel else None)
 
     def _refresh_bookmarks(self, bookmarks: list):
         """Update Quick Launch bookmark buttons."""
@@ -1472,7 +1465,7 @@ class MainWindow(QMainWindow):
                 self.env_table.blockSignals(False)
                 break
         # package_panel sync (sayfa değiştirme!)
-        self.package_panel.set_venv(venv_path)
+        if self.package_panel is not None: self.package_panel.set_venv(venv_path)
 
     def _ql_load_env_packages(self, venv_name: str):
         """Sadece QL için paket listesi yükle — sağ paneli değiştirme."""
@@ -1571,7 +1564,7 @@ class MainWindow(QMainWindow):
         installed = getattr(self.package_panel, "installed_package_names", set())
         self._rebuild_ql_buttons(installed)
         # QL selector'ı package_panel'in env'iyle sync et
-        if hasattr(self, "ql_env_selector") and self.package_panel.pip_manager:
+        if hasattr(self, "ql_env_selector") and self.package_panel is not None and self.package_panel.pip_manager:
             current_env = self.package_panel.pip_manager.venv_path.name
             self._sync_ql_selector(current_env)
 
@@ -1598,7 +1591,7 @@ class MainWindow(QMainWindow):
                 f"border: 1px solid {c['border']}; border-radius: 4px; }}"
                 f"QPushButton:hover {{ background-color: {c['hover']}; border-color: {c['accent']}; }}"
             )
-            btn.clicked.connect(lambda checked, a=app: self.package_panel._launch_app(a))
+            btn.clicked.connect(lambda checked, a=app: self.package_panel._launch_app(a) if self.package_panel else None)
             self.ql_buttons_layout.addWidget(btn)
         if not has_any:
             lbl = QLabel("  No apps installed")
@@ -1782,7 +1775,9 @@ class MainWindow(QMainWindow):
 
         # Update package panel env dropdown
         env_list = [(e.name, e.path) for e in envs]
-        self.package_panel.populate_env_list(env_list)
+        self._last_env_list = env_list
+        if self.package_panel is not None:
+            if self.package_panel is not None: self.package_panel.populate_env_list(env_list)
         self.settings_page.populate_vscode_envs(env_list)
 
         if not envs:
@@ -1894,7 +1889,7 @@ class MainWindow(QMainWindow):
             # Sync package_panel — use actual path (handles pipx, poetry etc.)
             venv_path = self._get_env_path(name) or self.venv_manager.base_dir / name
             if venv_path.exists():
-                self.package_panel.set_venv(venv_path)
+                if self.package_panel is not None: self.package_panel.set_venv(venv_path)
                 # ── Track in recent envs (deferred — no UI blocking) ─────
                 try:
                     type_item = self.env_table.item(row, 1)
@@ -1921,7 +1916,8 @@ class MainWindow(QMainWindow):
         venv_path = self.venv_manager.base_dir / default_env
         if not venv_path.exists():
             return
-        self.package_panel.set_venv(venv_path)
+        if self.package_panel is not None:
+            self.package_panel.set_venv(venv_path)
         self._switch_page(0)
         # Sync env table selection
         for row in range(self.env_table.rowCount()):
@@ -2287,9 +2283,9 @@ class MainWindow(QMainWindow):
             except Exception:
                 pass
             # Clear package panel so launcher doesn't show stale installed state
-            self.package_panel.installed_package_names.clear()
-            self.package_panel._launcher_py_version_cache.clear()
-            self.package_panel._update_launcher_status()
+            if self.package_panel is not None:
+                self.package_panel._launcher_py_version_cache.clear()
+                self.package_panel._update_launcher_status()
             self._refresh_env_list()
             self.statusBar().showMessage(message)
             if hasattr(self, "_cmd_panel_live"):
@@ -2693,7 +2689,7 @@ class MainWindow(QMainWindow):
             return
         # Use real path (handles pipx: ~/.local/share/pipx, poetry: ~/.cache/pypoetry/...)
         venv_path = self._get_env_path(name) or (self.venv_manager.base_dir / name)
-        self.package_panel.set_venv(venv_path)
+        if self.package_panel is not None: self.package_panel.set_venv(venv_path)
         self._switch_page(0)
 
     def _open_terminal(self):
@@ -2707,9 +2703,9 @@ class MainWindow(QMainWindow):
         cur = getattr(self.package_panel, "_current_venv_path", None)
         if cur is None or Path(cur) != Path(real_path):
             self._log.debug(f"_open_terminal: syncing package_panel to {real_path}")
-            self.package_panel.set_venv(real_path)
+            if self.package_panel is not None: self.package_panel.set_venv(real_path)
         # Delegate to package_panel which handles all env types correctly
-        self.package_panel._open_terminal_here()
+        if self.package_panel is not None: self.package_panel._open_terminal_here()
         self.statusBar().showMessage(f"Opened terminal for '{name}'")
 
     def _open_env_folder(self):
@@ -2760,7 +2756,7 @@ class MainWindow(QMainWindow):
                 tertiary_family=tertiary_family, tertiary_size=tertiary_size
             ))
             if hasattr(self, "package_panel"):
-                self.package_panel.apply_theme(theme)
+                if self.package_panel is not None: self.package_panel.apply_theme(theme)
             if hasattr(self, "settings_page"):
                 self.settings_page._refresh_styles()
             self._refresh_sidebar_styles()
@@ -3012,7 +3008,7 @@ class MainWindow(QMainWindow):
         self._refresh_env_list()
         # Reload presets tab so custom presets appear immediately
         if hasattr(self, "package_panel"):
-            self.package_panel.reload_presets_tab()
+            if self.package_panel is not None: self.package_panel.reload_presets_tab()
         self.statusBar().showMessage("Settings saved")
 
     def _show_about(self):

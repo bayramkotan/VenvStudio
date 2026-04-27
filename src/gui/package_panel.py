@@ -476,21 +476,27 @@ class PackagePanel(QWidget):
         layout.addWidget(_env_bar_scroll)
 
         self.tabs = QTabWidget()
-        self.tabs.setUsesScrollButtons(False)  # No < > scroll buttons
+        self.tabs.setUsesScrollButtons(False)
 
-        # Store tab definitions for dynamic show/hide via removeTab/insertTab
+        # Tab definitions — widgets built lazily on first visit
         self._tab_defs = [
-            ("launcher",  f"🚀 {tr('app_launcher')}",   self._create_launcher_tab(),  UI_TOOLTIPS.get("tab_launch", "")),
-            ("installed", f"📦 {tr('installed')}",       self._create_installed_tab(), UI_TOOLTIPS.get("tab_installed", "")),
-            ("catalog",   f"🛒 {tr('catalog')}",         self._create_catalog_tab(),   UI_TOOLTIPS.get("tab_catalog", "")),
-            ("presets",   f"⚡ {tr('presets')}",         self._create_presets_tab(),   UI_TOOLTIPS.get("tab_presets", "")),
-            ("manual",    f"⌨️ {tr('manual_install')}",  self._create_manual_tab(),    UI_TOOLTIPS.get("tab_manual", "")),
+            ("launcher",  f"🚀 {tr('app_launcher')}",   None, UI_TOOLTIPS.get("tab_launch", "")),
+            ("installed", f"📦 {tr('installed')}",       None, UI_TOOLTIPS.get("tab_installed", "")),
+            ("catalog",   f"🛒 {tr('catalog')}",         None, UI_TOOLTIPS.get("tab_catalog", "")),
+            ("presets",   f"⚡ {tr('presets')}",         None, UI_TOOLTIPS.get("tab_presets", "")),
+            ("manual",    f"⌨️ {tr('manual_install')}",  None, UI_TOOLTIPS.get("tab_manual", "")),
         ]
-        # Add all tabs initially
-        for key, label, widget, tooltip in self._tab_defs:
-            self.tabs.addTab(widget, label)
+        self._tab_built = {}
+
+        # Add placeholder tabs immediately
         for i, (key, label, widget, tooltip) in enumerate(self._tab_defs):
+            from PySide6.QtWidgets import QWidget as _QW
+            self.tabs.addTab(_QW(), label)
             self.tabs.setTabToolTip(i, tooltip)
+
+        # Build launcher tab immediately (first visible tab)
+        self._ensure_tab_built(0)
+        self.tabs.currentChanged.connect(self._on_tab_changed)
         layout.addWidget(self.tabs)
 
         # Status bar with cancel button
@@ -2932,6 +2938,10 @@ $s.Save()
         """
         if not hasattr(self, "_tab_defs"):
             return
+        # Ensure visible tabs are built
+        current = self.tabs.currentIndex()
+        if current >= 0:
+            self._ensure_tab_built(current)
 
         env_type = getattr(self, "_current_env_type", "venv")
 
@@ -3004,8 +3014,15 @@ $s.Save()
                     tooltip = _installed_tooltips.get(env_type, tooltip)
                 elif key == "catalog":
                     tooltip = _catalog_tooltips.get(env_type, tooltip)
-                idx = self.tabs.addTab(widget, label)
-                self.tabs.setTabToolTip(idx, tooltip)
+                # Build widget lazily if not yet created
+                if widget is None:
+                    tab_index = next((i for i, d in enumerate(self._tab_defs) if d[0] == key), -1)
+                    if tab_index >= 0:
+                        self._ensure_tab_built(tab_index)
+                        widget = self._tab_defs[tab_index][2]
+                if widget is not None:
+                    idx = self.tabs.addTab(widget, label)
+                    self.tabs.setTabToolTip(idx, tooltip)
 
         self.tabs.blockSignals(False)
 
@@ -4861,3 +4878,34 @@ dependencies:
         self.progress_bar.setVisible(busy)
         self.cancel_btn.setVisible(busy)
         self.tabs.setEnabled(not busy)
+    def _on_tab_changed(self, index: int):
+        """Build tab content lazily on first visit."""
+        self._ensure_tab_built(index)
+
+    def _ensure_tab_built(self, index: int):
+        """Build tab widget at index if not yet built."""
+        if index < 0 or index >= len(self._tab_defs):
+            return
+        key = self._tab_defs[index][0]
+        if self._tab_built.get(key):
+            return
+        creators = {
+            "launcher":  self._create_launcher_tab,
+            "installed": self._create_installed_tab,
+            "catalog":   self._create_catalog_tab,
+            "presets":   self._create_presets_tab,
+            "manual":    self._create_manual_tab,
+        }
+        creator = creators.get(key)
+        if not creator:
+            return
+        widget = creator()
+        # Replace placeholder with real widget
+        self.tabs.removeTab(index)
+        self.tabs.insertTab(index, widget, self._tab_defs[index][1])
+        self.tabs.setTabToolTip(index, self._tab_defs[index][3])
+        self._tab_defs[index] = (key, self._tab_defs[index][1], widget, self._tab_defs[index][3])
+        self.tabs.setCurrentIndex(index)
+        self._tab_built[key] = True
+
+

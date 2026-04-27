@@ -892,9 +892,13 @@ class VenvManager:
                 elif env_type in ("uv", "poetry"):
                     if env_type == "poetry":
                         _venv_path_str = marker_data.get("poetry_venv_path", "")
+                        # Always use the real venv path for cache — even if dir check fails
                         _venv_dir = Path(_venv_path_str) if _venv_path_str else item
-                        if _venv_dir != item and _venv_dir.exists():
+                        if _venv_dir.exists():
                             info.path = _venv_dir
+                        # If real path doesn't exist, fall back to marker dir
+                        if not _venv_dir.exists():
+                            _venv_dir = item
                     else:
                         _venv_dir = item
                     # Check cache first — avoids pip list subprocess every launch
@@ -1272,11 +1276,15 @@ class VenvManager:
 
     def _read_cache(self, venv_path: Path) -> Optional[Dict[str, Any]]:
         all_cache = self._load_all_cache()
-        entry = all_cache.get(self._cache_key(venv_path))
+        key = self._cache_key(venv_path)
+        entry = all_cache.get(key)
         if not entry:
+            print(f"[Cache] MISS: {key}")
             return None
         if entry.get("needs_refresh", 1) == 1:
+            print(f"[Cache] STALE: {key}")
             return None
+        print(f"[Cache] HIT: {key}")
         return entry
 
     def write_cache(self, venv_path: Path, python_version: str, package_count: int, size: str) -> None:

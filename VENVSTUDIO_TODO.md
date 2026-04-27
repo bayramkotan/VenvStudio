@@ -2,36 +2,49 @@
 
 ## 🔴 ÖNCELIK #1 — Startup Hız Optimizasyonu (Hedef: 3-5 saniye)
 
-### PERF-001 — Açılış 26 saniye, hedef 3-5 saniye
+### PERF-001 — Açılış süresi (güncel durum)
 
-Profiling sonuçları (Windows, 6 env):
-  - __init__ started → _refresh_env_list = 11s  (PackagePanel.__init__ + _setup_ui)
-  - subprocess: python.exe --version            = her açılışta (cache key mismatch)
-  - subprocess: pipx list --short               = her açılışta (cache key mismatch)  
-  - subprocess: pip.exe list --format=json      = poetry env için her açılışta
-  - _on_env_selected                            = 8s (pip list subprocess)
+**Windows:** ~26 saniye (hedef: 3-5s) — hâlâ çalışılıyor
+**Linux:**   ~8 saniye  (hedef: 3-5s) — iyileşti, devam ediliyor
 
-Yapılacaklar:
-  1. Cache key fix — Windows'ta pathlib.resolve() /C:/... döndürüyor, C:/... bekleniyordu
-     Düzeltme yapıldı (venv_manager.py) ama henüz etkili olmadı
-     İkinci açılışta subprocess'ler kaybolmalı
+Profiling (Windows, 6 env):
+  __init__ started → _refresh_env_list = 10s   (PackagePanel.__init__ + _setup_ui)
+  _refresh_env_list → __init__ complete = 13s  (sync_cache + subprocess'ler)
 
-  2. PackagePanel.__init__ yavaşlığı
-     - _setup_ui içinde QTableWidget, QTabWidget, tüm tab'lar oluşturuluyor
-     - Catalog tab'ı: _populate_catalog() startup'ta çağrılıyor — yüzlerce satır
-     - Çözüm: Tab'ları lazy oluştur — sadece ilk kez o tab'a tıklandığında
+Profiling (Linux, 6 env):
+  __init__ started → _refresh_env_list =  7s   (PackagePanel.__init__ + _setup_ui)
+  subprocess: pipx list --short                 (pipx cache siliniyordu — DÜZELTILDI v1.4.83)
+  subprocess: pip list --format=json            (poetry cache siliniyordu — DÜZELTILDI v1.4.83)
+  [Cache] HIT: conda_env, ml, nlp, uv_env      (bunlar zaten çalışıyor)
 
-  3. _setup_ui içinde from src.gui.package_panel import PackagePanel
-     Bu import python dosyasını parse ediyor (4800 satır) — ~2-3s
-     Çözüm: Önceden import et veya compile cache kullan
+✅ Tamamlanan düzeltmeler (v1.4.82 - v1.4.83):
+  - Cache key fix: Windows pathlib.resolve() /C:/... → C:/... (venv_manager.py)
+  - sync_cache_with_disk: artık sadece base_dir içini temizliyor
+    (pipx ~/.local/share/pipx, poetry ~/.cache/pypoetry/... korunuyor)
+  - PackagePanel lazy tabs: Installed/Catalog/Presets/Manual ilk tıklamada build
+  - Stub widgets: packages_table, catalog_table vs. __init__'te boş oluşturuluyor
+  - _all_cache class-level memory dict: env_cache.json tek seferinde okunuyor
+  - conda/uv/poetry/pipx için cache check eklendi (subprocess öncesi)
+  - settings_catalog.py debug print'leri kaldırıldı
+  - package_panel: _system_tool_cache, _cfg_cache, _vm_cache in-memory
 
-  4. poetry env için pip list her açılışta çalışıyor
-     Çözüm: cache key fix sonrası otomatik düzelecek
+⚠️ Hâlâ açık:
+  1. PackagePanel.__init__ + _setup_ui hâlâ ~7-10s
+     - Launcher tab bile ağır (çok sayıda card widget oluşturuluyor)
+     - Çözüm: Launcher card'larını da lazy yap (set_venv sonrası)
+     - Ya da: _setup_ui'yi split et, sadece skeleton oluştur
+
+  2. Windows'ta sync_cache + ensure_pipx hâlâ main thread'de
+     - Bunları QTimer ile 0ms defer et → UI önce görünsün
+     - background thread değil, sadece event loop'tan sonra
+
+  3. Python --version subprocess hâlâ çalışıyor (conda env için)
+     - conda env marker'da python_version varsa subprocess atla
 
   İlgili dosyalar:
-    src/core/venv_manager.py    — cache key fix (yapıldı, test edilecek)
-    src/gui/package_panel.py    — lazy tab creation
-    src/gui/main_window.py      — startup sequence
+    src/core/venv_manager.py  — cache key, sync_cache, lazy subprocess
+    src/gui/package_panel.py  — lazy tabs, stub widgets, launcher cards
+    src/gui/main_window.py    — startup sequence, defer heavy ops
 
 
 ---

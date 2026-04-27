@@ -221,6 +221,29 @@ class PackagePanel(QWidget):
         self._vm_cache_base: str = ""       # base_dir used for cached vm
         self._system_tool_cache: dict = {}  # icon_key -> bool (is_installed)
         self._setup_ui()
+        # Stub widgets — replaced when lazy tabs are built
+        # These ensure code outside tab-build never crashes on attribute access
+        if not hasattr(self, 'packages_table'):
+            from PySide6.QtWidgets import QTableWidget as _TW
+            self.packages_table = _TW()
+        if not hasattr(self, 'pkg_count_label'):
+            from PySide6.QtWidgets import QLabel as _QL
+            self.pkg_count_label = _QL()
+        if not hasattr(self, 'catalog_table'):
+            from PySide6.QtWidgets import QTableWidget as _TW2
+            self.catalog_table = _TW2()
+        if not hasattr(self, 'category_combo'):
+            from PySide6.QtWidgets import QComboBox as _CB
+            self.category_combo = _CB()
+        if not hasattr(self, 'manual_input'):
+            from PySide6.QtWidgets import QPlainTextEdit as _PTE
+            self.manual_input = _PTE()
+        if not hasattr(self, 'manual_info_label'):
+            from PySide6.QtWidgets import QLabel as _QL2
+            self.manual_info_label = _QL2()
+        if not hasattr(self, 'output_log'):
+            from PySide6.QtWidgets import QTextEdit as _TE
+            self.output_log = _TE()
 
     # ── Cache helpers ────────────────────────────────────────────────────────
 
@@ -2946,7 +2969,7 @@ $s.Save()
         env_type = getattr(self, "_current_env_type", "venv")
 
         # Update manual tab description and placeholder per env type
-        if hasattr(self, "manual_info_label") and hasattr(self, "manual_input"):
+        if True:
             _manual_descriptions = {
                 "venv":   "Enter package names separated by spaces or newlines.\nYou can specify versions like: numpy==1.24.0 or pandas>=2.0",
                 "uv":    "Enter package names separated by spaces or newlines.\nUses uv pip install (10-100× faster than pip).",
@@ -3156,12 +3179,16 @@ $s.Save()
         self.pip_manager = None
         self.installed_package_names = set()
         self._launcher_py_version_cache.clear()
-        self.packages_table.setRowCount(0)
-        self.env_pkg_count.setText("")
-        self.python_version_label.setText("")
+        if hasattr(self, "packages_table"):
+            self.packages_table.setRowCount(0)
+        if hasattr(self, "pkg_count_label"):
+            self.pkg_count_label.setText("0 packages")
+        if hasattr(self, "env_pkg_count"):
+            self.env_pkg_count.setText("")
+        if hasattr(self, "python_version_label"):
+            self.python_version_label.setText("")
         if hasattr(self, "_env_bar_terminal_btn"):
             self._env_bar_terminal_btn.setEnabled(False)
-        self.pkg_count_label.setText("0 packages")
         self.status_label.setText("Select an environment to manage packages")
         self._hide_env_info_bar()
 

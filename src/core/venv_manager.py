@@ -632,6 +632,8 @@ class VenvManager:
         self._save_all_cache(all_cache)
 
     def sync_cache_with_disk(self) -> None:
+        """Remove stale cache entries — but only for envs inside base_dir.
+        External envs (pipx, poetry, conda outside base_dir) are preserved."""
         if not self.base_dir.exists():
             return
         existing_keys = {
@@ -640,7 +642,18 @@ class VenvManager:
             if item.is_dir()
         }
         all_cache = self._load_all_cache()
-        cleaned = {k: v for k, v in all_cache.items() if k in existing_keys}
+        # Only remove entries that ARE inside base_dir but no longer exist
+        # Keep entries outside base_dir (pipx, poetry, conda) untouched
+        base_key = self._cache_key(self.base_dir)
+        cleaned = {}
+        for k, v in all_cache.items():
+            if k.startswith(base_key):
+                # Inside base_dir — remove if dir no longer exists
+                if k in existing_keys:
+                    cleaned[k] = v
+            else:
+                # Outside base_dir (pipx, poetry, conda) — always keep
+                cleaned[k] = v
         if len(cleaned) != len(all_cache):
             self._save_all_cache(cleaned)
 

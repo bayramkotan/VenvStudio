@@ -20,11 +20,8 @@ from PySide6.QtGui import QFont, QAction, QColor
 
 from src.core.venv_manager import VenvManager
 from src.core.config_manager import ConfigManager
-from src.gui.env_dialog import EnvCreateDialog
-from src.gui.package_panel import PackagePanel
-from src.gui.settings_page import SettingsPage
-from src.gui.learn_page import LearnPage
 from src.gui.styles import get_theme
+# Heavy GUI modules imported lazily in _setup_ui to speed up startup
 from src.utils.platform_utils import (
     get_activate_command, open_terminal_at, get_platform,
 )
@@ -192,26 +189,55 @@ class MainWindow(QMainWindow):
         self._setup_menubar()
         self._setup_ui()
         self._apply_theme()
-        self._apply_linux_emoji_fix()
-        self._check_linux_venv_module()
-        self.venv_manager.sync_cache_with_disk()
-        # Auto-create pipx marker env if pipx is installed
-        self.venv_manager.ensure_pipx_env()
-        self._refresh_env_list()
 
         # ── Screen change safety: re-apply theme when moving between monitors ──
         self._connect_screen_changed()
 
-        # Open default env on startup
-        from PySide6.QtCore import QTimer
-        QTimer.singleShot(300, self._open_default_env)
+        # Phase 1: Show UI immediately from cache — no subprocess, no disk scan
+        self._refresh_env_list(force=False)
 
-        # Auto-check for updates on startup (if enabled)
+        # Phase 2: Heavy init in background — sync cache, pipx, emoji fix, venv check
+        from PySide6.QtCore import QTimer
+        QTimer.singleShot(100, self._startup_background_init)
+
+        # Open default env after UI is ready
+        QTimer.singleShot(200, self._open_default_env)
+
+        # Auto-check for updates (if enabled)
         if self.config.get("check_updates", False):
-            from PySide6.QtCore import QTimer
-            QTimer.singleShot(3000, self._auto_check_update)
+            QTimer.singleShot(4000, self._auto_check_update)
 
         self._log.info("MainWindow.__init__ complete")
+
+    def _startup_background_init(self):
+        """Heavy startup tasks deferred to after UI is visible."""
+        import threading
+
+        def _bg():
+            try:
+                self._apply_linux_emoji_fix()
+            except Exception:
+                pass
+            try:
+                self._check_linux_venv_module()
+            except Exception:
+                pass
+            try:
+                self.venv_manager.sync_cache_with_disk()
+            except Exception:
+                pass
+            try:
+                self.venv_manager.ensure_pipx_env()
+            except Exception:
+                pass
+            # Refresh env list once background init is done
+            from PySide6.QtCore import QMetaObject, Qt
+            QMetaObject.invokeMethod(
+                self, "_refresh_env_list",
+                Qt.ConnectionType.QueuedConnection
+            )
+
+        threading.Thread(target=_bg, daemon=True).start()
     def _auto_check_update(self):
         """Silently check for updates on startup — runs in background thread."""
         class _UpdateWorker(QThread):
@@ -778,6 +804,7 @@ class MainWindow(QMainWindow):
 
         # Content Area
         self.stack = QStackedWidget()
+        from src.gui.package_panel import PackagePanel
         self.package_panel = PackagePanel(config=self.config)
         self.package_panel.env_refresh_requested.connect(self._refresh_env_list)
         self.package_panel._ql_update_callback = self._update_ql_buttons
@@ -786,6 +813,7 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self._create_env_page())       # Page 1
 
         # Settings page
+        from src.gui.settings_page import SettingsPage
         self.settings_page = SettingsPage(self.config)
         self.settings_page.theme_changed.connect(self._on_theme_changed)
         self.settings_page.font_changed.connect(self._on_font_changed)
@@ -793,6 +821,7 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.settings_page)             # Page 2
 
         # Learn page
+        from src.gui.learn_page import LearnPage
         self.learn_page = LearnPage(self._c, config=self.config)
         self.learn_page.install_packages_requested.connect(self._on_learn_install)
         self.learn_page.bookmark_changed.connect(self._refresh_bookmarks)
@@ -1241,6 +1270,33 @@ class MainWindow(QMainWindow):
     def _switch_page(self, index):
         page_names = {0: "Packages", 1: "Environments", 2: "Settings", 3: "Learn"}
         self._log.debug(f"_switch_page → {page_names.get(index, index)}")
+
+        # Lazy-build Settings page on first visit
+        if index == 2 and self.settings_page is None:
+            from src.gui.settings_page import SettingsPage
+            self.settings_page = SettingsPage(self.config)
+            self.settings_page.theme_changed.connect(self._on_theme_changed)
+            self.settings_page.font_changed.connect(self._on_font_changed)
+            self.settings_page.settings_saved.connect(self._on_settings_saved)
+            self.stack.removeWidget(self._settings_placeholder)
+            self.stack.insertWidget(2, self.settings_page)
+            self._settings_placeholder.deleteLater()
+
+        # Lazy-build Learn page on first visit
+        if index == 3 and self.learn_page is None:
+            from src.gui.learn_page import LearnPage
+            self.learn_page = LearnPage(self._c, config=self.config)
+            self.learn_page.install_packages_requested.connect(self._on_learn_install)
+            self.learn_page.bookmark_changed.connect(self._refresh_bookmarks)
+            self.stack.removeWidget(self._learn_placeholder)
+            self.stack.insertWidget(3, self.learn_page)
+            self._learn_placeholder.deleteLater()
+            # Load bookmarks
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(100, lambda: self._refresh_bookmarks(
+                list(self.learn_page._bookmarks)
+            ))
+
         self.stack.setCurrentIndex(index)
         for i, btn in enumerate(self.nav_buttons):
             btn.setChecked(i == index)
@@ -2018,6 +2074,7 @@ class MainWindow(QMainWindow):
         return ""
 
     def _create_env(self):
+        from src.gui.env_dialog import EnvCreateDialog
         dialog = EnvCreateDialog(self.venv_manager, self.config, self)
         dialog.env_created.connect(lambda name: self._refresh_env_list())
         dialog.exec()

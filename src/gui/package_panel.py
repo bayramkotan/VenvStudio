@@ -213,7 +213,57 @@ class PackagePanel(QWidget):
         self._launcher_py_version_cache: dict = {}  # venv_path -> tuple
         self._catalog_initial_state = {}  # Track original checkbox states
         self.config = config  # ConfigManager — for Jupyter workdir etc.
+
+        # ── In-memory cache — reduces repeated disk I/O ──────────────────
+        # Invalidated only after install/uninstall/remove operations
+        self._cfg_cache: dict = {}          # ConfigManager values
+        self._vm_cache: object = None       # VenvManager instance
+        self._vm_cache_base: str = ""       # base_dir used for cached vm
+        self._system_tool_cache: dict = {}  # icon_key -> bool (is_installed)
         self._setup_ui()
+
+    # ── Cache helpers ────────────────────────────────────────────────────────
+
+    def _get_config(self, key: str, default=None):
+        """Get a config value from cache, loading from ConfigManager once."""
+        if key not in self._cfg_cache:
+            if self.config is not None:
+                self._cfg_cache[key] = self.config.get(key, default)
+            else:
+                try:
+                    from src.core.config_manager import ConfigManager
+                    self._cfg_cache[key] = ConfigManager().get(key, default)
+                except Exception:
+                    return default
+        return self._cfg_cache[key]
+
+    def _get_venv_manager(self, base_dir=None):
+        """Return cached VenvManager, creating it only if base_dir changed."""
+        if base_dir is None:
+            base_dir = str(self._get_config_base_dir())
+        if self._vm_cache is None or self._vm_cache_base != str(base_dir):
+            from src.core.venv_manager import VenvManager
+            self._vm_cache = VenvManager(base_dir)
+            self._vm_cache_base = str(base_dir)
+        return self._vm_cache
+
+    def _get_config_base_dir(self):
+        """Return venv base dir from config (cached)."""
+        if self.config is not None:
+            return self.config.get_venv_base_dir()
+        try:
+            from src.core.config_manager import ConfigManager
+            return ConfigManager().get_venv_base_dir()
+        except Exception:
+            from pathlib import Path
+            return Path.home() / "venv"
+
+    def _invalidate_cache(self):
+        """Call after install/uninstall/env-switch to force fresh data."""
+        self._cfg_cache.clear()
+        self._vm_cache = None
+        self._vm_cache_base = ""
+        self._system_tool_cache.clear()
 
     # ── Theme color palettes ──
     DARK = {
@@ -1201,15 +1251,21 @@ class PackagePanel(QWidget):
 
                 from src.core.system_tools_installer import get_installer as _get_installer
                 _icon_key = app_def.get("icon_key", "")
-                _installer = _get_installer(_icon_key)
-                if _installer:
-                    system_found = _installer.is_installed()
+                # Use cache to avoid shutil.which on every status update
+                if _icon_key and _icon_key in self._system_tool_cache:
+                    system_found = self._system_tool_cache[_icon_key]
                 else:
-                    import shutil as _shutil
-                    from src.utils.platform_utils import get_platform as _gp
-                    _sys_cmds = app_def.get("system_commands", {})
-                    _exe = (_sys_cmds.get(_gp()) or _sys_cmds.get("linux", [""]))[0]
-                    system_found = bool(_shutil.which(_exe))
+                    _installer = _get_installer(_icon_key)
+                    if _installer:
+                        system_found = _installer.is_installed()
+                    else:
+                        import shutil as _shutil
+                        from src.utils.platform_utils import get_platform as _gp
+                        _sys_cmds = app_def.get("system_commands", {})
+                        _exe = (_sys_cmds.get(_gp()) or _sys_cmds.get("linux", [""]))[0]
+                        system_found = bool(_shutil.which(_exe))
+                    if _icon_key:
+                        self._system_tool_cache[_icon_key] = system_found
 
                 status = card._status_label
                 card._launch_btn.setEnabled(True)
@@ -1562,6 +1618,8 @@ class PackagePanel(QWidget):
     def _on_system_install_finished(self, success: bool, message: str, app_def: dict):
         """Called after a system tool silent install completes."""
         self._set_busy(False)
+        # Invalidate system tool cache so is_installed re-checks
+        self._system_tool_cache.clear()
         name = app_def["name"]
         if success:
             self.status_label.setText(f"✅ {name} installed. Launching...")
@@ -1573,7 +1631,7 @@ class PackagePanel(QWidget):
                 # B141: refresh env table too (conda pkg count changes)
                 try:
                     from src.core.venv_manager import VenvManager
-                    _vm = VenvManager(self.pip_manager.venv_path.parent)
+                    _vm = self._get_venv_manager(self.pip_manager.venv_path.parent)
                     _vm.invalidate_cache(self.pip_manager.venv_path)
                 except Exception:
                     pass
@@ -2012,7 +2070,7 @@ class PackagePanel(QWidget):
             # the parent so it re-queries list_venvs_fast with force=True.
             try:
                 from src.core.venv_manager import VenvManager
-                _vm = VenvManager(self.pip_manager.venv_path.parent)  # base_dir
+                _vm = self._get_venv_manager(self.pip_manager.venv_path.parent)  # base_dir
                 _vm.invalidate_cache(self.pip_manager.venv_path)
                 # For pipx we also invalidate the shared pipx tree — many apps share
                 # /pipx cache state.
@@ -2354,7 +2412,7 @@ $s.Save()
         # Add custom categories from config
         from src.core.config_manager import ConfigManager
         try:
-            _cfg = ConfigManager()
+            _cfg = self.config if self.config else __import__("src.core.config_manager", fromlist=["ConfigManager"]).ConfigManager()
             custom_cats = _cfg.get("custom_categories", [])
             for c in custom_cats:
                 name = c.get("name", "")
@@ -2452,7 +2510,7 @@ $s.Save()
 
         # Merge built-in + custom presets
         from src.core.config_manager import ConfigManager
-        _custom_presets = ConfigManager().get("custom_presets", {})
+        _custom_presets = self._get_config("custom_presets", {})
         _all_presets = {**PRESETS, **_custom_presets}
 
         self._preset_cards = {}
@@ -2706,7 +2764,7 @@ $s.Save()
         try:
             from src.core.venv_manager import VenvManager
             from src.core.config_manager import ConfigManager
-            vm = VenvManager(ConfigManager().get_venv_base_dir())
+            vm = self._get_venv_manager()
             entry = vm._load_all_cache().get(self._get_pkg_cache_key())
             if not entry or entry.get("needs_refresh", 1) == 1:
                 return None
@@ -2718,7 +2776,7 @@ $s.Save()
         try:
             from src.core.venv_manager import VenvManager
             from src.core.config_manager import ConfigManager
-            vm = VenvManager(ConfigManager().get_venv_base_dir())
+            vm = self._get_venv_manager()
             all_cache = vm._load_all_cache()
             all_cache[self._get_pkg_cache_key()] = {
                 "packages": [{"name": p.name, "version": p.version} for p in packages],
@@ -2732,7 +2790,7 @@ $s.Save()
         try:
             from src.core.venv_manager import VenvManager
             from src.core.config_manager import ConfigManager
-            vm = VenvManager(ConfigManager().get_venv_base_dir())
+            vm = self._get_venv_manager()
             all_cache = vm._load_all_cache()
             key = self._get_pkg_cache_key()
             if key in all_cache:
@@ -2750,8 +2808,7 @@ $s.Save()
         try:
             from src.core.venv_manager import VenvManager
             from src.core.config_manager import ConfigManager
-            base_dir = ConfigManager().get_venv_base_dir()
-            vm = VenvManager(base_dir)
+            vm = self._get_venv_manager()
             vm.invalidate_cache(self._current_venv_path)
         except Exception:
             pass
@@ -2765,7 +2822,7 @@ $s.Save()
         try:
             from src.utils.platform_utils import open_terminal_at
             from src.core.config_manager import ConfigManager
-            terminal_type = ConfigManager().get("terminal_type", "")
+            terminal_type = self._get_config("terminal_type", "")
             env_type = getattr(self, "_current_env_type", "venv")
             print(f"[DEBUG] open_terminal_at path={self._current_venv_path} env_type={env_type}")
             open_terminal_at(self._current_venv_path, terminal_type,
@@ -2779,7 +2836,7 @@ $s.Save()
         """Return current theme color palette with font hierarchy."""
         from src.gui.styles import get_colors
         from src.core.config_manager import ConfigManager
-        cfg = ConfigManager()
+        cfg = self.config if self.config else __import__("src.core.config_manager", fromlist=["ConfigManager"]).ConfigManager()
         theme = cfg.get("theme", "dark")
         font_size = cfg.get("font_secondary_size", 13) or cfg.get("font_size", 13)
         primary_size = cfg.get("font_primary_size", 22)
@@ -2790,7 +2847,7 @@ $s.Save()
         backend = "pip"
         try:
             from src.core.config_manager import ConfigManager
-            backend = ConfigManager().get("package_manager", "pip")
+            backend = self._get_config("package_manager", "pip")
         except Exception:
             pass
 
@@ -2850,7 +2907,22 @@ $s.Save()
         self.status_label.setText(f"Loading packages for {name}...")
         self._update_env_info_bar(venv_path, backend)
         self._update_tabs_for_env_type()
-        # Async refresh
+
+        # ── Fast path: if cache exists, populate instantly before async ──
+        cached = self._load_pkg_cache()
+        if cached is not None:
+            self.installed_package_names = set()
+            for p in cached:
+                n = p["name"].lower()
+                self.installed_package_names.add(n)
+                self.installed_package_names.add(n.replace("-", "_"))
+                self.installed_package_names.add(n.replace("_", "-"))
+            self._update_launcher_status()   # show installed/not-installed instantly
+            self.pkg_count_label.setText(f"{len(cached)} packages")
+            self.env_pkg_count.setText(f"{len(cached)} packages installed")
+            self.status_label.setText(f"Environment: {name}")
+
+        # Async refresh (updates if cache stale, runs pip list in background)
         self._async_refresh_packages()
 
     def _update_tabs_for_env_type(self):
@@ -3083,7 +3155,7 @@ $s.Save()
             backend = "pip"
             try:
                 from src.core.config_manager import ConfigManager
-                backend = ConfigManager().get("package_manager", "pip")
+                backend = self._get_config("package_manager", "pip")
             except Exception:
                 pass
             venv_path = Path(path_str)
@@ -3153,8 +3225,7 @@ $s.Save()
         try:
             from src.core.venv_manager import VenvManager
             from src.core.config_manager import ConfigManager
-            base_dir = ConfigManager().get_venv_base_dir()
-            vm = VenvManager(base_dir)
+            vm = self._get_venv_manager()
             cached = vm._read_cache(venv_path)
             if cached:
                 python_ver = cached.get("python_version", "")
@@ -3537,7 +3608,7 @@ $s.Save()
         # Include custom catalog packages from config
         from src.core.config_manager import ConfigManager
         try:
-            config = ConfigManager()
+            config = self.config if self.config else __import__("src.core.config_manager", fromlist=["ConfigManager"]).ConfigManager()
             custom_pkgs = config.get("custom_catalog", [])
         except Exception:
             custom_pkgs = []
@@ -4630,7 +4701,8 @@ dependencies:
 
         if success:
             self.status_label.setText("Operation completed successfully")
-            # Invalidate cache so env list shows updated package count/size
+            # Invalidate all caches so next read is fresh
+            self._invalidate_cache()
             self._invalidate_env_cache()
             self.refresh_packages()
             self.env_refresh_requested.emit()

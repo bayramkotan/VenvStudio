@@ -173,9 +173,16 @@ class VenvInfo:
 class VenvManager:
     """Manages virtual environment operations."""
 
+    # Class-level memory cache — survives multiple VenvManager() instantiations
+    _mem_envs: Dict[str, list] = {}         # str(base_dir) -> [VenvInfo, ...]
+    _mem_envs_valid: Dict[str, bool] = {}   # str(base_dir) -> is_valid
+    _all_cache: Optional[Dict] = None       # in-memory env_cache.json contents
+    _all_cache_dirty: bool = False          # needs write to disk
+
     def __init__(self, base_dir: Path):
         self.base_dir = base_dir
         self.base_dir.mkdir(parents=True, exist_ok=True)
+        self._base_key = str(self.base_dir)
 
     def set_base_dir(self, new_dir: Path) -> None:
         """Change the base directory."""
@@ -614,6 +621,11 @@ class VenvManager:
         self.invalidate_cache(self.base_dir / name)
 
     def invalidate_all_caches(self) -> None:
+        # Clear ALL memory caches
+        VenvManager._mem_envs.pop(self._base_key, None)
+        VenvManager._mem_envs_valid.pop(self._base_key, None)
+        VenvManager._all_cache = None  # force re-read from disk
+        # Then mark disk cache as stale
         all_cache = self._load_all_cache()
         for key in all_cache:
             all_cache[key]["needs_refresh"] = 1
@@ -633,6 +645,12 @@ class VenvManager:
             self._save_all_cache(cleaned)
 
     def list_venvs_fast(self, skip_calc: bool = False) -> List[VenvInfo]:
+        # Return from memory cache if valid (skip_calc=False only)
+        if (not skip_calc
+                and self._base_key in VenvManager._mem_envs
+                and VenvManager._mem_envs_valid.get(self._base_key)):
+            return list(VenvManager._mem_envs[self._base_key])
+
         venvs = []
         if not self.base_dir.exists():
             return venvs
@@ -665,26 +683,33 @@ class VenvManager:
                     _info.created = _mdata.get("created", "")
                     # Python version from marker or system python
                     _pyver = _mdata.get("python_version", "")
-                    if not _pyver:
+                    # Check disk cache before subprocess
+                    _pcached = self._read_cache(_pipx_home_path)
+                    if _pcached:
+                        _info.python_version = _pcached.get("python_version", _pyver or "")
+                        _info.package_count = _pcached.get("package_count", 0)
+                        _info.size = _pcached.get("size", _info.size or "")
+                    else:
+                        if not _pyver:
+                            try:
+                                import sys as _sys
+                                _r = _run([_sys.executable, "--version"],
+                                          capture_output=True, text=True, timeout=5)
+                                _pyver = (_r.stdout.strip() or _r.stderr.strip()).replace("Python ", "")
+                            except Exception:
+                                pass
+                        _info.python_version = _pyver
                         try:
                             import sys as _sys
-                            _r = _run([_sys.executable, "--version"],
-                                      capture_output=True, text=True, timeout=5)
-                            _pyver = (_r.stdout.strip() or _r.stderr.strip()).replace("Python ", "")
+                            from src.utils.platform_utils import get_pipx_cmd as _gpc3
+                            _pipx_cmd = (_gpc3() or [_sys.executable, "-m", "pipx"]) + ["list", "--short"]
+                            _r = _run(_pipx_cmd, capture_output=True, text=True, timeout=15)
+                            if _r.returncode == 0:
+                                _lines = [l for l in _r.stdout.strip().splitlines() if l.strip()]
+                                _info.package_count = len(_lines)
                         except Exception:
-                            pass
-                    _info.python_version = _pyver
-                    # Count installed pipx apps
-                    try:
-                        import sys as _sys
-                        from src.utils.platform_utils import get_pipx_cmd as _gpc3
-                        _pipx_cmd = (_gpc3() or [_sys.executable, "-m", "pipx"]) + ["list", "--short"]
-                        _r = _run(_pipx_cmd, capture_output=True, text=True, timeout=15)
-                        if _r.returncode == 0:
-                            _lines = [l for l in _r.stdout.strip().splitlines() if l.strip()]
-                            _info.package_count = len(_lines)
-                    except Exception:
-                        _info.package_count = 0
+                            _info.package_count = 0
+                        self.write_cache(_pipx_home_path, _info.python_version, _info.package_count, _info.size or "")
                     # Size: scan pipx venvs directory
                     try:
                         _venvs_dir = _pipx_home_path / "venvs"
@@ -823,133 +848,149 @@ class VenvManager:
                 marker_pyver = marker_data.get("python_version", "")
 
                 if env_type == "conda":
-                    # Always try real binary first — marker may have short version
-                    _conda_pyver = ""
-                    _conda_py = None
-                    for _cand in (
-                        item / "python.exe",
-                        item / "Scripts" / "python.exe",
-                        item / "bin" / "python",
-                        item / "bin" / "python3",
-                    ):
-                        if _cand.exists():
-                            _conda_py = _cand
-                            break
-                    if _conda_py:
+                    # Check cache first
+                    _cached = self._read_cache(item)
+                    if _cached:
+                        info.python_version = _cached.get("python_version", marker_pyver or "")
+                        info.package_count = _cached.get("package_count", 0)
+                        info.size = _cached.get("size", "")
+                    else:
+                        _conda_pyver = ""
+                        _conda_py = None
+                        for _cand in (
+                            item / "python.exe",
+                            item / "Scripts" / "python.exe",
+                            item / "bin" / "python",
+                            item / "bin" / "python3",
+                        ):
+                            if _cand.exists():
+                                _conda_py = _cand
+                                break
+                        if _conda_py:
+                            try:
+                                _r = _run([str(_conda_py), "--version"],
+                                          capture_output=True, text=True, timeout=5)
+                                _conda_pyver = (
+                                    _r.stdout.strip() or _r.stderr.strip()
+                                ).replace("Python ", "")
+                            except Exception:
+                                pass
+                        info.python_version = _conda_pyver or marker_pyver or ""
                         try:
-                            _r = _run([str(_conda_py), "--version"],
-                                      capture_output=True, text=True, timeout=5)
-                            _conda_pyver = (
-                                _r.stdout.strip() or _r.stderr.strip()
-                            ).replace("Python ", "")
+                            _cmeta = item / "conda-meta"
+                            if _cmeta.exists():
+                                info.package_count = len([
+                                    f for f in _cmeta.iterdir()
+                                    if f.suffix == ".json" and f.name != "history"
+                                ])
+                            else:
+                                info.package_count = 0
                         except Exception:
-                            pass
-                    info.python_version = _conda_pyver or marker_pyver or ""
-                    # Count conda packages from conda-meta (most reliable, no subprocess needed)
-                    try:
-                        _cmeta = item / "conda-meta"
-                        if _cmeta.exists():
-                            info.package_count = len([
-                                f for f in _cmeta.iterdir()
-                                if f.suffix == ".json" and f.name != "history"
-                            ])
-                        else:
                             info.package_count = 0
-                    except Exception:
-                        info.package_count = 0
+                        self.write_cache(item, info.python_version, info.package_count, info.size)
 
                 elif env_type in ("uv", "poetry"):
-                    # For poetry: real venv is at poetry_venv_path in marker
-                    # For uv: venv is at item itself
                     if env_type == "poetry":
                         _venv_path_str = marker_data.get("poetry_venv_path", "")
                         _venv_dir = Path(_venv_path_str) if _venv_path_str else item
                         if _venv_dir != item and _venv_dir.exists():
                             info.path = _venv_dir
-                            info.size = get_venv_size(_venv_dir)
                     else:
                         _venv_dir = item
-                    # Python version from marker or pyvenv.cfg or binary
-                    if marker_pyver:
-                        info.python_version = marker_pyver
+                    # Check cache first — avoids pip list subprocess every launch
+                    _cached = self._read_cache(_venv_dir)
+                    if _cached:
+                        info.python_version = _cached.get("python_version", marker_pyver or "")
+                        info.package_count = _cached.get("package_count", 0)
+                        info.size = _cached.get("size", "")
+                        if _venv_dir != item:
+                            info.size = _cached.get("size", get_venv_size(_venv_dir))
                     else:
-                        _pycfg = _venv_dir / "pyvenv.cfg"
-                        if _pycfg.exists():
-                            try:
-                                for _line in _pycfg.read_text().splitlines():
-                                    if _line.strip().startswith("version"):
-                                        info.python_version = _line.split("=", 1)[1].strip()
-                                        break
-                            except Exception:
-                                pass
-                        if not info.python_version:
-                            _py = get_python_executable(_venv_dir)
-                            if _py.exists():
+                        # Python version from marker or pyvenv.cfg (no subprocess)
+                        if marker_pyver:
+                            info.python_version = marker_pyver
+                        else:
+                            _pycfg = _venv_dir / "pyvenv.cfg"
+                            if _pycfg.exists():
                                 try:
-                                    _r = _run([str(_py), "--version"],
-                                              capture_output=True, text=True, timeout=5)
-                                    info.python_version = (
-                                        _r.stdout.strip() or _r.stderr.strip()
-                                    ).replace("Python ", "")
+                                    for _line in _pycfg.read_text().splitlines():
+                                        if _line.strip().startswith("version"):
+                                            info.python_version = _line.split("=", 1)[1].strip()
+                                            break
                                 except Exception:
                                     pass
-                    # Count packages
-                    # uv envs: no pip.exe, no pip module — use "uv pip list"
-                    # poetry/venv envs: pip.exe exists
-                    _counted = False
-                    if env_type == "uv":
-                        try:
-                            from src.utils.platform_utils import get_pipx_executable as _dummy
-                            import shutil as _shutil
-                            _uv_bin = _shutil.which("uv")
-                            if _uv_bin:
-                                _r = _run([_uv_bin, "pip", "list", "--format=json",
-                                           "--python", str(get_python_executable(_venv_dir))],
-                                          capture_output=True, text=True, timeout=15)
-                                if _r.returncode == 0:
-                                    info.package_count = len(json.loads(_r.stdout))
-                                    _counted = True
-                        except Exception:
-                            pass
-                    if not _counted:
-                        _pip_exe = get_pip_executable(_venv_dir)
-                        if _pip_exe.exists():
+                            if not info.python_version:
+                                _py = get_python_executable(_venv_dir)
+                                if _py.exists():
+                                    try:
+                                        _r = _run([str(_py), "--version"],
+                                                  capture_output=True, text=True, timeout=5)
+                                        info.python_version = (
+                                            _r.stdout.strip() or _r.stderr.strip()
+                                        ).replace("Python ", "")
+                                    except Exception:
+                                        pass
+                        # Count packages
+                        _counted = False
+                        if env_type == "uv":
                             try:
-                                _r = _run([str(_pip_exe), "list", "--format=json"],
-                                          capture_output=True, text=True, timeout=15)
-                                if _r.returncode == 0:
-                                    info.package_count = len(json.loads(_r.stdout))
+                                import shutil as _shutil
+                                _uv_bin = _shutil.which("uv")
+                                if _uv_bin:
+                                    _r = _run([_uv_bin, "pip", "list", "--format=json",
+                                               "--python", str(get_python_executable(_venv_dir))],
+                                              capture_output=True, text=True, timeout=15)
+                                    if _r.returncode == 0:
+                                        info.package_count = len(json.loads(_r.stdout))
+                                        _counted = True
                             except Exception:
                                 pass
+                        if not _counted:
+                            _pip_exe = get_pip_executable(_venv_dir)
+                            if _pip_exe.exists():
+                                try:
+                                    _r = _run([str(_pip_exe), "list", "--format=json"],
+                                              capture_output=True, text=True, timeout=15)
+                                    if _r.returncode == 0:
+                                        info.package_count = len(json.loads(_r.stdout))
+                                except Exception:
+                                    pass
+                        _sz = get_venv_size(_venv_dir)
+                        info.size = _sz
+                        self.write_cache(_venv_dir, info.python_version, info.package_count, _sz)
 
                 elif env_type == "pipx":
-                    # Get Python version — prefer marker, fallback to sys.executable
-                    if marker_pyver:
-                        info.python_version = marker_pyver
+                    # Check cache first
+                    _cached = self._read_cache(item)
+                    if _cached:
+                        info.python_version = _cached.get("python_version", marker_pyver or "")
+                        info.package_count = _cached.get("package_count", 0)
+                        info.size = _cached.get("size", "")
                     else:
+                        if marker_pyver:
+                            info.python_version = marker_pyver
+                        else:
+                            try:
+                                import sys as _sys
+                                _r = _run([_sys.executable, "--version"],
+                                          capture_output=True, text=True, timeout=5)
+                                info.python_version = (
+                                    _r.stdout.strip() or _r.stderr.strip()
+                                ).replace("Python ", "")
+                            except Exception:
+                                info.python_version = ""
                         try:
                             import sys as _sys
-                            _r = _run([_sys.executable, "--version"],
-                                      capture_output=True, text=True, timeout=5)
-                            info.python_version = (
-                                _r.stdout.strip() or _r.stderr.strip()
-                            ).replace("Python ", "")
+                            _pipx_cmd = (get_pipx_cmd() or [_sys.executable, "-m", "pipx"]) + ["list", "--short"]
+                            _r = _run(_pipx_cmd, capture_output=True, text=True, timeout=15)
+                            if _r.returncode == 0:
+                                _lines = [l for l in _r.stdout.strip().splitlines() if l.strip()]
+                                info.package_count = len(_lines)
+                            else:
+                                info.package_count = 0
                         except Exception:
-                            info.python_version = ""
-                    # Count installed pipx apps
-                    try:
-                        import sys as _sys
-                        from src.utils.platform_utils import get_pipx_executable as _gpx
-                        _pipx_cmd = (get_pipx_cmd() or [_sys.executable, "-m", "pipx"]) + ["list", "--short"]
-                        _r = _run(_pipx_cmd,
-                                  capture_output=True, text=True, timeout=15)
-                        if _r.returncode == 0:
-                            _lines = [l for l in _r.stdout.strip().splitlines() if l.strip()]
-                            info.package_count = len(_lines)
-                        else:
                             info.package_count = 0
-                    except Exception:
-                        info.package_count = 0
+                        self.write_cache(item, info.python_version, info.package_count, info.size)
 
                 else:  # system_tools
                     info.python_version = ""
@@ -1062,8 +1103,10 @@ class VenvManager:
                     pass
 
             venvs.append(info)
+        # Store in memory cache for next call
+        VenvManager._mem_envs[self._base_key] = list(venvs)
+        VenvManager._mem_envs_valid[self._base_key] = True
         return venvs
-
     def list_venvs(self, use_cache: bool = True) -> List[VenvInfo]:
         venvs = []
         if not self.base_dir.exists():
@@ -1196,15 +1239,21 @@ class VenvManager:
         return cache_dir / "env_cache.json"
 
     def _load_all_cache(self) -> Dict[str, Any]:
+        """Load cache from memory if available, otherwise from disk once."""
+        if VenvManager._all_cache is not None:
+            return VenvManager._all_cache
         f = self._get_cache_file()
         if not f.exists():
-            return {}
+            VenvManager._all_cache = {}
+            return VenvManager._all_cache
         try:
-            return json.load(open(f, encoding="utf-8"))
+            VenvManager._all_cache = json.load(open(f, encoding="utf-8"))
         except (json.JSONDecodeError, IOError):
-            return {}
+            VenvManager._all_cache = {}
+        return VenvManager._all_cache
 
     def _save_all_cache(self, data: Dict[str, Any]) -> None:
+        VenvManager._all_cache = data  # update memory cache
         try:
             cache_file = self._get_cache_file()
             cache_file.parent.mkdir(parents=True, exist_ok=True)

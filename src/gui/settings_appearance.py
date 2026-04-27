@@ -844,8 +844,24 @@ class AppearanceMixin:
             ("xterm", "xterm", "xterm"),
         ]
 
-        installed = [(label, data) for label, data, cmd in ALL_TERMINALS if shutil.which(cmd)]
-        not_installed = [(label, data, cmd) for label, data, cmd in ALL_TERMINALS if not shutil.which(cmd)]
+        # Also add TERMINAL_APPS (WezTerm, Alacritty, Tabby, Ghostty, Hyper)
+        try:
+            from src.core.cli_tools_manager import TERMINAL_APPS, get_terminal_version
+            import platform as _plat
+            for tid, tdata in TERMINAL_APPS.items():
+                ver = get_terminal_version(tid)
+                if ver:
+                    exe = tdata["check_cmd"][0]
+                    # Avoid duplicates
+                    if not any(d == tid for _, d, _ in ALL_TERMINALS):
+                        ALL_TERMINALS.append((tdata["name"], tid, exe))
+        except Exception:
+            pass
+
+        installed = [(label, data) for label, data, cmd in ALL_TERMINALS
+                     if shutil.which(cmd) or (data in TERMINAL_APPS and get_terminal_version(data))]
+        not_installed = [(label, data, cmd) for label, data, cmd in ALL_TERMINALS
+                         if not shutil.which(cmd) and not (data in TERMINAL_APPS and get_terminal_version(data))]
 
         # Update dropdown — show only installed + System Default
         current_data = self.terminal_combo.currentData()

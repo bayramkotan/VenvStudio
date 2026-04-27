@@ -449,6 +449,129 @@ class AdvancedMixin:
         self._load_current_settings()
 
 
+    # ── Terminal Emulators ───────────────────────────────────────────────────────
+
+    def _on_term_selector_toggled(self, checked: bool):
+        if not checked:
+            return
+        # Refresh install status on open
+        if not hasattr(self, 'term_stack') or not hasattr(self, 'term_selector'):
+            return
+        from src.core.cli_tools_manager import TERMINAL_APPS, get_terminal_version
+        for i, (tid, tdata) in enumerate(TERMINAL_APPS.items()):
+            ver = get_terminal_version(tid)
+            suffix = f"  ✅ {ver.split()[0] if ver else ''}" if ver else ""
+            self.term_selector.setItemText(i, f"{tdata['icon']} {tdata['name']}{suffix}")
+
+    def _make_terminal_card(self, terminal_id: str, tdata: dict) -> "QWidget":
+        """Build a card widget for a terminal emulator."""
+        from PySide6.QtWidgets import (
+            QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton
+        )
+        from src.core.cli_tools_manager import get_terminal_version, install_terminal, uninstall_terminal
+
+        c = self._c()
+        card = QWidget()
+        layout = QVBoxLayout(card)
+        layout.setSpacing(8)
+        layout.setContentsMargins(0, 8, 0, 8)
+
+        # Status row
+        ver = get_terminal_version(terminal_id)
+        status_lbl = QLabel(f"✅ Installed: {ver}" if ver else "❌ Not installed")
+        status_lbl.setStyleSheet(f"color: {'#a6e3a1' if ver else '#f38ba8'}; font-size: {c['fs_tiny']}px;")
+        layout.addWidget(status_lbl)
+
+        # Description
+        desc_lbl = QLabel(tdata["desc"])
+        desc_lbl.setWordWrap(True)
+        desc_lbl.setStyleSheet(f"color: {c['fg_muted']}; font-size: {c['fs_tiny']}px;")
+        layout.addWidget(desc_lbl)
+
+        # Buttons row
+        btn_row = QHBoxLayout()
+
+        install_btn = QPushButton("⬇️ Install")
+        install_btn.setObjectName("secondary")
+        install_btn.setEnabled(not bool(ver))
+
+        uninst_btn = QPushButton("🗑 Uninstall")
+        uninst_btn.setObjectName("danger")
+        uninst_btn.setEnabled(bool(ver))
+
+        site_btn = QPushButton("🌐 Website")
+        site_btn.setObjectName("secondary")
+
+        def _do_install(_, tid=terminal_id, ib=install_btn, ub=uninst_btn, sl=status_lbl):
+            ib.setEnabled(False)
+            ib.setText("Installing...")
+            def _cb(msg):
+                if hasattr(self, 'cli_log'):
+                    self.cli_log.append(msg)
+            ok, msg = install_terminal(tid, callback=_cb)
+            if hasattr(self, 'cli_log'):
+                self.cli_log.append(msg)
+            new_ver = get_terminal_version(tid)
+            if ok and new_ver:
+                sl.setText(f"✅ Installed: {new_ver}")
+                sl.setStyleSheet(f"color: #a6e3a1; font-size: {c['fs_tiny']}px;")
+                ib.setEnabled(False)
+                ub.setEnabled(True)
+                # Add to Default Terminal dropdown if not already there
+                if hasattr(self, 'terminal_combo'):
+                    from src.core.cli_tools_manager import TERMINAL_APPS
+                    tdata = TERMINAL_APPS.get(tid, {})
+                    if tdata and self.terminal_combo.findData(tid) < 0:
+                        self.terminal_combo.addItem(tdata.get("name", tid), tid)
+            else:
+                ib.setEnabled(True)
+            ib.setText("⬇️ Install")
+            self._on_term_selector_toggled(True)
+
+        def _do_uninstall(_, tid=terminal_id, ib=install_btn, ub=uninst_btn, sl=status_lbl):
+            ub.setEnabled(False)
+            ub.setText("Uninstalling...")
+            def _cb(msg):
+                if hasattr(self, 'cli_log'):
+                    self.cli_log.append(msg)
+            ok, msg = uninstall_terminal(tid, callback=_cb)
+            if hasattr(self, 'cli_log'):
+                self.cli_log.append(msg)
+            if ok:
+                sl.setText("❌ Not installed")
+                sl.setStyleSheet(f"color: #f38ba8; font-size: {c['fs_tiny']}px;")
+                ib.setEnabled(True)
+                ub.setEnabled(False)
+                # Remove from Default Terminal dropdown
+                if hasattr(self, 'terminal_combo'):
+                    idx = self.terminal_combo.findData(tid)
+                    if idx >= 0:
+                        self.terminal_combo.removeItem(idx)
+                # Update Install Terminal Emulators dropdown
+                self._on_term_selector_toggled(True)
+            else:
+                from PySide6.QtWidgets import QMessageBox
+                QMessageBox.warning(None, "Uninstall Failed", msg)
+                ub.setEnabled(True)
+            ub.setText("🗑 Uninstall")
+            self._on_term_selector_toggled(True)
+
+        def _open_site(_, url=tdata.get("url", "")):
+            import webbrowser
+            webbrowser.open(url)
+
+        install_btn.clicked.connect(_do_install)
+        uninst_btn.clicked.connect(_do_uninstall)
+        site_btn.clicked.connect(_open_site)
+
+        btn_row.addWidget(install_btn)
+        btn_row.addWidget(uninst_btn)
+        btn_row.addWidget(site_btn)
+        btn_row.addStretch()
+        layout.addLayout(btn_row)
+
+        return card
+
     # ── Noto Color Emoji install ─────────────────────────────────────────────
 
     def _install_noto_emoji(self):

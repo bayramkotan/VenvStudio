@@ -127,6 +127,247 @@ NERD_FONTS = [
 NERD_FONTS_BASE = "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/"
 
 # pip-based tools
+# ── Terminal Emulators ────────────────────────────────────────────────────────
+TERMINAL_APPS = {
+    "wezterm": {
+        "name":  "WezTerm",
+        "icon":  "⚡",
+        "desc":  "GPU-accelerated, Lua config, built-in multiplexer. The power user's choice.",
+        "url":   "https://wezfurlong.org/wezterm/",
+        "install": {
+            "linux":   "curl -fsSL https://apt.fury.io/wez/gpg.key | sudo gpg --yes --dearmor -o /usr/share/keyrings/wezterm-fury.gpg && echo 'deb [signed-by=/usr/share/keyrings/wezterm-fury.gpg] https://apt.fury.io/wez/ * *' | sudo tee /etc/apt/sources.list.d/wezterm.list && sudo apt update && sudo apt install -y wezterm",
+            "arch":    "yay -S wezterm || paru -S wezterm || sudo pacman -S wezterm",
+            "fedora":  "sudo dnf install -y wezterm",
+            "macos":   "brew install --cask wezterm",
+            "windows": "winget install wez.wezterm",
+        },
+        "check_cmd":   ["wezterm", "--version"],
+        "uninstall": {
+            "linux":   "sudo apt remove -y wezterm",
+            "arch":    "sudo pacman -R --noconfirm wezterm",
+            "fedora":  "sudo dnf remove -y wezterm",
+            "macos":   "brew uninstall --cask wezterm",
+            "windows": "winget uninstall wez.wezterm",
+        },
+    },
+    "alacritty": {
+        "name":  "Alacritty",
+        "icon":  "🚀",
+        "desc":  "The fastest terminal emulator. GPU-accelerated, minimal, blazing fast.",
+        "url":   "https://alacritty.org/",
+        "install": {
+            "linux":   "sudo apt install -y alacritty",
+            "arch":    "sudo pacman -S --noconfirm alacritty",
+            "fedora":  "sudo dnf install -y alacritty",
+            "macos":   "brew install --cask alacritty",
+            "windows": "winget install Alacritty.Alacritty",
+        },
+        "check_cmd":   ["alacritty", "--version"],
+        "uninstall": {
+            "linux":   "sudo apt remove -y alacritty",
+            "arch":    "sudo pacman -R --noconfirm alacritty",
+            "fedora":  "sudo dnf remove -y alacritty",
+            "macos":   "brew uninstall --cask alacritty",
+            "windows": "winget uninstall Alacritty.Alacritty",
+        },
+    },
+    "tabby": {
+        "name":  "Tabby",
+        "icon":  "🔷",
+        "desc":  "Modern, feature-rich terminal with SSH/Telnet/Serial built-in. Plugin ecosystem.",
+        "url":   "https://tabby.sh/",
+        "install": {
+            "linux":   "curl -sL https://packagecloud.io/eugeny/tabby/gpgkey | sudo apt-key add - && sudo sh -c 'echo deb https://packagecloud.io/eugeny/tabby/ubuntu/ focal main > /etc/apt/sources.list.d/tabby.list' && sudo apt update && sudo apt install -y tabby-terminal",
+            "arch":    "yay -S tabby-bin || paru -S tabby-bin",
+            "macos":   "brew install --cask tabby",
+            "windows": "winget install eugeny.tabby",
+        },
+        "check_cmd":   ["tabby", "--version"],
+        "uninstall": {
+            "linux":   "sudo apt remove -y tabby-terminal",
+            "arch":    "sudo pacman -R --noconfirm tabby-bin",
+            "macos":   "brew uninstall --cask tabby",
+            "windows": "winget uninstall eugeny.tabby",
+        },
+    },
+    "ghostty": {
+        "name":  "Ghostty",
+        "icon":  "👻",
+        "desc":  "Native, fast, and modern. Zig-powered with platform-native feel.",
+        "url":   "https://ghostty.org/",
+        "install": {
+            "linux":   "# Download from https://ghostty.org/download",
+            "arch":    "yay -S ghostty || paru -S ghostty",
+            "macos":   "brew install --cask ghostty",
+            "windows": "winget install ghostty",
+        },
+        "check_cmd":   ["ghostty", "--version"],
+        "uninstall": {
+            "arch":    "sudo pacman -R --noconfirm ghostty",
+            "macos":   "brew uninstall --cask ghostty",
+            "windows": "winget uninstall ghostty",
+        },
+    },
+    "hyper": {
+        "name":  "Hyper",
+        "icon":  "💜",
+        "desc":  "JS/HTML/CSS based terminal. Highly customizable with plugins and themes.",
+        "url":   "https://hyper.is/",
+        "install": {
+            "linux":   "sudo apt install -y hyper",
+            "arch":    "yay -S hyper || paru -S hyper",
+            "macos":   "brew install --cask hyper",
+            "windows": "winget install Vercel.Hyper",
+        },
+        "check_cmd":   ["hyper", "--version"],
+        "uninstall": {
+            "linux":   "sudo apt remove -y hyper",
+            "arch":    "sudo pacman -R --noconfirm hyper",
+            "macos":   "brew uninstall --cask hyper",
+            "windows": "winget uninstall Vercel.Hyper",
+        },
+    },
+}
+
+def get_terminal_version(terminal_id: str) -> Optional[str]:
+    """Return installed version of a terminal emulator, or None."""
+    app = TERMINAL_APPS.get(terminal_id)
+    if not app:
+        return None
+    try:
+        import shutil, platform as _plat
+        exe = app["check_cmd"][0]
+
+        # Find executable: shutil.which first, then Windows-specific paths
+        exe_path = shutil.which(exe)
+        if not exe_path and _plat.system() == "Windows":
+            # Common Windows install paths
+            import os
+            win_paths = [
+                os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), exe.split(".")[0], exe + ".exe"),
+                os.path.join(os.environ.get("ProgramFiles", r"C:\Program Files"), exe.split(".")[0], exe.title() + ".exe"),
+                os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", exe, exe + ".exe"),
+                os.path.join(os.environ.get("LOCALAPPDATA", ""), exe, exe + ".exe"),
+            ]
+            # Also try winget installed locations
+            for wp in win_paths:
+                if os.path.isfile(wp):
+                    exe_path = wp
+                    break
+
+        if not exe_path:
+            # Last resort: try running directly (may be in PATH via refresh)
+            try:
+                r = subprocess.run(app["check_cmd"], capture_output=True, text=True, timeout=5)
+                if r.returncode == 0:
+                    out = (r.stdout or r.stderr).strip().split("\n")[0]
+                    return out if out else "installed"
+            except Exception:
+                pass
+            return None
+
+        cmd = [exe_path] + app["check_cmd"][1:]
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+        if r.returncode == 0:
+            out = (r.stdout or r.stderr).strip().split("\n")[0]
+            return out if out else "installed"
+    except Exception:
+        pass
+    return None
+
+def install_terminal(terminal_id: str, callback=None) -> tuple:
+    """Install a terminal emulator. Returns (success, message)."""
+    import platform as _plat
+    app = TERMINAL_APPS.get(terminal_id)
+    if not app:
+        return False, f"Unknown terminal: {terminal_id}"
+
+    sys_name = _plat.system().lower()
+    # Detect Linux distro
+    if sys_name == "linux":
+        try:
+            with open("/etc/os-release") as f:
+                os_rel = f.read().lower()
+            if "arch" in os_rel or "manjaro" in os_rel or "cachyos" in os_rel:
+                distro = "arch"
+            elif "fedora" in os_rel or "rhel" in os_rel or "centos" in os_rel:
+                distro = "fedora"
+            else:
+                distro = "linux"
+        except Exception:
+            distro = "linux"
+        install_cmd = app["install"].get(distro) or app["install"].get("linux")
+    elif sys_name == "darwin":
+        install_cmd = app["install"].get("macos")
+    else:
+        install_cmd = app["install"].get("windows")
+
+    if not install_cmd or install_cmd.startswith("#"):
+        url = app.get("url", "")
+        return False, f"Automatic install not available.\nDownload from: {url}"
+
+    if callback:
+        callback(f"Installing {app['name']}...")
+    try:
+        from src.utils.platform_utils import subprocess_args
+        result = subprocess.run(
+            install_cmd, shell=True, timeout=300,
+            **subprocess_args(capture_output=True, text=True)
+        )
+        if result.returncode == 0:
+            return True, f"✅ {app['name']} installed successfully"
+        else:
+            return False, f"Install failed:\n{result.stderr[:400] or result.stdout[:400]}"
+    except subprocess.TimeoutExpired:
+        return False, "Install timed out (300s)"
+    except Exception as e:
+        return False, f"Error: {e}"
+
+def uninstall_terminal(terminal_id: str, callback=None) -> tuple:
+    """Uninstall a terminal emulator. Returns (success, message)."""
+    import platform as _plat
+    app = TERMINAL_APPS.get(terminal_id)
+    if not app:
+        return False, f"Unknown terminal: {terminal_id}"
+
+    sys_name = _plat.system().lower()
+    if sys_name == "linux":
+        try:
+            with open("/etc/os-release") as f:
+                os_rel = f.read().lower()
+            if "arch" in os_rel or "manjaro" in os_rel or "cachyos" in os_rel:
+                distro = "arch"
+            elif "fedora" in os_rel or "rhel" in os_rel:
+                distro = "fedora"
+            else:
+                distro = "linux"
+        except Exception:
+            distro = "linux"
+        uninstall_cmd = app.get("uninstall", {}).get(distro) or app.get("uninstall", {}).get("linux")
+    elif sys_name == "darwin":
+        uninstall_cmd = app.get("uninstall", {}).get("macos")
+    else:
+        uninstall_cmd = app.get("uninstall", {}).get("windows")
+
+    if not uninstall_cmd:
+        return False, f"Uninstall command not available for this platform."
+
+    if callback:
+        callback(f"Uninstalling {app['name']}...")
+    try:
+        from src.utils.platform_utils import subprocess_args
+        result = subprocess.run(
+            uninstall_cmd, shell=True, timeout=120,
+            **subprocess_args(capture_output=True, text=True)
+        )
+        if result.returncode == 0:
+            return True, f"✅ {app['name']} uninstalled"
+        else:
+            return False, f"Uninstall failed:\n{result.stderr[:400] or result.stdout[:400]}"
+    except Exception as e:
+        return False, f"Error: {e}"
+
+
 PIP_TOOLS = {
     "rich":           {"pip": "rich",           "desc": "Rich text and beautiful formatting in the terminal"},
     "textual":        {"pip": "textual",         "desc": "Rapid framework for terminal-based UIs"},

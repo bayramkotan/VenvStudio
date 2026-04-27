@@ -1626,3 +1626,64 @@ Olması gereken fark:
      - `QTimer.singleShot(0, ...)` ile background loading'i batch'lere böl
      - MainWindow `__init__` içindeki async operasyonları `show()` sonrasına ertele
      - `setFixedSize()` veya `setEnabled(False)` ile pencereyi tam yüklenene kadar sabit tut
+
+
+## ✅ F135 — TAMAMLANDI (v1.4.80): Terminal Emülatör Kurulum Desteği
+
+Settings → CLI/TUI Tools altına "Terminal Emulators" dropdown bölümü eklenecek.
+Tüm platformlarda (Windows, macOS, Linux) çalışan terminaller:
+
+| Terminal | Dil | Özellik | Platform |
+|----------|-----|---------|----------|
+| WezTerm | Rust | GPU hızlandırmalı, Lua config, dahili multiplexer | Win/Mac/Linux |
+| Alacritty | Rust | En hızlı, GPU ivmeli, sade (tmux/zellij ile kullanılır) | Win/Mac/Linux |
+| Tabby | Electron | SSH/Telnet/Serial dahili, eklenti desteği, modern UI | Win/Mac/Linux |
+| Ghostty | Zig | Native feel, Alacritty hızında, modern UX | Win/Mac/Linux |
+| Hyper | Electron/JS | JS/CSS ile tam özelleştirme, web dev dostu | Win/Mac/Linux |
+
+Her terminal için:
+- Yüklü mü? → versiyonu göster + Uninstall butonu
+- Yüklü değil mi? → Install butonu (platform'a göre doğru komut)
+- Launch butonu (yüklüyse)
+- Kısa açıklama + resmi site linki
+
+Kurulum yöntemleri:
+- WezTerm:   winget / brew / apt/pkg
+- Alacritty: winget / brew / cargo install alacritty
+- Tabby:     GitHub releases (.exe/.deb/.AppImage/.dmg)
+- Ghostty:   GitHub releases / brew
+- Hyper:     GitHub releases / brew
+
+İlgili dosyalar: `src/gui/settings_page.py`, `src/gui/settings_toolchain.py`, `src/core/cli_tools_manager.py`
+
+## 🔵 GELECEK — Yeni Paket/Env Yöneticileri
+
+### F134 — pixi, conda, mamba, pyenv, conda-forge tam implementasyonu
+
+Araştırılacak ve implemente edilecek:
+
+- **pixi** — Rust tabanlı, pyproject.toml ile çalışan modern conda alternatifi
+  - https://pixi.sh
+  - conda-forge + PyPI paketleri birlikte
+  
+- **conda** — Gerçek conda (Anaconda/Miniconda) desteği
+  - Şu an VenvStudio her zaman kendi micromamba'sını kullanıyor
+  - Kullanıcının sisteminde conda varsa onu kullanma seçeneği
+  
+- **mamba** — Kullanıcının sisteminde mamba kuruluysa kullanma
+  - conda'dan 10-100x hızlı
+  - https://mamba.readthedocs.io
+  
+- **micromamba** — Mevcut implementasyon iyileştirilecek
+  - Şu an çalışıyor ama UI'da daha net açıklama
+  
+- **pyenv** — Python version yöneticisi
+  - Birden fazla Python versiyonu kurma/yönetme
+  - https://github.com/pyenv/pyenv
+  - Şu an Settings > Python Versions ile benzer iş yapılıyor
+  
+- **conda-forge** — Kanal yönetimi
+  - Hangi kanaldan paket kurulacağını seçme
+  - Özel kanal ekleme
+
+**Not:** Tüm bu araçlar için env oluşturma, paket kurma, ve VenvStudio UI entegrasyonu yapılacak.

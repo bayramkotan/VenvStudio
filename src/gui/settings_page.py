@@ -295,11 +295,11 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         self._setup_language_section(layout)
         self._setup_python_ui_section(layout)
         self._setup_toolchain_ui_section(layout)
-        self._setup_general_section(layout)
+        self._setup_cliops_section(layout)
         self._setup_vscode_ui_section(layout)
         self._setup_catalog_ui_section(layout)
         self._setup_diagnostics_section(layout)
-        self._setup_cli_ui_section(layout)
+        self._setup_general_section(layout)
         self._setup_launch_section(layout)
 
         scroll.setWidget(container)
@@ -698,6 +698,308 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
             self._build_toolchain_ui(layout)
 
 
+    def _setup_cliops_section(self, layout):
+        # ── CLI/TUI OPERATIONS ──────────────────────────────────────────────────
+        ops_group = QGroupBox("🖥️ CLI/TUI Operations")
+        ops_layout = QVBoxLayout()
+        ops_layout.setSpacing(10)
+
+        # ── Default Terminal ──
+        from src.core.cli_tools_manager import TERMINAL_APPS, get_terminal_version
+        terminal_row = QHBoxLayout()
+        self.terminal_cb = QCheckBox()
+        self.terminal_cb.setChecked(False)
+        self.terminal_cb.toggled.connect(lambda on: self.terminal_combo.setEnabled(on))
+        terminal_row.addWidget(self.terminal_cb)
+
+        self.terminal_combo = NoScrollComboBox()
+        self.terminal_combo.setEnabled(False)
+        _platform = get_platform()
+        if _platform == "windows":
+            self.terminal_combo.addItem("PowerShell", "powershell")
+            self.terminal_combo.addItem("CMD", "cmd")
+            self.terminal_combo.addItem("Windows Terminal", "wt")
+            import os as _os2, shutil as _sh2
+            _git_paths = [
+                r"C:/Program Files/Git/bin/bash.exe",
+                r"C:/Program Files (x86)/Git/bin/bash.exe",
+                _os2.path.join(_os2.environ.get("LOCALAPPDATA",""), "Programs","Git","bin","bash.exe"),
+            ]
+            if any(_os2.path.isfile(p) for p in _git_paths) or _sh2.which("git-bash"):
+                self.terminal_combo.addItem("Git Bash", "git-bash")
+        elif _platform == "macos":
+            self.terminal_combo.addItem("Terminal", "terminal")
+            self.terminal_combo.addItem("iTerm2", "iterm2")
+        else:
+            self.terminal_combo.addItem("System Default", "default")
+            for _t in [("GNOME Terminal","gnome-terminal"),("Konsole","konsole"),
+                       ("Xfce4 Terminal","xfce4-terminal"),("Tilix","tilix"),
+                       ("Mate Terminal","mate-terminal"),("Alacritty","alacritty"),
+                       ("Kitty","kitty"),("WezTerm","wezterm"),("xterm","xterm")]:
+                self.terminal_combo.addItem(_t[0], _t[1])
+
+        for _tid, _tdata in TERMINAL_APPS.items():
+            if self.terminal_combo.findData(_tid) < 0 and get_terminal_version(_tid):
+                self.terminal_combo.addItem(_tdata["name"], _tid)
+
+        terminal_row.addWidget(self.terminal_combo, 1)
+
+        if _platform == "linux":
+            _detect_btn = QPushButton("🔍 Detect")
+            _detect_btn.setObjectName("secondary")
+            _detect_btn.setFixedWidth(90)
+            _detect_btn.clicked.connect(self._detect_terminals)
+            terminal_row.addWidget(_detect_btn)
+
+        _term_form = QFormLayout()
+        _term_form.addRow(f"{tr('default_terminal')}", terminal_row)
+        ops_layout.addLayout(_term_form)
+
+        # ── Install Terminal Emulators ──
+        _sep1 = QFrame(); _sep1.setFrameShape(QFrame.HLine)
+        _sep1.setStyleSheet(f"background: {self._c()['border']}; max-height:1px; margin:4px 0;")
+        ops_layout.addWidget(_sep1)
+
+        _inst_lbl = QLabel("  🖥️  Install Terminal Emulators")
+        _inst_lbl.setStyleSheet(f"color:{self._c()['fg']}; font-size:{self._c()['fs_small']}px; font-weight:bold;")
+        ops_layout.addWidget(_inst_lbl)
+        _inst_desc = QLabel("WezTerm, Alacritty, Tabby, Ghostty, Hyper — all platforms.")
+        _inst_desc.setStyleSheet(f"color:{self._c()['fg_muted']}; font-size:{self._c()['fs_tiny']}px;")
+        ops_layout.addWidget(_inst_desc)
+
+        _tsel_row = QHBoxLayout()
+        self.term_selector = QComboBox()
+        self.term_selector.setStyleSheet(
+            f"QComboBox{{background:{self._c()['card']};color:{self._c()['fg']};"
+            f"border:1px solid {self._c()['border']};border-radius:4px;"
+            f"padding:4px 10px;font-size:{self._c()['fs_small']}px;}}"
+        )
+        for _tid, _tdata in TERMINAL_APPS.items():
+            _ver = get_terminal_version(_tid)
+            _suf = f"  ✅ {_ver.split()[0]}" if _ver else ""
+            self.term_selector.addItem(f"{_tdata['icon']} {_tdata['name']}{_suf}", _tid)
+
+        self.term_install_cb = QCheckBox()
+        self.term_install_cb.setToolTip("Enable terminal installer")
+        self.term_selector.setEnabled(False)
+        self.term_install_cb.toggled.connect(self.term_selector.setEnabled)
+        self.term_install_cb.toggled.connect(self._on_term_selector_toggled)
+        _tsel_row.addWidget(self.term_install_cb)
+        _tsel_row.addWidget(self.term_selector, 1)
+        _tsel_row.addStretch()
+        ops_layout.addLayout(_tsel_row)
+
+        from PySide6.QtWidgets import QStackedWidget as _SW3
+        self.term_stack = _SW3()
+        self.term_stack.setVisible(False)
+        self.term_selector.currentIndexChanged.connect(self.term_stack.setCurrentIndex)
+        self.term_install_cb.toggled.connect(self.term_stack.setVisible)
+        for _tid, _tdata in TERMINAL_APPS.items():
+            self.term_stack.addWidget(self._make_terminal_card(_tid, _tdata))
+        ops_layout.addWidget(self.term_stack)
+
+        # ── Custom Terminals ──
+        _sep2 = QFrame(); _sep2.setFrameShape(QFrame.HLine)
+        _sep2.setStyleSheet(f"background:{self._c()['border']}; max-height:1px; margin:4px 0;")
+        ops_layout.addWidget(_sep2)
+
+        custom_term_group = QGroupBox("🖥️ Custom Terminals")
+        custom_term_layout = QVBoxLayout()
+        custom_term_layout.setSpacing(8)
+
+        info_lbl = QLabel("Add custom terminal commands. Use {path} for env path and {activate} for activate script.")
+        info_lbl.setWordWrap(True)
+        info_lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px;")
+        custom_term_layout.addWidget(info_lbl)
+
+        self.custom_term_table = QTableWidget(0, 3)
+        self.custom_term_table.setHorizontalHeaderLabels(["Name", "Command", "Enabled"])
+        self.custom_term_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
+        self.custom_term_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self.custom_term_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
+        self.custom_term_table.setSelectionBehavior(QTableWidget.SelectRows)
+        self.custom_term_table.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.custom_term_table.setMaximumHeight(180)
+        custom_term_layout.addWidget(self.custom_term_table)
+
+        btn_row = QHBoxLayout()
+        add_term_btn = QPushButton("➕ Add"); add_term_btn.setObjectName("secondary")
+        add_term_btn.clicked.connect(self._add_custom_terminal)
+        edit_term_btn = QPushButton("✏️ Edit"); edit_term_btn.setObjectName("secondary")
+        edit_term_btn.clicked.connect(self._edit_custom_terminal)
+        del_term_btn = QPushButton("🗑️ Remove"); del_term_btn.setObjectName("danger")
+        del_term_btn.clicked.connect(self._remove_custom_terminal)
+        btn_row.addWidget(add_term_btn); btn_row.addWidget(edit_term_btn)
+        btn_row.addWidget(del_term_btn); btn_row.addStretch()
+        custom_term_layout.addLayout(btn_row)
+        custom_term_group.setLayout(custom_term_layout)
+        ops_layout.addWidget(custom_term_group)
+
+        # ── Separator ──
+        _sep3 = QFrame(); _sep3.setFrameShape(QFrame.HLine)
+        _sep3.setStyleSheet(f"background:{self._c()['border']}; max-height:1px; margin:4px 0;")
+        ops_layout.addWidget(_sep3)
+
+# ── Nerd Fonts ──
+        font_group = QGroupBox("🖋️ Nerd Fonts")
+        font_inner = QHBoxLayout()
+        font_inner.setSpacing(8)
+
+        from src.core.cli_tools_manager import NERD_FONTS
+        self.nerd_font_cb = QCheckBox("Font:")
+        self.nerd_font_cb.setStyleSheet(f"font-size: {self._c()['fs_tiny']}px; color: {self._c()['fg']};")
+        font_inner.addWidget(self.nerd_font_cb)
+
+        self.nerd_font_combo = QComboBox()
+        for font_id, font_name in NERD_FONTS:
+            self.nerd_font_combo.addItem(font_name, font_id)
+        self.nerd_font_combo.setEnabled(False)
+        self.nerd_font_cb.toggled.connect(self.nerd_font_combo.setEnabled)
+        font_inner.addWidget(self.nerd_font_combo, 1)
+
+        install_font_btn = QPushButton("⬇️ Download & Install Font")
+        install_font_btn.setObjectName("secondary")
+        install_font_btn.clicked.connect(self._install_nerd_font)
+        font_inner.addWidget(install_font_btn)
+        font_group.setLayout(font_inner)
+        ops_layout.addWidget(font_group)
+
+        # ── Noto Color Emoji ──
+        if sys.platform == "linux":
+            emoji_group = QGroupBox("😀 Noto Color Emoji Font")
+            emoji_inner = QHBoxLayout()
+            emoji_inner.setSpacing(8)
+
+            emoji_label = QLabel("Required for emoji icons (🔄 ⭐ 📁 🐍) to display correctly.")
+            emoji_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
+            emoji_label.setWordWrap(True)
+            emoji_inner.addWidget(emoji_label, 1)
+
+            self._install_emoji_btn = QPushButton("⬇️ Install Noto Color Emoji")
+            self._install_emoji_btn.setObjectName("secondary")
+            self._install_emoji_btn.clicked.connect(self._install_noto_emoji)
+            emoji_inner.addWidget(self._install_emoji_btn)
+
+            emoji_group.setLayout(emoji_inner)
+            ops_layout.addWidget(emoji_group)
+
+        # ── Tool selector dropdown ──
+        from src.core.cli_tools_manager import (
+            STARSHIP_PRESETS, STARSHIP_PRESET_NAMES, OMP_THEMES, is_tool_installed
+        )
+
+        _tool_selector_row = QHBoxLayout()
+        _tool_selector_lbl = QLabel("🛠 CLI / TUI Tools:")
+        _tool_selector_lbl.setStyleSheet(f"font-size: {self._c()['fs_small']}px; color: {self._c()['fg']}; font-weight: bold;")
+        _tool_selector_row.addWidget(_tool_selector_lbl)
+
+        self.cli_tool_selector = QComboBox()
+        self.cli_tool_selector.setStyleSheet(
+            f"QComboBox {{ background: {self._c()['card']}; color: {self._c()['fg']}; "
+            f"border: 1px solid {self._c()['border']}; border-radius: 4px; "
+            f"padding: 4px 10px; font-size: {self._c()['fs_small']}px; min-width: 220px; }}"
+        )
+        _tools = [
+            ("oh-my-posh",      "🎨 Oh My Posh"),
+            ("starship",        "🚀 Starship"),
+            ("rich",            "✨ Rich"),
+            ("textual",         "🖼️ Textual"),
+            ("prompt_toolkit",  "⌨️ Prompt Toolkit"),
+        ]
+        for _tid, _tname in _tools:
+            _installed = is_tool_installed(_tid)
+            _suffix = " ✅" if _installed else ""
+            self.cli_tool_selector.addItem(f"{_tname}{_suffix}", _tid)
+
+        self.cli_tool_selector.setEnabled(False)
+
+        # ── Tool card stack — must be created before checkbox connects to it ──
+        from PySide6.QtWidgets import QStackedWidget
+        self.cli_tool_stack = QStackedWidget()
+
+        self.cli_tool_cb = QCheckBox()
+        self.cli_tool_cb.setToolTip("Enable tool selector")
+        self.cli_tool_cb.toggled.connect(self.cli_tool_selector.setEnabled)
+        self.cli_tool_cb.toggled.connect(self.cli_tool_stack.setVisible)
+        _tool_selector_row.insertWidget(0, self.cli_tool_cb)
+        _tool_selector_row.addWidget(self.cli_tool_selector, 1)
+        _tool_selector_row.addStretch()
+        ops_layout.addLayout(_tool_selector_row)
+
+        self.cli_tool_stack.addWidget(self._make_cli_card(
+            "oh-my-posh", "🎨 Oh My Posh",
+            "A prompt theme engine for any shell",
+            "Theme:", OMP_THEMES, "theme"
+        ))
+        self.cli_tool_stack.addWidget(self._make_cli_card(
+            "starship", "🚀 Starship",
+            "The minimal, blazing-fast, and infinitely customizable prompt for any shell",
+            "Preset:", STARSHIP_PRESET_NAMES, "preset",
+            preset_descriptions=STARSHIP_PRESETS
+        ))
+        self.cli_tool_stack.addWidget(self._make_pip_card(
+            "rich", "✨ Rich",
+            "Rich text and beautiful formatting in the terminal",
+        ))
+        self.cli_tool_stack.addWidget(self._make_pip_card(
+            "textual", "🖼️ Textual",
+            "Rapid framework for terminal-based user interfaces (TUI)",
+        ))
+        self.cli_tool_stack.addWidget(self._make_pip_card(
+            "prompt_toolkit", "⌨️ Prompt Toolkit",
+            "Library for building interactive CLI applications",
+        ))
+
+        self.cli_tool_selector.currentIndexChanged.connect(self.cli_tool_stack.setCurrentIndex)
+        self.cli_tool_stack.setCurrentIndex(0)
+        self.cli_tool_stack.setVisible(False)
+        ops_layout.addWidget(self.cli_tool_stack)
+
+        # ── Launch Settings ──
+        _sep4 = QFrame(); _sep4.setFrameShape(QFrame.HLine)
+        _sep4.setStyleSheet(f"background:{self._c()['border']}; max-height:1px; margin:4px 0;")
+        ops_layout.addWidget(_sep4)
+
+        launch_group = QGroupBox("🚀 Launch Settings")
+        launch_layout = QFormLayout()
+        launch_layout.setSpacing(12)
+
+        jupyter_dir_row = QHBoxLayout()
+        self.jupyter_workdir_cb = QCheckBox()
+        self.jupyter_workdir_cb.setChecked(False)
+        self.jupyter_workdir_cb.toggled.connect(lambda on: self.jupyter_workdir_combo.setEnabled(on))
+        jupyter_dir_row.addWidget(self.jupyter_workdir_cb)
+
+        self.jupyter_workdir_combo = NoScrollComboBox()
+        self.jupyter_workdir_combo.addItem("🏠 Home Directory", "home")
+        self.jupyter_workdir_combo.addItem("📁 Environment Folder", "env")
+        self.jupyter_workdir_combo.addItem("📂 Custom Path...", "custom")
+        self.jupyter_workdir_combo.setEnabled(False)
+        self.jupyter_workdir_combo.currentIndexChanged.connect(self._on_jupyter_workdir_changed)
+        jupyter_dir_row.addWidget(self.jupyter_workdir_combo, 1)
+
+        self.jupyter_custom_path_btn = QPushButton("📂")
+        self.jupyter_custom_path_btn.setFixedWidth(36)
+        self.jupyter_custom_path_btn.setToolTip("Pick custom folder")
+        self.jupyter_custom_path_btn.setEnabled(False)
+        self.jupyter_custom_path_btn.clicked.connect(self._pick_jupyter_workdir)
+        jupyter_dir_row.addWidget(self.jupyter_custom_path_btn)
+
+        launch_layout.addRow("Jupyter Working Dir:", jupyter_dir_row)
+
+        self.jupyter_custom_path_label = QLabel("")
+        self.jupyter_custom_path_label.setStyleSheet(
+            f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;"
+        )
+        self.jupyter_custom_path_label.setVisible(False)
+        launch_layout.addRow("", self.jupyter_custom_path_label)
+
+        launch_group.setLayout(launch_layout)
+        ops_layout.addWidget(launch_group)
+
+        ops_group.setLayout(ops_layout)
+        layout.addWidget(ops_group)
+
     def _setup_general_section(self, layout):
         # ── 6. GENERAL ──
         layout.addWidget(self._make_group_title_row(
@@ -730,90 +1032,10 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         self.save_window_cb = QCheckBox(tr("remember_window"))
         general_layout.addRow(self.save_window_cb)
 
-        # Default terminal
-        terminal_row = QHBoxLayout()
-        self.terminal_cb = QCheckBox()
-        self.terminal_cb.setChecked(False)
-        self.terminal_cb.toggled.connect(lambda on: self.terminal_combo.setEnabled(on))
-        terminal_row.addWidget(self.terminal_cb)
-
-        self.terminal_combo = NoScrollComboBox()
-        self.terminal_combo.setEnabled(False)
-        platform = get_platform()
-        if platform == "windows":
-            self.terminal_combo.addItem("PowerShell", "powershell")
-            self.terminal_combo.addItem("CMD", "cmd")
-            self.terminal_combo.addItem("Windows Terminal", "wt")
-        elif platform == "macos":
-            self.terminal_combo.addItem("Terminal", "terminal")
-            self.terminal_combo.addItem("iTerm2", "iterm2")
-        else:
-            self.terminal_combo.addItem("System Default", "default")
-            self.terminal_combo.addItem("GNOME Terminal", "gnome-terminal")
-            self.terminal_combo.addItem("Konsole", "konsole")
-            self.terminal_combo.addItem("Xfce4 Terminal", "xfce4-terminal")
-            self.terminal_combo.addItem("Tilix", "tilix")
-            self.terminal_combo.addItem("Mate Terminal", "mate-terminal")
-            self.terminal_combo.addItem("Alacritty", "alacritty")
-            self.terminal_combo.addItem("Kitty", "kitty")
-            self.terminal_combo.addItem("WezTerm", "wezterm")
-            self.terminal_combo.addItem("xterm", "xterm")
-        terminal_row.addWidget(self.terminal_combo, 1)
-
-        # Detect button (Linux only)
-        if platform == "linux":
-            detect_btn = QPushButton("🔍 Detect")
-            detect_btn.setObjectName("secondary")
-            detect_btn.setFixedWidth(90)
-            detect_btn.setToolTip("Scan system for installed terminals and install missing ones")
-            detect_btn.clicked.connect(self._detect_terminals)
-            terminal_row.addWidget(detect_btn)
-
-        general_layout.addRow(f"{tr('default_terminal')}", terminal_row)
-
         general_group.setLayout(general_layout)
         layout.addWidget(general_group)
 
-        # ── CUSTOM TERMINALS ──
-        custom_term_group = QGroupBox("🖥️ Custom Terminals")
-        custom_term_layout = QVBoxLayout()
-        custom_term_layout.setSpacing(8)
 
-        info_lbl = QLabel("Add custom terminal commands. Use {path} for env path and {activate} for activate script.")
-        info_lbl.setWordWrap(True)
-        info_lbl.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px;")
-        custom_term_layout.addWidget(info_lbl)
-
-        # Table
-        self.custom_term_table = QTableWidget(0, 3)
-        self.custom_term_table.setHorizontalHeaderLabels(["Name", "Command", "Enabled"])
-        self.custom_term_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeToContents)
-        self.custom_term_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
-        self.custom_term_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        self.custom_term_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.custom_term_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.custom_term_table.setMaximumHeight(180)
-        custom_term_layout.addWidget(self.custom_term_table)
-
-        # Buttons
-        btn_row = QHBoxLayout()
-        add_term_btn = QPushButton("➕ Add")
-        add_term_btn.setObjectName("secondary")
-        add_term_btn.clicked.connect(self._add_custom_terminal)
-        edit_term_btn = QPushButton("✏️ Edit")
-        edit_term_btn.setObjectName("secondary")
-        edit_term_btn.clicked.connect(self._edit_custom_terminal)
-        del_term_btn = QPushButton("🗑️ Remove")
-        del_term_btn.setObjectName("danger")
-        del_term_btn.clicked.connect(self._remove_custom_terminal)
-        btn_row.addWidget(add_term_btn)
-        btn_row.addWidget(edit_term_btn)
-        btn_row.addWidget(del_term_btn)
-        btn_row.addStretch()
-        custom_term_layout.addLayout(btn_row)
-
-        custom_term_group.setLayout(custom_term_layout)
-        layout.addWidget(custom_term_group)
 
 
     def _setup_vscode_ui_section(self, layout):
@@ -1367,190 +1589,6 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         diag_group.setLayout(diag_layout)
         layout.addWidget(diag_group)
 
-
-    def _setup_cli_ui_section(self, layout):
-        # ── CLI/TUI TOOLS ──
-        cli_group = QGroupBox("🖥️ CLI/TUI Tools")
-        cli_layout = QVBoxLayout()
-        cli_layout.setSpacing(12)
-
-        cli_desc = QLabel(
-            "Enhance your terminal experience with modern CLI/TUI tools. "
-            "Starship & Oh My Posh require a Nerd Font for proper rendering."
-        )
-        cli_desc.setWordWrap(True)
-        cli_desc.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px;")
-        cli_layout.addWidget(cli_desc)
-
-        # Output log for CLI tools
-        self.cli_log = QTextEdit()
-        self.cli_log.setStyleSheet(self._log_style())
-        self.cli_log.setReadOnly(True)
-        self.cli_log.setMaximumHeight(100)
-        self.cli_log.setStyleSheet(self._log_style())
-        self.cli_log.setPlaceholderText("Installation output will appear here...")
-        cli_layout.addWidget(self.cli_log)
-
-        # ── Nerd Fonts ──
-        font_group = QGroupBox("🖋️ Nerd Fonts")
-        font_inner = QHBoxLayout()
-        font_inner.setSpacing(8)
-
-        from src.core.cli_tools_manager import NERD_FONTS
-        self.nerd_font_cb = QCheckBox("Font:")
-        self.nerd_font_cb.setStyleSheet(f"font-size: {self._c()['fs_tiny']}px; color: {self._c()['fg']};")
-        font_inner.addWidget(self.nerd_font_cb)
-
-        self.nerd_font_combo = QComboBox()
-        for font_id, font_name in NERD_FONTS:
-            self.nerd_font_combo.addItem(font_name, font_id)
-        self.nerd_font_combo.setEnabled(False)
-        self.nerd_font_cb.toggled.connect(self.nerd_font_combo.setEnabled)
-        font_inner.addWidget(self.nerd_font_combo, 1)
-
-        install_font_btn = QPushButton("⬇️ Download & Install Font")
-        install_font_btn.setObjectName("secondary")
-        install_font_btn.clicked.connect(self._install_nerd_font)
-        font_inner.addWidget(install_font_btn)
-        font_group.setLayout(font_inner)
-        cli_layout.addWidget(font_group)
-
-        # ── Noto Color Emoji ──
-        if sys.platform == "linux":
-            emoji_group = QGroupBox("😀 Noto Color Emoji Font")
-            emoji_inner = QHBoxLayout()
-            emoji_inner.setSpacing(8)
-
-            emoji_label = QLabel("Required for emoji icons (🔄 ⭐ 📁 🐍) to display correctly.")
-            emoji_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
-            emoji_label.setWordWrap(True)
-            emoji_inner.addWidget(emoji_label, 1)
-
-            self._install_emoji_btn = QPushButton("⬇️ Install Noto Color Emoji")
-            self._install_emoji_btn.setObjectName("secondary")
-            self._install_emoji_btn.clicked.connect(self._install_noto_emoji)
-            emoji_inner.addWidget(self._install_emoji_btn)
-
-            emoji_group.setLayout(emoji_inner)
-            cli_layout.addWidget(emoji_group)
-
-        # ── Tool selector dropdown ──
-        from src.core.cli_tools_manager import (
-            STARSHIP_PRESETS, STARSHIP_PRESET_NAMES, OMP_THEMES, is_tool_installed
-        )
-
-        _tool_selector_row = QHBoxLayout()
-        _tool_selector_lbl = QLabel("🛠 CLI / TUI Tools:")
-        _tool_selector_lbl.setStyleSheet(f"font-size: {self._c()['fs_small']}px; color: {self._c()['fg']}; font-weight: bold;")
-        _tool_selector_row.addWidget(_tool_selector_lbl)
-
-        self.cli_tool_selector = QComboBox()
-        self.cli_tool_selector.setStyleSheet(
-            f"QComboBox {{ background: {self._c()['card']}; color: {self._c()['fg']}; "
-            f"border: 1px solid {self._c()['border']}; border-radius: 4px; "
-            f"padding: 4px 10px; font-size: {self._c()['fs_small']}px; min-width: 220px; }}"
-        )
-        _tools = [
-            ("oh-my-posh",      "🎨 Oh My Posh"),
-            ("starship",        "🚀 Starship"),
-            ("rich",            "✨ Rich"),
-            ("textual",         "🖼️ Textual"),
-            ("prompt_toolkit",  "⌨️ Prompt Toolkit"),
-        ]
-        for _tid, _tname in _tools:
-            _installed = is_tool_installed(_tid)
-            _suffix = " ✅" if _installed else ""
-            self.cli_tool_selector.addItem(f"{_tname}{_suffix}", _tid)
-
-        self.cli_tool_selector.setEnabled(False)
-
-        # ── Tool card stack — must be created before checkbox connects to it ──
-        from PySide6.QtWidgets import QStackedWidget
-        self.cli_tool_stack = QStackedWidget()
-
-        self.cli_tool_cb = QCheckBox()
-        self.cli_tool_cb.setToolTip("Enable tool selector")
-        self.cli_tool_cb.toggled.connect(self.cli_tool_selector.setEnabled)
-        self.cli_tool_cb.toggled.connect(self.cli_tool_stack.setVisible)
-        _tool_selector_row.insertWidget(0, self.cli_tool_cb)
-        _tool_selector_row.addWidget(self.cli_tool_selector, 1)
-        _tool_selector_row.addStretch()
-        cli_layout.addLayout(_tool_selector_row)
-
-        self.cli_tool_stack.addWidget(self._make_cli_card(
-            "oh-my-posh", "🎨 Oh My Posh",
-            "A prompt theme engine for any shell",
-            "Theme:", OMP_THEMES, "theme"
-        ))
-        self.cli_tool_stack.addWidget(self._make_cli_card(
-            "starship", "🚀 Starship",
-            "The minimal, blazing-fast, and infinitely customizable prompt for any shell",
-            "Preset:", STARSHIP_PRESET_NAMES, "preset",
-            preset_descriptions=STARSHIP_PRESETS
-        ))
-        self.cli_tool_stack.addWidget(self._make_pip_card(
-            "rich", "✨ Rich",
-            "Rich text and beautiful formatting in the terminal",
-        ))
-        self.cli_tool_stack.addWidget(self._make_pip_card(
-            "textual", "🖼️ Textual",
-            "Rapid framework for terminal-based user interfaces (TUI)",
-        ))
-        self.cli_tool_stack.addWidget(self._make_pip_card(
-            "prompt_toolkit", "⌨️ Prompt Toolkit",
-            "Library for building interactive CLI applications",
-        ))
-
-        self.cli_tool_selector.currentIndexChanged.connect(self.cli_tool_stack.setCurrentIndex)
-        self.cli_tool_stack.setCurrentIndex(0)
-        self.cli_tool_stack.setVisible(False)
-        cli_layout.addWidget(self.cli_tool_stack)
-
-        cli_group.setLayout(cli_layout)
-        layout.addWidget(cli_group)
-
-        layout.addStretch()
-
-        # ── LAUNCH SETTINGS ──
-        launch_group = QGroupBox("🚀 Launch Settings")
-        launch_layout = QFormLayout()
-        launch_layout.setSpacing(12)
-
-        # Jupyter Working Directory — protected by checkbox
-        jupyter_dir_row = QHBoxLayout()
-        self.jupyter_workdir_cb = QCheckBox()
-        self.jupyter_workdir_cb.setChecked(False)
-        self.jupyter_workdir_cb.toggled.connect(lambda on: self.jupyter_workdir_combo.setEnabled(on))
-        jupyter_dir_row.addWidget(self.jupyter_workdir_cb)
-
-        self.jupyter_workdir_combo = NoScrollComboBox()
-        self.jupyter_workdir_combo.addItem("🏠 Home Directory", "home")
-        self.jupyter_workdir_combo.addItem("📁 Environment Folder", "env")
-        self.jupyter_workdir_combo.addItem("📂 Custom Path...", "custom")
-        self.jupyter_workdir_combo.setEnabled(False)
-        self.jupyter_workdir_combo.currentIndexChanged.connect(self._on_jupyter_workdir_changed)
-        jupyter_dir_row.addWidget(self.jupyter_workdir_combo, 1)
-
-        self.jupyter_custom_path_btn = QPushButton("📂")
-        self.jupyter_custom_path_btn.setFixedWidth(36)
-        self.jupyter_custom_path_btn.setToolTip("Pick custom folder")
-        self.jupyter_custom_path_btn.setEnabled(False)
-        self.jupyter_custom_path_btn.clicked.connect(self._pick_jupyter_workdir)
-        jupyter_dir_row.addWidget(self.jupyter_custom_path_btn)
-
-        launch_layout.addRow("Jupyter Working Dir:", jupyter_dir_row)
-
-        self.jupyter_custom_path_label = QLabel("")
-        self.jupyter_custom_path_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
-        self.jupyter_custom_path_label.setVisible(False)
-        launch_layout.addRow("", self.jupyter_custom_path_label)
-
-        launch_group.setLayout(launch_layout)
-        layout.addWidget(launch_group)
-
-
-
-        # ── ABOUT (always at bottom) ──
 
     def _setup_launch_section(self, layout):
         about_group = QGroupBox(f"ℹ️ About {APP_NAME}")

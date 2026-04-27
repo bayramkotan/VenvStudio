@@ -330,6 +330,11 @@ class MainWindow(QMainWindow):
         settings_view_action.triggered.connect(self._open_settings)
         view_menu.addAction(settings_view_action)
 
+        tools_menu = menubar.addMenu("Tools")
+        shortcut_action = QAction("🖥️ Create Desktop Shortcut", self)
+        shortcut_action.triggered.connect(self._create_desktop_shortcut)
+        tools_menu.addAction(shortcut_action)
+
         help_menu = menubar.addMenu(tr("help"))
         about_action = QAction(f"ℹ️ {tr('about')}", self)
         about_action.triggered.connect(self._show_about)
@@ -352,6 +357,199 @@ class MainWindow(QMainWindow):
         issues_action = QAction("🐛 Report a Bug", self)
         issues_action.triggered.connect(lambda: __import__("webbrowser").open("https://github.com/bayramkotan/VenvStudio/issues"))
         help_menu.addAction(issues_action)
+
+
+
+    def _create_desktop_shortcut(self):
+        """Create a desktop shortcut that runs 'venvstudio' command (pip-installed).
+        If venvstudio is not found in PATH, installs it first via pip.
+        No terminal window opens when the shortcut is launched.
+        """
+        import sys, os, shutil, platform, subprocess
+        from PySide6.QtWidgets import QMessageBox, QProgressDialog
+        from PySide6.QtCore import Qt
+
+        system = platform.system()
+        app_name = "VenvStudio"
+
+        # ── Step 1: Find venvstudio executable ──────────────────────────────
+        vs_exe = shutil.which("venvstudio")
+
+        if not vs_exe:
+            # Not in PATH — offer to install
+            reply = QMessageBox.question(
+                self, "VenvStudio Not Found",
+                "⚠️  The 'venvstudio' command was not found in PATH.\n\n"
+                "This usually means VenvStudio was not installed via pip.\n\n"
+                "Install now with pip? (requires internet connection)",
+                QMessageBox.Yes | QMessageBox.No
+            )
+            if reply != QMessageBox.Yes:
+                return
+
+            # Show progress
+            prog = QProgressDialog("Installing VenvStudio via pip...", None, 0, 0, self)
+            prog.setWindowTitle("Installing...")
+            prog.setWindowModality(Qt.WindowModal)
+            prog.show()
+            from PySide6.QtWidgets import QApplication
+            QApplication.processEvents()
+
+            try:
+                result = subprocess.run(
+                    [sys.executable, "-m", "pip", "install", "--upgrade",
+                     "venvstudio", "--break-system-packages"],
+                    capture_output=True, text=True, timeout=120
+                )
+                prog.close()
+                if result.returncode != 0:
+                    # Try without --break-system-packages
+                    result2 = subprocess.run(
+                        [sys.executable, "-m", "pip", "install", "--upgrade", "venvstudio"],
+                        capture_output=True, text=True, timeout=120
+                    )
+                    if result2.returncode != 0:
+                        QMessageBox.critical(self, "Install Failed",
+                            f"pip install failed:\n{result2.stderr[:500]}")
+                        return
+            except Exception as e:
+                prog.close()
+                QMessageBox.critical(self, "Error", str(e))
+                return
+
+            # Re-check
+            vs_exe = shutil.which("venvstudio")
+            if not vs_exe:
+                # Try Scripts / bin path
+                scripts_dir = os.path.join(os.path.dirname(sys.executable),
+                                           "Scripts" if system == "Windows" else "bin")
+                candidate = os.path.join(scripts_dir,
+                                         "venvstudio.exe" if system == "Windows" else "venvstudio")
+                if os.path.isfile(candidate):
+                    vs_exe = candidate
+                else:
+                    QMessageBox.warning(self, "Not Found",
+                        "Installed but 'venvstudio' still not found.\n"
+                        f"Scripts dir: {scripts_dir}\n"
+                        "Try adding it to PATH and running this again.")
+                    return
+
+        # ── Step 2: Create shortcut using vs_exe ────────────────────────────
+        try:
+            if system == "Windows":
+                self._create_shortcut_windows(vs_exe, app_name)
+            elif system == "Linux":
+                self._create_shortcut_linux(vs_exe, app_name)
+            elif system == "Darwin":
+                self._create_shortcut_macos(vs_exe, app_name)
+            else:
+                QMessageBox.warning(self, "Unsupported",
+                    f"Desktop shortcut not supported on {system}.")
+                return
+
+            QMessageBox.information(self, "Done",
+                f"✅ Desktop shortcut created!\n\n"
+                f"Command: {vs_exe}\n\n"
+                "You can now launch VenvStudio from your desktop\n"
+                "without opening a terminal.")
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to create shortcut:\n{e}")
+
+    def _create_shortcut_windows(self, vs_exe, app_name):
+        """Create a .lnk on Windows Desktop using PowerShell."""
+        import os, subprocess
+
+        desktop = os.path.join(
+            os.environ.get("USERPROFILE", os.path.expanduser("~")), "Desktop"
+        )
+        lnk_path = os.path.join(desktop, f"{app_name}.lnk")
+        scripts_dir = os.path.dirname(vs_exe)
+
+        icon_candidate = os.path.join(scripts_dir, "venvstudio.ico")
+        icon_line = f'$s.IconLocation = "{icon_candidate}";' if os.path.isfile(icon_candidate) else ""
+
+        ps = (
+            f'$ws = New-Object -ComObject WScript.Shell; '
+            f'$s  = $ws.CreateShortcut("{lnk_path}"); '
+            f'$s.TargetPath     = "{vs_exe}"; '
+            f'$s.WorkingDirectory = "{scripts_dir}"; '
+            f'$s.Description    = "VenvStudio — Python Virtual Environment Manager"; '
+            f'{icon_line} '
+            f'$s.Save()'
+        )
+        subprocess.run(["powershell", "-NoProfile", "-Command", ps],
+                       check=True, timeout=15, capture_output=True)
+
+
+    def _create_shortcut_linux(self, vs_exe, app_name):
+        """Create a .desktop file on Linux — Terminal=false."""
+        import os, subprocess
+
+        # Find icon
+        icon_path = vs_exe  # fallback
+        for candidate in [
+            os.path.join(os.path.dirname(vs_exe), "..", "share", "pixmaps", "venvstudio.png"),
+            os.path.expanduser("~/.local/share/icons/venvstudio.png"),
+        ]:
+            if os.path.isfile(candidate):
+                icon_path = os.path.abspath(candidate)
+                break
+
+        content = (
+            "[Desktop Entry]\n"
+            "Version=1.0\n"
+            f"Name={app_name}\n"
+            "Comment=Python Virtual Environment Manager\n"
+            f"Exec={vs_exe}\n"
+            f"Icon={icon_path}\n"
+            "Terminal=false\n"
+            "Type=Application\n"
+            "Categories=Development;\n"
+            "StartupNotify=true\n"
+        )
+
+        # XDG applications dir
+        apps_dir = os.path.expanduser("~/.local/share/applications")
+        os.makedirs(apps_dir, exist_ok=True)
+        xdg_path = os.path.join(apps_dir, "venvstudio.desktop")
+        with open(xdg_path, "w") as f:
+            f.write(content)
+        os.chmod(xdg_path, 0o755)
+
+        # Desktop dir — try xdg-user-dir first, then fallbacks
+        desktop_dir = None
+        try:
+            desktop_dir = subprocess.check_output(
+                ["xdg-user-dir", "DESKTOP"], text=True, timeout=5
+            ).strip()
+        except Exception:
+            pass
+        if not desktop_dir or not os.path.isdir(desktop_dir):
+            for d in [os.path.expanduser("~/Desktop"),
+                      os.path.expanduser("~/Masaüstü")]:
+                if os.path.isdir(d):
+                    desktop_dir = d
+                    break
+
+        if desktop_dir and os.path.isdir(desktop_dir):
+            dest = os.path.join(desktop_dir, "venvstudio.desktop")
+            with open(dest, "w") as f:
+                f.write(content)
+            os.chmod(dest, 0o755)
+            try:
+                subprocess.run(["gio", "set", dest, "metadata::trusted", "true"],
+                               timeout=5, capture_output=True)
+            except Exception:
+                pass
+
+    def _create_shortcut_macos(self, vs_exe, app_name):
+        """Create a .command launcher on macOS Desktop."""
+        import os, stat
+        script = os.path.expanduser(f"~/Desktop/{app_name}.command")
+        with open(script, "w") as f:
+            f.write("#!/bin/bash\n")
+            f.write(f'"{vs_exe}"\n')
+        os.chmod(script, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP)
 
     def _populate_recent_menu(self):
         """Rebuild the Recent Environments submenu from recent_envs.json."""

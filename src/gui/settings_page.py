@@ -1032,6 +1032,13 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         self.save_window_cb = QCheckBox(tr("remember_window"))
         general_layout.addRow(self.save_window_cb)
 
+        # ── Desktop Shortcut ──
+        shortcut_btn = QPushButton("🖥️  Create Desktop Shortcut")
+        shortcut_btn.setObjectName("secondary")
+        shortcut_btn.setToolTip("Create a shortcut on your Desktop to launch VenvStudio without a terminal")
+        shortcut_btn.clicked.connect(self._create_desktop_shortcut_from_settings)
+        general_layout.addWidget(shortcut_btn)
+
         general_group.setLayout(general_layout)
         layout.addWidget(general_group)
 
@@ -1589,6 +1596,29 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         diag_group.setLayout(diag_layout)
         layout.addWidget(diag_group)
 
+
+    def _create_desktop_shortcut_from_settings(self):
+        """Delegate to MainWindow._create_desktop_shortcut."""
+        try:
+            parent = self.parent()
+            while parent is not None:
+                if hasattr(parent, '_create_desktop_shortcut'):
+                    parent._create_desktop_shortcut()
+                    return
+                parent = parent.parent() if hasattr(parent, 'parent') else None
+        except Exception:
+            pass
+        # Fallback: call directly
+        try:
+            from src.gui.main_window import MainWindow
+            import sys
+            for widget in __import__('PySide6.QtWidgets', fromlist=['QApplication']).QApplication.topLevelWidgets():
+                if hasattr(widget, '_create_desktop_shortcut'):
+                    widget._create_desktop_shortcut()
+                    return
+        except Exception as e:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Error", str(e))
 
     def _setup_launch_section(self, layout):
         about_group = QGroupBox(f"ℹ️ About {APP_NAME}")

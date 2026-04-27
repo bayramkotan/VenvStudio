@@ -1656,6 +1656,100 @@ Kurulum yöntemleri:
 
 İlgili dosyalar: `src/gui/settings_page.py`, `src/gui/settings_toolchain.py`, `src/core/cli_tools_manager.py`
 
+
+## 🔴 Öncelikli Yeni Özellikler
+
+### B171 — Packages → Catalog → Package Info: Home ve PyPI aynı adresi gösteriyor
+  - Sağ tık → Package Info diyince Home butonu ile PyPI butonu aynı URL'yi açıyor
+  - Home URL'si PyPI yerine paketin kendi sitesine (GitHub, docs sitesi vb.) yönlenmeli
+  - İlgili dosya: `src/gui/package_panel.py` → package info dialog
+
+### F136 — Editor Integration: Spyder ekle
+  - Mevcut editörler: VS Code, Cursor, Windsurf, Zed, PyCharm...
+  - Spyder da bilimsel Python IDE olarak eklenecek
+  - Spyder'ın env discovery mekanizması: `~/.spyder-py3/config/python_path_manager.ini`
+  - İlgili dosya: `src/gui/settings_page.py` → _setup_vscode_ui_section
+
+### F137 — Yeni Env Yöneticileri: pipx, uv, virtualenv, conda-forge, pip-env
+  - Env oluşturma dialog'una eklenecek seçenekler:
+    - pipx (uygulama izolasyonu — zaten var ama geliştirilebilir)
+    - virtualenv (venv'in öncüsü, daha fazla seçenek)
+    - pip-env (Pipfile + otomatik venv yönetimi)
+  - Her biri için: oluşturma, paket kurma, export, import
+  - İlgili dosyalar: `src/gui/env_dialog.py`, `src/core/venv_manager.py`
+
+### F138 — pyenv Entegrasyonu
+  - pyenv: Python version yöneticisi — birden fazla Python versiyonu kur/yönet
+  - VenvStudio'da kullanım: Settings → Python Versions'da pyenv ile kurulu versiyonları göster
+  - pyenv install X.Y.Z → VenvStudio'dan tetiklenebilir
+  - pyenv local → proje dizinine Python versiyonu pinle
+  - https://github.com/pyenv/pyenv
+  - İlgili dosya: `src/gui/settings_python.py`, `src/core/python_downloader.py`
+
+### F139 — Docker/Container Entegrasyonu
+  - VenvStudio'dan direkt container oluşturma
+  - Seçilen Python versiyonu + paketlerden Dockerfile oluştur
+  - docker build / docker run entegrasyonu
+  - Container içinde Jupyter, FastAPI vb. başlatma
+  - Mevcut env'den Dockerfile export etme
+  - İlgili dosya: yeni `src/core/docker_manager.py`
+
+### F140 — Proje İçine Env Kurma (Geliştirme)
+  - Mevcut F133'ü genişlet
+  - Klasör seç → .venv oluştur → pyproject.toml/requirements.txt varsa otomatik kur
+  - Recent Envs'te "📁 Project Envs" bölümü
+  - Environments sayfasında proje env'leri ayrı göster
+  - İlgili dosyalar: `src/gui/env_dialog.py`, `src/core/venv_manager.py`
+
+### F141 — VenvStudio'ya Yapay Zeka Entegrasyonu
+  - Olası kullanım alanları:
+    - Paket önerileri: "numpy, pandas kurulu, ne önerisin?" → AI suggestion
+    - Hata analizi: kurulum hatalarını AI ile açıkla
+    - Env description: env içeriğini AI ile özetle
+    - Learn sayfası: konuları AI ile genişlet / soru sor
+    - Package search: doğal dil ile paket arama
+  - LLM: Ollama (local) veya OpenAI API (kullanıcı kendi key'ini girer)
+  - İlgili dosya: yeni `src/core/ai_assistant.py`
+
+### F142 — README Güncellemesi
+  - Ana README.md: yeni özellikler, ekran görüntüleri, kurulum
+  - TR/EN her iki dil
+  - Yeni kategoriler: Terminal Emulators, Learn sayfası, Bookmark sistemi
+  - Badges güncelle (versiyon, PyPI, platform)
+
+### F143 — Kod Mimarisi Haritası (büyük dosyalar parçalandıktan sonra)
+  - Tüm modüller ve aralarındaki bağımlılıkları gösteren diagram
+  - Her dosyanın sorumluluğu (tek cümle)
+  - `docs/architecture.md` dosyası
+  - Mermaid diagram ile görsel harita
+  - Büyük dosyalar önce parçalanacak (REFACTOR TODO'su mevcut)
+
+
+### F144 — Learn: Package Manager Konuları
+  - pip, uv, poetry, conda, mamba, micromamba, pipx, virtualenv için detaylı Learn topics
+  - Her PM için: kurulum, temel komutlar, lockfile mantığı, karşılaştırma diyagramı
+  - Konular: "pip — Python Package Installer", "uv — Ultra Fast Package Manager",
+    "Poetry — Dependency Management", "conda vs pip farkı",
+    "pipx — Application Isolation", "Lockfiles & Reproducibility"
+  - İlgili dosya: src/gui/learn_page.py → Scientific Computing veya yeni "Package Managers" kategorisi
+
+### B172 — Linux Terminal Kurulumunda pkexec Yerine GUI Şifre Sorma
+  - Yeni terminal yüklerken şifre terminalde soruluyor, popup olarak gelmeli
+  - pkexec çalışıyor ama bazı sistemlerde (KDE/Wayland) farklı davranıyor
+  - Alternatif: `pkexec` → `kdesu` (KDE) veya `gksudo`/`zenity` (GNOME) fallback
+  - Veya: terminal emülatör aç + sudo komutu çalıştır
+  - İlgili dosya: src/core/cli_tools_manager.py → install_terminal() / uninstall_terminal()
+
+### ✅ F145 — TAMAMLANDI (v1.4.81): Desktop Shortcut (Tools menüsü)
+  - Settings → General bölümüne "Create Desktop Shortcut" butonu
+  - Help menüsüne "Create Desktop Shortcut" seçeneği
+  - Windows: .lnk dosyası oluştur (winshell veya win32com veya PowerShell)
+  - Linux:   ~/.local/share/applications/venvstudio.desktop (XDG) +
+             ~/Desktop/venvstudio.desktop (masaüstü kısayolu)
+  - macOS:   ~/Desktop/VenvStudio.command veya .app alias
+  - Kısayol terminalsiz çalışmalı (GUI launcher)
+  - İlgili dosyalar: src/gui/settings_page.py, src/gui/main_window.py (Help menüsü)
+
 ## 🔵 GELECEK — Yeni Paket/Env Yöneticileri
 
 ### F134 — pixi, conda, mamba, pyenv, conda-forge tam implementasyonu

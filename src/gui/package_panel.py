@@ -4926,6 +4926,22 @@ dependencies:
         creator = creators.get(key)
         if not creator:
             return
+        # Clear stub widgets so creator assigns fresh ones
+        stub_attrs = {
+            "installed":  ["packages_table", "pkg_count_label", "search_input",
+                           "update_btn", "uninstall_btn"],
+            "catalog":    ["catalog_table", "category_combo", "catalog_search",
+                           "apply_btn", "changes_label"],
+            "presets":    [],
+            "manual":     ["manual_input", "manual_info_label", "output_log"],
+        }
+        for attr in stub_attrs.get(key, []):
+            if hasattr(self, attr):
+                try:
+                    getattr(self, attr).setParent(None)
+                except Exception:
+                    pass
+                delattr(self, attr)
         widget = creator()
         # Replace placeholder with real widget
         self.tabs.removeTab(index)

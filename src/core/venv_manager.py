@@ -924,7 +924,7 @@ class VenvManager:
                     else:
                         _venv_dir = item
                     # Check cache first — avoids pip list subprocess every launch
-                    print(f"[Poetry] checking cache for _venv_dir={_venv_dir} exists={_venv_dir.exists()}")
+                    _log.debug(f"[Poetry] cache check: venv_dir={_venv_dir} exists={_venv_dir.exists()}")
                     _cached = self._read_cache(_venv_dir)
                     if _cached:
                         info.python_version = _cached.get("python_version", marker_pyver or "")
@@ -984,7 +984,7 @@ class VenvManager:
                                     pass
                         _sz = get_venv_size(_venv_dir)
                         info.size = _sz
-                        print(f"[Poetry] write_cache: {_venv_dir} exists={_venv_dir.exists()} py={info.python_version} pkgs={info.package_count}")
+                        _log.debug(f"[Poetry] write_cache: {_venv_dir} py={info.python_version} pkgs={info.package_count}")
                         self.write_cache(_venv_dir, info.python_version, info.package_count, _sz)
 
                 elif env_type == "pipx":
@@ -1288,7 +1288,7 @@ class VenvManager:
             with open(cache_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
         except Exception as e:
-            print(f"[VenvStudio] Cache write error: {e}")
+            _log.warning(f"[Cache] Write error: {e}")
 
     def _cache_key(self, venv_path: Path) -> str:
         """Consistent cache key — always forward slashes, no leading slash on Windows."""
@@ -1303,12 +1303,12 @@ class VenvManager:
         key = self._cache_key(venv_path)
         entry = all_cache.get(key)
         if not entry:
-            print(f"[Cache] MISS: {key}")
+            _log.debug(f"[Cache] MISS: {key}")
             return None
         if entry.get("needs_refresh", 1) == 1:
-            print(f"[Cache] STALE: {key}")
+            _log.debug(f"[Cache] STALE: {key} (needs_refresh=1)")
             return None
-        print(f"[Cache] HIT: {key}")
+        _log.debug(f"[Cache] HIT: {key} (py={entry.get('python_version','?')} pkgs={entry.get('package_count','?')})")
         return entry
 
     def write_cache(self, venv_path: Path, python_version: str, package_count: int, size: str) -> None:
@@ -1320,8 +1320,8 @@ class VenvManager:
             "needs_refresh": 0,
         }
         self._save_all_cache(all_cache)
-        print(f"[Cache] Written: {venv_path} -> {python_version}, {package_count} pkgs, {size}")
-        print(f"[Cache] File: {self._get_cache_file()}")
+        _log.info(f"[Cache] Written: {venv_path} → py={python_version} pkgs={package_count} size={size}")
+        _log.debug(f"[Cache] File: {self._get_cache_file()}")
 
     def invalidate_cache(self, venv_path: Path) -> None:
         all_cache = self._load_all_cache()

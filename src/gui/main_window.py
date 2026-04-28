@@ -1239,7 +1239,7 @@ class MainWindow(QMainWindow):
 
     def _switch_page(self, index):
         page_names = {0: "Packages", 1: "Environments", 2: "Settings", 3: "Learn"}
-        self._log.debug(f"_switch_page → {page_names.get(index, index)}")
+        self._log.debug(f"_switch_page → {page_names.get(index, index)} (index={index})")
 
         # Lazy-build PackagePanel on first visit
         if index == 0 and self.package_panel is None:
@@ -1778,7 +1778,8 @@ class MainWindow(QMainWindow):
         self._last_env_list = env_list
         if self.package_panel is not None:
             if self.package_panel is not None: self.package_panel.populate_env_list(env_list)
-        self.settings_page.populate_vscode_envs(env_list)
+        if self.settings_page is not None:
+            self.settings_page.populate_vscode_envs(env_list)
 
         if not envs:
             self.loading_label.setVisible(False)
@@ -1844,9 +1845,10 @@ class MainWindow(QMainWindow):
         self.info_label.setText(f"\U0001f4c2 {base_dir}  \u2022  {count} environment(s)")
 
     def _on_env_selected(self):
-        self._log.debug("_on_env_selected triggered")
         rows = self.env_table.selectionModel().selectedRows()
-        has_selection = len(rows) > 0
+        has_selection = bool(rows)
+        _sel_name = self.env_table.item(rows[0].row(), 0).text().strip() if has_selection else "(none)"
+        self._log.debug(f"_on_env_selected: env={_sel_name!r} has_selection={has_selection}")
         self.btn_manage_pkgs.setEnabled(has_selection)
         self.btn_terminal.setEnabled(has_selection)
         # Resolve env_type for button visibility rules
@@ -2072,10 +2074,14 @@ class MainWindow(QMainWindow):
     def _create_env(self):
         from src.gui.env_dialog import EnvCreateDialog
         dialog = EnvCreateDialog(self.venv_manager, self.config, self)
-        dialog.env_created.connect(lambda name: self._refresh_env_list())
+        def _on_env_created(name):
+            self._log.info(f"env_created: name={name!r} → invalidating cache + refreshing list")
+            self.venv_manager.invalidate_all_caches()
+            self._refresh_env_list()
+        dialog.env_created.connect(_on_env_created)
         dialog.exec()
-        # Refresh again after dialog closes — catches empty folder envs
-        # and any env created just before dialog closed
+        self._log.debug("_create_env: dialog closed → final cache invalidate + refresh")
+        self.venv_manager.invalidate_all_caches()
         self._refresh_env_list()
 
     def _get_new_name_for_rename(self, name):
@@ -2190,6 +2196,8 @@ class MainWindow(QMainWindow):
     def _on_rename_finished(self, success, message):
         self.rename_progress.close()
         if success:
+            # Force memory cache clear so deleted env disappears immediately
+            self.venv_manager.invalidate_all_caches()
             self._refresh_env_list()
             self.statusBar().showMessage(message)
             if hasattr(self, "_cmd_panel_live"):
@@ -2210,34 +2218,7 @@ class MainWindow(QMainWindow):
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
         )
         if reply == QMessageBox.Yes:
-            # Custom delete progress dialog
-            from PySide6.QtWidgets import QDialog, QVBoxLayout, QLabel, QProgressBar
-            self.delete_progress = QDialog(self)
-            self.delete_progress.setWindowTitle("Deleting Environment")
-            self.delete_progress.setWindowModality(Qt.WindowModal)
-            self.delete_progress.setMinimumWidth(420)
-            self.delete_progress.setWindowFlags(
-                self.delete_progress.windowFlags() & ~Qt.WindowCloseButtonHint
-            )
-            _dp_layout = QVBoxLayout(self.delete_progress)
-            _dp_layout.setSpacing(12)
-            _dp_layout.setContentsMargins(24, 20, 24, 20)
-            _dp_title = QLabel(f"🗑️ Deleting '{name}'")
-            _dp_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #f38ba8;")
-            _dp_layout.addWidget(_dp_title)
-            self._dp_msg = QLabel("⏳ Preparing...")
-            self._dp_msg.setStyleSheet("font-size: 13px; color: #cdd6f4;")
-            self._dp_msg.setWordWrap(True)
-            _dp_layout.addWidget(self._dp_msg)
-            _dp_bar = QProgressBar()
-            _dp_bar.setRange(0, 0)
-            _dp_bar.setFixedHeight(6)
-            _dp_bar.setStyleSheet(
-                "QProgressBar { border: none; background: #313244; border-radius: 3px; }"
-                "QProgressBar::chunk { background: #f38ba8; border-radius: 3px; }"
-            )
-            _dp_layout.addWidget(_dp_bar)
-            self.delete_progress.show()
+            # No popup — progress shown in Command Reference panel below
 
             self._deleting_env_name = name
             # Get env path and type from table for proper deletion (poetry needs real venv path)
@@ -2258,8 +2239,6 @@ class MainWindow(QMainWindow):
 
             self._delete_worker = DeleteWorker(self.venv_manager, name, env_path=_env_path, env_type=_env_type)
             def _on_del_progress(msg):
-                self._dp_msg.setText(f"⏳ {msg}")
-                # Also update bottom cmd panel live command
                 if hasattr(self, "_cmd_panel_live"):
                     self._cmd_panel_live.setText(f"▶ {msg}")
             self._delete_worker.progress.connect(_on_del_progress)
@@ -2267,30 +2246,35 @@ class MainWindow(QMainWindow):
             self._delete_worker.start()
 
     def _on_delete_finished(self, success, message):
-        self.delete_progress.close()
+        deleted_name = getattr(self, "_deleting_env_name", "")
         if success:
+            self._log.info(f"env_deleted: name={deleted_name!r} → cleaning cache + refreshing list")
             # Remove pkg_list cache entry for the deleted env
             try:
                 from src.core.venv_manager import VenvManager
                 vm = VenvManager(self.config.get_venv_base_dir())
                 all_cache = vm._load_all_cache()
-                deleted_name = getattr(self, "_deleting_env_name", "")
                 if deleted_name:
                     key = "pkg_list:" + str(self.venv_manager.base_dir / deleted_name).replace("\\", "/")
-                    all_cache.pop(key, None)
+                    if key in all_cache:
+                        all_cache.pop(key, None)
+                        self._log.debug(f"env_deleted: removed pkg_list cache key={key!r}")
                     vm._save_all_cache(all_cache)
                     vm.invalidate_cache(self.venv_manager.base_dir / deleted_name)
-            except Exception:
-                pass
-            # Clear package panel so launcher doesn't show stale installed state
+            except Exception as e:
+                self._log.warning(f"env_deleted: cache cleanup error: {e}")
+            # Clear package panel launcher state
             if self.package_panel is not None:
                 self.package_panel._launcher_py_version_cache.clear()
                 self.package_panel._update_launcher_status()
+            # Invalidate all caches so env disappears from list immediately
+            self.venv_manager.invalidate_all_caches()
             self._refresh_env_list()
             self.statusBar().showMessage(message)
             if hasattr(self, "_cmd_panel_live"):
                 self._cmd_panel_live.setText(f"✅ {message}")
         else:
+            self._log.warning(f"env_delete_failed: name={deleted_name!r} error={message!r}")
             first_line = message.splitlines()[0] if message else "Failed"
             QMessageBox.critical(self, "Error", message)
             self._refresh_env_list()
@@ -2350,6 +2334,8 @@ class MainWindow(QMainWindow):
     def _on_clone_finished(self, success, message):
         self.clone_progress.close()
         if success:
+            # Force memory cache clear so deleted env disappears immediately
+            self.venv_manager.invalidate_all_caches()
             self._refresh_env_list()
             self.statusBar().showMessage(message)
             if hasattr(self, "_cmd_panel_live"):

@@ -813,18 +813,27 @@ class VenvManager:
                                     break
                         except Exception:
                             pass
-                    # Package count
-                    _pip_exe = get_pip_executable(_penv)
-                    if _pip_exe.exists():
-                        try:
-                            _r = _run([str(_pip_exe), "list", "--format=json"],
-                                      capture_output=True, text=True, timeout=15)
-                            if _r.returncode == 0:
-                                _pinfo.package_count = len(json.loads(_r.stdout))
-                        except Exception:
-                            pass
-                    # Size
-                    _pinfo.size = get_venv_size(_penv)
+                    # Package count — check cache first
+                    _pcached = self._read_cache(_penv)
+                    if _pcached:
+                        _pinfo.package_count = _pcached.get("package_count", 0)
+                        _pinfo.size = _pcached.get("size", "")
+                        if _pcached.get("python_version"):
+                            _pinfo.python_version = _pcached["python_version"]
+                    else:
+                        _pip_exe = get_pip_executable(_penv)
+                        if _pip_exe.exists():
+                            try:
+                                _r = _run([str(_pip_exe), "list", "--format=json"],
+                                          capture_output=True, text=True, timeout=15)
+                                if _r.returncode == 0:
+                                    _pinfo.package_count = len(json.loads(_r.stdout))
+                            except Exception:
+                                pass
+                        # Size
+                        _pinfo.size = get_venv_size(_penv)
+                        # Write to cache
+                        self.write_cache(_penv, _pinfo.python_version, _pinfo.package_count, _pinfo.size)
                     # Created from pyvenv.cfg or dir stat
                     try:
                         from datetime import datetime as _dt
@@ -915,6 +924,7 @@ class VenvManager:
                     else:
                         _venv_dir = item
                     # Check cache first — avoids pip list subprocess every launch
+                    print(f"[Poetry] checking cache for _venv_dir={_venv_dir} exists={_venv_dir.exists()}")
                     _cached = self._read_cache(_venv_dir)
                     if _cached:
                         info.python_version = _cached.get("python_version", marker_pyver or "")
@@ -974,6 +984,7 @@ class VenvManager:
                                     pass
                         _sz = get_venv_size(_venv_dir)
                         info.size = _sz
+                        print(f"[Poetry] write_cache: {_venv_dir} exists={_venv_dir.exists()} py={info.python_version} pkgs={info.package_count}")
                         self.write_cache(_venv_dir, info.python_version, info.package_count, _sz)
 
                 elif env_type == "pipx":

@@ -29,17 +29,10 @@ Profiling (Linux, 6 env):
   - package_panel: _system_tool_cache, _cfg_cache, _vm_cache in-memory
 
 ⚠️ Hâlâ açık:
-  1. PackagePanel.__init__ + _setup_ui hâlâ ~7-10s
-     - Launcher tab bile ağır (çok sayıda card widget oluşturuluyor)
-     - Çözüm: Launcher card'larını da lazy yap (set_venv sonrası)
-     - Ya da: _setup_ui'yi split et, sadece skeleton oluştur
-
-  2. Windows'ta sync_cache + ensure_pipx hâlâ main thread'de
-     - Bunları QTimer ile 0ms defer et → UI önce görünsün
-     - background thread değil, sadece event loop'tan sonra
-
-  3. Python --version subprocess hâlâ çalışıyor (conda env için)
-     - conda env marker'da python_version varsa subprocess atla
+  1. PackagePanel._setup_ui ~7-10s — Launcher card'ları lazy yapılabilir
+  2. Windows'ta açılış ~26s — Linux'ta tüm HIT'ler OK, Windows test gerekli
+  3. Cache debug print'leri kaldırılacak (production'da [Cache] HIT/MISS görünmemeli)
+  4. conda env için python --version subprocess — marker'dan version okunabilir
 
   İlgili dosyalar:
     src/core/venv_manager.py  — cache key, sync_cache, lazy subprocess

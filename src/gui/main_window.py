@@ -2736,6 +2736,15 @@ class MainWindow(QMainWindow):
             primary_size = self.config.get("font_primary_size", 22)
             tertiary_family = self.config.get("font_tertiary_family", "")
             tertiary_size = self.config.get("font_tertiary_size", 11)
+            # Aşama 1.5: clear style cache so a Settings → Apply round-trip
+            # always rebuilds the QSS, even if the user changed something
+            # subtle (e.g. swapped a palette dict at runtime). Steady-state
+            # calls go through the cache untouched.
+            try:
+                from src.gui.styles import invalidate_style_cache
+                invalidate_style_cache()
+            except Exception:
+                pass
             self.setStyleSheet(get_theme(
                 theme, font_family=font_family, font_size=font_size,
                 primary_family=primary_family, primary_size=primary_size,

@@ -67,6 +67,114 @@ Profiling (Linux, 6 env):
 
 ## 🔴 EN ÖNCELİKLİ (Sonraki Sprint)
 
+### 🟡 F156 — Terminal Çıktıları Anlamlı/Görsel Olsun (Rich Box)
+
+**Hedef:** Anlaşılmaz log satırları yerine kullanıcı dostu kutucuklar.
+
+**Örnek:**
+```
+╭──────────────────────────────────────╮
+│ 🚀  Deleting environment 'tsssss'    │
+│    • Type: venv                      │
+│    • Path: C:\venv\tsssss            │
+╰──────────────────────────────────────╯
+╭──────────────────────────────────────╮
+│ ✅  Environment 'tsssss' deleted     │
+│    • Removed: C:\venv\tsssss         │
+╰──────────────────────────────────────╯
+```
+
+**Nerede uygulanacak:**
+- Env oluştur/sil/değiştir
+- Paket yükle/kaldır
+- Launch app yükle/kaldır/çalıştır
+- Komut kopyalama
+- Tab değiştirme
+- Preset yükleme
+- Manual install
+
+**Teknik:** Rich library zaten dependency (`rich.console.Console` + `rich.panel.Panel`). Logger formatter'ında özel event'ler için Panel render et.
+
+**Dosya:** `src/utils/logger.py`, ilgili event'leri tetikleyen yerler
+
+**Öncelik:** 🟡 Orta — UX iyileştirmesi, çok değer katar
+
+---
+
+### 🟡 F155 — Create Env Dialog: Diğer Backend'lerde de "Pip Upgrade / system-site-packages" Var mı?
+
+**Sorun:** Create Env dialog'unda venv için `--system-site-packages` ve `pip upgrade` seçenekleri var. **uv, conda, pipx, poetry** için bu seçenekler de uygun mu? Ekrana çıkıyor mu? Çıkıyorsa anlamlı mı?
+
+**Yapılacak:**
+- Her backend için Create dialog'u test et
+- venv: `--system-site-packages` ✓ var
+- uv: `--system-site-packages` desteği var mı? `uv venv --system-site-packages` çalışıyor mu?
+- conda: env oluştururken site-packages'a paralel kavram var mı? (`--clone base` belki)
+- pipx: tek-paket tool, system-site-packages anlamsız
+- poetry: `poetry env use` — ayar farklı
+- Pip upgrade: uv/conda/pipx/poetry için anlamı var mı?
+
+**Sonuç:** Backend-aware seçenek seti. Uygun olmayanları gizle veya disable et + tooltip'le açıkla.
+
+**Dosya:** `src/gui/env_dialog.py`
+
+---
+
+### 🟡 B178 — Env Silerken Form Bazen Donuyor
+
+**Sorun:** Env silme operasyonu sırasında ana form bazen donuyor (yanıt vermiyor görünüyor). v1.4.85'te delete progress popup kaldırıldı ama tam çözülmemiş — silme hâlâ UI thread'de bir şey yapıyor olabilir.
+
+**Yapılacak:**
+- Silme operasyonunu profile et
+- `shutil.rmtree` UI thread'inde mi koşuyor? (Büyük env'lerde 5-10 saniye sürebilir)
+- `_on_delete_finished` callback'inde pahalı bir iş var mı?
+- Solution: Silme tamamen background QThread'de + UI'da progress göstergesi (alt panel)
+
+**Dosya:** `src/gui/main_window.py` veya `src/core/venv_manager.py` (delete_env)
+
+---
+
+### 🟡 B179 — Launch App Yükle/Sil Sonrası Form Tazelenmiyor mu?
+
+**Sorun:** Launch sekmesinde bir uygulama yüklenip kaldırılınca env paket sayısı / size güncelleniyor mu? Tablo/UI tazeleniyor mu? Test edip doğrula.
+
+**Yapılacak:**
+- Launch'tan JupyterLab yükle → env tablosunda paket sayısı güncellendi mi?
+- Launch'tan JupyterLab kaldır → "Installed" badge "Not installed" oluyor mu?
+- Env size yeniden hesaplanıyor mu? (cache invalidate edilmeli)
+- Aynı şey paket yükle/kaldır için de geçerli (Catalog, Manual Install, Presets)
+
+**Beklenen davranış:** Her install/uninstall sonrası:
+- Env'in pkg_list cache invalidate
+- Env'in size cache invalidate
+- UI tabloları refresh
+
+**Dosya:** `src/gui/package_panel.py` (install/uninstall callback'leri)
+
+---
+
+### 🔴 PERF-002 — Hedef: Her Platformda < 3sn Cold Start
+
+**Mevcut:**
+- Windows 11: ~15-16s (v1.4.86 fix sonrası, eskiden 31s)
+- Linux: ~5-6s
+
+**Hedef:** Her ikisinde de **< 3 saniye**
+
+**Bu hedef için PERF-001'de planlanan tüm aşamalar gerekli:**
+- ✅ Aşama 1: Pkg cache fix (v1.4.87) — 5.9s tasarruf
+- ✅ Aşama 1.5: QSS stylesheet cache (v1.4.88)
+- ⏳ Aşama 2: Chip widget cache (env table render — 11.8s tasarruf hedefi)
+- ⏳ Aşama 3: Launcher card lazy load (22 kart — 3-5s tasarruf hedefi)
+- ⏳ Aşama 4: Module lazy import (learn_page, settings_*)
+- ⏳ Aşama 5: Mtime-based cache invalidation
+- ⏳ Aşama 6: Final profile + polish
+
+**Ölçüm aralığı:** Her aşamadan sonra Windows + Linux ölçümü tekrarla, hedef yaklaşımını izle.
+
+**Öncelik:** 🔴 Yüksek — kullanıcı deneyimi için kritik
+
+---
 ### 🔴 B174 — Windows'ta `QFont::setPointSize: Point size <= 0 (-1)` Spam Uyarısı
 
 **Sorun:** Windows'ta uygulama açılışından itibaren, env değiştirince ve page switch yapınca terminale şu uyarı düşüyor:

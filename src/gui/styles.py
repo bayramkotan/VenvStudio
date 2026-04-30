@@ -10,6 +10,8 @@ Themes:
   - light-nord     : Nord Light (cool, muted)
 """
 
+from functools import lru_cache
+
 
 def _build_theme(c: dict, font_family: str = "", font_size: int = 13,
                  primary_family: str = "", primary_size: int = 22,
@@ -35,29 +37,12 @@ def _build_theme(c: dict, font_family: str = "", font_size: int = 13,
     primary_size  = max(int(primary_size or 22), 10)
     tertiary_size = max(int(tertiary_size or 11),  8)
 
-    # Font sizes (px — kept for non-font properties / legacy)
+    # Font sizes
     fs_header = primary_size                              # 22px default
     fs_subheader = max(primary_size - 8, font_size + 1)   # 14px default
     fs_base = font_size                                   # 13px default
     fs_small = max(tertiary_size, 8)                      # 11px default
     fs_tiny = max(tertiary_size, 8)                        # 11px default
-
-    # B174: Qt's stylesheet engine triggers QFont::setPointSize(-1) warnings
-    # when font-size is given in px (pixel-sized fonts have no point size, so
-    # internal Qt calls to QFont.pointSize() return -1, which then propagate
-    # to setPointSize(-1) on derived fonts). Using `pt` makes Qt build
-    # point-size-based fonts and the warnings go away.
-    #
-    # Conversion: 1pt = 1.333px @ 96 DPI  →  pt = round(px * 0.75)
-    # Minimum 6pt to avoid unreadable fonts on legacy themes.
-    def _to_pt(px_value: int) -> int:
-        return max(round(px_value * 0.75), 6)
-
-    font_size_pt    = _to_pt(font_size)
-    fs_header_pt    = _to_pt(fs_header)
-    fs_subheader_pt = _to_pt(fs_subheader)
-    fs_small_pt     = _to_pt(fs_small)
-    fs_tiny_pt      = _to_pt(fs_tiny)
 
     _stylesheet = f"""
 /* ── Base ── */
@@ -70,7 +55,7 @@ QWidget {{
     background-color: {c['bg']};
     color: {c['fg']};
     font-family: {font_family};
-    font-size: {font_size_pt}pt;
+    font-size: {font_size}px;
 }}
 
 /* ── Sidebar ── */
@@ -86,7 +71,7 @@ QWidget {{
     border-radius: 8px;
     padding: 10px 16px;
     text-align: left;
-    font-size: {font_size_pt}pt;
+    font-size: {font_size}px;
 }}
 
 #sidebar QPushButton:hover {{
@@ -102,7 +87,7 @@ QWidget {{
 /* ── Headers ── */
 QLabel#header {{
     font-family: {primary_family};
-    font-size: {fs_header_pt}pt;
+    font-size: {fs_header}px;
     font-weight: bold;
     color: {c['fg']};
     padding: 8px 0;
@@ -110,7 +95,7 @@ QLabel#header {{
 
 QLabel#subheader {{
     font-family: {primary_family};
-    font-size: {fs_subheader_pt}pt;
+    font-size: {fs_subheader}px;
     color: {c['fg_muted']};
     padding: 4px 0;
 }}
@@ -123,7 +108,7 @@ QPushButton {{
     border-radius: 8px;
     padding: 8px 20px;
     font-weight: bold;
-    font-size: {font_size_pt}pt;
+    font-size: {font_size}px;
 }}
 
 QPushButton:hover {{
@@ -173,7 +158,7 @@ QLineEdit, QComboBox {{
     border: 2px solid {c['border']};
     border-radius: 8px;
     padding: 8px 12px;
-    font-size: {font_size_pt}pt;
+    font-size: {font_size}px;
     selection-background-color: {c['accent']};
     selection-color: {c['accent_fg']};
 }}
@@ -358,7 +343,7 @@ QSpinBox {{
     border-radius: 8px;
     padding: 8px 12px;
     min-height: 18px;
-    font-size: {font_size_pt}pt;
+    font-size: {font_size}px;
 }}
 
 QSpinBox:focus {{
@@ -389,7 +374,7 @@ QTextEdit, QPlainTextEdit {{
     border-radius: 8px;
     padding: 8px;
     font-family: "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
-    font-size: {fs_small_pt}pt;
+    font-size: {fs_small}px;
 }}
 
 /* ── Menu ── */
@@ -713,7 +698,21 @@ THEME_OPTIONS = [
 def get_theme(name: str = "dark", font_family: str = "", font_size: int = 13,
               primary_family: str = "", primary_size: int = 22,
               tertiary_family: str = "", tertiary_size: int = 11) -> str:
-    """Return stylesheet for the given theme name with 3-level font settings."""
+    """Return stylesheet for the given theme name with 3-level font settings.
+
+    PERF: cached on (name, fonts, sizes). The returned QSS is a 600+ line
+    f-string that is identical for identical inputs — building it on every
+    env switch / tab change was wasteful. The cache is global and bounded.
+    """
+    return _get_theme_cached(name, font_family, font_size,
+                             primary_family, primary_size,
+                             tertiary_family, tertiary_size)
+
+
+@lru_cache(maxsize=64)
+def _get_theme_cached(name: str, font_family: str, font_size: int,
+                      primary_family: str, primary_size: int,
+                      tertiary_family: str, tertiary_size: int) -> str:
     palette = _PALETTES.get(name, _PALETTES['dark'])
     return _build_theme(palette, font_family=font_family, font_size=font_size,
                         primary_family=primary_family, primary_size=primary_size,
@@ -725,11 +724,22 @@ def get_colors(name: str = "dark", font_size: int = 13,
     """Return the color palette dict for the given theme name.
     Use this in widgets that apply inline styles.
     Includes font size hierarchy values.
+
+    PERF: cached internally. Returns a fresh dict copy on every call so
+    callers can safely mutate without poisoning the cache.
     """
     # Guard against 0 or negative font sizes (causes QFont::setPointSize errors)
     font_size     = max(int(font_size or 13),     8)
     primary_size  = max(int(primary_size or 22),  10)
     tertiary_size = max(int(tertiary_size or 11),  8)
+    cached = _get_colors_cached(name, font_size, primary_size, tertiary_size)
+    return dict(cached)  # fresh dict per call, cache holds an immutable mapping
+
+
+@lru_cache(maxsize=128)
+def _get_colors_cached(name: str, font_size: int,
+                       primary_size: int, tertiary_size: int) -> tuple:
+    """Internal cache returning a tuple of (key, value) pairs (immutable, hashable)."""
     palettes = {
         'dark':             _DARK_CATPPUCCIN,
         'dark-dracula':     _DARK_DRACULA,
@@ -752,4 +762,12 @@ def get_colors(name: str = "dark", font_size: int = 13,
     result['fs_base'] = font_size
     result['fs_small'] = max(tertiary_size, 8)
     result['fs_tiny'] = max(tertiary_size, 8)
-    return result
+    return tuple(result.items())
+
+
+def invalidate_style_cache() -> None:
+    """Clear the QSS / palette cache. Call this when settings (theme, font
+    size) change at runtime so the next get_theme() / get_colors() call
+    rebuilds with the new values."""
+    _get_theme_cached.cache_clear()
+    _get_colors_cached.cache_clear()

@@ -28,11 +28,34 @@ Profiling (Linux, 6 env):
   - settings_catalog.py debug print'leri kaldırıldı
   - package_panel: _system_tool_cache, _cfg_cache, _vm_cache in-memory
 
+✅ Tamamlanan (v1.4.82-v1.4.85):
+  - Cache key fix (Windows /C:/... → C:/...)
+  - sync_cache_with_disk: dış env'ler (pipx/poetry/conda) korunuyor
+  - Poetry direct loop cache check eklendi
+  - PackagePanel lazy tabs (Installed/Catalog/Presets/Manual)
+  - Env create/delete sonrası invalidate_all_caches() + refresh
+  - Delete progress popup kaldırıldı
+  - Log detaylandırıldı (print → _log.debug/info)
+
 ⚠️ Hâlâ açık:
   1. PackagePanel._setup_ui ~7-10s — Launcher card'ları lazy yapılabilir
-  2. Windows'ta açılış ~26s — Linux'ta tüm HIT'ler OK, Windows test gerekli
-  3. Cache debug print'leri kaldırılacak (production'da [Cache] HIT/MISS görünmemeli)
+  2. Windows'ta açılış ~26-31s — Linux'ta tüm HIT'ler OK, Windows test gerekli
+  3. [Cache] HIT/MISS/STALE logları production'da DEBUG seviyesinde — OK
   4. conda env için python --version subprocess — marker'dan version okunabilir
+
+⚠️ EN SON ÖLÇÜM (v1.4.85, Windows 11, AMD64, Python 3.13.13, Qt 6.10.2, 6 env):
+  - 11:20:17 → MainWindow.__init__ started
+  - 11:20:35 → _refresh_env_list called  (18s — PackagePanel.__init__ + _setup_ui)
+  - 11:20:36 → tüm cache HIT (1s — cache çalışıyor ✓)
+  - 11:20:48 → MainWindow.__init__ complete (13s — env_selected + post-setup)
+  - **TOPLAM: 31 saniye** (hedef 3-5s — 6-10x daha yavaş)
+  - Linux aynı sistem profilinde ~8s — Windows 4x daha yavaş
+  - Tüm cache'ler HIT olmasına rağmen yavaş → UI build pahalı, subprocess değil
+  - Windows-specific darboğazlar:
+    * Python module import (Qt, PySide6) Windows'ta yavaş
+    * QSS stylesheet parse — Windows'ta GDI font lookup yavaş
+    * Launcher card render — 22 kart × QPixmap/QIcon load
+    * QFont uyarısı (B174 — aşağıda) bir döngünün/yeniden çiziminin işareti olabilir
 
   İlgili dosyalar:
     src/core/venv_manager.py  — cache key, sync_cache, lazy subprocess
@@ -43,6 +66,393 @@ Profiling (Linux, 6 env):
 ---
 
 ## 🔴 EN ÖNCELİKLİ (Sonraki Sprint)
+
+### 🔴 B174 — Windows'ta `QFont::setPointSize: Point size <= 0 (-1)` Spam Uyarısı
+
+**Sorun:** Windows'ta uygulama açılışından itibaren, env değiştirince ve page switch yapınca terminale şu uyarı düşüyor:
+```
+QFont::setPointSize: Point size <= 0 (-1), must be greater than 0
+```
+
+**Reproduce (Windows 11, Python 3.13.13, Qt 6.10.2, PySide6 6.10.2, v1.4.85):**
+```
+11:20:36 │ HIT: C:/venv/uv_env (cache OK)
+QFont::setPointSize: Point size <= 0 (-1), must be greater than 0  ← ilk uyarı
+11:20:43 │ _on_env_selected: env='dev'
+11:20:48 │ MainWindow.__init__ complete
+QFont::setPointSize: Point size <= 0 (-1), must be greater than 0  ← her seferinde
+11:20:58 │ _switch_page → Packages
+11:20:58 │ _on_env_selected: env='ml'
+QFont::setPointSize... × 8  ← page switch'te 8 kez!
+11:21:12 │ _switch_page → Environments
+QFont::setPointSize... × 2
+11:21:14 │ _on_env_selected: env='uv_env'
+11:21:15 │ _on_env_selected: env='pipx'
+QFont::setPointSize... × 2
+11:21:16 │ _on_env_selected: env='p1'
+QFont::setPointSize... × 2
+```
+
+Linux'ta (CachyOS, Pardus) bu uyarı **YOK** — sadece Windows'ta. Bu Windows-specific bir kod yolu var demektir, ya da Qt'nin Windows backend'i pixel-size font'lardan point-size'a çevirirken `-1` döndürüyor.
+
+**Kök neden hipotezleri:**
+
+1. **`QFont().pointSize()` → `-1` döndüğünde başka bir QFont'a kopyalanıyor**
+   - Bir widget'ın font'u pixel-size based (`setPixelSize()`) olarak set edilmiş
+   - Sonra `font.pointSize()` çağrılıyor → `-1` dönüyor (pixel size kullanıyorsa point size yok)
+   - Bu `-1` değeri başka bir `setPointSize()` çağrısına gidiyor → uyarı
+   - Çözüm: `font.pointSize()` yerine `font.pointSizeF()` veya pixel-size kontrolü yap (`font.pixelSize() > 0`)
+
+2. **Stylesheet font merge hatası**
+   - QSS'te bazı widget'larda `font-size: 12px` (pixel)
+   - Python'da `widget.font().pointSize()` çağrılıyor → pixel-size'lı font için `-1` dönüyor
+   - Fontu yeniden uygularken `setPointSize(-1)` çağrılıyor
+
+3. **3-level font sistemi (v1.4.26)** — Headings/UI&Menus/Details
+   - `_refresh_styles` veya benzer fonksiyon font cascade yaparken bir widget'ta font default `-1` oluyor olabilir
+   - Özellikle env-selected callback'inde font güncellemesi yapılıyorsa (her env tıklamada uyarı çıktığı için muhtemel)
+
+4. **Launcher card icon font**
+   - Launcher card'larında 22 kart var, her birinde bir QLabel/QPushButton font'u
+   - Windows'ta default QPushButton font size `-1` olabiliyor (Qt theme'e göre değişir)
+
+**Hangi widget? — Bulma stratejisi:**
+- v1.4.86'da `main.py`'ye geçici debug:
+  ```python
+  # GEÇİCİ — B174 teşhisi için, çözünce KALDIR
+  import os
+  if os.environ.get("VENVSTUDIO_FONT_TRACE"):
+      from PySide6.QtGui import QFont
+      _orig_setPointSize = QFont.setPointSize
+      def _traced_setPointSize(self, size):
+          if size <= 0:
+              import traceback
+              print(f"[FONT TRACE] setPointSize({size}) called from:")
+              traceback.print_stack(limit=10)
+          _orig_setPointSize(self, size)
+      QFont.setPointSize = _traced_setPointSize
+  ```
+- Sonra `VENVSTUDIO_FONT_TRACE=1 python main.py` ile çalıştır
+- Stack trace'ten hangi dosya/satır olduğu çıkar
+
+**Olası dosyalar (öncelik sırası):**
+1. `src/utils/styles.py` — global font setup
+2. `src/gui/main_window.py` — `_refresh_styles`, `_on_env_selected`, `_switch_page` (uyarı bunlarla korelasyonlu)
+3. `src/gui/package_panel.py` — Launcher card font'ları, env değişikliği callback
+4. `src/gui/settings_appearance.py` — 3-level font sistemi (Headings/UI&Menus/Details)
+5. `src/gui/syntax_highlighter.py` — Catppuccin highlighter font set'i
+
+**Etkisi:**
+- ✅ Crash yapmıyor — sadece terminal'e uyarı düşüyor
+- ⚠️ Performans: Her uyarı bir başarısız Qt çağrısı — Windows'taki 31s startup'a katkıda bulunuyor olabilir
+- ⚠️ Logları kirletiyor — gerçek hatalar bu spam'in arasında kayboluyor
+- ⚠️ Production'da kullanıcılar `python main.py` ile başlatınca görüyor
+
+**Kural #12 (Verbose Logging) ile ilişki:**
+- Bu uyarı Qt C++ tarafından `stderr`'e yazılıyor — Python logger'ı yakalayamaz
+- Çözüm: kök nedeni bul ve düzelt, log'u "bastırmak" değil
+
+**Öncelik:** 🔴 Yüksek — Windows kullanıcılarını rahatsız ediyor, performans sorununu maskeliyor olabilir
+
+---
+
+### 🟡 B175 — Windows Startup ~31s + Env Switch Kasması (KISMİ ÇÖZÜLDÜ v1.4.86)
+
+**v1.4.86'da çözülen kısım — Env Switch Kasması:**
+Profile (cProfile, 44.5s ölçüm) net konuştu:
+- `_on_env_selected` 8 kez çağrılmış, her biri ~3s, toplam 23.9s
+- En büyük suçlu: `_update_env_info_bar` içinde `os.walk` UI thread'inde (12s — 43,066 walk çağrısı, 345,853 stat çağrısı!)
+- Aynı env'e tekrar tıklayınca tüm reload tekrarlanıyordu
+
+**v1.4.86 fix (`src/gui/package_panel.py`):**
+1. `_EnvSizeWorker` — yeni QThread sınıfı; env size hesaplaması arka plana alındı
+2. `set_venv` early-return — aynı env'e tekrar tıklayınca anında dön
+3. Hesaplanan size venv cache'e yazılıyor → bir sonraki açılış anında
+
+**Hâlâ Açık — Windows Startup ~31s:**
+
+**Sorun:** Windows 11'de v1.4.85 startup ölçümü:
+- 18s: `MainWindow.__init__` başladı → `_refresh_env_list` çağrıldı (PackagePanel.__init__ + _setup_ui)
+- 1s: tüm cache HIT (cache çalışıyor ✓)
+- 13s: env_selected + post-setup → init complete
+- **TOPLAM: 31 saniye**
+
+Linux aynı sistem profilinde (6 env, hepsi cache HIT) ~8s. **Windows 4x daha yavaş.**
+
+**Profile'da bulunan diğer darboğazlar (HÂLÂ AÇIK):**
+- `pip list` subprocess — 5.9s (10 çağrı), pkg_list cache HIT olsa bile bazen tekrar koşuyor
+- `selectRow` Qt render — 11.8s (12 çağrı), her tıklamada tablo yeniden render
+- `setCellWidget` — 1.2s (3,425 çağrı)
+- `subprocess.run` toplam — 10.5s
+
+**Yapılacaklar:**
+1. **pkg_list cache logic'i** — `_async_refresh_packages` cache HIT olunca neden bazen pip list çağırıyor? Bug var, bul
+2. **selectRow render** — env tablosunda her tıklamada `setCellWidget` × 3,425 — chip widget'ları yeniden mi yaratılıyor? Cache'le
+3. **Launcher card lazy load** — 22 launcher kartı ilk açılışta build ediliyor; sadece görünür olanları (ilk 6-8) build et
+4. **QSS stylesheet parse** — Windows'ta GDI font lookup yavaş, parse'ı minify et
+5. **Module import deferred** — `learn_page`, `settings_*` lazy import (sadece tıklanınca)
+6. **QPixmap/QIcon caching** — launcher icon'ları paylaşılan cache kullan
+
+**Öncelik:** 🔴 Yüksek — Windows kullanıcı deneyimi çok kötü; PERF-001'in Windows-spesifik kısmı
+
+---
+
+### ✅ B176 — TAMAMLANDI (v1.4.86): Launch Copy Command Tek Satır Kopyalıyor
+
+**Sorun:** Launch sekmesindeki 📋 butonu install + run komutlarını `\n` ile birleştirip clipboard'a koyuyordu. Terminale (PowerShell, cmd, bash, zsh, fish) yapıştırınca `\n` ENTER olarak yorumlanıyor → ilk komut çalışıyor, ikinci komut sessizce kayboluyor. Tüm platformlarda aynı sorun.
+
+**Çözüm:** Tek 📋 butonu yerine **iki ayrı buton**:
+- 📋 Install — sadece install komutunu kopyalar
+- 📋 Run — sadece run komutunu kopyalar
+
+Her tıklama net, tek komut, tüm platformlarda aynı çalışıyor (Windows cmd/PowerShell, macOS, Linux bash/zsh/fish). Status bar'da kopyalanan komut gösteriliyor.
+
+**Dosya:** `src/gui/package_panel.py` — `_copy_single_command` (yeni metod), launcher card render iki butona uyarlandı, env değişikliği güncelleme bloğu da iki butona göre düzenlendi. Eski `_copy_launcher_commands` deprecated olarak bırakıldı (backward compat).
+
+---
+
+### 🟡 F154 — View Menüsünden Zoom In/Out (Font Büyüt/Küçült)
+
+**Hedef:** View menüsüne "Zoom In", "Zoom Out", "Reset Zoom" eklensin. Tüm uygulama fontları büyütülüp küçültülebilsin.
+
+**Kapsam:**
+- View → Zoom In (Ctrl++ veya Ctrl+=)
+- View → Zoom Out (Ctrl+-)
+- View → Reset Zoom (Ctrl+0)
+- Zoom level config'e kaydedilir (`ui_zoom_level`, default 1.0)
+- Font sistemine uygulanır: `font_size`, `primary_size`, `tertiary_size` zoom_level ile çarpılır
+- Stylesheet yeniden yüklenir + tüm widget font'ları refresh edilir
+- Min/max sınır: 0.6x – 2.0x (60% - 200%)
+- Status bar'da geçici mesaj: "Zoom: 110%"
+
+**İlgili dosyalar:**
+- `src/gui/main_window.py` — View menüsü + zoom action'lar + handler'lar
+- `src/gui/styles.py` — `get_theme()` `zoom_level` parametresi alır
+- `src/utils/config_manager.py` — `ui_zoom_level` key'i
+- `src/utils/constants.py` — DEFAULT_UI_ZOOM, MIN/MAX sabitleri
+
+**Notlar:**
+- 3-level font sistemi (Headings/UI&Menus/Details) zoom'la birlikte ölçeklenmeli
+- Settings → Appearance → Font Size ile birlikte çalışmalı (zoom çarpan, font_size taban)
+- Reset zoom Settings'teki font değerlerini değiştirmemeli, sadece zoom'u 1.0 yapmalı
+
+**Öncelik:** 🟡 Orta — kullanıcı erişilebilirliği için
+
+---
+
+### 🔴 F151 — Detaylı Conflict Management System (Paket Uyumluluk Önkontrolü)
+
+**Hedef:** Tek paket veya preset (paket serisi) kurulmadan ÖNCE detaylı uyumsuzluk/uyumluluk kontrolü yap, sonra kur. Orange3, MLflow, TensorFlow gibi karmaşık dependency'lere sahip paketler için kritik.
+
+**Sorun:** Şu an pip/uv `pip install <pkg>` çalıştırılıyor → paket fail olunca kullanıcı hata mesajını görüyor. Pre-flight check yok.
+
+**Kapsam — Üç katman:**
+
+1. **Static Compatibility Rules (constants.py)** — bilinen incompatibility'ler
+   - `INCOMPATIBLE_PAIRS`: `[("orange3", "pyqt6"), ("tensorflow", "numpy>=2.0"), ...]`
+   - `BACKEND_REQUIREMENTS`: paket → tercih edilen backend (`{"orange3": "pip", "jupyter": "pip", "black": "pipx", "mlflow": "pip-not-pipx"}`)
+   - `PYTHON_VERSION_CONSTRAINTS`: `{"tensorflow": ">=3.9,<3.13", "orange3": ">=3.10"}`
+   - `SYSTEM_DEPENDENCIES`: `{"orange3": {"linux": ["libxcb-cursor0"], "all": ["PyQt5"]}}`
+
+2. **Dynamic Resolution Check (subprocess)** — `pip install --dry-run --report`
+   - Kurulum öncesi: `pip install --dry-run --report report.json <pkg>` çalıştır
+   - JSON'dan: hangi paketler downgrade/upgrade olacak, conflict var mı
+   - uv için: `uv pip install --dry-run` (uv 0.4+ destekliyor)
+   - Conda için: `micromamba install --dry-run`
+
+3. **Pre-flight Dialog (yeni dialog)**
+   - Tablo: `Paket | Şu anki versiyon | Kurulacak versiyon | Etkilenen | Aksiyon`
+   - Çakışma varsa kırmızı uyarı satırı
+   - Python versiyon uyumsuzluğu → "Bu env Python 3.9, ama TensorFlow 3.10+ ister"
+   - Backend uyumsuzluğu → "Orange3 pipx env'de çalışmaz, venv seç"
+   - System dep eksikliği → "libxcb-cursor0 sistemde yok, install komutu: ..."
+   - Butonlar: "Yine de Kur", "İptal", "Önerilen Env'e Geç"
+
+**Akış:**
+```
+User clicks Install / Launch App
+  ├─ 1. Static check (constants.py rules) — milisaniyeler
+  │    └─ Hard block (Python version, OS) varsa dur, dialog göster
+  ├─ 2. Dynamic check (pip --dry-run) — birkaç saniye
+  │    ├─ Spinner: "Checking compatibility..."
+  │    └─ Conflict varsa dialog göster
+  ├─ 3. User onaylar veya iptal eder
+  └─ 4. Asıl install çalıştırılır
+```
+
+**Preset için özel akış:**
+- Preset = N paket → her birini sırayla resolve et
+- "ML Basics" presetinde conflict varsa hangi paketin sorun olduğunu göster
+- "Atlayarak devam et" / "Sırayı değiştir" / "İptal" seçenekleri
+
+**Dosyalar:**
+- `src/core/conflict_resolver.py` — YENİ — static + dynamic check logic
+- `src/gui/conflict_dialog.py` — YENİ — pre-flight dialog
+- `src/utils/constants.py` — `INCOMPATIBLE_PAIRS`, `BACKEND_REQUIREMENTS`, `PYTHON_VERSION_CONSTRAINTS`, `SYSTEM_DEPENDENCIES` dictleri
+- `src/gui/package_panel.py` — install/launch öncesi conflict_resolver çağrısı
+- `src/gui/env_dialog.py` — preset install öncesi conflict_resolver çağrısı
+- `src/core/venv_manager.py` — `check_compatibility(env, packages) -> ConflictReport` API
+
+**İlgili eski TODO'lar (BU MADDE TARAFINDAN BİRLEŞTİRİLDİ):**
+- F140 — Launcher Package Conflict/Version Ayarı
+- F65 — Conflict Detection (pip --dry-run --report)
+- B144 — Pipx-uygun olmayan paketler (MLflow, Orange3) — bu sistem `BACKEND_REQUIREMENTS` ile çözülecek
+
+**Öncelik:** 🔴 Yüksek — Orange3 ve preset fail'leri kullanıcıyı zorluyor
+
+---
+
+### 🔴 B173 — uv env'inde Time Series (Deep Learning) Preset Yüklenmiyor (Linux)
+
+**Sorun:** Linux'ta uv env oluşturup "Time Series (Deep Learning)" presetini kurmaya çalışınca install fail oluyor. Diğer presetler kontrol edilmedi, Windows'ta hiç test edilmedi.
+
+**Reproduce:**
+1. Linux (CachyOS/Pardus) → New Environment → Type: uv → Create
+2. Packages → Presets → "Time Series (Deep Learning)" → Install
+3. Hata mesajı al (terminal/log'a düşmeli)
+
+**Yapılacaklar:**
+- [ ] Hangi paket fail ediyor — log/stderr göster (B142 kapsamında verbose log lazım)
+- [ ] Diğer presetleri uv env'inde test et (ML Basics, NLP, CV, Data Science vb.)
+- [ ] Aynı testleri Windows'ta yap
+- [ ] Aynı testleri venv (klasik) ve conda env'lerinde de yap — kıyaslama için
+- [ ] uv özel davranışları araştır:
+  - uv `--break-system-packages` istemiyor (kendi env'i)
+  - PyTorch CUDA wheels için extra index URL gerekiyor olabilir (`--extra-index-url https://download.pytorch.org/whl/cu121`)
+  - TensorFlow Linux'ta GLIBC sürümüne hassas
+- [ ] `_PRESETS` dict'inde Time Series (DL) preseti incelensin (`src/utils/constants.py`)
+
+**Muhtemel sebepler:**
+- TensorFlow / PyTorch / Keras için Python sürümü uyumsuzluğu
+- uv default `--no-deps` davranışı?
+- darts / sktime gibi paketlerin geçici dep çakışması
+- prophet derleme zorunluluğu (cmdstanpy + C++ compiler gerekiyor)
+
+**İlgili dosyalar:**
+- `src/utils/constants.py` — `_PRESETS` dict
+- `src/core/venv_manager.py` — preset install
+- `src/gui/package_panel.py` — Presets tab
+- `src/core/pip_manager.py` — install command building
+
+**Related:** F151 (conflict management) — bu bug F151 implementasyonuyla otomatik teşhis edilecek
+
+**Öncelik:** 🔴 Yüksek — preset install'ın temel akışı kırık
+
+---
+
+### 🔴 F152 — SSL Verify Toggle (Paket Kurulumu + Env Oluşturma)
+
+**Hedef:** Kullanıcı SSL doğrulamasını paket kurulumunda VE env oluşturma sırasında açıp kapatabilsin. Şirket içi proxy, MITM proxy, kendi imzalı sertifika kullanan ortamlarda kritik.
+
+**Mevcut durum:**
+- v1.4.15'te `--cert` ile sistem SSL eklendi (Windows EXE için)
+- v1.4.50'de Check for Updates → urllib SSL fix yapıldı
+- Ama kullanıcının "şu an SSL'i kapat/aç" diye toggle'ı yok
+
+**Kapsam:**
+
+**A) Settings → Network bölümü (yeni alt-bölüm)**
+- ☐ "Disable SSL verification (insecure)" checkbox
+  - Açıklama: "Use only on trusted networks (corporate proxy, self-signed certs). Insecure!"
+  - Ⓘ Tooltip: PyPI'a `--trusted-host` ekleneceğini açıkla
+- 📁 "Custom CA bundle path" (path picker — opsiyonel)
+  - Açıklama: "Path to custom certificate file (PEM format)"
+- 🌐 "Proxy" alanı (opsiyonel — HTTP_PROXY/HTTPS_PROXY env vars)
+- Config keys:
+  - `ssl_verify_disabled` (bool, default False)
+  - `ssl_ca_bundle_path` (str, default "")
+  - `http_proxy` (str), `https_proxy` (str)
+
+**B) Env Oluşturma Dialog'u — SSL toggle**
+- Env Create dialog → Advanced section → "SSL settings (optional)" expandable
+- Settings'teki global ayarı override edebilen local toggle
+- Bu env için kalıcı (env metadata'da saklanır — `~/.venvstudio/env_settings.json`)
+- "Use global SSL settings" / "Disable for this env" / "Custom CA for this env"
+
+**C) Install komutuna SSL flag inject**
+
+| Tool | Disable SSL | Trusted Host | Custom CA |
+|------|-------------|--------------|-----------|
+| pip | `--trusted-host pypi.org --trusted-host files.pythonhosted.org` | ↑ aynı | `--cert /path/to/ca.pem` |
+| uv | `--native-tls` (system) veya `--allow-insecure-host pypi.org` | ↑ | `SSL_CERT_FILE=/path` env var |
+| poetry | `poetry config certificates.pypi.cert /path` | — | ↑ |
+| pipx | `--pip-args="--trusted-host pypi.org"` | ↑ | ↑ |
+| conda/micromamba | `--insecure` veya `ssl_verify: False` config | — | `ssl_verify: /path` |
+
+**D) Env oluştururken de SSL gerekiyor**
+- venv: Python `ensurepip` → `pip install setuptools wheel` çalışıyor → SSL gerekli
+- uv: `uv venv` → Python download → `--native-tls` veya custom cert
+- conda: micromamba download için SSL
+- poetry: poetry kendi pip'i ile + cache server
+
+**E) UI feedback**
+- SSL kapalıyken statusbar'da uyarı: "⚠ SSL verification disabled"
+- Install dialog'unda da görünmeli (ne ile kuracağız belli olsun)
+
+**Dosyalar:**
+- `src/gui/settings_advanced.py` veya yeni `src/gui/settings_network.py` — Network section
+- `src/utils/constants.py` — config keys
+- `src/core/pip_manager.py` — install komutuna SSL flag inject
+- `src/core/venv_manager.py` — env create'te SSL flag inject
+- `src/gui/env_dialog.py` — Advanced SSL toggle
+- `src/utils/config_manager.py` — `ssl_verify_disabled`, `ssl_ca_bundle_path`, proxy keys
+
+**Güvenlik notu:**
+- Kullanıcı bilinçli olarak SSL'i kapatmalı — checkbox'ın yanında ⚠ uyarı
+- Default değer her zaman: SSL **AÇIK**
+- "Disable" seçilince onay dialog'u: "Are you sure? This is insecure on public networks."
+
+**Öncelik:** 🟡 Orta — kurumsal kullanıcılar için elzem, bireysel için opsiyonel
+
+---
+
+### 🟡 F153 — Presets Paket Detay Hover/Click Bilgisi
+
+**Hedef:** Presets tabında preset içindeki kütüphanelere tıklayınca / hover'da o kütüphane ile ilgili detay görünsün. Mevcut Package Info dialog'unun **üstünde / yanında** sade bir tooltip/info card.
+
+**Hiyerarşi:**
+1. **Hover (1 satır):** Paketin desc'i — "numpy: Numerical computing with N-dimensional arrays"
+2. **Tek tık (info card):** Sağ panel veya inline expandable — desc + version range + linkler + install size estimate
+3. **Çift tık veya "Details" butonu:** Mevcut Package Info dialog'u (zaten var — B171'de düzeltilecek Home/PyPI sorunu)
+
+**Kapsam:**
+
+**Görsel tasarım:**
+- Preset card'ında paket listesi: `numpy, pandas, scikit-learn, ...` — şu an plain text
+- Yeni: her paket adı **chip/badge** olur (clickable)
+- Hover → tooltip: paket adı + 1 satır desc
+- Tek tık → preset card altında **info row** açılır (slide animasyonu):
+  - 📝 Desc (2-3 satır)
+  - 🏷 Latest version (PyPI'dan lazy fetch)
+  - 🔗 Linkler (PyPI, Docs, GitHub) — F74 launcher_links pattern'i
+  - 📦 Install size (eğer cache'de varsa) — "~14 MB"
+  - 🔍 "More details" butonu → mevcut Package Info dialog (B171 fix sonrası)
+
+**Veri kaynağı:**
+- `PACKAGE_CATALOG` (`src/utils/constants.py`) — desc, links zaten var
+- F133 (Catalog Override) ile kullanıcı overrideleri de uygulanır
+- Latest version → PyPI JSON API (lazy, cache'lenir)
+
+**Dosyalar:**
+- `src/gui/package_panel.py` — Presets tab → preset card render güncelle
+- `src/gui/preset_card.py` — yeni custom widget olabilir (preset card'ı standalone widget'a böl)
+- `src/utils/constants.py` — PACKAGE_CATALOG (mevcut)
+
+**İlgili eski TODO'lar (BU MADDE TARAFINDAN BİRLEŞTİRİLDİ / GENİŞLETİLDİ):**
+- F144 — Presets'te Paket Bilgi Penceresi (popup formatı önerilmişti — bu madde inline + popup'ı birleştiriyor)
+
+**Hiyerarşi özet:**
+```
+Preset Card (ML Basics)
+  ├─ [numpy] [pandas] [scikit-learn] ...  ← chip'ler
+  │    ├─ hover → tooltip: "numpy: Numerical computing..."
+  │    └─ click → expandable info row (desc + version + links + size)
+  │         └─ "More details" → Package Info Dialog (mevcut, B171 fix sonrası)
+```
+
+**Öncelik:** 🟡 Orta — UX iyileştirmesi, mevcut akışı kırmaz
+
+---
 
 ### 🔴 REFACTOR — Büyük Dosyaları Parçala (500+ satır)
 Settings dosyaları gibi Mixin/modül pattern uygulanacak. Öncelik sırasına göre:
@@ -633,6 +1043,7 @@ F130'da kısaca geçiyor, ayrı bir büyük kategori olsun: **"📊 Görselleşt
 - Editor Integration paneline Spyder satırı eklenmeli (mevcut 7 editörün yanına)
 
 ### ✨ F144 — Presets'te Paket Bilgi Penceresi
+> ⚠️ **F153 (Presets Paket Detay Hover/Click Bilgisi) TARAFINDAN KAPSANIYOR ve GENİŞLETİLDİ** — F153 popup'a ek olarak hover tooltip + inline info row da getiriyor.
 - Preset'lere tıklandığında yüklenecek kütüphanelerin **açıklamaları + isimleri alt alta** bir info/liste olsun
 - Launch'daki "Links ›" gibi benzer bir görünüm ama pencere açılsın
 - İçerik: paket adı, 1-2 satır açıklama, versiyon (varsa)
@@ -695,6 +1106,7 @@ F130'da kısaca geçiyor, ayrı bir büyük kategori olsun: **"📊 Görselleşt
 - Main window `env_refresh_requested` signal'ını `_refresh_env_list`'e bağlı tutuyor (mevcut wiring)
 
 ### ✨ F140 — Launcher'da Package Conflict/Version Ayarı
+> ⚠️ **F151 (Detaylı Conflict Management System) TARAFINDAN KAPSANIYOR** — F151'in launcher entegrasyonu bu maddenin yerini alacak. Aşağıdaki notlar F151 içinde de uygulanacak.
 - Launcher bir uygulamayı yüklerken paket çakışmaları olabiliyor (ör. `streamlit==1.30` ama mevcut env'de `streamlit==1.28`)
 - **Talep**: Install başlamadan önce kullanıcıya **"versiyon değiştirmek ister misin?"** mini dialog
 - Dialog içinde:
@@ -1181,6 +1593,7 @@ F130'da kısaca geçiyor, ayrı bir büyük kategori olsun: **"📊 Görselleşt
 
 ### ⚡ F64 — uv Backend Tam Entegrasyonu
 ### 🔍 F65 — Conflict Detection (pip --dry-run --report)
+> ⚠️ **F151 (Detaylı Conflict Management System) TARAFINDAN KAPSANIYOR** — F151'in dynamic resolution check katmanı bu maddenin yerini alıyor.
 ### 🔒 F66 — Reproducibility & Lock Files
 ### 🐍 F67 — Micromamba / Miniforge Backend
 ### 🐉 F68 — Pixi Backend
@@ -1780,7 +2193,7 @@ Kurulum yöntemleri:
   - Veya: terminal emülatör aç + sudo komutu çalıştır
   - İlgili dosya: src/core/cli_tools_manager.py → install_terminal() / uninstall_terminal()
 
-### ✅ F145 — TAMAMLANDI (v1.4.81): Desktop Shortcut (Tools menüsü)
+### ✅ F145 — TAMAMLANDI (v1.4.81): Desktop Shortcut (Tools menüsü + Settings)
   - Settings → General bölümüne "Create Desktop Shortcut" butonu
   - Help menüsüne "Create Desktop Shortcut" seçeneği
   - Windows: .lnk dosyası oluştur (winshell veya win32com veya PowerShell)

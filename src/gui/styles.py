@@ -35,12 +35,29 @@ def _build_theme(c: dict, font_family: str = "", font_size: int = 13,
     primary_size  = max(int(primary_size or 22), 10)
     tertiary_size = max(int(tertiary_size or 11),  8)
 
-    # Font sizes
+    # Font sizes (px — kept for non-font properties / legacy)
     fs_header = primary_size                              # 22px default
     fs_subheader = max(primary_size - 8, font_size + 1)   # 14px default
     fs_base = font_size                                   # 13px default
     fs_small = max(tertiary_size, 8)                      # 11px default
     fs_tiny = max(tertiary_size, 8)                        # 11px default
+
+    # B174: Qt's stylesheet engine triggers QFont::setPointSize(-1) warnings
+    # when font-size is given in px (pixel-sized fonts have no point size, so
+    # internal Qt calls to QFont.pointSize() return -1, which then propagate
+    # to setPointSize(-1) on derived fonts). Using `pt` makes Qt build
+    # point-size-based fonts and the warnings go away.
+    #
+    # Conversion: 1pt = 1.333px @ 96 DPI  →  pt = round(px * 0.75)
+    # Minimum 6pt to avoid unreadable fonts on legacy themes.
+    def _to_pt(px_value: int) -> int:
+        return max(round(px_value * 0.75), 6)
+
+    font_size_pt    = _to_pt(font_size)
+    fs_header_pt    = _to_pt(fs_header)
+    fs_subheader_pt = _to_pt(fs_subheader)
+    fs_small_pt     = _to_pt(fs_small)
+    fs_tiny_pt      = _to_pt(fs_tiny)
 
     _stylesheet = f"""
 /* ── Base ── */
@@ -53,7 +70,7 @@ QWidget {{
     background-color: {c['bg']};
     color: {c['fg']};
     font-family: {font_family};
-    font-size: {font_size}px;
+    font-size: {font_size_pt}pt;
 }}
 
 /* ── Sidebar ── */
@@ -69,7 +86,7 @@ QWidget {{
     border-radius: 8px;
     padding: 10px 16px;
     text-align: left;
-    font-size: {font_size}px;
+    font-size: {font_size_pt}pt;
 }}
 
 #sidebar QPushButton:hover {{
@@ -85,7 +102,7 @@ QWidget {{
 /* ── Headers ── */
 QLabel#header {{
     font-family: {primary_family};
-    font-size: {fs_header}px;
+    font-size: {fs_header_pt}pt;
     font-weight: bold;
     color: {c['fg']};
     padding: 8px 0;
@@ -93,7 +110,7 @@ QLabel#header {{
 
 QLabel#subheader {{
     font-family: {primary_family};
-    font-size: {fs_subheader}px;
+    font-size: {fs_subheader_pt}pt;
     color: {c['fg_muted']};
     padding: 4px 0;
 }}
@@ -106,7 +123,7 @@ QPushButton {{
     border-radius: 8px;
     padding: 8px 20px;
     font-weight: bold;
-    font-size: {font_size}px;
+    font-size: {font_size_pt}pt;
 }}
 
 QPushButton:hover {{
@@ -156,7 +173,7 @@ QLineEdit, QComboBox {{
     border: 2px solid {c['border']};
     border-radius: 8px;
     padding: 8px 12px;
-    font-size: {font_size}px;
+    font-size: {font_size_pt}pt;
     selection-background-color: {c['accent']};
     selection-color: {c['accent_fg']};
 }}
@@ -341,7 +358,7 @@ QSpinBox {{
     border-radius: 8px;
     padding: 8px 12px;
     min-height: 18px;
-    font-size: {font_size}px;
+    font-size: {font_size_pt}pt;
 }}
 
 QSpinBox:focus {{
@@ -372,7 +389,7 @@ QTextEdit, QPlainTextEdit {{
     border-radius: 8px;
     padding: 8px;
     font-family: "Cascadia Code", "Fira Code", "JetBrains Mono", "Consolas", monospace;
-    font-size: {fs_small}px;
+    font-size: {fs_small_pt}pt;
 }}
 
 /* ── Menu ── */

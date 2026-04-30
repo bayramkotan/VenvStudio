@@ -121,6 +121,51 @@ import subprocess
 import os
 import sys
 
+
+class _EnvSizeWorker(QThread):
+    """Background worker that totals the on-disk size of a venv directory.
+
+    Runs os.walk + getsize off the UI thread (B175). Emits ``done(path, size_str)``
+    when finished. ``size_str`` is empty on failure. The walk respects
+    interruption requests so the worker can be cancelled when the user
+    selects a different env.
+    """
+    done = Signal(str, str)  # (venv_path_str, formatted_size_or_empty)
+
+    # Soft cap — stop accumulating once the env exceeds this size.
+    # Beyond ~10 GB the exact figure stops being useful for the UI label.
+    _SIZE_CAP_BYTES = 10 * 1024 * 1024 * 1024
+
+    def __init__(self, venv_path_str: str, parent=None):
+        super().__init__(parent)
+        self._venv_path_str = venv_path_str
+
+    def run(self):
+        total = 0
+        try:
+            for dirpath, _dirnames, filenames in os.walk(self._venv_path_str):
+                if self.isInterruptionRequested():
+                    self.done.emit(self._venv_path_str, "")
+                    return
+                for f in filenames:
+                    fp = os.path.join(dirpath, f)
+                    try:
+                        total += os.path.getsize(fp)
+                    except OSError:
+                        pass
+                if total > self._SIZE_CAP_BYTES:
+                    break
+            if total < 1024 * 1024:
+                size_str = f"{total / 1024:.0f} KB"
+            elif total < 1024 * 1024 * 1024:
+                size_str = f"{total / (1024 * 1024):.1f} MB"
+            else:
+                size_str = f"{total / (1024 * 1024 * 1024):.2f} GB"
+            self.done.emit(self._venv_path_str, size_str)
+        except Exception:
+            self.done.emit(self._venv_path_str, "")
+
+
 class WorkerThread(QThread):
     """Worker thread with cancel support."""
     finished = Signal(bool, str)
@@ -2873,6 +2918,16 @@ $s.Save()
         return get_colors(theme, font_size, primary_size, tertiary_size)
 
     def set_venv(self, venv_path: Path):
+        # B175 perf fix: skip the entire reload if the same env is selected again.
+        # _on_env_selected fires on every row click in the env table, so without
+        # this guard each redundant click reruns os.walk + pip list + UI rebuild.
+        try:
+            _prev = getattr(self, "_current_venv_path", None)
+            if _prev is not None and Path(_prev) == Path(venv_path):
+                return
+        except Exception:
+            pass
+
         backend = "pip"
         try:
             from src.core.config_manager import ConfigManager
@@ -3337,26 +3392,12 @@ $s.Save()
         if size_str:
             self.env_disk_label.setText(f"💾 {size_str}")
         else:
-            try:
-                total_size = 0
-                for dirpath, dirnames, filenames in os.walk(str(venv_path)):
-                    for f in filenames:
-                        fp = os.path.join(dirpath, f)
-                        try:
-                            total_size += os.path.getsize(fp)
-                        except OSError:
-                            pass
-                    if total_size > 10 * 1024 * 1024 * 1024:
-                        break
-                if total_size < 1024 * 1024:
-                    size_str = f"{total_size / 1024:.0f} KB"
-                elif total_size < 1024 * 1024 * 1024:
-                    size_str = f"{total_size / (1024 * 1024):.1f} MB"
-                else:
-                    size_str = f"{total_size / (1024 * 1024 * 1024):.2f} GB"
-                self.env_disk_label.setText(f"💾 {size_str}")
-            except Exception:
-                self.env_disk_label.setText("💾 ?")
+            # B175 perf fix: never run os.walk on the UI thread.
+            # Show a placeholder, compute size in a background QThread, then
+            # update the label and persist the result to the venv cache so
+            # the next click is instant.
+            self.env_disk_label.setText("💾 …")
+            self._start_size_calc_async(venv_path)
 
         # 4) Backend (pip/uv/conda/poetry/pipx)
         _env_type = getattr(self, "_current_env_type", "venv")
@@ -3425,6 +3466,61 @@ $s.Save()
         """Hide all info bar labels when no env is selected."""
         for lbl in self._info_labels:
             lbl.setVisible(False)
+
+    # ── B175: background env-size calculation ────────────────────────
+    # The UI thread used to call os.walk on the selected env, which
+    # could iterate hundreds of thousands of files (profile showed ~12s
+    # cumulative). We now compute this in a QThread, persist the result
+    # to the venv cache, and update the label when finished.
+    def _start_size_calc_async(self, venv_path):
+        """Spawn a worker that computes total env size off the UI thread."""
+        try:
+            # Cancel any previous size worker — env may have changed
+            prev = getattr(self, "_size_worker", None)
+            if prev is not None and prev.isRunning():
+                try:
+                    prev.done.disconnect()
+                except Exception:
+                    pass
+                prev.requestInterruption()
+                prev.quit()
+                prev.wait(500)
+            self._size_worker = _EnvSizeWorker(str(venv_path), parent=self)
+            # Capture the venv_path in the slot so a late result for an
+            # outdated env does not overwrite the label of a newer one.
+            _expected = str(venv_path)
+
+            def _on_size_done(path_str: str, size_str: str):
+                # Ignore if user has clicked another env in the meantime
+                cur = getattr(self, "_current_venv_path", None)
+                if cur is not None and str(cur) != _expected:
+                    return
+                if size_str:
+                    self.env_disk_label.setText(f"💾 {size_str}")
+                    # Persist into the venv cache so the next click is instant
+                    try:
+                        from pathlib import Path as _P
+                        vm = self._get_venv_manager()
+                        all_cache = vm._load_all_cache()
+                        key = vm._cache_key(_P(path_str))
+                        entry = all_cache.get(key, {}) or {}
+                        entry["size"] = size_str
+                        all_cache[key] = entry
+                        vm._save_all_cache(all_cache)
+                    except Exception:
+                        pass
+                else:
+                    self.env_disk_label.setText("💾 ?")
+
+            self._size_worker.done.connect(_on_size_done)
+            self._size_worker.start()
+        except Exception:
+            # If anything goes wrong setting up the worker, just clear the label
+            try:
+                self.env_disk_label.setText("💾 ?")
+            except Exception:
+                pass
+    # ─────────────────────────────────────────────────────────────────
 
     def _async_refresh_packages(self, force: bool = False):
         """Load packages — from cache if available, otherwise background subprocess."""

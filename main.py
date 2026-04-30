@@ -672,7 +672,52 @@ def main():
             window.activateWindow()
         _single_instance_server.newConnection.connect(_on_new_connection)
 
-        exit_code = app.exec()
+        # ─────────────────────────────────────────────────────────────────
+        # B175 PROFILING — measure where time is spent in the app
+        # TEMPORARY: remove once B175 is solved.
+        #
+        # Activates only when VENVSTUDIO_PROFILE=1 is set in env.
+        # Wraps app.exec() with cProfile and writes the result to
+        # <project_dir>/b175_profile.prof when the app exits.
+        #
+        # Usage (Windows):
+        #   $env:VENVSTUDIO_PROFILE=1; python main.py
+        # ─────────────────────────────────────────────────────────────────
+        if os.environ.get("VENVSTUDIO_PROFILE") == "1":
+            import cProfile
+            import pstats
+
+            _profile_path = os.path.join(BASE_DIR, "b175_profile.prof")
+            _profile_text_path = os.path.join(BASE_DIR, "b175_profile.txt")
+            logger.info(f"B175 PROFILE active — output: {_profile_path}")
+
+            _profiler = cProfile.Profile()
+            _profiler.enable()
+            exit_code = app.exec()
+            _profiler.disable()
+
+            # Save raw profile data
+            try:
+                _profiler.dump_stats(_profile_path)
+                logger.info(f"B175 profile dumped: {_profile_path}")
+            except Exception as _e:
+                logger.warning(f"B175: dump_stats failed: {_e}")
+
+            # Save human-readable text version (top 60 by cumulative time)
+            try:
+                with open(_profile_text_path, "w", encoding="utf-8") as _ftxt:
+                    _stats = pstats.Stats(_profiler, stream=_ftxt)
+                    _ftxt.write("=== B175 PROFILE — Top 60 by cumulative time ===\n\n")
+                    _stats.sort_stats("cumulative").print_stats(60)
+                    _ftxt.write("\n\n=== Top 60 by total time (tottime) ===\n\n")
+                    _stats.sort_stats("tottime").print_stats(60)
+                logger.info(f"B175 profile text: {_profile_text_path}")
+            except Exception as _e:
+                logger.warning(f"B175: text dump failed: {_e}")
+        else:
+            exit_code = app.exec()
+        # ─── END B175 PROFILING ──────────────────────────────────────────
+
         logger.info(f"Application exiting with code {exit_code}")
         sys.exit(exit_code)
 

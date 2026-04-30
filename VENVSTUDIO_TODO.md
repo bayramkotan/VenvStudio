@@ -197,17 +197,34 @@ Linux aynı sistem profilinde (6 env, hepsi cache HIT) ~8s. **Windows 4x daha ya
 
 ---
 
-### ✅ B176 — TAMAMLANDI (v1.4.86): Launch Copy Command Tek Satır Kopyalıyor
+### ✅ B177 — TAMAMLANDI (v1.4.87): Pkg Cache Hiç Yazılmıyordu
 
-**Sorun:** Launch sekmesindeki 📋 butonu install + run komutlarını `\n` ile birleştirip clipboard'a koyuyordu. Terminale (PowerShell, cmd, bash, zsh, fish) yapıştırınca `\n` ENTER olarak yorumlanıyor → ilk komut çalışıyor, ikinci komut sessizce kayboluyor. Tüm platformlarda aynı sorun.
+**Bug:** `_get_venv_manager` `VenvManager`'a `str` veriyordu, `VenvManager.__init__` ise `base_dir.mkdir()` çağırıyor — string'de mkdir yok. Sessiz `try/except` exception'ı yutuyordu, **pkg_list cache hiç yazılamıyordu** v1.4.86 öncesinde de.
 
-**Çözüm:** Tek 📋 butonu yerine **iki ayrı buton**:
-- 📋 Install — sadece install komutunu kopyalar
-- 📋 Run — sadece run komutunu kopyalar
+**Fix:** `VenvManager(Path(base_dir))` — tek satır.
 
-Her tıklama net, tek komut, tüm platformlarda aynı çalışıyor (Windows cmd/PowerShell, macOS, Linux bash/zsh/fish). Status bar'da kopyalanan komut gösteriliyor.
+**Etki:** Profile'daki 5.9s `pip list` kasması ortadan kalktı. Pkg list cache artık çalışıyor — ilk env switch MISS+SAVED, sonraki açılışlar HIT.
 
-**Dosya:** `src/gui/package_panel.py` — `_copy_single_command` (yeni metod), launcher card render iki butona uyarlandı, env değişikliği güncelleme bloğu da iki butona göre düzenlendi. Eski `_copy_launcher_commands` deprecated olarak bırakıldı (backward compat).
+**Dosya:** `src/gui/package_panel.py` — `_get_venv_manager`
+
+---
+
+### 🟡 B176 — TEKRAR AÇIK: Launch Copy Command Tek Satır Kopyalıyor
+
+**Sorun:** Launch sekmesindeki 📋 butonu install + run komutlarını `\n` ile birleştirip clipboard'a koyuyor. Terminale yapıştırınca `\n` ENTER olarak yorumlanıyor → ilk komut çalışıyor, ikinci komut kayboluyor. Tüm terminallerde (PowerShell, cmd, bash, zsh, fish) aynı.
+
+**v1.4.86'da denendi → kullanıcı izni olmadan UI değiştiği için geri alındı.** Tek 📋 buton korundu.
+
+**Yapılacak:** Önce kullanıcıyla UI seçeneği üzerinde anlaş, sonra implement et.
+
+**Olası çözümler:**
+1. Tek buton, sadece install komutu kopyala (run gizli)
+2. İki ayrı buton (📋 Install + 📋 Run) — geri alınan yaklaşım
+3. Tek buton, dialog aç, kullanıcı seçsin
+4. Tek buton, uzun-tıkla → run, kısa-tıkla → install
+5. Tek buton, platform-aware separator (`;` Windows, `&&` Linux)
+
+**Dosya:** `src/gui/package_panel.py`
 
 ---
 

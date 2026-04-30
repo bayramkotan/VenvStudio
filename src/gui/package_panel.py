@@ -130,10 +130,8 @@ class _EnvSizeWorker(QThread):
     interruption requests so the worker can be cancelled when the user
     selects a different env.
     """
-    done = Signal(str, str)  # (venv_path_str, formatted_size_or_empty)
+    done = Signal(str, str)
 
-    # Soft cap — stop accumulating once the env exceeds this size.
-    # Beyond ~10 GB the exact figure stops being useful for the UI label.
     _SIZE_CAP_BYTES = 10 * 1024 * 1024 * 1024
 
     def __init__(self, venv_path_str: str, parent=None):
@@ -311,7 +309,12 @@ class PackagePanel(QWidget):
             base_dir = str(self._get_config_base_dir())
         if self._vm_cache is None or self._vm_cache_base != str(base_dir):
             from src.core.venv_manager import VenvManager
-            self._vm_cache = VenvManager(base_dir)
+            # B175 cache fix: VenvManager.__init__ calls base_dir.mkdir(),
+            # so it must receive a Path, not a str. Without this, every
+            # _save_all_cache call raised "'str' object has no attribute
+            # 'mkdir'" silently — pkg_list cache was never written and
+            # every env switch fell back to a fresh `pip list` subprocess.
+            self._vm_cache = VenvManager(Path(base_dir))
             self._vm_cache_base = str(base_dir)
         return self._vm_cache
 
@@ -2832,7 +2835,13 @@ $s.Save()
     def _get_pkg_cache_key(self) -> str:
         if not self.pip_manager:
             return ""
-        return "pkg_list:" + str(self.pip_manager.venv_path).replace("\\", "/")
+        # B175 perf fix: use venv_manager's normalised cache key.
+        try:
+            from src.core.venv_manager import VenvManager  # noqa: F401
+            vm = self._get_venv_manager()
+            return "pkg_list:" + vm._cache_key(self.pip_manager.venv_path)
+        except Exception:
+            return "pkg_list:" + str(self.pip_manager.venv_path).replace("\\", "/")
 
     def _load_pkg_cache(self):
         try:
@@ -2852,13 +2861,29 @@ $s.Save()
             from src.core.config_manager import ConfigManager
             vm = self._get_venv_manager()
             all_cache = vm._load_all_cache()
-            all_cache[self._get_pkg_cache_key()] = {
+            key = self._get_pkg_cache_key()
+            all_cache[key] = {
                 "packages": [{"name": p.name, "version": p.version} for p in packages],
                 "needs_refresh": 0,
             }
             vm._save_all_cache(all_cache)
-        except Exception:
-            pass
+            try:
+                from src.utils.logger import get_logger
+                get_logger("venvstudio.pkg_cache").debug(
+                    f"[PkgCache] SAVED key={key!r} count={len(packages)}"
+                )
+            except Exception:
+                pass
+        except Exception as _e:
+            try:
+                import traceback
+                from src.utils.logger import get_logger
+                _tb = traceback.format_exc()
+                get_logger("venvstudio.pkg_cache").warning(
+                    f"[PkgCache] SAVE FAILED: {type(_e).__name__}: {_e}\n{_tb}"
+                )
+            except Exception:
+                pass
 
     def _invalidate_pkg_cache(self):
         try:
@@ -2919,8 +2944,6 @@ $s.Save()
 
     def set_venv(self, venv_path: Path):
         # B175 perf fix: skip the entire reload if the same env is selected again.
-        # _on_env_selected fires on every row click in the env table, so without
-        # this guard each redundant click reruns os.walk + pip list + UI rebuild.
         try:
             _prev = getattr(self, "_current_venv_path", None)
             if _prev is not None and Path(_prev) == Path(venv_path):
@@ -3393,9 +3416,6 @@ $s.Save()
             self.env_disk_label.setText(f"💾 {size_str}")
         else:
             # B175 perf fix: never run os.walk on the UI thread.
-            # Show a placeholder, compute size in a background QThread, then
-            # update the label and persist the result to the venv cache so
-            # the next click is instant.
             self.env_disk_label.setText("💾 …")
             self._start_size_calc_async(venv_path)
 
@@ -3467,15 +3487,9 @@ $s.Save()
         for lbl in self._info_labels:
             lbl.setVisible(False)
 
-    # ── B175: background env-size calculation ────────────────────────
-    # The UI thread used to call os.walk on the selected env, which
-    # could iterate hundreds of thousands of files (profile showed ~12s
-    # cumulative). We now compute this in a QThread, persist the result
-    # to the venv cache, and update the label when finished.
+    # B175: background env-size calculation
     def _start_size_calc_async(self, venv_path):
-        """Spawn a worker that computes total env size off the UI thread."""
         try:
-            # Cancel any previous size worker — env may have changed
             prev = getattr(self, "_size_worker", None)
             if prev is not None and prev.isRunning():
                 try:
@@ -3486,18 +3500,14 @@ $s.Save()
                 prev.quit()
                 prev.wait(500)
             self._size_worker = _EnvSizeWorker(str(venv_path), parent=self)
-            # Capture the venv_path in the slot so a late result for an
-            # outdated env does not overwrite the label of a newer one.
             _expected = str(venv_path)
 
             def _on_size_done(path_str: str, size_str: str):
-                # Ignore if user has clicked another env in the meantime
                 cur = getattr(self, "_current_venv_path", None)
                 if cur is not None and str(cur) != _expected:
                     return
                 if size_str:
                     self.env_disk_label.setText(f"💾 {size_str}")
-                    # Persist into the venv cache so the next click is instant
                     try:
                         from pathlib import Path as _P
                         vm = self._get_venv_manager()
@@ -3515,12 +3525,10 @@ $s.Save()
             self._size_worker.done.connect(_on_size_done)
             self._size_worker.start()
         except Exception:
-            # If anything goes wrong setting up the worker, just clear the label
             try:
                 self.env_disk_label.setText("💾 ?")
             except Exception:
                 pass
-    # ─────────────────────────────────────────────────────────────────
 
     def _async_refresh_packages(self, force: bool = False):
         """Load packages — from cache if available, otherwise background subprocess."""
@@ -3531,6 +3539,13 @@ $s.Save()
         if not force:
             cached = self._load_pkg_cache()
             if cached is not None:
+                try:
+                    from src.utils.logger import get_logger
+                    get_logger("venvstudio.pkg_cache").debug(
+                        f"[PkgCache] HIT key={self._get_pkg_cache_key()!r} count={len(cached)}"
+                    )
+                except Exception:
+                    pass
                 class _Pkg:
                     def __init__(self, name, version):
                         self.name = name
@@ -3538,6 +3553,13 @@ $s.Save()
                 pkgs = [_Pkg(p["name"], p["version"]) for p in cached]
                 self._on_packages_loaded(pkgs)
                 return
+            try:
+                from src.utils.logger import get_logger
+                get_logger("venvstudio.pkg_cache").debug(
+                    f"[PkgCache] MISS key={self._get_pkg_cache_key()!r} force={force} → starting pip list"
+                )
+            except Exception:
+                pass
 
         # Cancel / wait for any previous loader to avoid QThread crash
         if hasattr(self, '_pkg_loader') and self._pkg_loader is not None:
@@ -3641,6 +3663,13 @@ $s.Save()
 
     def _on_packages_loaded(self, packages):
         """Called when async package loading finishes."""
+        try:
+            from src.utils.logger import get_logger
+            get_logger("venvstudio.pkg_cache").debug(
+                f"[PkgCache] _on_packages_loaded called count={len(packages) if packages else 0}"
+            )
+        except Exception:
+            pass
         if not self.pip_manager:
             return
 

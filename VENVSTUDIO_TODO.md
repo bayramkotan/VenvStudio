@@ -67,7 +67,143 @@ Profiling (Linux, 6 env):
 
 ## 🔴 EN ÖNCELİKLİ (Sonraki Sprint)
 
+### 🟡 F157 — Settings → Performance Sekmesi
+
+**⚠️ SIRA:** Önce F158 (alt yapı) → sonra F157 (UI). Aksi halde Cache stats boş görünür.
+
+**Hedef:** Settings altında yeni "Performance" bölümü. Tüm performans/cache/threading ayarları tek yerde.
+
+**İçerik:**
+
+**📊 Cache İstatistikleri (read-only panel)**
+- Env cache: X entry, Y KB
+- Pkg list cache: X entry, Y KB
+- QSS/style cache: hits/misses, hit rate %
+- Toplam cache disk kullanımı
+
+**🗑 Cache Yönetimi**
+- "Clear all caches" butonu (env + pkg + qss + chip + ...)
+- "Clear pkg list cache only" (selektif)
+- "Clear style cache only"
+- Onay dialog'u (geri alınamaz)
+
+**⚙️ Cache Davranışı**
+- ☐ Mtime-based invalidation (Aşama 5 ile gelecek)
+- ☐ Time-based stale detection (default >7 gün)
+- Sürgü: Cache TTL (saat) — varsayılan 168 (7 gün)
+- Sürgü: Max cache size (MB) — varsayılan 50 MB
+
+**🧵 Threading**
+- Sürgü: Subprocess timeout (saniye) — varsayılan 30s
+- Sürgü: Background worker count — varsayılan 4 (CPU bağımlı)
+- ☐ Parallel env scan (birden çok env aynı anda taransın)
+
+**🔬 Diagnostik**
+- ☐ Enable performance logging (DEBUG seviyesinde startup ve switch süreleri)
+- ☐ Show cache hit/miss in status bar
+- "Run profile" butonu — cProfile çalıştır, raporu file'a kaydet
+
+**💤 Lazy Loading**
+- ☐ Launcher cards lazy load (Aşama 3 sonrası)
+- ☐ Tabs lazy build (sadece tıklanınca)
+- ☐ Module lazy import (learn_page, settings_*)
+
+**Dosya:** `src/gui/settings_performance.py` (yeni), `src/gui/settings_page.py` (sekme ekle), `src/utils/config_manager.py` (yeni keys)
+
+**Öncelik:** 🟡 Orta — power user feature, ama çok değerli (debugging için kritik)
+
+---
+
+### 🟡 F158 — Kütüphane (Pkg Catalog) Cache İyileştirmeleri
+
+**⚠️ SIRA:** ÖNCE bu yapılır (alt yapı), SONRA F157 (UI bunun üstüne).
+
+**Hedef:** Catalog tab'ındaki kütüphane bilgilerini cache'le. PyPI'a bağlı her şey local cache'e alınsın.
+
+**Şu an:**
+- Pkg list (kurulu paketler) → cache'leniyor (v1.4.87 sonrası ✓)
+- Pkg metadata (description, homepage, version, license, deps) → her seferinde subprocess `pip show` veya PyPI request
+- Pkg search (Catalog'da arama) → muhtemelen her keyword için yeniden taranıyor
+- Pkg version listesi → her "version" tıklamada PyPI request
+
+**Yapılacak:**
+
+**A) Pkg metadata cache (yeni)**
+- `pkg_meta_cache.json` — `pip show <pkg>` çıktısı cache'lenir
+- TTL: 7 gün (paket sürümü değişince doğal güncelleme zaten olur)
+- Anahtar: `(env_path, pkg_name, version)` → `{description, homepage, license, deps, ...}`
+
+**B) PyPI metadata cache (yeni)**
+- `pypi_meta_cache.json` — PyPI JSON API çağrıları (`https://pypi.org/pypi/<pkg>/json`)
+- TTL: 24 saat (paket sürümleri sık güncellenir)
+- Anahtar: `pkg_name` → `{latest_version, all_versions, summary, project_urls, ...}`
+
+**C) Search index (yeni)**
+- Catalog'daki PACKAGE_CATALOG sabit zaten — JSON dosyaya çevrilebilir
+- İlk açılışta indexlensin (full-text search için sqlite FTS5 veya basit dict-of-words)
+- Search anlık olur, her keyword için liste taraması yapma
+
+**D) Pkg detail dialog cache**
+- Bir paket detayını ilk açtığında PyPI'dan çek + cache'le
+- Sonraki açılışlarda cache'den anında göster
+- "Refresh" butonu manuel re-fetch için
+
+**E) Görsel cache (icon, thumbnail)**
+- Catalog'daki paket icon'ları (varsa)
+- Disk cache, RAM'de QPixmapCache
+
+**F) Cache invalidation**
+- F157'deki Settings paneli ile entegre
+- Her cache türü için ayrı clear butonu
+
+**Etki:**
+- Catalog ilk açılış: birkaç saniye yerine anında
+- Pkg detail dialog: 1-2s yerine anında
+- Search: yazarken instant filter
+
+**Dosyalar:**
+- `src/core/pkg_metadata_cache.py` (yeni)
+- `src/core/pypi_client.py` (yeni — PyPI API + caching wrapper)
+- `src/gui/package_panel.py` (Catalog tab → use cache)
+- `src/utils/constants.py` (cache TTL sabitleri)
+
+**Öncelik:** 🔴 Yüksek — Catalog kullanılabilirliği için kritik
+
+---
+
 ### 🟡 F156 — Terminal Çıktıları Anlamlı/Görsel Olsun (Rich Box)
+
+**Hedef:** Anlaşılmaz log satırları yerine kullanıcı dostu kutucuklar.
+
+**Örnek:**
+```
+╭──────────────────────────────────────╮
+│ 🚀  Deleting environment 'tsssss'    │
+│    • Type: venv                      │
+│    • Path: C:\venv\tsssss            │
+╰──────────────────────────────────────╯
+╭──────────────────────────────────────╮
+│ ✅  Environment 'tsssss' deleted     │
+│    • Removed: C:\venv\tsssss         │
+╰──────────────────────────────────────╯
+```
+
+**Nerede uygulanacak:**
+- Env oluştur/sil/değiştir
+- Paket yükle/kaldır
+- Launch app yükle/kaldır/çalıştır
+- Komut kopyalama
+- Tab değiştirme
+- Preset yükleme
+- Manual install
+
+**Teknik:** Rich library zaten dependency (`rich.console.Console` + `rich.panel.Panel`). Logger formatter'ında özel event'ler için Panel render et.
+
+**Dosya:** `src/utils/logger.py`, ilgili event'leri tetikleyen yerler
+
+**Öncelik:** 🟡 Orta — UX iyileştirmesi, çok değer katar
+
+---
 
 **Hedef:** Anlaşılmaz log satırları yerine kullanıcı dostu kutucuklar.
 

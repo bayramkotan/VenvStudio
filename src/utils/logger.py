@@ -539,20 +539,35 @@ def _safe_format_exception(exc_type, exc_value, exc_tb) -> str:
     """Format an exception without triggering Python 3.13 + PySide6 6.10.2
     shibokensupport recursion bug.
 
-    The standard `traceback.format_exception(t, v, tb)` path enters
-    `import ast` inside `_should_show_carets()`, which on PySide6 patches
-    Python's import machinery via shibokensupport.feature, which then
-    recurses on every signature lookup → RecursionError. The legacy
-    component API (format_tb + format_exception_only) bypasses that path.
+    Both `traceback.format_exception()` and `traceback.format_tb()` go
+    through `_should_show_carets()` → `import ast` → shiboken signature
+    loader → recursion. We walk the frames manually instead — that path
+    never imports ast and is safe.
     """
+    # Always-safe header
+    type_name = getattr(exc_type, "__name__", str(exc_type))
+    header = f"{type_name}: {exc_value}\n"
+
+    # Walk traceback manually — no format_tb, no carets, no ast import
+    if exc_tb is None:
+        return header
     try:
-        tb_part = "".join(traceback.format_tb(exc_tb)) if exc_tb else ""
-        exc_part = "".join(traceback.format_exception_only(exc_type, exc_value))
-        return tb_part + exc_part
+        frames = []
+        tb = exc_tb
+        depth = 0
+        while tb is not None and depth < 50:  # cap to prevent infinite tb chain
+            frame = tb.tb_frame
+            lineno = tb.tb_lineno
+            filename = frame.f_code.co_filename
+            funcname = frame.f_code.co_name
+            frames.append(f'  File "{filename}", line {lineno}, in {funcname}')
+            tb = tb.tb_next
+            depth += 1
+        return "Traceback (most recent call last):\n" + "\n".join(frames) + "\n" + header
     except RecursionError:
-        return f"{exc_type.__name__}: {exc_value}\n(traceback unavailable due to RecursionError in format_exception)\n"
+        return header + "(traceback walk hit RecursionError)\n"
     except Exception as _fe:
-        return f"{exc_type.__name__}: {exc_value}\n(traceback formatting failed: {_fe})\n"
+        return header + f"(traceback walk failed: {_fe})\n"
 
 
 def _install_sys_excepthook(log_dir: Path, logger: logging.Logger):

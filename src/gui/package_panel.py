@@ -5098,13 +5098,45 @@ dependencies:
                 except Exception:
                     pass
                 delattr(self, attr)
-        widget = creator()
-        # Replace placeholder with real widget
-        self.tabs.removeTab(index)
-        self.tabs.insertTab(index, widget, self._tab_defs[index][1])
-        self.tabs.setTabToolTip(index, self._tab_defs[index][3])
-        self._tab_defs[index] = (key, self._tab_defs[index][1], widget, self._tab_defs[index][3])
-        self.tabs.setCurrentIndex(index)
-        self._tab_built[key] = True
+        # B180: build the tab inside try/except so a creator crash does NOT
+        # leave the QTabWidget in an inconsistent state (previously the old
+        # placeholder was removed first, then insertTab failed → duplicate
+        # tabs accumulated on every retry).
+        try:
+            widget = creator()
+        except Exception as _ce:
+            try:
+                from src.utils.logger import get_logger
+                get_logger("venvstudio.tabs").error(
+                    f"[B180] Tab '{key}' creator failed: {type(_ce).__name__}: {_ce}"
+                )
+            except Exception:
+                pass
+            # Build a minimal error placeholder so the user sees something
+            from PySide6.QtWidgets import QWidget as _QW, QVBoxLayout as _QV, QLabel as _QL
+            widget = _QW()
+            _lay = _QV(widget)
+            _lay.addWidget(_QL(
+                f"⚠ Could not build the {key.title()} tab.\n"
+                f"Error: {type(_ce).__name__}: {_ce}\n\n"
+                f"This is usually a PySide6 / Python 3.13 compatibility issue (B180).\n"
+                f"Please update to Python 3.13.5+ or report this on GitHub."
+            ))
+        # Replace placeholder with real widget — both calls always run together
+        try:
+            self.tabs.removeTab(index)
+            self.tabs.insertTab(index, widget, self._tab_defs[index][1])
+            self.tabs.setTabToolTip(index, self._tab_defs[index][3])
+            self._tab_defs[index] = (key, self._tab_defs[index][1], widget, self._tab_defs[index][3])
+            self.tabs.setCurrentIndex(index)
+            self._tab_built[key] = True
+        except Exception as _re:
+            try:
+                from src.utils.logger import get_logger
+                get_logger("venvstudio.tabs").error(
+                    f"[B180] Tab '{key}' replace failed: {_re}"
+                )
+            except Exception:
+                pass
 
 

@@ -445,24 +445,31 @@ def main():
         # the log AND the console so crashes can be diagnosed.
         def _global_excepthook(exc_type, exc_value, exc_tb):
             # B180/B181 yan etki: Python 3.13 + PySide6 6.10.2 kombinasyonunda
-            # `traceback.format_exception(exc_type, exc_value, exc_tb)` shiboken
+            # `traceback.format_exception` ve `traceback.format_tb` shibokensupport
             # signature loader ile sonsuz döngüye giriyor (RecursionError).
-            # Eski API (format_tb + format_exception_only) bu yolu tetiklemiyor.
+            # Manuel olarak frame frame walk yapmak güvenli — ast import etmiyor.
+            type_name = getattr(exc_type, "__name__", str(exc_type))
             try:
-                tb_lines = traceback.format_tb(exc_tb) if exc_tb else []
-                exc_lines = traceback.format_exception_only(exc_type, exc_value)
-                tb_text = "".join(tb_lines) + "".join(exc_lines)
-            except RecursionError:
-                tb_text = f"{exc_type.__name__}: {exc_value}\n(traceback unavailable due to RecursionError in format_exception)\n"
+                frames = []
+                _tb = exc_tb
+                _depth = 0
+                while _tb is not None and _depth < 50:
+                    _f = _tb.tb_frame
+                    frames.append(
+                        f'  File "{_f.f_code.co_filename}", line {_tb.tb_lineno}, in {_f.f_code.co_name}'
+                    )
+                    _tb = _tb.tb_next
+                    _depth += 1
+                tb_text = "Traceback (most recent call last):\n" + "\n".join(frames) + f"\n{type_name}: {exc_value}\n"
             except Exception as _fe:
-                tb_text = f"{exc_type.__name__}: {exc_value}\n(traceback formatting failed: {_fe})\n"
+                tb_text = f"{type_name}: {exc_value}\n(manual tb walk failed: {_fe})\n"
             full_msg = (
                 f"\n{'='*70}\n"
-                f"UNHANDLED EXCEPTION — {exc_type.__name__}: {exc_value}\n"
+                f"UNHANDLED EXCEPTION — {type_name}: {exc_value}\n"
                 f"{'='*70}\n{tb_text}{'='*70}\n"
             )
             try:
-                logger.critical(f"UNHANDLED: {exc_type.__name__}: {exc_value}\n{tb_text}")
+                logger.critical(f"UNHANDLED: {type_name}: {exc_value}\n{tb_text}")
             except Exception:
                 pass
             # Always also print to stderr (visible in terminal / debug EXE)

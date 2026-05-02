@@ -422,10 +422,82 @@ class AppearanceMixin:
             parent=self
         )
         self._cli_worker.progress.connect(self._cli_log_append)
+        # F172: after the font installs successfully, offer to create a
+        # terminal profile that uses it. Without this step, the prompt
+        # icons render as boxes (□) because the user's default profile
+        # still uses the old non-Nerd font.
         self._cli_worker.finished.connect(
-            lambda ok, msg: self._cli_log_append(msg)
+            lambda ok, msg, fn=font_name: self._after_nerd_font_install(ok, msg, fn)
         )
         self._cli_worker.start()
+
+    def _after_nerd_font_install(self, ok: bool, msg: str, font_name: str):
+        """Called when Nerd Font installation finishes. On success, prompts
+        the user to create a matching terminal profile (F172)."""
+        self._cli_log_append(msg)
+        if not ok:
+            return
+        try:
+            from src.core.terminal_profile_setup import (
+                detect_terminal, supported_terminals, create_nerd_font_profile,
+            )
+        except Exception as _ie:
+            self._cli_log_append(f"⚠️ terminal_profile_setup unavailable: {_ie}")
+            return
+
+        # Nerd Font names usually have " Nerd Font" suffix when installed
+        # via oh-my-posh / nerd-fonts release. Use the family the user picked.
+        family = self._guess_nerd_font_family(font_name)
+
+        terminal = detect_terminal()
+        if terminal and terminal in supported_terminals():
+            prompt = (
+                f"Nerd Font '{family}' installed.\n\n"
+                f"Detected terminal: {terminal}\n\n"
+                f"Create a new terminal profile named 'VenvStudio Posh' "
+                f"with this font, so prompt icons render correctly?\n\n"
+                f"You can switch to this profile from your terminal's "
+                f"profile menu after creation."
+            )
+            reply = QMessageBox.question(self, "Set up terminal profile?", prompt,
+                                         QMessageBox.Yes | QMessageBox.No,
+                                         QMessageBox.Yes)
+            if reply == QMessageBox.Yes:
+                set_default = (QMessageBox.question(
+                    self, "Set as default?",
+                    f"Make 'VenvStudio Posh' the DEFAULT profile for {terminal}?\n\n"
+                    f"(You can always switch back from the terminal's preferences.)",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No,
+                ) == QMessageBox.Yes)
+                ok2, msg2 = create_nerd_font_profile(
+                    terminal=terminal,
+                    font_family=family,
+                    profile_name="VenvStudio Posh",
+                    font_size=11,
+                    set_default=set_default,
+                )
+                self._cli_log_append(msg2)
+                QMessageBox.information(self, "Terminal profile",
+                                        msg2 if ok2 else f"❌ {msg2}")
+        else:
+            # Unknown / unsupported terminal — guide the user manually
+            self._cli_log_append(
+                f"ℹ️ Could not auto-detect a supported terminal. "
+                f"Open your terminal preferences and set the font to: {family}"
+            )
+
+    def _guess_nerd_font_family(self, raw_name: str) -> str:
+        """Convert a download/UI label like 'FiraCode' into the actual
+        installed family name 'FiraCode Nerd Font'. Most nerd-fonts release
+        zips install families with that exact suffix."""
+        if not raw_name:
+            return "Nerd Font"
+        cleaned = raw_name.strip()
+        # If user already typed "Foo Nerd Font", leave it alone
+        if "nerd font" in cleaned.lower():
+            return cleaned
+        return f"{cleaned} Nerd Font"
 
     def _verify_pip_venv(self):
         """Check pip and venv for selected Python, offer to fix if missing."""

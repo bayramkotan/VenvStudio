@@ -2451,9 +2451,25 @@ $s.Save()
         self.packages_table = QTableWidget()
         self.packages_table.setColumnCount(3)
         self.packages_table.setHorizontalHeaderLabels(["Package", "Version", ""])
-        self.packages_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        self.packages_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self.packages_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Fixed)
+        # B180: PySide6 6.10.2 + Python 3.13.0/3.13.x early patches has a
+        # C-level enum→int conversion bug that crashes setSectionResizeMode
+        # with `SystemError: longobject.c:1481`. Wrap in try/except and use
+        # the explicit ResizeMode enum path (the deprecated short form
+        # QHeaderView.Stretch is what triggers the bug).
+        try:
+            _hdr = self.packages_table.horizontalHeader()
+            _hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+            _hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+            _hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        except (SystemError, TypeError, AttributeError) as _e:
+            try:
+                from src.utils.logger import get_logger
+                get_logger("venvstudio.qt").warning(
+                    f"[B180] setSectionResizeMode failed (PySide6/Python compat): {_e} "
+                    f"— falling back to default header behaviour"
+                )
+            except Exception:
+                pass
         self.packages_table.setColumnWidth(2, 40)
         self.packages_table.horizontalHeader().setStretchLastSection(False)
         self.packages_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
@@ -2520,13 +2536,24 @@ $s.Save()
         self.catalog_table = QTableWidget()
         self.catalog_table.setColumnCount(5)
         self.catalog_table.setHorizontalHeaderLabels(["Install", "Package", "Description", "Category", "Links"])
-        self.catalog_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Fixed)
-        self.catalog_table.setColumnWidth(0, 28)
-        self.catalog_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self.catalog_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
-        self.catalog_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        self.catalog_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Fixed)
-        self.catalog_table.setColumnWidth(4, 80)
+        # B180: see Installed tab — same PySide6 6.10.2/Python 3.13 enum bug
+        try:
+            _hdr = self.catalog_table.horizontalHeader()
+            _hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+            self.catalog_table.setColumnWidth(0, 28)
+            _hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+            _hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+            _hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+            _hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
+            self.catalog_table.setColumnWidth(4, 80)
+        except (SystemError, TypeError, AttributeError) as _e:
+            try:
+                from src.utils.logger import get_logger
+                get_logger("venvstudio.qt").warning(
+                    f"[B180] catalog setSectionResizeMode failed: {_e}"
+                )
+            except Exception:
+                pass
         self.catalog_table.horizontalHeader().setStretchLastSection(False)
         self.catalog_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.catalog_table.setAlternatingRowColors(True)

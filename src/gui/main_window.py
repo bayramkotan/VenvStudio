@@ -2233,6 +2233,13 @@ class MainWindow(QMainWindow):
                 if _type_item:
                     _env_type = _type_item.data(Qt.UserRole) or "venv"
             _display_path = _env_path or str(self.venv_manager.base_dir / name)
+            # B182: remember the real env path/type for cache invalidation in
+            # _on_delete_finished — pipx/poetry/uv envs live OUTSIDE
+            # venv_manager.base_dir, so the old code that built the cache key
+            # from `base_dir / name` was looking up the wrong key and the
+            # stale entry survived a delete.
+            self._deleting_env_path = _env_path
+            self._deleting_env_type = _env_type
 
             # Update the educational command panel at the bottom of the env page
             self._update_cmd_panel(action="delete", env_type=_env_type, name=name, env_path=_display_path)
@@ -2247,20 +2254,40 @@ class MainWindow(QMainWindow):
 
     def _on_delete_finished(self, success, message):
         deleted_name = getattr(self, "_deleting_env_name", "")
+        deleted_path = getattr(self, "_deleting_env_path", None)
+        deleted_type = getattr(self, "_deleting_env_type", "venv")
         if success:
-            self._log.info(f"env_deleted: name={deleted_name!r} → cleaning cache + refreshing list")
+            self._log.info(
+                f"env_deleted: name={deleted_name!r} type={deleted_type!r} "
+                f"path={deleted_path!r} → cleaning cache + refreshing list"
+            )
             # Remove pkg_list cache entry for the deleted env
             try:
                 from src.core.venv_manager import VenvManager
-                vm = VenvManager(self.config.get_venv_base_dir())
+                from pathlib import Path as _P
+                vm = VenvManager(_P(self.config.get_venv_base_dir()))
                 all_cache = vm._load_all_cache()
+                # B182: pipx/poetry/uv envs live OUTSIDE base_dir — use the
+                # actual env path captured in _delete_env, not the assumed
+                # `base_dir / name`. Falls back to base_dir/name only if the
+                # real path is missing (legacy / classic venv path).
+                real_path = _P(deleted_path) if deleted_path else (self.venv_manager.base_dir / deleted_name)
                 if deleted_name:
-                    key = "pkg_list:" + str(self.venv_manager.base_dir / deleted_name).replace("\\", "/")
-                    if key in all_cache:
-                        all_cache.pop(key, None)
-                        self._log.debug(f"env_deleted: removed pkg_list cache key={key!r}")
+                    # Cache key uses the same normalisation as venv_manager
+                    try:
+                        norm_path = vm._cache_key(real_path)
+                    except Exception:
+                        norm_path = str(real_path).replace("\\", "/")
+                    pkg_key = "pkg_list:" + norm_path
+                    if pkg_key in all_cache:
+                        all_cache.pop(pkg_key, None)
+                        self._log.debug(f"env_deleted: removed pkg_list cache key={pkg_key!r}")
+                    # Also remove env meta cache entry by the same normalised key
+                    if norm_path in all_cache:
+                        all_cache.pop(norm_path, None)
+                        self._log.debug(f"env_deleted: removed env meta cache key={norm_path!r}")
                     vm._save_all_cache(all_cache)
-                    vm.invalidate_cache(self.venv_manager.base_dir / deleted_name)
+                    vm.invalidate_cache(real_path)
             except Exception as e:
                 self._log.warning(f"env_deleted: cache cleanup error: {e}")
             # Clear package panel launcher state
@@ -2269,7 +2296,7 @@ class MainWindow(QMainWindow):
                 self.package_panel._update_launcher_status()
             # Invalidate all caches so env disappears from list immediately
             self.venv_manager.invalidate_all_caches()
-            self._refresh_env_list()
+            self._refresh_env_list(force=True)
             self.statusBar().showMessage(message)
             if hasattr(self, "_cmd_panel_live"):
                 self._cmd_panel_live.setText(f"✅ {message}")
@@ -2736,15 +2763,6 @@ class MainWindow(QMainWindow):
             primary_size = self.config.get("font_primary_size", 22)
             tertiary_family = self.config.get("font_tertiary_family", "")
             tertiary_size = self.config.get("font_tertiary_size", 11)
-            # Aşama 1.5: clear style cache so a Settings → Apply round-trip
-            # always rebuilds the QSS, even if the user changed something
-            # subtle (e.g. swapped a palette dict at runtime). Steady-state
-            # calls go through the cache untouched.
-            try:
-                from src.gui.styles import invalidate_style_cache
-                invalidate_style_cache()
-            except Exception:
-                pass
             self.setStyleSheet(get_theme(
                 theme, font_family=font_family, font_size=font_size,
                 primary_family=primary_family, primary_size=primary_size,

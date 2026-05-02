@@ -59,6 +59,17 @@ class AppearanceMixin:
             self._refresh_styles()
 
     def _cli_log_append(self, text: str):
+        # B181: cli_log widget may not exist on every code path that mixes
+        # in AppearanceMixin (some entry points don't build the log pane).
+        # Without this guard a stray Install click crashed the whole app
+        # with AttributeError. Fall back to the application logger.
+        if not hasattr(self, "cli_log") or self.cli_log is None:
+            try:
+                from src.utils.logger import get_logger
+                get_logger("venvstudio.cli").info(text.strip())
+            except Exception:
+                pass
+            return
         import html as _html
         c = self._c()
         for line in text.split("\n"):
@@ -76,7 +87,10 @@ class AppearanceMixin:
                 color = c.get('warning', '#f9e2af')
             else:
                 color = c['fg']
-            self.cli_log.append(f'<span style="color:{color};">{escaped}</span>')
+            try:
+                self.cli_log.append(f'<span style="color:{color};">{escaped}</span>')
+            except Exception:
+                pass
 
     def _make_cli_card(self, tool_id, title, desc, preset_label, presets, preset_key,
                         preset_descriptions=None):
@@ -245,7 +259,12 @@ class AppearanceMixin:
         from src.core.cli_tools_manager import CliToolWorker
         btn.setEnabled(False)
         btn.setText("⏳ Installing...")
-        self.cli_log.clear()
+        # B181: cli_log may not be present in this view — clear only if it is
+        if hasattr(self, "cli_log") and self.cli_log is not None:
+            try:
+                self.cli_log.clear()
+            except Exception:
+                pass
         self._cli_worker = CliToolWorker("install", tool_id, parent=self)
         self._cli_worker.progress.connect(self._cli_log_append)
         self._cli_worker.finished.connect(
@@ -391,7 +410,12 @@ class AppearanceMixin:
             return
         font_id   = self.nerd_font_combo.currentData()
         font_name = self.nerd_font_combo.currentText()
-        self.cli_log.clear()
+        # B181: cli_log may not be present
+        if hasattr(self, "cli_log") and self.cli_log is not None:
+            try:
+                self.cli_log.clear()
+            except Exception:
+                pass
         self._cli_worker = CliToolWorker(
             "install_font", "font",
             {"font_id": font_id, "font_name": font_name},

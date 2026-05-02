@@ -128,10 +128,15 @@ class AppearanceMixin:
         controls.setSpacing(6)
 
         cb_key = f"cb_preset_{tool_id.replace('-','_')}"
-        preset_cb = QCheckBox(preset_label)
-        preset_cb.setStyleSheet(f"font-size: {self._c()['fs_tiny']}px; color: {self._c()['fg']};")
-        preset_cb.setObjectName(cb_key)
-        controls.addWidget(preset_cb)
+        # Theme/preset is now a plain label + combo — no checkbox.
+        # The old checkbox only enable/disabled the combo, which was
+        # confusing because Configure already controls whether the
+        # theme is actually applied. Removing it makes the flow obvious:
+        # pick a theme, click Configure.
+        preset_lbl = QLabel(preset_label)
+        preset_lbl.setStyleSheet(f"font-size: {self._c()['fs_tiny']}px; color: {self._c()['fg']};")
+        preset_lbl.setObjectName(cb_key)  # keep the same name for any external refs
+        controls.addWidget(preset_lbl)
 
         combo = QComboBox()
         combo.setMaximumWidth(200)
@@ -141,8 +146,7 @@ class AppearanceMixin:
                 label = f"{p}  \u2014  {preset_descriptions[p]}"
             combo.addItem(label, p)
         combo.setObjectName(f"preset_{tool_id.replace('-','_')}")
-        combo.setEnabled(False)
-        preset_cb.toggled.connect(combo.setEnabled)
+        # Always enabled — no checkbox to gate it any more
         controls.addWidget(combo)
 
         # Preset description label (updates on selection)

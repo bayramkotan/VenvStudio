@@ -5122,20 +5122,34 @@ dependencies:
                 f"This is usually a PySide6 / Python 3.13 compatibility issue (B180).\n"
                 f"Please update to Python 3.13.5+ or report this on GitHub."
             ))
-        # Replace placeholder with real widget — both calls always run together
+        # Replace placeholder with real widget — both calls always run together.
+        # B180: mark the tab as built BEFORE touching tabs.* so any signal that
+        # re-enters _on_tab_changed during removeTab/insertTab/setCurrentIndex
+        # short-circuits at `if self._tab_built.get(key): return`. Also block
+        # tab-change signals while we mutate the QTabWidget — Qt 6.10.2 on
+        # Linux/Python 3.13 fires currentChanged on setCurrentIndex even when
+        # the index does not actually change, which previously caused the
+        # function to recurse until RecursionError.
+        self._tab_built[key] = True
+        _was_blocked = False
         try:
+            _was_blocked = self.tabs.blockSignals(True)
             self.tabs.removeTab(index)
             self.tabs.insertTab(index, widget, self._tab_defs[index][1])
             self.tabs.setTabToolTip(index, self._tab_defs[index][3])
             self._tab_defs[index] = (key, self._tab_defs[index][1], widget, self._tab_defs[index][3])
             self.tabs.setCurrentIndex(index)
-            self._tab_built[key] = True
         except Exception as _re:
             try:
                 from src.utils.logger import get_logger
                 get_logger("venvstudio.tabs").error(
                     f"[B180] Tab '{key}' replace failed: {_re}"
                 )
+            except Exception:
+                pass
+        finally:
+            try:
+                self.tabs.blockSignals(_was_blocked)
             except Exception:
                 pass
 

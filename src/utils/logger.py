@@ -535,6 +535,26 @@ def setup_logging() -> logging.Logger:
 #  CRASH HANDLERS
 # =====================================================================
 
+def _safe_format_exception(exc_type, exc_value, exc_tb) -> str:
+    """Format an exception without triggering Python 3.13 + PySide6 6.10.2
+    shibokensupport recursion bug.
+
+    The standard `traceback.format_exception(t, v, tb)` path enters
+    `import ast` inside `_should_show_carets()`, which on PySide6 patches
+    Python's import machinery via shibokensupport.feature, which then
+    recurses on every signature lookup → RecursionError. The legacy
+    component API (format_tb + format_exception_only) bypasses that path.
+    """
+    try:
+        tb_part = "".join(traceback.format_tb(exc_tb)) if exc_tb else ""
+        exc_part = "".join(traceback.format_exception_only(exc_type, exc_value))
+        return tb_part + exc_part
+    except RecursionError:
+        return f"{exc_type.__name__}: {exc_value}\n(traceback unavailable due to RecursionError in format_exception)\n"
+    except Exception as _fe:
+        return f"{exc_type.__name__}: {exc_value}\n(traceback formatting failed: {_fe})\n"
+
+
 def _install_sys_excepthook(log_dir: Path, logger: logging.Logger):
     """Replace sys.excepthook to catch all unhandled exceptions in the main thread."""
 
@@ -543,7 +563,7 @@ def _install_sys_excepthook(log_dir: Path, logger: logging.Logger):
             sys.__excepthook__(exc_type, exc_value, exc_tb)
             return
 
-        crash_msg = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+        crash_msg = _safe_format_exception(exc_type, exc_value, exc_tb)
         logger.critical(f"UNHANDLED EXCEPTION (main thread):\n{crash_msg}")
 
         _write_crash_report(log_dir, crash_msg, context="main_thread")
@@ -563,8 +583,8 @@ def _install_threading_excepthook(logger: logging.Logger):
         if issubclass(args.exc_type, SystemExit):
             return
 
-        crash_msg = "".join(
-            traceback.format_exception(args.exc_type, args.exc_value, args.exc_traceback)
+        crash_msg = _safe_format_exception(
+            args.exc_type, args.exc_value, args.exc_traceback
         )
         thread_name = args.thread.name if args.thread else "unknown"
         logger.critical(

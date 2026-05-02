@@ -2451,32 +2451,33 @@ $s.Save()
         self.packages_table = QTableWidget()
         self.packages_table.setColumnCount(3)
         self.packages_table.setHorizontalHeaderLabels(["Package", "Version", ""])
-        # B180: PySide6 6.10.2 + Python 3.13.0/3.13.x early patches has a
-        # C-level enum→int conversion bug that crashes setSectionResizeMode
-        # with `SystemError: longobject.c:1481`. Wrap in try/except and use
-        # the explicit ResizeMode enum path (the deprecated short form
-        # QHeaderView.Stretch is what triggers the bug).
+        # B180: PySide6 6.10.2 + Python 3.13.x has a C-level enum→int
+        # conversion bug that crashes ANY Qt enum call with the short
+        # deprecated form (e.g. Qt.ScrollBarAsNeeded, QHeaderView.Stretch)
+        # with `SystemError: longobject.c:1481`. The fix is to use the
+        # explicit nested enum path (Qt.ScrollBarPolicy.ScrollBarAsNeeded,
+        # QHeaderView.ResizeMode.Stretch) AND wrap in try/except for safety.
         try:
             _hdr = self.packages_table.horizontalHeader()
             _hdr.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
             _hdr.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
             _hdr.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+            self.packages_table.setColumnWidth(2, 40)
+            _hdr.setStretchLastSection(False)
+            self.packages_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+            self.packages_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+            self.packages_table.setAlternatingRowColors(True)
+            self.packages_table.verticalHeader().setVisible(False)
+            self.packages_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         except (SystemError, TypeError, AttributeError) as _e:
             try:
                 from src.utils.logger import get_logger
                 get_logger("venvstudio.qt").warning(
-                    f"[B180] setSectionResizeMode failed (PySide6/Python compat): {_e} "
-                    f"— falling back to default header behaviour"
+                    f"[B180] Installed table enum setup failed (PySide6/Python 3.13 compat): {_e} "
+                    f"— table will use default Qt behaviour"
                 )
             except Exception:
                 pass
-        self.packages_table.setColumnWidth(2, 40)
-        self.packages_table.horizontalHeader().setStretchLastSection(False)
-        self.packages_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.packages_table.setSelectionBehavior(QTableWidget.SelectRows)
-        self.packages_table.setAlternatingRowColors(True)
-        self.packages_table.verticalHeader().setVisible(False)
-        self.packages_table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.packages_table.customContextMenuRequested.connect(self._pkg_table_context_menu)
         layout.addWidget(self.packages_table)
 
@@ -2546,19 +2547,22 @@ $s.Save()
             _hdr.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
             _hdr.setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
             self.catalog_table.setColumnWidth(4, 80)
+            _hdr.setStretchLastSection(False)
+            self.catalog_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         except (SystemError, TypeError, AttributeError) as _e:
             try:
                 from src.utils.logger import get_logger
                 get_logger("venvstudio.qt").warning(
-                    f"[B180] catalog setSectionResizeMode failed: {_e}"
+                    f"[B180] catalog table enum setup failed: {_e}"
                 )
             except Exception:
                 pass
-        self.catalog_table.horizontalHeader().setStretchLastSection(False)
-        self.catalog_table.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.catalog_table.setAlternatingRowColors(True)
         self.catalog_table.verticalHeader().setVisible(False)
-        self.catalog_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        try:
+            self.catalog_table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        except (SystemError, TypeError, AttributeError):
+            pass
         self.catalog_table.customContextMenuRequested.connect(self._catalog_table_context_menu)
         layout.addWidget(self.catalog_table)
 

@@ -444,7 +444,18 @@ def main():
         # silently in release builds. This hook ensures every traceback hits
         # the log AND the console so crashes can be diagnosed.
         def _global_excepthook(exc_type, exc_value, exc_tb):
-            tb_text = "".join(traceback.format_exception(exc_type, exc_value, exc_tb))
+            # B180/B181 yan etki: Python 3.13 + PySide6 6.10.2 kombinasyonunda
+            # `traceback.format_exception(exc_type, exc_value, exc_tb)` shiboken
+            # signature loader ile sonsuz döngüye giriyor (RecursionError).
+            # Eski API (format_tb + format_exception_only) bu yolu tetiklemiyor.
+            try:
+                tb_lines = traceback.format_tb(exc_tb) if exc_tb else []
+                exc_lines = traceback.format_exception_only(exc_type, exc_value)
+                tb_text = "".join(tb_lines) + "".join(exc_lines)
+            except RecursionError:
+                tb_text = f"{exc_type.__name__}: {exc_value}\n(traceback unavailable due to RecursionError in format_exception)\n"
+            except Exception as _fe:
+                tb_text = f"{exc_type.__name__}: {exc_value}\n(traceback formatting failed: {_fe})\n"
             full_msg = (
                 f"\n{'='*70}\n"
                 f"UNHANDLED EXCEPTION — {exc_type.__name__}: {exc_value}\n"
@@ -672,52 +683,7 @@ def main():
             window.activateWindow()
         _single_instance_server.newConnection.connect(_on_new_connection)
 
-        # ─────────────────────────────────────────────────────────────────
-        # B175 PROFILING — measure where time is spent in the app
-        # TEMPORARY: remove once B175 is solved.
-        #
-        # Activates only when VENVSTUDIO_PROFILE=1 is set in env.
-        # Wraps app.exec() with cProfile and writes the result to
-        # <project_dir>/b175_profile.prof when the app exits.
-        #
-        # Usage (Windows):
-        #   $env:VENVSTUDIO_PROFILE=1; python main.py
-        # ─────────────────────────────────────────────────────────────────
-        if os.environ.get("VENVSTUDIO_PROFILE") == "1":
-            import cProfile
-            import pstats
-
-            _profile_path = os.path.join(BASE_DIR, "b175_profile.prof")
-            _profile_text_path = os.path.join(BASE_DIR, "b175_profile.txt")
-            logger.info(f"B175 PROFILE active — output: {_profile_path}")
-
-            _profiler = cProfile.Profile()
-            _profiler.enable()
-            exit_code = app.exec()
-            _profiler.disable()
-
-            # Save raw profile data
-            try:
-                _profiler.dump_stats(_profile_path)
-                logger.info(f"B175 profile dumped: {_profile_path}")
-            except Exception as _e:
-                logger.warning(f"B175: dump_stats failed: {_e}")
-
-            # Save human-readable text version (top 60 by cumulative time)
-            try:
-                with open(_profile_text_path, "w", encoding="utf-8") as _ftxt:
-                    _stats = pstats.Stats(_profiler, stream=_ftxt)
-                    _ftxt.write("=== B175 PROFILE — Top 60 by cumulative time ===\n\n")
-                    _stats.sort_stats("cumulative").print_stats(60)
-                    _ftxt.write("\n\n=== Top 60 by total time (tottime) ===\n\n")
-                    _stats.sort_stats("tottime").print_stats(60)
-                logger.info(f"B175 profile text: {_profile_text_path}")
-            except Exception as _e:
-                logger.warning(f"B175: text dump failed: {_e}")
-        else:
-            exit_code = app.exec()
-        # ─── END B175 PROFILING ──────────────────────────────────────────
-
+        exit_code = app.exec()
         logger.info(f"Application exiting with code {exit_code}")
         sys.exit(exit_code)
 

@@ -36,6 +36,7 @@ STARSHIP_BINS = {
 
 # Oh My Posh GitHub releases
 OMP_RELEASES = "https://github.com/JanDeDobbeleer/oh-my-posh/releases/latest/download/"
+OMP_THEMES_URL = "https://github.com/JanDeDobbeleer/oh-my-posh/releases/latest/download/themes.zip"
 OMP_BINS = {
     ("Windows", "amd64"):   "posh-windows-amd64.exe",
     ("Windows", "x86_64"):  "posh-windows-amd64.exe",
@@ -390,6 +391,30 @@ def _get_config_dir() -> Path:
     return Path.home() / ".config"
 
 
+def _get_omp_dir() -> Path:
+    """Return the user-level oh-my-posh installation directory.
+
+    Layout (B181 fix):
+        ~/.posh/                       (Linux/macOS)
+        %USERPROFILE%\\.posh\\          (Windows)
+            ├── oh-my-posh(.exe)       — binary
+            └── themes/                — *.omp.json files
+                ├── jandedobbeleer.omp.json
+                ├── agnoster.omp.json
+                └── ...
+
+    Previously the binary went to ~/.local/bin and themes lived wherever
+    `oh-my-posh env home` reported (a command that no longer exists in
+    recent oh-my-posh releases), which broke `configure` with
+    `Error: unknown command "env" for "oh-my-posh"`.
+    """
+    return Path.home() / ".posh"
+
+
+def _get_omp_themes_dir() -> Path:
+    return _get_omp_dir() / "themes"
+
+
 # ── Detection ─────────────────────────────────────────────────────────────────
 
 def get_tool_version(tool: str) -> Optional[str]:
@@ -407,7 +432,9 @@ def get_tool_version(tool: str) -> Optional[str]:
             return None
         elif tool == "oh-my-posh":
             exe = "oh-my-posh" if SYSTEM != "Windows" else "oh-my-posh.exe"
-            for cmd in [exe, str(_get_bin_dir() / exe)]:
+            # B181 fix: check ~/.posh/ FIRST (new layout), then PATH and
+            # legacy ~/.local/bin location for backward compat.
+            for cmd in [str(_get_omp_dir() / exe), exe, str(_get_bin_dir() / exe)]:
                 try:
                     r = subprocess.run([cmd, "--version"], capture_output=True, text=True, timeout=5)
                     if r.returncode == 0:
@@ -537,25 +564,37 @@ def configure_starship(preset: Optional[str] = None) -> list[str]:
 
 
 def configure_omp(theme: str = "jandedobbeleer") -> list[str]:
-    """Write oh-my-posh init to shell configs."""
-    configured = []
-    exe = "oh-my-posh" if SYSTEM != "Windows" else \
-          str(_get_bin_dir() / "oh-my-posh.exe")
+    """Write oh-my-posh init to shell configs.
 
-    theme_path = f"$(oh-my-posh env home)/themes/{theme}.omp.json"
+    B181 fix: previously this used `$(oh-my-posh env home)/themes/...`,
+    but `env home` was removed from oh-my-posh in newer releases and
+    crashes with "unknown command env". We now write the absolute path
+    to ~/.posh/themes/<theme>.omp.json that _install_binary_omp creates.
+    """
+    configured = []
+    omp_dir = _get_omp_dir()
+    themes_dir = _get_omp_themes_dir()
     if SYSTEM == "Windows":
-        theme_path = f"$env:POSH_THEMES_PATH\\{theme}.omp.json"
+        exe = str(omp_dir / "oh-my-posh.exe")
+        theme_path = str(themes_dir / f"{theme}.omp.json")
+    else:
+        exe = str(omp_dir / "oh-my-posh")
+        theme_path = str(themes_dir / f"{theme}.omp.json")
 
     for cfg in _get_shell_configs():
         name = cfg.name
         if name in (".bashrc", ".bash_profile"):
-            snippet = f'command -v {exe} &>/dev/null && eval "$({exe} init bash --config {theme_path})"'
+            snippet = f'command -v "{exe}" >/dev/null 2>&1 && eval "$("{exe}" init bash --config \'{theme_path}\')"'
         elif name == ".zshrc":
-            snippet = f'command -v {exe} &>/dev/null && eval "$({exe} init zsh --config {theme_path})"'
+            snippet = f'command -v "{exe}" >/dev/null 2>&1 && eval "$("{exe}" init zsh --config \'{theme_path}\')"'
         elif name == "config.fish":
-            snippet = f'type -q {exe}; and {exe} init fish --config {theme_path} | source'
+            snippet = f'type -q "{exe}"; and "{exe}" init fish --config \'{theme_path}\' | source'
         elif name.endswith(".ps1"):
-            snippet = f'if (Get-Command oh-my-posh -ErrorAction SilentlyContinue) {{ oh-my-posh init pwsh --config {theme_path} | Invoke-Expression }}'
+            snippet = (
+                f'if (Test-Path "{exe}") {{ '
+                f'& "{exe}" init pwsh --config "{theme_path}" | Invoke-Expression '
+                f'}}'
+            )
         else:
             continue
         _inject_shell_config(cfg, "oh-my-posh", snippet)
@@ -638,7 +677,87 @@ class CliToolWorker(QThread):
             return
         url = OMP_RELEASES + filename
         self.progress.emit(f"⬇️ Downloading oh-my-posh ({filename})...")
-        self._download_and_extract(url, filename, "oh-my-posh")
+        # B181 fix: install binary into ~/.posh/ (not ~/.local/bin/) so it
+        # lives next to its themes/ folder.
+        try:
+            self._download_omp_binary(url, filename)
+            self.progress.emit("⬇️ Downloading themes pack...")
+            self._download_omp_themes()
+            omp_dir = _get_omp_dir()
+            self._ensure_path(omp_dir)
+            self.finished.emit(
+                True,
+                f"✅ oh-my-posh installed to {omp_dir}\n"
+                f"   • Binary: {omp_dir / ('oh-my-posh.exe' if SYSTEM == 'Windows' else 'oh-my-posh')}\n"
+                f"   • Themes: {_get_omp_themes_dir()}\n"
+                f"   • Next: select a theme and click Configure to enable it"
+            )
+        except Exception as _e:
+            self.finished.emit(False, f"❌ oh-my-posh install failed: {_e}")
+
+    def _download_omp_binary(self, url: str, filename: str):
+        """Download the oh-my-posh executable into ~/.posh/."""
+        import urllib.request, ssl
+        omp_dir = _get_omp_dir()
+        omp_dir.mkdir(parents=True, exist_ok=True)
+        exe_name = "oh-my-posh.exe" if SYSTEM == "Windows" else "oh-my-posh"
+        out = omp_dir / exe_name
+        ctx = ssl.create_default_context()
+        req = urllib.request.Request(url, headers={"User-Agent": "VenvStudio"})
+        self.progress.emit(f"⬇️ Fetching {url}")
+        with urllib.request.urlopen(req, timeout=60, context=ctx) as resp:
+            total = int(resp.headers.get("Content-Length", 0))
+            downloaded = 0
+            with open(out, "wb") as f:
+                while True:
+                    chunk = resp.read(65536)
+                    if not chunk:
+                        break
+                    f.write(chunk)
+                    downloaded += len(chunk)
+                    if total > 0:
+                        pct = min(100, int(downloaded * 100 / total))
+                        self.progress.emit(f"⬇️ Downloading binary... {pct}%")
+        if SYSTEM != "Windows":
+            os.chmod(out, 0o755)
+        self.progress.emit(f"✅ Binary installed: {out}")
+
+    def _download_omp_themes(self):
+        """Download and extract the official oh-my-posh themes pack into
+        ~/.posh/themes/. This replaces the broken `oh-my-posh env home`
+        lookup that older configure code relied on."""
+        import urllib.request, ssl
+        themes_dir = _get_omp_themes_dir()
+        themes_dir.mkdir(parents=True, exist_ok=True)
+        ctx = ssl.create_default_context()
+        req = urllib.request.Request(OMP_THEMES_URL, headers={"User-Agent": "VenvStudio"})
+        with tempfile.TemporaryDirectory() as tmp:
+            zip_path = Path(tmp) / "themes.zip"
+            with urllib.request.urlopen(req, timeout=60, context=ctx) as resp:
+                total = int(resp.headers.get("Content-Length", 0))
+                downloaded = 0
+                with open(zip_path, "wb") as f:
+                    while True:
+                        chunk = resp.read(65536)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total > 0:
+                            pct = min(100, int(downloaded * 100 / total))
+                            self.progress.emit(f"⬇️ Downloading themes... {pct}%")
+            self.progress.emit("📦 Extracting themes...")
+            with zipfile.ZipFile(zip_path) as z:
+                # Themes pack contains *.omp.json files at root or in a subdir
+                for member in z.namelist():
+                    if member.endswith(".omp.json"):
+                        # Strip any leading directory, write flat under themes/
+                        target = themes_dir / Path(member).name
+                        with z.open(member) as src, open(target, "wb") as dst:
+                            shutil.copyfileobj(src, dst)
+        # Count what we extracted
+        count = len(list(themes_dir.glob("*.omp.json")))
+        self.progress.emit(f"✅ {count} themes installed to {themes_dir}")
 
     def _download_and_extract(self, url: str, filename: str, tool_name: str):
         import urllib.request, ssl
@@ -729,11 +848,42 @@ class CliToolWorker(QThread):
                 self.finished.emit(False, r.stderr[-300:])
         elif tool in ("starship", "oh-my-posh"):
             exe = tool + (".exe" if SYSTEM == "Windows" else "")
+            removed = []
+            # Legacy bin location
             bin_path = _get_bin_dir() / exe
             if bin_path.exists():
-                bin_path.unlink()
+                try:
+                    bin_path.unlink()
+                    removed.append(str(bin_path))
+                except Exception:
+                    pass
+            # B181 fix: oh-my-posh now lives in ~/.posh/ — remove the
+            # whole directory (binary + themes/) when uninstalling.
+            # NOTE: fonts are intentionally NOT removed — the user may
+            # still want them for other terminals or applications.
+            if tool == "oh-my-posh":
+                omp_dir = _get_omp_dir()
+                if omp_dir.exists():
+                    try:
+                        shutil.rmtree(omp_dir)
+                        removed.append(str(omp_dir))
+                    except Exception as _e:
+                        self.progress.emit(f"⚠️ Could not remove {omp_dir}: {_e}")
+            # Remove the tool's init snippet (`# Added by VenvStudio — oh-my-posh`)
             remove_shell_config(tool)
-            self.finished.emit(True, f"✅ {tool} removed")
+            # B181 fix: also remove the PATH-export snippets we wrote during
+            # install. Two markers may exist depending on which install path
+            # was taken: the new ~/.posh layout AND the legacy ~/.local/bin.
+            for path_marker in (f"venvstudio-path-{_get_omp_dir().name}",
+                                f"venvstudio-path-{_get_bin_dir().name}"):
+                for cfg in _get_shell_configs():
+                    _remove_shell_config(cfg, path_marker)
+            msg = f"✅ {tool} removed"
+            if removed:
+                msg += "\n   • " + "\n   • ".join(removed)
+            msg += "\n   • Shell init + PATH lines cleaned from .bashrc / .zshrc / fish / PowerShell profile"
+            msg += "\n   • Fonts left intact (use Settings → Appearance to manage fonts separately)"
+            self.finished.emit(True, msg)
         else:
             self.finished.emit(False, f"Unknown tool: {tool}")
 

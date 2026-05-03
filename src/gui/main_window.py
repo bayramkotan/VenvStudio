@@ -2745,7 +2745,18 @@ class MainWindow(QMainWindow):
         self._switch_page(2)
 
     def _set_theme(self, theme_name):
+        # B184 fix: View menüsünden tema değişikliği disk'e kaydedilmiyordu —
+        # config.set sadece RAM'de tutar. Bilinen save metodlarını sırayla
+        # dene — hangisi varsa onu çağır.
         self.config.set("theme", theme_name)
+        for _save_attr in ("save", "_save", "save_config", "flush", "write"):
+            _fn = getattr(self.config, _save_attr, None)
+            if callable(_fn):
+                try:
+                    _fn()
+                    break
+                except Exception:
+                    continue
         self._apply_theme()
 
     def _apply_theme(self):

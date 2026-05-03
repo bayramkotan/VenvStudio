@@ -343,6 +343,303 @@ Veya mevcut terminal oturumunda:
 **Öncelik:** 🔴 Yüksek — light tema kullanıcıları için çok rahatsız edici, kısmen kullanılamaz hâlde
 
 ---
+
+## 🏆 ANACONDA'DAN İYİ OLMA YOL HARİTASI (3 Faz, ~2-3 yıl)
+
+**Strateji C (Hybrid):** Niche'e odaklan + en kritik 10-15 Anaconda özelliğini ekle.
+
+### Pozisyon Analizi
+
+**VenvStudio'nun Anaconda'dan üstün olduğu yerler:**
+- 5 backend desteği (venv + uv + poetry + pipx + conda) — Anaconda Navigator sadece conda
+- Hafiflik (~MB) vs Anaconda (~3GB)
+- Açık kaynak LGPL — Anaconda kurumsal kullanıcıdan ücret alıyor
+- Modern UI (13 tema)
+- Hızlı başlangıç (5-15s vs 30-60s)
+- Çoklu dil (TR/EN, genişletilebilir)
+- Learn sayfası
+
+**Anaconda'nın eksikleri (VenvStudio'da olmayan):**
+- Conda channels yönetimi
+- Mamba (hızlı conda)
+- Workspace/Project konsepti
+- Notebook kernel manager
+- Plugin sistemi
+- Cloud sync
+- GPU/CUDA detection
+- License compliance dashboard
+- Built-in REPL/playground
+
+### FAZ 1 — "Anaconda kullanıcısını çekecek" temeller (3-6 ay hedef)
+
+---
+
+### 🔴 F175 — Conda Channels Yönetimi (FAZ 1)
+
+**Hedef:** Anaconda Navigator'daki gibi UI'dan channel ekle/kaldır/öncelik belirle.
+
+**Kapsam:**
+- Settings → Channels sekmesi (yeni)
+- Liste: defaults, conda-forge, bioconda, pytorch, nvidia, ...
+- Ekle butonu: URL veya kısa ad ("conda-forge")
+- Sırala (drag-drop): öncelik düzenleme
+- Per-env override: bir env için özel channel set
+- `~/.condarc` dosyasını otomatik yönet
+- Pip için de aynısı: extra-index-url, trusted-host
+
+**Dosyalar:** `src/gui/settings_channels.py` (yeni), `src/core/channel_manager.py` (yeni)
+
+**Öncelik:** 🔴 Yüksek — conda kullanıcıları için kritik
+
+---
+
+### 🔴 F176 — Mamba Backend Desteği (FAZ 1)
+
+**Hedef:** conda yerine mamba kullanma seçeneği. Mamba aynı conda komutlarını destekler ama 10-50x hızlı (paralel paket çözümlemesi).
+
+**Kapsam:**
+- Backend listesine "mamba" ekle (conda alt-tipi)
+- Yüklü ise otomatik tespit et, kullanıcıya öner
+- `conda install` çağrılarını `mamba install`'a yönlendir
+- Sürüm karşılaştırma: conda 10s, mamba 1s gibi UI gösterimi
+- Settings: "Prefer mamba over conda" toggle (default: yes)
+
+**Dosyalar:** `src/core/conda_manager.py` (mevcut, mamba alt sınıf), `src/utils/constants.py` (yeni sabit)
+
+**Öncelik:** 🔴 Yüksek — kullanıcıyı çok mutlu eder, conda'nın en büyük şikayeti
+
+---
+
+### 🔴 F177 — Workspace / Project Konsepti (FAZ 1)
+
+**Hedef:** Bir "workspace" = env + klasör + git repo + favorite paketler. VS Code'un workspace mantığı gibi. Hızlı switch.
+
+**Kapsam:**
+- File → New Workspace (Ctrl+Shift+N)
+- Workspace metadata: `<klasör>/.venvstudio/workspace.json`
+  - Env adı + path
+  - Çalışma klasörü
+  - Git repo varsa branch info
+  - Favorite paketler/launcher'lar
+  - Son açılan dosyalar
+- Recent workspaces listesi (File menu → Open Recent)
+- Workspace açılınca env otomatik seç + klasörü VS Code/Cursor'da aç
+- Workspace export/import (.vsws dosyası — taşıma için)
+
+**Dosyalar:** `src/core/workspace_manager.py` (yeni), `src/gui/workspace_dialog.py` (yeni), `src/gui/main_window.py` (File menu)
+
+**Öncelik:** 🔴 Yüksek — modern IDE'lerin hepsinde var, VenvStudio'da olması kritik
+
+---
+
+### 🟡 F178 — environment.yml / requirements.txt Import-Export (FAZ 1)
+
+**Hedef:** Conda env'i veya pip env'i bir tıkla taşı.
+
+**Kapsam:**
+- File → Export environment...
+  - Format: `requirements.txt`, `environment.yml`, `pyproject.toml`, `pipfile`
+  - Sadece direct deps mi yoksa pinned (== version) mı seçeneği
+  - Platform-spesifik mi (her OS için ayrı YAML) yoksa generic mi
+- File → Import environment...
+  - Dosya seç → otomatik backend tespit et (yml → conda, txt → pip, lock → poetry)
+  - Yeni env oluştur + paketleri kur
+  - Progress bar + hata raporu
+- Catalog'dan da export edilebilir: "Bu listeyi yml olarak kaydet"
+
+**Dosyalar:** `src/core/env_io.py` (yeni), `src/gui/import_export_dialog.py` (yeni)
+
+**Öncelik:** 🟡 Orta — Anaconda kullanıcıları için temel feature, eksik olması büyük eksiklik
+
+---
+
+### 🟡 F179 — Notebook Kernel Manager (FAZ 1)
+
+**Hedef:** VenvStudio kendi env'lerini Jupyter'e otomatik kaydetsin. Kullanıcı Jupyter'de "Kernel: ml-env" görsün.
+
+**Kapsam:**
+- Env oluştururken otomatik checkbox: "Register as Jupyter kernel" (default kapalı)
+- Manuel: sağ tık env → "Register as Jupyter kernel" / "Unregister kernel"
+- `python -m ipykernel install --user --name=<env> --display-name="<env> (VenvStudio)"`
+- ipykernel paketi yoksa otomatik kurulum öner
+- Tools menüsünde "Manage Jupyter kernels" — tüm kayıtlı kernel'leri listele, sil
+- Bu kernel'leri VenvStudio'nun yarattığını işaretle (hangi kernel hangi VenvStudio env'i)
+
+**Dosyalar:** `src/core/jupyter_kernel_manager.py` (yeni), `src/gui/main_window.py` (context menu), `src/gui/kernel_manager_dialog.py` (yeni)
+
+**Öncelik:** 🟡 Orta — Jupyter kullanıcıları için zorunlu, az kullananlar için opsiyonel
+
+---
+
+### FAZ 2 — "Anaconda'yı geride bırakacak" özellikler (6-12 ay hedef)
+
+---
+
+### 🔴 F180 — Plugin Sistemi (FAZ 2)
+
+**Hedef:** Kullanıcı kendi launcher/preset/check yazabilsin. Üçüncü parti araçlar VenvStudio'ya entegre olabilsin.
+
+**Kapsam:**
+- `~/.venvstudio/plugins/` klasörü
+- Plugin yapısı: `plugin.json` + `plugin.py`
+- Plugin türleri:
+  - **Launcher plugin** — yeni uygulama Launch sekmesine ekle (örn. PyCharm community)
+  - **Preset plugin** — yeni preset paketi (örn. "Climate Science")
+  - **Check plugin** — env üzerinde özel kontrol (örn. "Has CUDA-compatible torch?")
+  - **Action plugin** — sağ-tık menüsüne yeni eylem ekle
+- Plugin marketplace (sonra) — GitHub'dan plugin keşfetme/yükleme
+- Plugin signing/güvenlik (sonra)
+
+**Dosyalar:** `src/core/plugin_manager.py` (yeni), `src/core/plugin_api.py` (yeni — kullanıcı plugin'leri için public API), `src/gui/plugin_dialog.py` (yeni)
+
+**Öncelik:** 🔴 Yüksek — VenvStudio'yu platform haline getirir, ekosistem kurar
+
+---
+
+### 🟡 F181 — AI Asistanlı Env Oluşturma (FAZ 2)
+
+**Hedef:** "ML için env yarat" deyince AI öner.
+
+**Kapsam:**
+- File → New Environment → "Ask AI" sekmesi
+- Doğal dil input: "Bana scikit-learn ile çalışacak bir ML env yarat"
+- AI önerir:
+  - Backend: uv (hızlı)
+  - Python: 3.11
+  - Paketler: numpy, pandas, scikit-learn, matplotlib, seaborn, jupyter
+  - Açıklama: "Veri bilimi için temel kurulum, jupyter notebook hazır"
+- Kullanıcı düzenler veya direkt onaylar
+- Backend: Claude API (kullanıcının API key'i veya local Ollama)
+- Privacy: opt-in, default kapalı
+
+**Dosyalar:** `src/core/ai_assistant.py` (yeni), `src/gui/ai_env_dialog.py` (yeni), `src/utils/llm_client.py` (yeni — Claude/Ollama abstraction)
+
+**Öncelik:** 🟡 Orta — wow factor, ama birçok kullanıcı API key vermek istemez
+
+---
+
+### 🟡 F182 — Cloud Sync (FAZ 2)
+
+**Hedef:** Env'leri GitHub Gist / Drive / Dropbox'a yedekle, başka makineden çek.
+
+**Kapsam:**
+- Settings → Cloud Sync sekmesi
+- Provider seçimi: GitHub Gist (gh auth), Google Drive, Dropbox, Self-hosted (URL)
+- Auto-sync toggle: env yarat/sil/değiştirildikçe otomatik upload
+- "Restore from cloud": başka makinede aynı env'leri kur
+- Conflict resolution: aynı isimde env iki yerde varsa birleştir/seç
+- Şifreleme: env adlarını ve metadata'yı şifrele (opsiyonel)
+
+**Dosyalar:** `src/core/cloud_sync.py` (yeni), `src/gui/settings_cloud.py` (yeni)
+
+**Öncelik:** 🟡 Orta — niche feature, ama power user'lar bayılır
+
+---
+
+### 🔗 F159, F161, F162, F163, F165 — Mevcut TODO'da var (FAZ 2'ye dahil)
+
+- **F159** Vulnerability Scanner — yukarıda detaylı
+- **F161** Snapshot/Restore — yukarıda detaylı
+- **F162** Compare envs (diff) — yukarıda detaylı
+- **F163** License Checker — yukarıda detaylı
+- **F165** Command Palette — yukarıda detaylı
+
+Bunlar Faz 2'nin parçası. Detayı yukarıdaki ilgili madde başlıklarında.
+
+---
+
+### FAZ 3 — "Anaconda'nın hayal edemediği" şeyler (1-2 yıl hedef)
+
+---
+
+### 🟡 F183 — GPU / CUDA / Hardware Detection (FAZ 3)
+
+**Hedef:** Env'in GPU/CUDA gereksinimlerini otomatik tespit et, uyumlu kurulum öner.
+
+**Kapsam:**
+- System Info paneli: NVIDIA GPU var mı? CUDA sürümü? cuDNN? ROCm (AMD)? Apple MPS?
+- Env'e PyTorch/TensorFlow kurulurken: "GPU desteği mi CPU only mi?" sor
+- CUDA sürüm uyumluluğu kontrol (PyTorch 2.5 + CUDA 11.8 vs 12.1)
+- Otomatik doğru index URL: `--index-url https://download.pytorch.org/whl/cu121`
+- Settings → Hardware sekmesi (yeni) — algılanan donanım listesi
+
+**Dosyalar:** `src/core/hardware_detector.py` (yeni), `src/gui/settings_hardware.py` (yeni)
+
+**Öncelik:** 🟡 Orta — ML/Data Science kullanıcıları için kritik, diğerleri için bonus
+
+---
+
+### 🔵 F184 — Docker Export (FAZ 3 — KULLANICI ERTELEDI)
+
+**Durum:** Bayram bunu daha önce listeden çıkardı. Eklenmeyecek bir not.
+
+**Eğer ileride istenirse:** Env → Dockerfile üret. Tek tık.
+
+---
+
+### 🔵 F185 — Kubernetes Deployment Generator (FAZ 3)
+
+**Durum:** Önceden konuşulup TODO'ya eklenmemişti.
+
+**Hedef:** Env → K8s Deployment YAML üret.
+
+**Kapsam:**
+- Env seç → "Export to K8s"
+- Otomatik üret: Deployment + Service + ConfigMap + Secrets (env vars)
+- Helm chart üretebilme (opsiyonel)
+- Image build kısmı F184'e bağlı (Docker)
+
+**Öncelik:** 🔵 Düşük — niche kullanıcı, F184 olmadan anlamsız
+
+---
+
+### 🟡 F186 — Built-in REPL / Python Playground (FAZ 3)
+
+**Hedef:** F165 (Command Palette) ile birlikte. Mini REPL VenvStudio içinde, env içinde direkt kod çalıştır.
+
+**Kapsam:**
+- Tools menüsü → "Open Python Playground" (Ctrl+`)
+- Embedded terminal/REPL widget (QTextEdit + subprocess)
+- Seçili env'de çalışır (env'in Python'unu kullanır)
+- Syntax highlighting (qtpy/Pygments)
+- Multi-line input (Shift+Enter)
+- History (Up/Down arrows)
+- "Send to playground" — Catalog'dan paket seç → import et + örnek snippet
+- Save session → .py dosyasına
+
+**Dosyalar:** `src/gui/playground_widget.py` (yeni), `src/utils/python_runner.py` (yeni)
+
+**Öncelik:** 🟡 Orta — Anaconda Navigator'da yok, VenvStudio için özgün feature
+
+---
+
+### 📊 ÖZET TABLO
+
+| Kod | Faz | İsim | Öncelik | Süre |
+|-----|-----|------|---------|------|
+| F175 | 1 | Conda Channels | 🔴 | 2-3 hafta |
+| F176 | 1 | Mamba Backend | 🔴 | 1-2 hafta |
+| F177 | 1 | Workspace | 🔴 | 4-6 hafta |
+| F178 | 1 | Import/Export YAML | 🟡 | 2-3 hafta |
+| F179 | 1 | Jupyter Kernel | 🟡 | 1-2 hafta |
+| F180 | 2 | Plugin Sistemi | 🔴 | 6-8 hafta |
+| F181 | 2 | AI Assistant | 🟡 | 3-4 hafta |
+| F182 | 2 | Cloud Sync | 🟡 | 4-6 hafta |
+| F159 | 2 | Vulnerability (TODO'da) | 🟡 | 2-3 hafta |
+| F161 | 2 | Snapshot (TODO'da) | 🔴 | 3-4 hafta |
+| F162 | 2 | Compare (TODO'da) | 🟡 | 2 hafta |
+| F163 | 2 | License (TODO'da) | 🟡 | 1-2 hafta |
+| F165 | 2 | Command Palette (TODO'da) | 🔴 | 2-3 hafta |
+| F183 | 3 | GPU/CUDA Detection | 🟡 | 3-4 hafta |
+| F185 | 3 | K8s Generator | 🔵 | 4-6 hafta |
+| F186 | 3 | REPL/Playground | 🟡 | 4-6 hafta |
+
+**Toplam tahmini süre:** ~70-100 hafta full-time. Tek başına yapılırsa ~2-3 yıl.
+
+**Ön koşul:** Mevcut bug'lar (B180 final test, B181 macOS/Win test, B183 light tema, performans) önce kapanmalı. Aksi halde yeni özellikler eski bug'ların üstüne biner.
+
+---
+
 ### 🟡 F157 — Settings → Performance Sekmesi
 
 **⚠️ SIRA:** Önce F158 (alt yapı) → sonra F157 (UI). Aksi halde Cache stats boş görünür.

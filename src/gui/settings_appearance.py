@@ -398,7 +398,7 @@ class AppearanceMixin:
             QMessageBox.warning(self, "Error", f"Could not open terminal:\n{e}")
 
     def _cli_done(self, ok, msg, btn, status_lbl, tool_id):
-        from src.core.cli_tools_manager import is_tool_installed, get_tool_version
+        from src.core.cli_tools_manager import is_tool_installed, get_tool_version, CliToolWorker
         self._cli_log_append(msg)
         installed = is_tool_installed(tool_id)
         version = get_tool_version(tool_id) or ""
@@ -406,6 +406,33 @@ class AppearanceMixin:
         status_lbl.setStyleSheet(f"color: {self._c()['success'] if installed else self._c()['danger']}; font-size: {self._c()['fs_tiny']}px;")
         btn.setEnabled(True)
         btn.setText("🔄 Reinstall" if installed else "⬇️ Install")
+
+        # Auto-configure default theme right after a successful install of
+        # oh-my-posh / starship. Without this the user had to manually click
+        # Configure to get any visible effect — confusing because Install
+        # downloaded everything but nothing changed in their shell.
+        if ok and installed and tool_id in ("oh-my-posh", "starship"):
+            try:
+                # Find the theme combo this card uses
+                combo_name = f"preset_{tool_id.replace('-','_')}"
+                combo = self.findChild(QComboBox, combo_name)
+                if combo is not None:
+                    selected = combo.currentData() or combo.currentText().split("  —")[0].strip()
+                else:
+                    # Fallback defaults if combo somehow not found
+                    selected = "jandedobbeleer" if tool_id == "oh-my-posh" else "Tokyo Night"
+                preset_key = "theme" if tool_id == "oh-my-posh" else "preset"
+                self._cli_log_append(f"⚙️ Auto-configuring {tool_id} with theme: {selected}")
+                self._cli_worker_autocfg = CliToolWorker(
+                    "configure", tool_id, {preset_key: selected}, parent=self
+                )
+                self._cli_worker_autocfg.progress.connect(self._cli_log_append)
+                self._cli_worker_autocfg.finished.connect(
+                    lambda _ok, _msg: self._cli_log_append(_msg + "\n   • Restart your terminal to see the new prompt")
+                )
+                self._cli_worker_autocfg.start()
+            except Exception as _e:
+                self._cli_log_append(f"⚠️ Auto-configure skipped: {_e}")
 
     def _install_nerd_font(self):
         from src.core.cli_tools_manager import CliToolWorker

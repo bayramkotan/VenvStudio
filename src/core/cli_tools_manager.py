@@ -504,10 +504,13 @@ def _get_shell_configs() -> list[Path]:
 
 
 def _inject_shell_config(config_path: Path, marker: str, snippet: str):
-    """Add snippet to shell config if not already present."""
+    """Add snippet to shell config. If a block with the same marker already
+    exists, REPLACE it (so configure-with-different-theme actually updates
+    the file instead of leaving the old line behind)."""
     content = config_path.read_text(encoding="utf-8") if config_path.exists() else ""
     if marker in content:
-        return  # already injected
+        # Remove the old block first so we can write the new snippet
+        _remove_shell_config(config_path, marker)
     with open(config_path, "a", encoding="utf-8") as f:
         f.write(f"\n# Added by VenvStudio — {marker}\n{snippet}\n")
 
@@ -821,8 +824,23 @@ class CliToolWorker(QThread):
             self.finished.emit(True, f"✅ {tool_name} installed to {out}")
 
     def _ensure_path(self, bin_dir: Path):
-        """Ensure bin_dir is in PATH in shell configs."""
+        """Ensure bin_dir is in PATH in shell configs.
+
+        Skips the injection entirely if bin_dir is already on PATH (the
+        usual case for ~/.local/bin on Linux, which is added by
+        ~/.profile or pipx). Avoids duplicate `export PATH=...` lines
+        accumulating in .bashrc on every install.
+        """
         bin_str = str(bin_dir)
+        try:
+            current = os.environ.get("PATH", "")
+            sep = ";" if SYSTEM == "Windows" else ":"
+            entries = [e.rstrip("/\\") for e in current.split(sep) if e]
+            if bin_dir.resolve() and str(bin_dir.resolve()).rstrip("/\\") in entries:
+                # Already on PATH — nothing to add.
+                return
+        except Exception:
+            pass
         if SYSTEM == "Windows":
             snippet = f'$env:PATH = "{bin_str};" + $env:PATH'
             marker = f"venvstudio-path-{bin_dir.name}"

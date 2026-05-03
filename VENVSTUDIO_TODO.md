@@ -67,6 +67,174 @@ Profiling (Linux, 6 env):
 
 ## 🔴 EN ÖNCELİKLİ (Sonraki Sprint)
 
+---
+
+## 🚨🚨 ACİL — KULLANICI BİLDİRİMLERİ (Birden çok platformda kritik buglar)
+
+### 🚨 B180 — KRİTİK: Installed Tab Açılınca Crash (Win 11 + Debian, Python 3.13.0)
+
+**Bildiren:** Eyüp (Win 11, Python 3.13.0) ve Debian (Python 3.13.x) — v1.4.88
+
+**Hata:**
+```
+SystemError: ../Objects/longobject.c:1481: bad argument to internal function
+File "package_panel.py", line 2454, in _create_installed_tab
+    self.packages_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+```
+
+**Senin makinende çalışıyor (Win 11, Python 3.13.13)** — sebep büyük ihtimalle **PySide6 6.10.2 + Python 3.13.0/3.13.x eski patch sürümleri** uyumsuzluğu. `setSectionResizeMode(0, QHeaderView.Stretch)` C-level int dönüşümünde patlıyor.
+
+**Yan etki:** sys.excepthook da `RecursionError` veriyor (logger.py:546 → traceback.format_exception → ast import → shibokensupport recursion).
+
+**Olası çözümler:**
+1. **`int` cast ekle:** `setSectionResizeMode(0, int(QHeaderView.ResizeMode.Stretch))` — enum int dönüşümünü explicit yap
+2. **Try/except ile sarmala:** Header resize fail olursa default davranışla devam et
+3. **PySide6 minimum sürüm bump:** 6.10.2 → 6.10.3+ (eğer patch varsa)
+4. **Python 3.13.0/3.13.1 desteğini düş:** README'de "Python 3.13.5+" iste
+
+**Excepthook fix de lazım:** `logger.py:546` `traceback.format_exception` shibokensupport ile sonsuz döngüye giriyor. Onu da güvenli hale getir.
+
+**Dosyalar:** `src/gui/package_panel.py:2454` (ve diğer setSectionResizeMode çağrıları), `src/utils/logger.py:546`
+
+**Öncelik:** 🚨 KRİTİK — birden çok kullanıcı etkileniyor, uygulama tamamen kullanılamaz hale geliyor
+
+---
+
+### 🚨 B181 — KRİTİK: TUI (oh-my-posh) Linux'ta Yükleme Crash
+
+**Hata:**
+```
+File "settings_appearance.py", line 248, in _cli_install
+    self.cli_log.clear()
+AttributeError: 'SettingsPage' object has no attribute 'cli_log'
+```
+
+**Sebep:** `_cli_install` metodu `self.cli_log` widget'ına erişmeye çalışıyor ama o widget tanımlanmamış (SettingsPage'de yok).
+
+**Fix:** Ya `self.cli_log` widget'ını init'te oluştur, ya da `_cli_install` içinde varlığını kontrol et:
+```python
+if hasattr(self, 'cli_log') and self.cli_log:
+    self.cli_log.clear()
+```
+
+**Dosyalar:** `src/gui/settings_appearance.py:248` (ve `cli_log` referans eden tüm yerler)
+
+**Öncelik:** 🚨 KRİTİK — TUI tools yüklenemiyor
+
+---
+
+### 🐛 B182 — pipx Silme Sonrası Tablo Cache'den Yenilenmiyor
+
+**Sorun:** pipx env silindikten sonra env tablosunda hâlâ görünüyor. **Uygulama kapatılıp tekrar açılınca** kayboluyor → cache invalidation eksik.
+
+**Kök neden:** `delete_env` sonrası cache invalidate edilmiyor veya tablo refresh edilmiyor.
+
+**Fix:**
+- Delete callback'inde: `vm.invalidate_cache(env_path)` + `_refresh_env_list(force=True)`
+- v1.4.85'te env create/delete cache fix yapıldı ama pipx için ayrı code path olabilir (`_uninstall_pipx_app` veya benzeri)
+
+**Dosyalar:** `src/gui/main_window.py` (pipx delete handler), `src/core/venv_manager.py`
+
+**Öncelik:** 🔴 Yüksek — kullanıcıyı şaşırtıyor, "uygulama bozuk" hissi yaratıyor
+
+---
+
+### 🟡 F168 — Scale / Zoom Özelliği (Genel UI Boyutlandırma)
+
+**Hedef:** Tüm UI bileşenleri (butonlar, label'lar, fontlar) tek bir scale değeriyle büyütülüp küçültülebilsin. Bazı ekranlarda sığmıyor, bazılarında çok küçük kalıyor.
+
+**Kapsam:**
+- View → Scale slider (50% – 200%)
+- Veya Settings → Appearance → "UI Scale: [50% — 200%]"
+- Tüm widget boyutlarına çarpan uygulanır
+- Settings'e kaydedilir, açılışta uygulanır
+- Min/max sınırlar (50%-200%)
+- Reset Scale (Ctrl+0) — F154 ile entegre
+
+**F154 (Zoom) ile fark:** F154 sadece font, F168 her şey (padding, margin, button height, icon size). Birlikte düşünülebilir veya tek özellik.
+
+**Öncelik:** 🔴 Yüksek — erişilebilirlik kritik, çok ekran çeşitliliği var
+
+---
+
+### 🟡 F169 — FreeBSD / BSD Desteği + AppImage Benzeri Dağıtım
+
+**Hedef:** BSD ailesi için (FreeBSD, OpenBSD, NetBSD) destek + portable paketleme (AppImage benzeri).
+
+**Kapsam:**
+- FreeBSD'de test: `freebsd-version`, paket yöneticisi `pkg`, Python ports
+- BSD path'leri farklı olabilir (`/usr/local/bin/python3` vs `/usr/bin/python3`)
+- `platform_utils.py`'ye BSD detection ekle
+- Paketleme: AppImage (Linux only) veya benzer **portable bundle** (PyInstaller `--onefile`)
+- BSD için `.txz` paketi (FreeBSD pkg format)
+
+**Mevcut destek:** Linux ✅, macOS ✅, Windows ✅. BSD ❌.
+
+**Öncelik:** 🟡 Orta — niche kullanıcı, ama tamamlayıcı
+
+---
+
+### 🟡 F170 — Conda Sistem Çapında Kurulum (Global Path)
+
+**Hedef:** Conda yüklerken **sadece local user'a** değil, **sistem geneline** de yüklenebilsin. Global PATH'e ekle.
+
+**Şu an:** Conda local'e (`~/miniconda3` veya `~/.conda`) yükleniyor, global yok.
+
+**Kapsam:**
+- Conda install dialog'unda checkbox: "Install system-wide (requires admin/sudo)"
+- Linux/macOS: `/opt/conda` veya `/usr/local/conda` + `/etc/profile.d/conda.sh`
+- Windows: `C:\ProgramData\miniconda3` + sistem PATH'e ekle (admin)
+- Sudo/admin elevation: Linux `pkexec`, Windows UAC prompt
+
+**Öncelik:** 🟡 Orta — multi-user makinelerde faydalı
+
+---
+
+### 🟡 F171 — oh-my-posh Theme Yönetimi + .bashrc Otomatik Setup
+
+**Hedef:** oh-my-posh kurulumundan sonra:
+1. Theme dropdown'dan seç
+2. `.bashrc` (Linux/macOS) veya PowerShell `$PROFILE` (Windows) otomatik düzenle
+3. Tema değiştirme Settings altından yapılabilsin
+4. "Restart your terminal" mesajı göster
+
+**Mevcut sorun:**
+- Theme'lerin önünde gereksiz tick var (zaten TUI/CLI Tools onunde tick var)
+- Otomatik kurulum sonrası `.bashrc`'ye eklenmiyor
+
+**.bashrc örneği:**
+```bash
+####### entered by VenvStudio ########
+export PATH="/home/bayram/.posh:$PATH"
+eval "$(oh-my-posh init bash --config /home/bayram/.posh/themes/<tema_adi>.omp.json)"
+######################################
+```
+
+**Windows PowerShell `$PROFILE` örneği:**
+```powershell
+####### entered by VenvStudio ########
+$env:PATH = "$env:USERPROFILE\.posh;$env:PATH"
+oh-my-posh init pwsh --config "$env:USERPROFILE\.posh\themes\<tema_adi>.omp.json" | Invoke-Expression
+######################################
+```
+
+**Kurulum yolu:**
+- Linux/macOS: `~/.posh/` ve `~/.posh/themes/`
+- Windows: `%USERPROFILE%\.posh\` ve `%USERPROFILE%\.posh\themes\`
+- `~` yerine tam path kullan (script güvenliği)
+
+**Settings → Appearance → "Posh Theme" dropdown:**
+- Yüklü tema listesi
+- Değiştir → `.bashrc` / `$PROFILE` güncelle → "Terminali yeniden başlatın" toast
+
+**UI temizlik:**
+- Theme'lerin önündeki tick kaldırılsın (TUI/CLI Tools'ta zaten var)
+
+**Dosyalar:** `src/gui/settings_appearance.py`, `src/core/posh_theme_manager.py` (yeni), `src/utils/shell_profile.py` (yeni — .bashrc/$PROFILE editing)
+
+**Öncelik:** 🟡 Orta — UX katmanı, oh-my-posh kullanıcılarını mutlu eder
+
+---
 ### 🟡 F157 — Settings → Performance Sekmesi
 
 **⚠️ SIRA:** Önce F158 (alt yapı) → sonra F157 (UI). Aksi halde Cache stats boş görünür.
@@ -856,7 +1024,208 @@ Her kütüphane için uzun bir dedike sayfa. Mevcut tek-snippet formatını **ge
 
 ---
 
-## 🆕 YENİ TOPLANAN NOTLAR (v1.4.62 sonrası)
+## 💎 Yeni Özellik Önerileri (Power User / Pro)
+
+### 🔒 F159 — Vulnerability Scanner (Güvenlik Açığı Taraması)
+
+**Hedef:** `pip-audit` veya `safety` entegrasyonu. Kurulu paketlerde bilinen güvenlik açıkları varsa kullanıcıyı uyar.
+
+**Kapsam:**
+- Env tablosunda badge: 🔴 3 güvenlik açığı
+- Env detail panelinde liste: hangi paket, hangi CVE, severity, fix version
+- "Update vulnerable packages" tek-tık butonu
+- Settings → "Scan on startup" toggle (default kapalı, manuel)
+- Cache: scan sonucu 24h tutulsun (PyPI Advisory DB güncellemesi yavaş)
+
+**Backend desteği:**
+- pip/uv/poetry/pipx → `pip-audit` (önerilir, modern)
+- conda → `mamba audit` veya pip-audit fallback
+- Scan komutunu env içinde subprocess olarak çalıştır
+
+**Dosyalar:** `src/core/vuln_scanner.py` (yeni), `src/gui/package_panel.py` (badge + dialog)
+
+**Öncelik:** 🟡 Orta — kurumsal kullanıcı için kritik, bireysel için bonus
+
+---
+
+### 📊 F160 — Outdated Paket Göstergesi (UI)
+
+**Hedef:** `pip list --outdated` cache'le, env tablosunda "5 güncellenebilir" badge göster.
+
+**Şu an:** `Ctrl+U` kısayolu var ama UI'da görünür gösterim yok — kullanıcı kısayolu bilmiyorsa hiç görmez.
+
+**Kapsam:**
+- Env tablosunda Packages kolonunun yanına: "171 (5 ↑)" formatı
+- Tooltip: hangi paketler outdated, current → latest sürümler
+- Catalog/Installed tab'ında outdated paket satırı sarı highlight
+- Cache: outdated listesi 12h tutulsun
+- Bulk update: "Update all outdated" butonu
+
+**Dosyalar:** `src/core/pip_manager.py` (outdated metodu var mı kontrol), `src/gui/main_window.py` (env tablo render), `src/gui/package_panel.py` (Installed tab)
+
+**Öncelik:** 🟡 Orta — kullanıcı farkındalığı için önemli
+
+---
+
+### 🔄 F161 — Env Snapshot / Restore
+
+**Hedef:** Bir env'in paket listesini "snapshot" al, sorun çıkınca eski hale geri dön.
+
+**Kapsam:**
+- Sağ tık env → "Take snapshot" → ad/tarih ile kaydet
+- `~/.venvstudio/snapshots/<env>/<timestamp>.json` (paket listesi + sürümler)
+- Sağ tık env → "Restore from snapshot" → liste göster, seç → uygula
+- Restore = mevcut env'i temizle, snapshot'taki paketleri kur (uzun sürer, progress göster)
+- "Auto-snapshot before bulk install" toggle (Settings)
+- Snapshot listesi: tarih, paket sayısı, boyut tahmini
+
+**Use case:**
+- "TensorFlow 2.15 kurdum, bir şey bozuldu" → 2 dakika önce snapshot'a dön
+- "ML env'imi başka makineye taşıyacağım" → snapshot al, transfer et
+
+**Dosyalar:** `src/core/snapshot_manager.py` (yeni), `src/gui/main_window.py` (context menu), `src/gui/snapshot_dialog.py` (yeni)
+
+**Öncelik:** 🔴 Yüksek — workflow safety net, çok değerli
+
+---
+
+### 📦 F162 — İki Env Karşılaştır (Diff)
+
+**Hedef:** Env A vs Env B → paket farkı tablosu.
+
+**Kapsam:**
+- Tools menüsü → "Compare environments..."
+- İki env seç (dropdown)
+- Side-by-side tablo:
+  - Sadece A'da olan paketler (yeşil)
+  - Sadece B'de olan paketler (mavi)
+  - İkisinde de var, sürüm aynı (gri)
+  - İkisinde de var, sürüm farklı (sarı, A→B sürüm değişimi)
+- Filtre: sadece farkları göster / hepsini göster
+- "Sync A → B" butonu (B'ye eksikleri kur, fazlaları kaldır) — uyarı dialog'lu
+
+**Dosyalar:** `src/gui/env_compare_dialog.py` (yeni), `src/gui/main_window.py` (Tools menüsü)
+
+**Öncelik:** 🟡 Orta — geliştirici için faydalı, sık kullanılmayabilir
+
+---
+
+### ⚖️ F163 — License Checker
+
+**Hedef:** Kurulu paketlerin lisanslarını listele. Ticari proje için kritik (GPL bulaşıcı, MIT serbest).
+
+**Kapsam:**
+- Tools menüsü → "License report"
+- Tablo: paket adı | sürüm | lisans | risk
+- Risk kategorileri:
+  - 🟢 Düşük: MIT, BSD, Apache-2.0, ISC
+  - 🟡 Orta: LGPL, MPL
+  - 🔴 Yüksek: GPL, AGPL (ticari kapalı kaynak için sorunlu)
+  - ❓ Bilinmeyen: lisans bulunamadı
+- Filter: sadece yüksek risk göster
+- Export: CSV / Markdown
+- Cache: lisans sabit, paket sürümüne bağlı, uzun TTL OK
+
+**Veri kaynağı:** `pip show <pkg>` çıktısında "License" alanı, ya da PyPI metadata
+
+**Dosyalar:** `src/core/license_analyzer.py` (yeni), `src/gui/license_dialog.py` (yeni)
+
+**Öncelik:** 🟡 Orta — ticari kullanıcı için kritik
+
+---
+
+### 💾 F164 — Per-Package Disk Usage Analyzer
+
+**Hedef:** Bir env içinde hangi paket kaç MB? "pip-sizes" benzeri.
+
+**Şu an:** Env'in toplam disk kullanımı tablonun üstünde gösteriliyor (env bazlı). Ama paket bazlı yok.
+
+**Kapsam:**
+- Sağ tık env → "Disk usage report"
+- Tablo: paket adı | sürüm | boyut | yüzde
+- Sırala: en büyük üstte
+- Top 10 görselleştirme: pasta grafik veya horizontal bar chart
+- "Cleanup suggestions": eski sürümler, __pycache__ klasörleri, test dosyaları
+- "Reclaim space" butonu — pip cache temizle, __pycache__ sil
+- Cache: paket boyutları yavaş hesaplanır, 24h cache
+
+**Algoritma:** `site-packages/<pkg>` klasörü için `os.walk` → toplam boyut. Background thread'de çalıştır.
+
+**Dosyalar:** `src/core/disk_analyzer.py` (yeni), `src/gui/disk_usage_dialog.py` (yeni)
+
+**Öncelik:** 🟡 Orta — debug ve cleanup için faydalı
+
+---
+
+### ⌨️ F165 — Command Palette (Ctrl+Shift+P)
+
+**Hedef:** VS Code / Notion / Sublime tarzı evrensel komut paleti. Klavye odaklı her şeye erişim.
+
+**Kapsam:**
+- `Ctrl+Shift+P` veya `Ctrl+K` ile aç
+- Fuzzy search: "create env", "delete", "install pandas", "switch theme dark", "open settings", "compare envs", ...
+- Komut kategorileri:
+  - Environment: create, delete, switch to, open terminal, open folder
+  - Package: install, uninstall, update all, search catalog
+  - Settings: theme, language, font size, perform tab
+  - View: zoom in/out, switch page, toggle sidebar
+  - Tools: snapshot, compare, license report
+- Recent commands üstte
+- Sonuç seç → enter → çalıştır
+- Plugin friendly (gelecekte kullanıcı kendi komutlarını ekleyebilsin)
+
+**Implementation:** `QLineEdit` + `QListWidget` + fuzzy match (rapidfuzz library)
+
+**Dosyalar:** `src/gui/command_palette.py` (yeni), `src/gui/main_window.py` (kısayol bind)
+
+**Öncelik:** 🔴 Yüksek — çok güçlü UX katar, power user'lar bayılır
+
+---
+
+### ↩️ F166 — Undo / Redo (Ctrl+Z / Ctrl+Y)
+
+**Hedef:** Yanlış paketi sildim, env'i sildim, ayar değiştirdim → Ctrl+Z ile geri al.
+
+**Kapsam:**
+- Action history stack (son 50 işlem)
+- Undo'lanabilen işlemler:
+  - Paket yükle/kaldır → tersini yap
+  - Env oluştur → sil (uyarı dialog'lu — büyük iş)
+  - Env sil → snapshot'tan restore (F161 ile entegre)
+  - Settings değiştir → eski değere dön
+- Status bar'da "Last action: Installed pandas" + Undo butonu
+- Dialog: undo'ya basınca onay iste ("Bu pandas paketi kaldırılacak, emin misin?")
+
+**Risk:** Bazı işlemler doğal olarak geri alınamaz (örn. cache temizle). Onlar undo stack'e girmesin.
+
+**Implementation:** Command pattern. Her action `do()` ve `undo()` metodlarını implement etsin.
+
+**Dosyalar:** `src/core/action_history.py` (yeni), tüm action tetikleyici yerlere entegrasyon
+
+**Öncelik:** 🟡 Orta — koruma katmanı, ama büyük refactor (her action'ı command pattern'e dönüştürmek)
+
+---
+
+### 🪟 F167 — Çoklu Pencere / Sekme (Multi-Window)
+
+**Hedef:** Aynı anda iki env ile çalış. İki ayrı VenvStudio penceresi veya tek pencerede sekmeler.
+
+**Kapsam:**
+- File menüsü → "New Window" (Ctrl+N veya Ctrl+Shift+N)
+- Yeni pencere = aynı uygulama, farklı state
+- Pencereler birbirinden bağımsız: farklı env seçili olabilir
+- Cache + config paylaşımlı (singleton)
+- Pencere konumu/boyutu her pencere için ayrı kaydedilir (`window_state_<n>.json`)
+
+**Alternatif yaklaşım:** Tek pencerede sekme sistemi (her sekme bir env workspace'i). Daha az invasive ama daha az esnek.
+
+**Dosyalar:** `src/gui/main_window.py` (multi-instance support), `src/utils/config_manager.py` (per-window state)
+
+**Öncelik:** 🟡 Orta — power user feature, gerçek workflow değer katar
+
+---
+
+
 
 ### 🐛 B138 — Windows EXE'de başlangıçta terminal yanıp sönüyor
 - Form yüklenince **3-5 kez terminal penceresi** açılıp kayboluyor (flash)

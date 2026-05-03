@@ -287,6 +287,60 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
                         )
                 except RuntimeError:
                     pass
+
+            # 8) B183: Input widgets (QComboBox, QLineEdit, QListWidget,
+            #    QSpinBox). These widgets have inline `background-color:`
+            #    rules that don't pick up theme changes from the global
+            #    QSS unless re-applied. The CLI/TUI Tools combo, "Home
+            #    Directory" path field, terminal emulator list and others
+            #    were stuck in the previous theme's colours.
+            from PySide6.QtWidgets import QComboBox, QLineEdit, QListWidget, QSpinBox
+            input_style = (
+                f"background-color: {c['input_bg']}; color: {c['fg']}; "
+                f"border: 1px solid {c['border']}; padding: 4px 8px; "
+                f"border-radius: 4px; font-size: {c['fs_small']}px;"
+            )
+            for combo in self.findChildren(QComboBox):
+                try:
+                    ss = combo.styleSheet()
+                    if ss and ("background" in ss or "color" in ss):
+                        combo.setStyleSheet(
+                            f"QComboBox {{ {input_style} }}"
+                            f"QComboBox::drop-down {{ border: none; }}"
+                            f"QComboBox QAbstractItemView {{ "
+                            f"background: {c['card']}; color: {c['fg']}; "
+                            f"selection-background-color: {c['active']}; "
+                            f"border: 1px solid {c['border']}; }}"
+                        )
+                except RuntimeError:
+                    pass
+            for line in self.findChildren(QLineEdit):
+                try:
+                    ss = line.styleSheet()
+                    if ss and ("background" in ss or "color" in ss):
+                        line.setStyleSheet(f"QLineEdit {{ {input_style} }}")
+                except RuntimeError:
+                    pass
+            for lw in self.findChildren(QListWidget):
+                try:
+                    ss = lw.styleSheet()
+                    if ss and ("background" in ss or "color" in ss):
+                        lw.setStyleSheet(
+                            f"QListWidget {{ background: {c['card']}; "
+                            f"color: {c['fg']}; border: 1px solid {c['border']}; "
+                            f"border-radius: 6px; }}"
+                            f"QListWidget::item:selected {{ "
+                            f"background: {c['active']}; color: {c['fg']}; }}"
+                        )
+                except RuntimeError:
+                    pass
+            for sb in self.findChildren(QSpinBox):
+                try:
+                    ss = sb.styleSheet()
+                    if ss and ("background" in ss or "color" in ss):
+                        sb.setStyleSheet(f"QSpinBox {{ {input_style} }}")
+                except RuntimeError:
+                    pass
         except Exception:
             pass
 

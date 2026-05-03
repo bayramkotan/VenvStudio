@@ -146,9 +146,18 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         )
 
     def _refresh_styles(self):
-        """Re-apply theme-dependent inline styles on all tracked widgets."""
+        """Re-apply theme-dependent inline styles on all tracked widgets.
+
+        B183 fix: previous version only covered widgets registered in
+        ``self._theme_frames``. CLI Tools cards, Nerd-Font panels and the
+        new Settings blocks added later were not all registered, so they
+        kept their dark colours when the user switched to light theme.
+        We now ALSO sweep every QFrame / QGroupBox under this page and
+        re-apply the frame style when the existing inline stylesheet
+        looks like a theme-coloured card.
+        """
         try:
-            from PySide6.QtWidgets import QFrame, QLabel, QCheckBox
+            from PySide6.QtWidgets import QFrame, QLabel, QCheckBox, QGroupBox, QPushButton
             c = self._c()
 
             # 1) Tablolar
@@ -198,6 +207,86 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
                 ss = frame.styleSheet()
                 if ss and "border-radius" in ss and "border" in ss:
                     frame.setStyleSheet(self._frame_style())
+
+            # 5) B183: QGroupBox container'ları (Settings'teki yeni bloklar
+            #    çoğunlukla QGroupBox içinde — eski kod onları atlıyordu).
+            for gb in self.findChildren(QGroupBox):
+                try:
+                    ss = gb.styleSheet()
+                    # Only refresh if it carries inline theme colours; leave
+                    # untouched group boxes alone so we don't clobber custom
+                    # widget styling.
+                    if ss and ("background" in ss or "color" in ss or "border" in ss):
+                        gb.setStyleSheet(
+                            f"QGroupBox {{ background: {c['card']}; color: {c['fg']}; "
+                            f"border: 1px solid {c['border']}; border-radius: 8px; "
+                            f"margin-top: 12px; padding: 12px; "
+                            f"font-size: {c['fs_base']}px; font-weight: bold; }}"
+                            f"QGroupBox::title {{ subcontrol-origin: margin; "
+                            f"left: 10px; padding: 0 6px; color: {c['fg']}; }}"
+                        )
+                except RuntimeError:
+                    pass
+
+            # 6) B183: standalone QLabel'lar (kart dışında, hardcoded renk
+            #    kullanan başlıklar / hint'ler / spacer text). Yalnızca
+            #    inline color taşıyanları yenile.
+            for lbl in self.findChildren(QLabel):
+                try:
+                    if lbl.parent() and isinstance(lbl.parent(), QFrame) and lbl.parent() in self._theme_frames:
+                        continue  # zaten 3'te güncellendi
+                    ss = lbl.styleSheet()
+                    if not ss:
+                        continue
+                    # Only refresh labels we recognise as theme-coloured
+                    # (foreground / muted / secondary). We can't tell what
+                    # they should become exactly, so we just refresh the
+                    # most common patterns.
+                    if "color:" not in ss:
+                        continue
+                    if "font-weight: bold" in ss:
+                        # heading
+                        lbl.setStyleSheet(
+                            f"font-weight: bold; font-size: {c['fs_base']}px; color: {c['fg']};"
+                        )
+                    elif "font-style: italic" in ss or "font-size:" in ss:
+                        # hint / muted
+                        if c['success'] in ss or c['danger'] in ss:
+                            continue  # status label, dokunma
+                        lbl.setStyleSheet(
+                            f"color: {c['fg_muted']}; font-size: {c['fs_tiny']}px;"
+                            + (" font-style: italic;" if "italic" in ss else "")
+                        )
+                except RuntimeError:
+                    pass
+
+            # 7) B183: QPushButton'lar (özellikle "Install Noto Color Emoji"
+            #    gibi tek başına butonlar). Inline arka-plan rengi varsa yenile.
+            for btn in self.findChildren(QPushButton):
+                try:
+                    ss = btn.styleSheet()
+                    if not ss:
+                        continue
+                    # Skip object-name styled buttons (they have a global
+                    # QSS rule, no need to touch them inline).
+                    if btn.objectName():
+                        continue
+                    if "background" in ss and "color" in ss:
+                        # Generic refresh — preserve "primary"/"danger" hint
+                        # if present, otherwise use neutral.
+                        if "danger" in ss.lower() or c['danger'] in ss:
+                            continue
+                        if "success" in ss.lower() or c['success'] in ss:
+                            continue
+                        # Neutral button refresh
+                        btn.setStyleSheet(
+                            f"QPushButton {{ background: {c['secondary']}; "
+                            f"color: {c['fg']}; border: 1px solid {c['border']}; "
+                            f"padding: 6px 12px; border-radius: 6px; }}"
+                            f"QPushButton:hover {{ background: {c['active']}; }}"
+                        )
+                except RuntimeError:
+                    pass
         except Exception:
             pass
 

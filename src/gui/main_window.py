@@ -2771,7 +2771,26 @@ class MainWindow(QMainWindow):
             if hasattr(self, "package_panel"):
                 if self.package_panel is not None: self.package_panel.apply_theme(theme)
             if hasattr(self, "settings_page"):
-                self.settings_page._refresh_styles()
+                if self.settings_page is not None:
+                    try:
+                        self.settings_page._refresh_styles()
+                    except Exception:
+                        pass
+            # B183 fix: learn_page was previously skipped during theme switch,
+            # so it stayed in dark colours when the user picked light theme.
+            # Try multiple known refresh entry points to stay compatible if
+            # the LearnPage API changes.
+            if hasattr(self, "learn_page") and self.learn_page is not None:
+                try:
+                    if hasattr(self.learn_page, "apply_theme"):
+                        self.learn_page.apply_theme(theme)
+                    elif hasattr(self.learn_page, "_refresh_styles"):
+                        self.learn_page._refresh_styles()
+                    else:
+                        # Last resort: re-apply the global stylesheet to force a repaint
+                        self.learn_page.setStyleSheet(self.learn_page.styleSheet())
+                except Exception:
+                    pass
             self._refresh_sidebar_styles()
         except RuntimeError:
             # Widget may be in an unstable state during screen transition

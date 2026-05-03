@@ -146,21 +146,33 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         )
 
     def _refresh_styles(self):
-        """Re-apply theme-dependent inline styles on all tracked widgets.
+        """Re-apply theme-dependent inline styles on every child widget.
 
-        B183 fix: previous version only covered widgets registered in
-        ``self._theme_frames``. CLI Tools cards, Nerd-Font panels and the
-        new Settings blocks added later were not all registered, so they
-        kept their dark colours when the user switched to light theme.
-        We now ALSO sweep every QFrame / QGroupBox under this page and
-        re-apply the frame style when the existing inline stylesheet
-        looks like a theme-coloured card.
+        Strategy: don't keep a hardcoded list of widgets to update — that
+        was the original B183 bug, where new widgets added later didn't
+        get refreshed. Instead, sweep ALL descendants and rewrite any
+        inline stylesheet that contains a stale theme colour from the
+        previous palette.
+
+        How it works:
+        1. Build a map of OLD palette colours (recorded before this call)
+           → NEW palette colours from `self._c()`.
+        2. For each child widget, if its inline stylesheet contains an
+           old colour, replace it with the new one in-place. The new
+           stylesheet is then re-applied.
+        3. Tables, log areas and frames also get their canonical style
+           re-applied (they have helpers that read live colours).
+
+        This keeps the maintenance burden at zero — adding a new card,
+        button, combo or input never needs an update here as long as it
+        uses ``self._c()`` for its colours.
         """
         try:
-            from PySide6.QtWidgets import QFrame, QLabel, QCheckBox, QGroupBox, QPushButton
-            c = self._c()
+            from PySide6.QtWidgets import QFrame, QWidget, QTableWidget
+            new_c = self._c()
+            old_c = getattr(self, "_last_palette", None)
 
-            # 1) Tablolar
+            # 1) Tables and the CLI log area — always refreshable via helpers
             tables = [
                 ("builtin_cats_table", 12),
                 ("custom_categories_list", 13),
@@ -171,176 +183,62 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
             ]
             for attr, size in tables:
                 w = getattr(self, attr, None)
-                if w:
-                    w.setStyleSheet(self._table_style(size))
+                if w is not None:
+                    try:
+                        w.setStyleSheet(self._table_style(size))
+                    except RuntimeError:
+                        pass
+            if hasattr(self, "cli_log") and self.cli_log is not None:
+                try:
+                    self.cli_log.setStyleSheet(self._log_style())
+                except RuntimeError:
+                    pass
 
-            # 2) CLI log alanı
-            if hasattr(self, "cli_log"):
-                self.cli_log.setStyleSheet(self._log_style())
-
-            # 3) Kayıtlı CLI/pip kartları (_theme_frames)
-            for frame in self._theme_frames:
+            # 2) Re-apply frame style on tracked CLI/pip cards
+            for frame in getattr(self, "_theme_frames", []):
                 try:
                     frame.setStyleSheet(self._frame_style())
-                    # Kart içindeki label'ları güncelle
-                    for lbl in frame.findChildren(QLabel):
-                        ss = lbl.styleSheet()
-                        if "font-weight: bold" in ss:
-                            lbl.setStyleSheet(f"font-weight: bold; font-size: {c['fs_base']}px; color: {c['fg']};")
-                        elif "font-size:" in ss and "color:" in ss:
-                            # status veya desc label — rengi koru ama fg_muted güncelle
-                            if c['success'] in ss or c['danger'] in ss or "✅" in lbl.text() or "❌" in lbl.text():
-                                pass  # status label, rengi değişmesin
-                            else:
-                                lbl.setStyleSheet(f"color: {c['fg_muted']}; font-size: {c['fs_tiny']}px;")
-                    # Kart içindeki checkbox'ları güncelle
-                    for cb in frame.findChildren(QCheckBox):
-                        cb.setStyleSheet(f"font-size: {self._c()['fs_tiny']}px; color: {c['fg']};")
-                except RuntimeError:
-                    pass  # widget deleted
-
-            # 4) Fallback: objectName'siz QFrame'ler (eski kartlar)
-            for frame in self.findChildren(QFrame):
-                obj = frame.objectName()
-                if obj and (obj.startswith("cli_card_") or obj.startswith("pip_card_")):
-                    continue  # zaten yukarıda güncellendi
-                ss = frame.styleSheet()
-                if ss and "border-radius" in ss and "border" in ss:
-                    frame.setStyleSheet(self._frame_style())
-
-            # 5) B183: QGroupBox container'ları (Settings'teki yeni bloklar
-            #    çoğunlukla QGroupBox içinde — eski kod onları atlıyordu).
-            for gb in self.findChildren(QGroupBox):
-                try:
-                    ss = gb.styleSheet()
-                    # Only refresh if it carries inline theme colours; leave
-                    # untouched group boxes alone so we don't clobber custom
-                    # widget styling.
-                    if ss and ("background" in ss or "color" in ss or "border" in ss):
-                        gb.setStyleSheet(
-                            f"QGroupBox {{ background: {c['card']}; color: {c['fg']}; "
-                            f"border: 1px solid {c['border']}; border-radius: 8px; "
-                            f"margin-top: 12px; padding: 12px; "
-                            f"font-size: {c['fs_base']}px; font-weight: bold; }}"
-                            f"QGroupBox::title {{ subcontrol-origin: margin; "
-                            f"left: 10px; padding: 0 6px; color: {c['fg']}; }}"
-                        )
                 except RuntimeError:
                     pass
 
-            # 6) B183: standalone QLabel'lar (kart dışında, hardcoded renk
-            #    kullanan başlıklar / hint'ler / spacer text). Yalnızca
-            #    inline color taşıyanları yenile.
-            for lbl in self.findChildren(QLabel):
-                try:
-                    if lbl.parent() and isinstance(lbl.parent(), QFrame) and lbl.parent() in self._theme_frames:
-                        continue  # zaten 3'te güncellendi
-                    ss = lbl.styleSheet()
-                    if not ss:
-                        continue
-                    # Only refresh labels we recognise as theme-coloured
-                    # (foreground / muted / secondary). We can't tell what
-                    # they should become exactly, so we just refresh the
-                    # most common patterns.
-                    if "color:" not in ss:
-                        continue
-                    if "font-weight: bold" in ss:
-                        # heading
-                        lbl.setStyleSheet(
-                            f"font-weight: bold; font-size: {c['fs_base']}px; color: {c['fg']};"
-                        )
-                    elif "font-style: italic" in ss or "font-size:" in ss:
-                        # hint / muted
-                        if c['success'] in ss or c['danger'] in ss:
-                            continue  # status label, dokunma
-                        lbl.setStyleSheet(
-                            f"color: {c['fg_muted']}; font-size: {c['fs_tiny']}px;"
-                            + (" font-style: italic;" if "italic" in ss else "")
-                        )
-                except RuntimeError:
-                    pass
+            # 3) Sweep — for every widget whose inline stylesheet contains
+            #    an OLD palette colour, swap it for the NEW one. This
+            #    handles QLabel, QPushButton, QComboBox, QLineEdit,
+            #    QListWidget, QSpinBox, QGroupBox, QFrame, QCheckBox,
+            #    QToolButton — anything Qt knows about.
+            if old_c:
+                # Build replacement map for actual colour-string occurrences
+                # (skip non-colour keys like fs_base, fs_small, etc.)
+                colour_keys = [k for k, v in old_c.items()
+                               if isinstance(v, str) and v.startswith("#")]
+                replacements = []
+                for k in colour_keys:
+                    old_v = old_c.get(k)
+                    new_v = new_c.get(k)
+                    if old_v and new_v and old_v != new_v:
+                        replacements.append((old_v.lower(), new_v))
+                        replacements.append((old_v.upper(), new_v))
+                if replacements:
+                    for w in self.findChildren(QWidget):
+                        try:
+                            ss = w.styleSheet()
+                            if not ss:
+                                continue
+                            new_ss = ss
+                            changed = False
+                            for old_v, new_v in replacements:
+                                if old_v in new_ss:
+                                    new_ss = new_ss.replace(old_v, new_v)
+                                    changed = True
+                            if changed:
+                                w.setStyleSheet(new_ss)
+                        except RuntimeError:
+                            pass  # widget deleted
 
-            # 7) B183: QPushButton'lar (özellikle "Install Noto Color Emoji"
-            #    gibi tek başına butonlar). Inline arka-plan rengi varsa yenile.
-            for btn in self.findChildren(QPushButton):
-                try:
-                    ss = btn.styleSheet()
-                    if not ss:
-                        continue
-                    # Skip object-name styled buttons (they have a global
-                    # QSS rule, no need to touch them inline).
-                    if btn.objectName():
-                        continue
-                    if "background" in ss and "color" in ss:
-                        # Generic refresh — preserve "primary"/"danger" hint
-                        # if present, otherwise use neutral.
-                        if "danger" in ss.lower() or c['danger'] in ss:
-                            continue
-                        if "success" in ss.lower() or c['success'] in ss:
-                            continue
-                        # Neutral button refresh
-                        btn.setStyleSheet(
-                            f"QPushButton {{ background: {c['secondary']}; "
-                            f"color: {c['fg']}; border: 1px solid {c['border']}; "
-                            f"padding: 6px 12px; border-radius: 6px; }}"
-                            f"QPushButton:hover {{ background: {c['active']}; }}"
-                        )
-                except RuntimeError:
-                    pass
-
-            # 8) B183: Input widgets (QComboBox, QLineEdit, QListWidget,
-            #    QSpinBox). These widgets have inline `background-color:`
-            #    rules that don't pick up theme changes from the global
-            #    QSS unless re-applied. The CLI/TUI Tools combo, "Home
-            #    Directory" path field, terminal emulator list and others
-            #    were stuck in the previous theme's colours.
-            from PySide6.QtWidgets import QComboBox, QLineEdit, QListWidget, QSpinBox
-            input_style = (
-                f"background-color: {c['input_bg']}; color: {c['fg']}; "
-                f"border: 1px solid {c['border']}; padding: 4px 8px; "
-                f"border-radius: 4px; font-size: {c['fs_small']}px;"
-            )
-            for combo in self.findChildren(QComboBox):
-                try:
-                    ss = combo.styleSheet()
-                    if ss and ("background" in ss or "color" in ss):
-                        combo.setStyleSheet(
-                            f"QComboBox {{ {input_style} }}"
-                            f"QComboBox::drop-down {{ border: none; }}"
-                            f"QComboBox QAbstractItemView {{ "
-                            f"background: {c['card']}; color: {c['fg']}; "
-                            f"selection-background-color: {c['active']}; "
-                            f"border: 1px solid {c['border']}; }}"
-                        )
-                except RuntimeError:
-                    pass
-            for line in self.findChildren(QLineEdit):
-                try:
-                    ss = line.styleSheet()
-                    if ss and ("background" in ss or "color" in ss):
-                        line.setStyleSheet(f"QLineEdit {{ {input_style} }}")
-                except RuntimeError:
-                    pass
-            for lw in self.findChildren(QListWidget):
-                try:
-                    ss = lw.styleSheet()
-                    if ss and ("background" in ss or "color" in ss):
-                        lw.setStyleSheet(
-                            f"QListWidget {{ background: {c['card']}; "
-                            f"color: {c['fg']}; border: 1px solid {c['border']}; "
-                            f"border-radius: 6px; }}"
-                            f"QListWidget::item:selected {{ "
-                            f"background: {c['active']}; color: {c['fg']}; }}"
-                        )
-                except RuntimeError:
-                    pass
-            for sb in self.findChildren(QSpinBox):
-                try:
-                    ss = sb.styleSheet()
-                    if ss and ("background" in ss or "color" in ss):
-                        sb.setStyleSheet(f"QSpinBox {{ {input_style} }}")
-                except RuntimeError:
-                    pass
+            # 4) Remember current palette so the next switch knows what
+            #    colours to swap out.
+            self._last_palette = {k: v for k, v in new_c.items()
+                                  if isinstance(v, str) and v.startswith("#")}
         except Exception:
             pass
 
@@ -348,6 +246,13 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         super().__init__(parent)
         self.config = config_manager
         self._theme_frames = []  # CLI/pip card frame attribute names
+        # B183: remember the palette currently in use so the *next* call to
+        # _refresh_styles knows which colours to swap out of inline stylesheets.
+        try:
+            self._last_palette = {k: v for k, v in self._c().items()
+                                  if isinstance(v, str) and v.startswith("#")}
+        except Exception:
+            self._last_palette = None
         self._setup_ui()
         self._load_current_settings()
         self._load_cache_settings()

@@ -235,6 +235,114 @@ oh-my-posh init pwsh --config "$env:USERPROFILE\.posh\themes\<tema_adi>.omp.json
 **Öncelik:** 🟡 Orta — UX katmanı, oh-my-posh kullanıcılarını mutlu eder
 
 ---
+
+### 🧪 F172 — Terminal Otomatik Profil Kurulumu (KISMEN YAPILDI v1.4.88, TEST AŞAMASINDA)
+
+**Durum:** Linux'ta gnome-terminal/mate-terminal/konsole/alacritty/kitty/wezterm için adapter'lar yazıldı (`src/core/terminal_profile_setup.py`). Nerd Font kurulduktan sonra otomatik dialog açılıyor: "Terminalin algılandı, profil oluşturayım mı?" + "Default yapayım mı?".
+
+**Test edilmesi gerekenler:**
+- Linux: gnome-terminal ✅ (Bayram Debian'da test etti, kabul edildi gibi — kesin doğrulama bekleniyor)
+- Linux: mate-terminal, konsole, alacritty, kitty, wezterm — test edilmedi
+- macOS: **HİÇ DESTEK YOK** — Terminal.app ve iTerm2 için adapter eklenmeli
+- Windows: **HİÇ DESTEK YOK** — Windows Terminal (`settings.json` JSON edit) ve cmd/PowerShell adapter'ları eklenmeli
+
+**Yapılacak:**
+- macOS Terminal.app için plist yazıcı (`~/Library/Preferences/com.apple.Terminal.plist`)
+- macOS iTerm2 için plist yazıcı (`~/Library/Preferences/com.googlecode.iterm2.plist`)
+- Windows Terminal: `%LOCALAPPDATA%\Packages\Microsoft.WindowsTerminal_8wekyb3d8bbcw\LocalState\settings.json` JSON edit
+- Tüm terminallerde test edip bug'ları topla
+
+**Dosyalar:** `src/core/terminal_profile_setup.py` (var, genişletilecek)
+
+---
+
+### 🟡 F173 — Tema Değiştirme (Change Theme) Butonu
+
+**Hedef:** TUI tools yüklendikten **sonra** Uninstall butonunun yanında veya combo'nun yanında **"Apply" / "Change Theme" / "Switch"** gibi bir buton olsun. Configure butonu zaten var ama install öncesi de görünüyor — kafa karıştırıcı olabilir.
+
+**Mevcut akış (v1.4.88'den sonra):**
+- Install → otomatik default tema configure ediliyor (jandedobbeleer / Tokyo Night)
+- Kullanıcı tema değiştirmek isterse → Combo'dan seç → Configure'a bas → eski init satırı silinip yenisi yazılıyor (`_inject_shell_config` overwrite)
+
+**Sorulacak:** Bu yeterli mi yoksa Configure butonunun adı/davranışı değişmeli mi?
+- Seçenek A: Mevcut (Configure her zaman aktif)
+- Seçenek B: Install öncesi sadece "Install", sonrası "Apply theme" (ad değişir)
+- Seçenek C: İki ayrı buton (Apply / Reset)
+
+**Otomatik aktivasyon:**
+- `.bashrc` güncelleniyor ama yeni terminal açmadan etki yok (subprocess shell'i izole)
+- VenvStudio içindeki açık terminallere otomatik uygulanamaz (Linux/macOS'ta `source` subprocess'te işe yaramaz)
+- F174 (popup) ile "Yeni terminal aç" mesajı gösterilecek
+
+**Dosyalar:** `src/gui/settings_appearance.py`
+
+**Öncelik:** 🟡 Orta — UX iyileştirmesi, kullanıcıya net mesaj
+
+---
+
+### 🟡 F174 — TUI Yükleme/Configure Sonrası "Terminali Yeniden Başlat" Pop-up
+
+**Hedef:** oh-my-posh / Starship / herhangi bir TUI tool kurulduktan veya tema değiştirildikten sonra kullanıcıya bilgilendirici bir pop-up:
+
+```
+✅ oh-my-posh configured with theme: jandedobbeleer
+
+Etkili olması için terminalinizi yeniden başlatın.
+
+Veya mevcut terminal oturumunda:
+  • Linux/macOS bash: source ~/.bashrc
+  • Linux/macOS zsh:  source ~/.zshrc
+  • Linux/macOS fish: source ~/.config/fish/config.fish
+  • Windows PowerShell: . $PROFILE
+  • Windows cmd: yeni cmd aç (source desteği yok)
+
+[ 📋 Komutu Kopyala ]   [ Tamam ]
+```
+
+**Platform-specific komutlar:**
+- Linux/macOS bash: `source ~/.bashrc`
+- Linux/macOS zsh: `source ~/.zshrc`
+- Linux/macOS fish: `source ~/.config/fish/config.fish`
+- Windows PowerShell: `. $PROFILE`
+- Windows cmd: yok (yeni cmd açmak gerek)
+
+**Otomatik source mümkün mü?**
+- VenvStudio içinden `subprocess.run(["bash", "-c", "source ~/.bashrc && bash"])` çalıştırılabilir ama sadece o subprocess'i etkiler, kullanıcının açtığı diğer terminalleri etkilemez
+- En temiz yol: pop-up + kopyala butonu + "yeni terminal aç"
+
+**Dosyalar:** `src/gui/settings_appearance.py` (`_after_nerd_font_install` ve `_cli_done` callback'leri), yeni helper `src/utils/shell_reload_helper.py` olabilir
+
+**Öncelik:** 🟡 Orta — kullanıcı şu an "neden çalışmıyor?" diye düşünüyor, terminal restart gerektiğini bilmiyor
+
+---
+
+### 🐛 B183 — Learn Sayfası ve Settings'teki Yeni Bloklar Light Tema'ya Geçmiyor
+
+**Sorun:** Tema değiştirildiğinde:
+- ✅ Ana pencere, env tablosu, package paneli light tema'ya geçiyor
+- ❌ Learn sayfası dark tema'da kalıyor
+- ❌ Settings altındaki yeni bloklar dark tema'da kalıyor (özellikle: CLI Tools card, Nerd Font bloğu, oh-my-posh theme card vb.)
+
+**Olası sebep:**
+- Learn sayfası kendi inline stylesheet'ini kullanıyor olabilir (`setStyleSheet(...)` hardcoded renklerle)
+- Yeni Settings bloklarındaki widget'lar `_c()` (color helper) kullanmıyor olabilir
+- Theme switch sırasında sadece `MainWindow.setStyleSheet()` çağrılıyor, child widget'ların `_refresh_styles()` veya `apply_theme()` metodu çağrılmıyor
+
+**Yapılacak:**
+- Tüm "yeni bloklar"ı tara (CLI Tools card, Nerd Font, oh-my-posh, learn pages)
+- Hardcoded renkleri `self._c()['bg']`, `self._c()['fg']` ile değiştir
+- Theme switch'te `_refresh_styles()` recursive çağrılsın
+- `_apply_theme` MainWindow'da → tüm child'ların `apply_theme(theme)` çağırılmalı
+
+**Dosyalar:**
+- `src/gui/learn_page.py` (Learn sayfası)
+- `src/gui/settings_appearance.py` (CLI Tools, Nerd Font blokları)
+- `src/gui/settings_*.py` (diğer settings bloklar)
+- `src/gui/main_window.py` (`_apply_theme` recursive)
+
+**Öncelik:** 🔴 Yüksek — light tema kullanıcıları için çok rahatsız edici, kısmen kullanılamaz hâlde
+
+---
 ### 🟡 F157 — Settings → Performance Sekmesi
 
 **⚠️ SIRA:** Önce F158 (alt yapı) → sonra F157 (UI). Aksi halde Cache stats boş görünür.

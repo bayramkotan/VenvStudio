@@ -490,19 +490,27 @@ class PackagePanel(QWidget):
         )
         # Disable mouse wheel scrolling on env selector to prevent accidental switches
         # wheelEvent enabled — scroll to switch environments
+        # B183: previously hardcoded Catppuccin Mocha colours (#1e1e2e,
+        # #cdd6f4, #89b4fa) which made the selector look dark even when
+        # the user picked a light theme. Use palette colours so it adapts.
+        _c = self._c()
+        _bg = _c.get("input_bg", "#1e1e2e")
+        _fg = _c.get("fg", "#cdd6f4")
+        _accent = _c.get("accent", "#89b4fa")
+        _accent_hover = _c.get("accent_hover", _c.get("accent", "#b4befe"))
         self.env_selector.setStyleSheet(
             "QComboBox {"
             "  font-size: 14px; font-weight: bold; padding: 4px 12px;"
-            "  background-color: #1e1e2e; color: #cdd6f4;"
-            "  border: 2px solid #89b4fa; border-radius: 6px;"
+            f"  background-color: {_bg}; color: {_fg};"
+            f"  border: 2px solid {_accent}; border-radius: 6px;"
             "}"
-            "QComboBox:hover { border-color: #b4befe; }"
+            f"QComboBox:hover {{ border-color: {_accent_hover}; }}"
             "QComboBox::drop-down { border: none; width: 30px; }"
             "QComboBox QAbstractItemView {"
-            "  background-color: #1e1e2e; color: #cdd6f4;"
-            "  selection-background-color: #89b4fa; selection-color: #1e1e2e;"
+            f"  background-color: {_bg}; color: {_fg};"
+            f"  selection-background-color: {_accent}; selection-color: {_bg};"
             "  font-size: 14px; font-weight: bold;"
-            "  border: 1px solid #89b4fa;"
+            f"  border: 1px solid {_accent};"
             "}"
         )
         self.env_selector.addItem(tr("select_environment"), "")
@@ -1487,21 +1495,30 @@ class PackagePanel(QWidget):
             btn = QPushButton(app_def["icon"])
             btn.setFixedSize(48, 48)
             btn.setToolTip(f"Launch {name}")
-            btn.setStyleSheet("""
-                QPushButton {
-                    font-size: 22px;
-                    background-color: #1e1e2e;
-                    border: 1px solid #313244;
-                    border-radius: 8px;
-                }
-                QPushButton:hover {
-                    background-color: #313244;
-                    border-color: #89b4fa;
-                }
-                QPushButton:pressed {
-                    background-color: #45475a;
-                }
-            """)
+            # B183: was hardcoded Catppuccin Mocha #1e1e2e/#313244/#89b4fa
+            # which kept these tiles dark even on a light theme. Use
+            # palette colours so they follow the active theme.
+            _c = self._c()
+            _bg = _c.get("input_bg", "#1e1e2e")
+            _border = _c.get("border", "#313244")
+            _hover_bg = _c.get("active", _c.get("secondary", "#313244"))
+            _hover_border = _c.get("accent", "#89b4fa")
+            _pressed_bg = _c.get("muted", "#45475a")
+            btn.setStyleSheet(
+                f"QPushButton {{"
+                f"  font-size: 22px;"
+                f"  background-color: {_bg};"
+                f"  border: 1px solid {_border};"
+                f"  border-radius: 8px;"
+                f"}}"
+                f"QPushButton:hover {{"
+                f"  background-color: {_hover_bg};"
+                f"  border-color: {_hover_border};"
+                f"}}"
+                f"QPushButton:pressed {{"
+                f"  background-color: {_pressed_bg};"
+                f"}}"
+            )
             btn.clicked.connect(lambda checked, a=app_def: self._launch_app(a))
             self._sidebar_layout.addWidget(btn)
             self._sidebar_buttons[name] = btn
@@ -2782,7 +2799,17 @@ $s.Save()
                 badge.setStyleSheet(f"color: {self._c()['success']}; font-size: {self._c()['fs_small']}px; font-weight: bold;")
                 install_btn.setText(f"✅ {tr('installed') if tr('installed') != 'installed' else 'Installed'}")
                 install_btn.setEnabled(False)
-                install_btn.setStyleSheet("background-color: #313244; color: #a6e3a1; font-weight: bold;")
+                # B183: was hardcoded "background:#313244; color:#a6e3a1"
+                # (Catppuccin Mocha surface + pastel green) which stayed
+                # dark on light themes. Use palette `secondary` (slightly
+                # darker than card) + `success` (theme's "good" colour).
+                _bg = self._c().get("secondary", "#313244")
+                _fg = self._c().get("success", "#a6e3a1")
+                install_btn.setStyleSheet(
+                    f"background-color: {_bg}; color: {_fg}; "
+                    f"font-weight: bold; border: 1px solid {self._c().get('border', _bg)}; "
+                    f"border-radius: 6px; padding: 6px 12px;"
+                )
                 if uninstall_btn:
                     uninstall_btn.setVisible(True)
             elif installed_count > 0:

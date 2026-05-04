@@ -858,11 +858,14 @@ class MainWindow(QMainWindow):
         self.env_table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.env_table.verticalHeader().setVisible(False)
         self.env_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.env_table.verticalHeader().setDefaultSectionSize(38)
+        self.env_table.verticalHeader().setDefaultSectionSize(42)  # daha yüksek satır
+        # B183: bigger font + bold table cells for legibility on light themes
+        # where the previous fs_subheader plain weight looked washed out.
         self.env_table.setStyleSheet(
-            f"QTableWidget {{ font-size: {self._c()['fs_subheader']}px; }}"
-            f"QTableWidget::item {{ padding: 4px 8px; }}"
-            f"QHeaderView::section {{ font-size: {self._c()['fs_base']}px; font-weight: bold; padding: 6px; }}"
+            f"QTableWidget {{ font-size: {self._c()['fs_base']}px; "
+            f"color: {self._c()['fg']}; }}"
+            f"QTableWidget::item {{ padding: 6px 10px; font-weight: 500; }}"
+            f"QHeaderView::section {{ font-size: {self._c()['fs_base']}px; font-weight: bold; padding: 8px; }}"
         )
         self.env_table.doubleClicked.connect(self._on_env_double_click)
         self.env_table.selectionModel().selectionChanged.connect(self._on_env_selected)
@@ -1666,13 +1669,48 @@ class MainWindow(QMainWindow):
             "conda":        "🦎 Conda",
             "system_tools": "🗂 Tools",
         }
-        _type_colors = {
-            "uv":           "#f9e2af",
-            "poetry":       "#cba6f7",
-            "pipx":         "#89dceb",
-            "conda":        "#a6e3a1",
-            "system_tools": None,  # uses accent
-        }
+        # B183: previously hardcoded pastel Catppuccin Mocha colours, which
+        # were illegible on a light background. Pick darker, saturated
+        # versions for light themes and the original pastels for dark
+        # themes. We detect light vs dark by looking at the active 'bg'
+        # palette colour — light themes have a near-white bg.
+        _is_light_theme = False
+        try:
+            _bg = (self._c().get("bg") or "").lower()
+            _bg_hex = _bg.lstrip("#")
+            if len(_bg_hex) >= 6:
+                _r = int(_bg_hex[0:2], 16)
+                _g = int(_bg_hex[2:4], 16)
+                _b = int(_bg_hex[4:6], 16)
+                _is_light_theme = (_r * 299 + _g * 587 + _b * 114) / 1000 > 128
+            self._log.debug(
+                f"env_table colours: bg={_bg!r} → light_theme={_is_light_theme}"
+            )
+        except Exception as _e:
+            self._log.debug(f"env_table colour detection failed: {_e}")
+        if _is_light_theme:
+            _type_colors = {
+                "uv":           "#8a6d00",  # darker amber, more contrast on white
+                "poetry":       "#5b2c6f",  # very deep purple
+                "pipx":         "#0c5a72",  # very dark teal
+                "conda":        "#1b5e20",  # dark forest green
+                "system_tools": None,
+            }
+            _path_color_default = "#333333"  # nearly black
+        else:
+            _type_colors = {
+                "uv":           "#f9e2af",
+                "poetry":       "#cba6f7",
+                "pipx":         "#89dceb",
+                "conda":        "#a6e3a1",
+                "system_tools": None,
+            }
+            _path_color_default = "#bac2de"
+
+        # Bold font used for ALL columns (B183 — previously only name was
+        # bold, other columns looked anaemic next to it on light themes)
+        _row_font = QFont()
+        _row_font.setBold(True)
 
         for i, env in enumerate(envs):
             etype = getattr(env, "env_type", "venv")
@@ -1689,9 +1727,10 @@ class MainWindow(QMainWindow):
             elif not env.is_valid:
                 name_item.setForeground(Qt.red)
                 name_item.setToolTip("Invalid environment (Python not found)")
-            name_font = QFont()
-            name_font.setBold(True)
-            name_item.setFont(name_font)
+            elif _is_light_theme:
+                # Default venv on light theme — needs a dark fg too
+                name_item.setForeground(QColor("#1f2937"))
+            name_item.setFont(_row_font)
             self.env_table.setItem(i, 0, name_item)
 
             # ── Type column ──
@@ -1701,6 +1740,9 @@ class MainWindow(QMainWindow):
                 type_item.setForeground(QColor(_color))
             elif etype == "system_tools":
                 type_item.setForeground(QColor(self._c().get("accent", "#89b4fa")))
+            elif _is_light_theme:
+                type_item.setForeground(QColor("#1f2937"))
+            type_item.setFont(_row_font)
             self.env_table.setItem(i, 1, type_item)
 
             # ── Path column ──
@@ -1708,18 +1750,32 @@ class MainWindow(QMainWindow):
             _display_path = _full_path
             path_item = QTableWidgetItem(f"  {_display_path}")
             path_item.setToolTip(_full_path)
-            path_item.setForeground(QColor(self._c().get("fg_muted", "#888")))
+            path_item.setForeground(QColor(_path_color_default))
+            path_item.setFont(_row_font)
             self.env_table.setItem(i, 2, path_item)
 
             # ── Runtime column: Python version or "----" ──
             _rv = str(env.python_version).strip()
             _runtime_str = f"  Python {_rv}" if (_rv and _rv not in ("Unknown", "?", "...")) else "  ----"
-            self.env_table.setItem(i, 3, QTableWidgetItem(_runtime_str))
+            _runtime_item = QTableWidgetItem(_runtime_str)
+            _runtime_item.setFont(_row_font)
+            if _is_light_theme:
+                _runtime_item.setForeground(QColor("#1f2937"))
+            self.env_table.setItem(i, 3, _runtime_item)
 
             pkg = str(env.package_count) if env.package_count else "0"
-            self.env_table.setItem(i, 4, QTableWidgetItem(f"  {pkg}"))
+            _pkg_item = QTableWidgetItem(f"  {pkg}")
+            _pkg_item.setFont(_row_font)
+            if _is_light_theme:
+                _pkg_item.setForeground(QColor("#1f2937"))
+            self.env_table.setItem(i, 4, _pkg_item)
+
             _size = env.size if env.size and env.size not in ("N/A", "?", "...") else "0 MB"
-            self.env_table.setItem(i, 5, QTableWidgetItem(f"  {_size}"))
+            _size_item = QTableWidgetItem(f"  {_size}")
+            _size_item.setFont(_row_font)
+            if _is_light_theme:
+                _size_item.setForeground(QColor("#1f2937"))
+            self.env_table.setItem(i, 5, _size_item)
 
             created_str = ""
             if env.created:
@@ -1728,7 +1784,11 @@ class MainWindow(QMainWindow):
                     created_str = dt.strftime("%Y-%m-%d %H:%M")
                 except ValueError:
                     created_str = env.created[:16]
-            self.env_table.setItem(i, 6, QTableWidgetItem(f"  {created_str}"))
+            _created_item = QTableWidgetItem(f"  {created_str}")
+            _created_item.setFont(_row_font)
+            if _is_light_theme:
+                _created_item.setForeground(QColor("#1f2937"))
+            self.env_table.setItem(i, 6, _created_item)
 
             # Default column
             default_env = self.config.get("default_env", "")
@@ -2467,23 +2527,47 @@ class MainWindow(QMainWindow):
 
             from PySide6.QtWidgets import QTableWidgetItem
             from PySide6.QtCore import Qt as _Qt
+            from PySide6.QtGui import QColor as _QColor, QFont as _QFont
+
+            # Detect light theme for colour choices (matches _refresh_env_list)
+            _is_light = False
+            try:
+                _bg = (self._c().get("bg") or "").lstrip("#")
+                if len(_bg) >= 6:
+                    _r = int(_bg[0:2], 16)
+                    _g = int(_bg[2:4], 16)
+                    _b = int(_bg[4:6], 16)
+                    _is_light = (_r * 299 + _g * 587 + _b * 114) / 1000 > 128
+            except Exception:
+                pass
+            _pipx_color = "#0e7490" if _is_light else "#89dceb"
+            _path_color = (self._c().get("fg_secondary")
+                           or self._c().get("fg")
+                           or ("#444" if _is_light else "#bac2de"))
+            _bold = _QFont()
+            _bold.setBold(True)
 
             # Column 0: Name
-            name_item = QTableWidgetItem("pipx")
+            name_item = QTableWidgetItem("  pipx")
             name_item.setFlags(name_item.flags() & ~_Qt.ItemIsEditable)
+            name_item.setForeground(_QColor(_pipx_color))
+            name_item.setFont(_bold)
             self.env_table.setItem(row, 0, name_item)
 
             # Column 1: Type — store env_type in UserRole so other code paths
             # (clone, delete, etc.) can read it back.
-            type_item = QTableWidgetItem("pipx")
+            type_item = QTableWidgetItem("  📦 pipx")
             type_item.setData(_Qt.UserRole, "pipx")
             type_item.setFlags(type_item.flags() & ~_Qt.ItemIsEditable)
+            type_item.setForeground(_QColor(_pipx_color))
+            type_item.setFont(_bold)
             self.env_table.setItem(row, 1, type_item)
 
             # Column 2: Path
-            path_item = QTableWidgetItem(str(pipx_path))
+            path_item = QTableWidgetItem(f"  {pipx_path}")
             path_item.setToolTip(str(pipx_path))
             path_item.setFlags(path_item.flags() & ~_Qt.ItemIsEditable)
+            path_item.setForeground(_QColor(_path_color))
             self.env_table.setItem(row, 2, path_item)
 
             # Column 3: Runtime (Python version)
@@ -3007,6 +3091,24 @@ class MainWindow(QMainWindow):
                     else:
                         # Last resort: re-apply the global stylesheet to force a repaint
                         self.learn_page.setStyleSheet(self.learn_page.styleSheet())
+                except Exception:
+                    pass
+            # B183 fix: env_table item colours (uv yellow, poetry purple, etc.)
+            # are baked into items at refresh time. Without re-running
+            # _refresh_env_list after a theme switch, items keep the old
+            # palette's pastel colours and look unreadable on light themes.
+            if hasattr(self, "env_table") and self.env_table is not None:
+                try:
+                    self.env_table.setStyleSheet(
+                        f"QTableWidget {{ font-size: {self._c()['fs_base']}px; "
+                        f"color: {self._c()['fg']}; }}"
+                        f"QTableWidget::item {{ padding: 6px 10px; font-weight: 500; }}"
+                        f"QHeaderView::section {{ font-size: {self._c()['fs_base']}px; "
+                        f"font-weight: bold; padding: 8px; }}"
+                    )
+                    # Re-render rows with the new theme's colours. Use the
+                    # cached env list so this is cheap (no subprocess).
+                    self._refresh_env_list(force=False)
                 except Exception:
                     pass
             self._refresh_sidebar_styles()

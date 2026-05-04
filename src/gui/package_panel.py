@@ -263,6 +263,13 @@ class PackagePanel(QWidget):
         self._vm_cache: object = None       # VenvManager instance
         self._vm_cache_base: str = ""       # base_dir used for cached vm
         self._system_tool_cache: dict = {}  # icon_key -> bool (is_installed)
+        # B183: snapshot the palette currently in use so the *next* call to
+        # apply_theme can detect which colour strings to swap out.
+        try:
+            self._last_palette = {k: v for k, v in self._c().items()
+                                  if isinstance(v, str) and v.startswith("#")}
+        except Exception:
+            self._last_palette = None
         self._setup_ui()
         # Stub widgets — replaced when lazy tabs are built
         # These ensure code outside tab-build never crashes on attribute access
@@ -407,6 +414,46 @@ class PackagePanel(QWidget):
             self.pkg_count_label.setStyleSheet(f"color: {c['muted']};")
         if hasattr(self, "_legend_label"):
             self._legend_label.setStyleSheet(f"color: {c['muted']}; font-size: {self._c()['fs_tiny']}px;")
+
+        # B183: generic sweep — replace stale palette colours in inline
+        # stylesheets across every child widget. Without this, tabs (Launch,
+        # Installed, Catalog, Presets, Manual Install) and their cards stay
+        # in the previous theme's colours after a switch. We track the last
+        # set of colours we used so the next call knows what to swap.
+        try:
+            from PySide6.QtWidgets import QWidget
+            new_palette = self._c()
+            old_palette = getattr(self, "_last_palette", None)
+            if old_palette:
+                replacements = []
+                for k, v_old in old_palette.items():
+                    if not (isinstance(v_old, str) and v_old.startswith("#")):
+                        continue
+                    v_new = new_palette.get(k)
+                    if isinstance(v_new, str) and v_new and v_new != v_old:
+                        replacements.append((v_old.lower(), v_new))
+                        replacements.append((v_old.upper(), v_new))
+                if replacements:
+                    for w in self.findChildren(QWidget):
+                        try:
+                            ss = w.styleSheet()
+                            if not ss:
+                                continue
+                            new_ss = ss
+                            changed = False
+                            for v_old, v_new in replacements:
+                                if v_old in new_ss:
+                                    new_ss = new_ss.replace(v_old, v_new)
+                                    changed = True
+                            if changed:
+                                w.setStyleSheet(new_ss)
+                        except RuntimeError:
+                            pass
+            # Snapshot current palette for next switch
+            self._last_palette = {k: v for k, v in new_palette.items()
+                                  if isinstance(v, str) and v.startswith("#")}
+        except Exception:
+            pass
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)

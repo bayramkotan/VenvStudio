@@ -858,14 +858,16 @@ class MainWindow(QMainWindow):
         self.env_table.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         self.env_table.verticalHeader().setVisible(False)
         self.env_table.setEditTriggers(QTableWidget.NoEditTriggers)
-        self.env_table.verticalHeader().setDefaultSectionSize(42)  # daha yüksek satır
-        # B183: bigger font + bold table cells for legibility on light themes
-        # where the previous fs_subheader plain weight looked washed out.
+        self.env_table.verticalHeader().setDefaultSectionSize(48)  # daha yüksek satır
+        # B183: previous fs_base / fs_subheader sizes were too small —
+        # user repeatedly asked for a bigger, bolder env table. Hardcode
+        # a comfortable reading size and bold every cell via QSS so a
+        # forgotten setFont() call can't dilute it.
         self.env_table.setStyleSheet(
-            f"QTableWidget {{ font-size: {self._c()['fs_base']}px; "
+            f"QTableWidget {{ font-size: 16px; "
             f"color: {self._c()['fg']}; }}"
-            f"QTableWidget::item {{ padding: 6px 10px; font-weight: 500; }}"
-            f"QHeaderView::section {{ font-size: {self._c()['fs_base']}px; font-weight: bold; padding: 8px; }}"
+            f"QTableWidget::item {{ padding: 8px 12px; font-weight: bold; font-size: 16px; }}"
+            f"QHeaderView::section {{ font-size: 15px; font-weight: bold; padding: 10px; }}"
         )
         self.env_table.doubleClicked.connect(self._on_env_double_click)
         self.env_table.selectionModel().selectionChanged.connect(self._on_env_selected)
@@ -3100,11 +3102,11 @@ class MainWindow(QMainWindow):
             if hasattr(self, "env_table") and self.env_table is not None:
                 try:
                     self.env_table.setStyleSheet(
-                        f"QTableWidget {{ font-size: {self._c()['fs_base']}px; "
+                        f"QTableWidget {{ font-size: 16px; "
                         f"color: {self._c()['fg']}; }}"
-                        f"QTableWidget::item {{ padding: 6px 10px; font-weight: 500; }}"
-                        f"QHeaderView::section {{ font-size: {self._c()['fs_base']}px; "
-                        f"font-weight: bold; padding: 8px; }}"
+                        f"QTableWidget::item {{ padding: 8px 12px; font-weight: bold; font-size: 16px; }}"
+                        f"QHeaderView::section {{ font-size: 15px; "
+                        f"font-weight: bold; padding: 10px; }}"
                     )
                     # Re-render rows with the new theme's colours. Use the
                     # cached env list so this is cheap (no subprocess).

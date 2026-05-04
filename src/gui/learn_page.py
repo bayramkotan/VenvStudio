@@ -2717,14 +2717,23 @@ class TopicCard(QFrame):
             bl.addWidget(body_lbl)
 
         # ── Optional: tip / note / warning info callouts ────────────────
-        for kind, icon, bg_color, border_color, title_text in (
-            ("tip",     "💡", "#1e2a1e", "#a6e3a1", "Tip"),
-            ("note",    "ℹ",  "#1e2030", "#89b4fa", "Note"),
-            ("warning", "⚠",  "#2a1f1a", "#fab387", "Warning"),
+        # B183: bg colours were hardcoded for the dark Catppuccin Mocha
+        # theme (deep greens/blues/oranges) which look out of place on a
+        # light background. Pick a translucent tint of the border colour
+        # instead — works for both light and dark themes because the
+        # alpha channel keeps it subtle either way.
+        for kind, icon, border_color, title_text in (
+            ("tip",     "💡", c.get("success", "#a6e3a1"), "Tip"),
+            ("note",    "ℹ",  c.get("info",    c.get("accent", "#89b4fa")), "Note"),
+            ("warning", "⚠",  c.get("warning", "#fab387"), "Warning"),
         ):
             text_val = self._topic.get(kind)
             if not text_val:
                 continue
+            # 22 alpha hex ≈ ~13% opacity — a soft tinted background
+            # that reads as "tip green / note blue / warning orange"
+            # on top of any theme.
+            bg_color = f"{border_color}22"
             info_frame = QFrame()
             info_frame.setStyleSheet(
                 f"QFrame {{ background: {bg_color}; "

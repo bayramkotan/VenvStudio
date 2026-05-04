@@ -571,6 +571,9 @@ class VenvManager:
     def delete_venv(self, name: str, callback=None, env_path=None, env_type: str = "venv") -> tuple[bool, str]:
         """Delete a virtual environment.
         For poetry envs: deletes both the project marker dir (base_dir/name) AND the real venv (env_path).
+        For pipx envs: deletes the pipx home directory AND its .venvstudio_env marker
+          (the marker controls listing — without removing it the row would survive
+          the disk delete and reappear after the next refresh, which is B182).
         For other envs: deletes base_dir/name or env_path if given.
         """
         _log.info(f"delete_venv: name={name!r} env_type={env_type!r} env_path={env_path!r}")
@@ -593,6 +596,36 @@ class VenvManager:
         try:
             if callback:
                 callback(f"Deleting {name}...")
+            # B182 fix: for pipx, do NOT rmtree the whole pipx home — that
+            # would nuke pipx itself plus every app the user installed
+            # outside VenvStudio. Instead, remove only the marker file so
+            # the env disappears from our listing. The actual pipx apps
+            # are managed by `pipx uninstall <app>` which is done from
+            # the package panel, not here.
+            if env_type == "pipx":
+                marker = venv_path / ".venvstudio_env"
+                if marker.exists():
+                    try:
+                        marker.unlink()
+                        _log.info(f"delete_venv: removed pipx marker {marker}")
+                    except Exception as _me:
+                        _log.warning(f"delete_venv: could not remove pipx marker: {_me}")
+                # Also drop our cache entry for this pipx home so list_venvs_fast
+                # doesn't keep showing the row from cache
+                try:
+                    self.invalidate_cache(venv_path)
+                except Exception:
+                    pass
+                if callback:
+                    callback(f"Removed pipx tracking for {name}")
+                banner_success(
+                    f"pipx tracking removed for '{name}'",
+                    details=[
+                        "pipx itself and your installed apps were NOT removed.",
+                        "To uninstall a specific app, use `pipx uninstall <app>`.",
+                    ],
+                )
+                return True, f"pipx tracking for '{name}' removed (pipx itself untouched)"
             shutil.rmtree(venv_path)
             # For poetry: also delete the project marker dir in base_dir if different
             if env_type == "poetry" and env_path:

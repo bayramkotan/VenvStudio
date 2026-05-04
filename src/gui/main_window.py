@@ -2212,26 +2212,44 @@ class MainWindow(QMainWindow):
         name = self._get_selected_env_name()
         if not name:
             return
+        # B182 fix: figure out env type BEFORE the confirm dialog, so pipx
+        # users see a meaningful warning. The previous wording suggested
+        # the "environment" would be deleted along with all its packages
+        # — for pipx that would mean wiping pipx itself plus every app
+        # the user installed outside VenvStudio. Be explicit instead.
+        _env_type = "venv"
+        _env_path = None
+        _sel_row = self.env_table.currentRow()
+        if _sel_row >= 0:
+            _path_item = self.env_table.item(_sel_row, 2)
+            _type_item = self.env_table.item(_sel_row, 1)
+            if _path_item:
+                _env_path = _path_item.toolTip() or _path_item.text().strip()
+            if _type_item:
+                _env_type = _type_item.data(Qt.UserRole) or "venv"
+
+        if _env_type == "pipx":
+            confirm_msg = (
+                f"Stop tracking the '{name}' pipx installation?\n\n"
+                f"This will remove the row from VenvStudio's environment list.\n\n"
+                f"⚠ Your installed pipx apps and pipx itself will NOT be removed.\n"
+                f"To uninstall a specific app, use the package panel "
+                f"or run: pipx uninstall <app>"
+            )
+        else:
+            confirm_msg = (
+                f"Are you sure you want to delete '{name}'?\n\n"
+                f"This will permanently remove the environment and all installed packages."
+            )
+
         reply = QMessageBox.warning(
-            self, "Delete Environment",
-            f"Are you sure you want to delete '{name}'?\n\nThis will permanently remove the environment and all installed packages.",
+            self, "Delete Environment", confirm_msg,
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
         )
         if reply == QMessageBox.Yes:
             # No popup — progress shown in Command Reference panel below
 
             self._deleting_env_name = name
-            # Get env path and type from table for proper deletion (poetry needs real venv path)
-            _env_path = None
-            _env_type = "venv"
-            _sel_row = self.env_table.currentRow()
-            if _sel_row >= 0:
-                _path_item = self.env_table.item(_sel_row, 2)
-                _type_item = self.env_table.item(_sel_row, 1)
-                if _path_item:
-                    _env_path = _path_item.toolTip() or _path_item.text().strip()
-                if _type_item:
-                    _env_type = _type_item.data(Qt.UserRole) or "venv"
             _display_path = _env_path or str(self.venv_manager.base_dir / name)
             # B182: remember the real env path/type for cache invalidation in
             # _on_delete_finished — pipx/poetry/uv envs live OUTSIDE

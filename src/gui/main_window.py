@@ -2277,7 +2277,7 @@ class MainWindow(QMainWindow):
         if success:
             self._log.info(
                 f"env_deleted: name={deleted_name!r} type={deleted_type!r} "
-                f"path={deleted_path!r} → cleaning cache + refreshing list"
+                f"path={deleted_path!r} → cleaning cache + removing row"
             )
             # Remove pkg_list cache entry for the deleted env
             try:
@@ -2312,9 +2312,14 @@ class MainWindow(QMainWindow):
             if self.package_panel is not None:
                 self.package_panel._launcher_py_version_cache.clear()
                 self.package_panel._update_launcher_status()
-            # Invalidate all caches so env disappears from list immediately
-            self.venv_manager.invalidate_all_caches()
-            self._refresh_env_list(force=True)
+            # B182: previously called _refresh_env_list(force=True) here, which
+            # re-scanned every env on disk and ran subprocess calls for each.
+            # Even though only one row changed, the user saw a "Refreshing
+            # environments — please wait..." banner stuck for several seconds.
+            # Now we do a surgical update: remove the row from the table and
+            # purge the in-memory env list cache for this env. Anything else
+            # the user is looking at stays exactly as it was.
+            self._remove_env_row_inplace(deleted_name, deleted_path)
             self.statusBar().showMessage(message)
             if hasattr(self, "_cmd_panel_live"):
                 self._cmd_panel_live.setText(f"✅ {message}")
@@ -2322,9 +2327,75 @@ class MainWindow(QMainWindow):
             self._log.warning(f"env_delete_failed: name={deleted_name!r} error={message!r}")
             first_line = message.splitlines()[0] if message else "Failed"
             QMessageBox.critical(self, "Error", message)
+            # Failure path: do a normal refresh (no force) so the user sees
+            # the actual current state without a heavy re-scan.
             self._refresh_env_list()
             if hasattr(self, "_cmd_panel_live"):
                 self._cmd_panel_live.setText(f"❌ {first_line}")
+
+    def _remove_env_row_inplace(self, name: str, path: str = None) -> None:
+        """B182: surgically drop a single row from the env table without
+        triggering a full _refresh_env_list. Also drops the env from the
+        VenvManager's in-memory list cache so a later normal refresh
+        (e.g. switching pages) won't bring it back from the in-process
+        cache.
+
+        Falls back to a normal (non-force) refresh if the row can't be
+        located by name+path — that path still avoids the heavy
+        force=True rescan that put a "Refreshing..." banner on screen.
+        """
+        try:
+            removed_row = -1
+            for r in range(self.env_table.rowCount()):
+                name_item = self.env_table.item(r, 0)
+                path_item = self.env_table.item(r, 2)
+                row_name = (name_item.text().strip() if name_item else "")
+                row_path = ""
+                if path_item:
+                    row_path = path_item.toolTip() or path_item.text().strip()
+                if row_name == name and (not path or row_path == path or not row_path):
+                    removed_row = r
+                    break
+            if removed_row >= 0:
+                self.env_table.removeRow(removed_row)
+                self._log.debug(f"env_deleted: removed row {removed_row} from table")
+            else:
+                # Fallback — couldn't pinpoint the row, do a light refresh
+                self._log.debug(
+                    f"env_deleted: row not found for name={name!r} path={path!r} "
+                    f"→ falling back to light refresh"
+                )
+                self._refresh_env_list()
+                return
+
+            # Drop the env from the in-memory list cache for this base_dir
+            try:
+                from src.core.venv_manager import VenvManager
+                base_key = getattr(self.venv_manager, "_base_key", None)
+                if base_key and base_key in VenvManager._mem_envs:
+                    VenvManager._mem_envs[base_key] = [
+                        e for e in VenvManager._mem_envs[base_key]
+                        if e.name != name
+                    ]
+            except Exception as e:
+                self._log.debug(f"env_deleted: in-memory cache prune skipped: {e}")
+
+            # Also sync the quick-launch env selector if present
+            if hasattr(self, "ql_env_selector"):
+                idx = self.ql_env_selector.findData(name)
+                if idx >= 0:
+                    self.ql_env_selector.removeItem(idx)
+
+            # Update header counters (e.g. "3 env(s) · 2.4 GB"). These come
+            # from the venv_manager's list, so re-render that strip only.
+            try:
+                if hasattr(self, "_update_env_summary"):
+                    self._update_env_summary()
+            except Exception:
+                pass
+        except Exception as e:
+            self._log.warning(f"_remove_env_row_inplace failed: {e} — falling back")
+            self._refresh_env_list()
 
     def _clone_env(self):
         source = self._get_selected_env_name()

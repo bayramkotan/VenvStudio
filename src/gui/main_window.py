@@ -181,6 +181,16 @@ class MainWindow(QMainWindow):
         self._log.info("MainWindow.__init__ started")
 
         self.config = ConfigManager()
+        # B184 v2: legacy "light" config values get auto-upgraded to a real
+        # theme id. Older builds saved bare "light" which the styles module
+        # silently treated as dark.
+        try:
+            _t = self.config.get("theme", "")
+            if _t == "light":
+                self.config.set("theme", "light-latte")
+                self._log.info("migrated config theme: 'light' → 'light-latte'")
+        except Exception as _e:
+            self._log.debug(f"theme migration skipped: {_e}")
         self.venv_manager = VenvManager(self.config.get_venv_base_dir())
         self.selected_env = None
         self._applying_theme = False  # Guard against re-entrant / screen-change crashes
@@ -3041,6 +3051,16 @@ class MainWindow(QMainWindow):
         # The real bug for this issue was in AppearanceMixin's
         # _on_theme_cb_toggled, which silently reset the theme to "dark"
         # whenever the Settings page loaded with the theme checkbox off.
+        #
+        # B184 v2: View menu sends "light"/"dark", but the styles module
+        # only registers specific names like "light-latte", "light-github",
+        # "dark" (= Catppuccin Mocha). A bare "light" silently fell back
+        # to dark on the next app start. Map the menu shortcut to a real
+        # theme id here so what's saved is what's loaded.
+        _menu_alias = {
+            "light": "light-latte",  # default light variant
+        }
+        theme_name = _menu_alias.get(theme_name, theme_name)
         self.config.set("theme", theme_name)
         for _save_attr in ("save", "_save", "save_config", "flush", "write"):
             _fn = getattr(self.config, _save_attr, None)

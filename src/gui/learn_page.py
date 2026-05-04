@@ -3076,7 +3076,69 @@ class LearnPage(QWidget):
         self._config = config
         _raw = (config.get("bookmarked_topics", []) if config else []) or []
         self._bookmarks = set(_raw)
+        # B183: snapshot current palette so the next apply_theme call knows
+        # which colours to swap out of inline stylesheets across the entire
+        # Learn page (sidebar, topic cards, category panels, code blocks).
+        try:
+            self._last_palette = {k: v for k, v in colors_fn().items()
+                                  if isinstance(v, str) and v.startswith("#")}
+        except Exception:
+            self._last_palette = None
         self._setup()
+
+    def apply_theme(self, theme: str = None):
+        """Re-apply theme across the Learn page.
+
+        Strategy: generic palette sweep (B183). Walk every child widget,
+        and for any inline stylesheet that contains a colour string from
+        the *previous* palette, replace it with the matching colour from
+        the *new* palette. No hardcoded widget list — this picks up new
+        cards, panels and labels automatically.
+        """
+        try:
+            from PySide6.QtWidgets import QWidget
+            new_palette = self._colors_fn() if callable(self._colors_fn) else {}
+            old_palette = getattr(self, "_last_palette", None) or {}
+            replacements = []
+            for k, v_old in old_palette.items():
+                if not (isinstance(v_old, str) and v_old.startswith("#")):
+                    continue
+                v_new = new_palette.get(k)
+                if isinstance(v_new, str) and v_new and v_new != v_old:
+                    replacements.append((v_old.lower(), v_new))
+                    replacements.append((v_old.upper(), v_new))
+            if replacements:
+                for w in self.findChildren(QWidget):
+                    try:
+                        ss = w.styleSheet()
+                        if not ss:
+                            continue
+                        new_ss = ss
+                        changed = False
+                        for v_old, v_new in replacements:
+                            if v_old in new_ss:
+                                new_ss = new_ss.replace(v_old, v_new)
+                                changed = True
+                        if changed:
+                            w.setStyleSheet(new_ss)
+                    except RuntimeError:
+                        pass
+            # Also refresh the Learn page itself
+            try:
+                ss = self.styleSheet()
+                if ss:
+                    new_ss = ss
+                    for v_old, v_new in replacements:
+                        new_ss = new_ss.replace(v_old, v_new)
+                    if new_ss != ss:
+                        self.setStyleSheet(new_ss)
+            except Exception:
+                pass
+            # Update the snapshot for the next switch
+            self._last_palette = {k: v for k, v in new_palette.items()
+                                  if isinstance(v, str) and v.startswith("#")}
+        except Exception:
+            pass
 
     def _on_bookmark_toggled(self, title: str, is_bookmarked: bool):
         if is_bookmarked:

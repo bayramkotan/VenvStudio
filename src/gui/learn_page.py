@@ -2817,10 +2817,17 @@ class TopicCard(QFrame):
 
         # Code snippet
         if self._topic.get("snippet"):
+            # B183: previously hardcoded Catppuccin Mocha colours (#11111b
+            # and #181825) regardless of theme. Now picks the deepest
+            # background ('input_bg') and a slightly lighter shade
+            # ('card' or 'secondary') from the active palette so light
+            # themes get a light code block.
+            code_bg   = c.get("input_bg", "#11111b")
+            header_bg = c.get("card", c.get("secondary", "#181825"))
             snippet_frame = QFrame()
             snippet_frame.setStyleSheet(f"""
                 QFrame {{
-                    background: #11111b;
+                    background: {code_bg};
                     border: 1px solid {c['border']};
                     border-radius: 8px;
                 }}
@@ -2832,7 +2839,7 @@ class TopicCard(QFrame):
             # Snippet header
             snippet_header = QFrame()
             snippet_header.setStyleSheet(
-                f"background: #181825; border: none; "
+                f"background: {header_bg}; border: none; "
                 f"border-top-left-radius: 8px; border-top-right-radius: 8px; "
                 f"border-bottom: 1px solid {c['border']};"
             )
@@ -2874,10 +2881,13 @@ class TopicCard(QFrame):
             snippet_edit.setPlainText(self._topic["snippet"])
             snippet_edit.setReadOnly(True)
             snippet_edit.setFont(QFont("Consolas", 14))
+            # B183: snippet text colour was hardcoded #cdd6f4 (Catppuccin
+            # Mocha foreground), invisible on light themes. Use palette
+            # 'fg' so it matches whatever theme is active.
             snippet_edit.setStyleSheet(f"""
                 QTextEdit {{
                     background: transparent;
-                    color: #cdd6f4;
+                    color: {c['fg']};
                     border: none;
                     padding: 12px 14px;
                     font-family: 'Consolas', 'Fira Code', 'Courier New', monospace;

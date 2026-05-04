@@ -2320,6 +2320,18 @@ class MainWindow(QMainWindow):
             # purge the in-memory env list cache for this env. Anything else
             # the user is looking at stays exactly as it was.
             self._remove_env_row_inplace(deleted_name, deleted_path)
+
+            # B182: for pipx, the user expects the row to come back as a
+            # fresh empty pipx tracker (zero apps installed via VenvStudio).
+            # Re-create the marker file and add the row back to the table
+            # in one shot — no full _refresh_env_list, no "Refreshing..."
+            # banner, no subprocess scans.
+            if deleted_type == "pipx":
+                try:
+                    self._readd_empty_pipx_row()
+                except Exception as _e:
+                    self._log.warning(f"pipx readd skipped: {_e}")
+
             self.statusBar().showMessage(message)
             if hasattr(self, "_cmd_panel_live"):
                 self._cmd_panel_live.setText(f"✅ {message}")
@@ -2395,6 +2407,110 @@ class MainWindow(QMainWindow):
                 pass
         except Exception as e:
             self._log.warning(f"_remove_env_row_inplace failed: {e} — falling back")
+            self._refresh_env_list()
+
+    def _readd_empty_pipx_row(self) -> None:
+        """B182: re-create the pipx tracker marker and insert a fresh row
+        into the env table — without calling _refresh_env_list (which
+        would re-scan every env on disk and freeze the UI for seconds).
+
+        We assume the user just deleted the pipx row, which removed the
+        ``.venvstudio_env`` marker but left ``~/.local/share/pipx``
+        (or ``%LOCALAPPDATA%\\pipx`` on Windows) intact. We write a new
+        empty marker, then add a row with package_count=0 to the table.
+        Real package counts and python versions will be picked up on the
+        next natural refresh — by then it's irrelevant because the row
+        is already on screen.
+        """
+        from pathlib import Path as _P
+        import json as _json
+        import sys as _sys
+        import os as _os
+        from datetime import datetime as _dt
+
+        # 1) Locate pipx home (same logic as venv_manager.list_venvs_fast)
+        try:
+            from src.utils.platform_utils import get_pipx_home
+            pipx_home = get_pipx_home()
+        except Exception:
+            pipx_home = None
+        if not pipx_home:
+            if _sys.platform == "win32":
+                pipx_home = _os.path.join(_os.environ.get("LOCALAPPDATA", ""), "pipx")
+            else:
+                pipx_home = _os.path.join(_os.path.expanduser("~"), ".local", "share", "pipx")
+        pipx_path = _P(pipx_home)
+        if not pipx_path.exists():
+            self._log.debug(f"pipx readd: pipx_home not found at {pipx_path} — nothing to track")
+            return
+
+        # 2) Re-create the marker so VenvStudio recognises it again next start
+        marker = pipx_path / ".venvstudio_env"
+        try:
+            marker_data = {
+                "name": "pipx",
+                "env_type": "pipx",
+                "created": _dt.now().strftime("%Y-%m-%d %H:%M"),
+                "python_version": f"{_sys.version_info.major}.{_sys.version_info.minor}.{_sys.version_info.micro}",
+            }
+            with open(marker, "w", encoding="utf-8") as f:
+                _json.dump(marker_data, f, indent=2)
+            self._log.info(f"pipx readd: wrote marker at {marker}")
+        except Exception as e:
+            self._log.warning(f"pipx readd: marker write failed: {e}")
+            return
+
+        # 3) Add row to the env table directly — no subprocess, no rescan
+        try:
+            row = self.env_table.rowCount()
+            self.env_table.insertRow(row)
+
+            from PySide6.QtWidgets import QTableWidgetItem
+            from PySide6.QtCore import Qt as _Qt
+
+            # Column 0: Name
+            name_item = QTableWidgetItem("pipx")
+            name_item.setFlags(name_item.flags() & ~_Qt.ItemIsEditable)
+            self.env_table.setItem(row, 0, name_item)
+
+            # Column 1: Type — store env_type in UserRole so other code paths
+            # (clone, delete, etc.) can read it back.
+            type_item = QTableWidgetItem("pipx")
+            type_item.setData(_Qt.UserRole, "pipx")
+            type_item.setFlags(type_item.flags() & ~_Qt.ItemIsEditable)
+            self.env_table.setItem(row, 1, type_item)
+
+            # Column 2: Path
+            path_item = QTableWidgetItem(str(pipx_path))
+            path_item.setToolTip(str(pipx_path))
+            path_item.setFlags(path_item.flags() & ~_Qt.ItemIsEditable)
+            self.env_table.setItem(row, 2, path_item)
+
+            # Column 3: Runtime (Python version)
+            py_ver = marker_data["python_version"]
+            runtime_item = QTableWidgetItem(py_ver)
+            runtime_item.setFlags(runtime_item.flags() & ~_Qt.ItemIsEditable)
+            self.env_table.setItem(row, 3, runtime_item)
+
+            # Column 4: Packages — empty pipx == 0
+            pkg_item = QTableWidgetItem("0")
+            pkg_item.setFlags(pkg_item.flags() & ~_Qt.ItemIsEditable)
+            self.env_table.setItem(row, 4, pkg_item)
+
+            # Column 5: Size — unknown, leave blank
+            size_item = QTableWidgetItem("—")
+            size_item.setFlags(size_item.flags() & ~_Qt.ItemIsEditable)
+            self.env_table.setItem(row, 5, size_item)
+
+            # Column 6: Created
+            created_item = QTableWidgetItem(marker_data["created"])
+            created_item.setFlags(created_item.flags() & ~_Qt.ItemIsEditable)
+            self.env_table.setItem(row, 6, created_item)
+
+            self._log.info(f"pipx readd: row inserted at index {row}")
+        except Exception as e:
+            self._log.warning(f"pipx readd: table insert failed: {e}")
+            # Last resort: just trigger a light refresh, no force
             self._refresh_env_list()
 
     def _clone_env(self):

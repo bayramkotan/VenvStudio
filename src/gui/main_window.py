@@ -2745,9 +2745,11 @@ class MainWindow(QMainWindow):
         self._switch_page(2)
 
     def _set_theme(self, theme_name):
-        # B184 fix: View menüsünden tema değişikliği disk'e kaydedilmiyordu —
-        # config.set sadece RAM'de tutar. Bilinen save metodlarını sırayla
-        # dene — hangisi varsa onu çağır.
+        # B184 fix: ConfigManager.set() already auto-saves to disk, but
+        # call save() explicitly anyway as a belt-and-suspenders move.
+        # The real bug for this issue was in AppearanceMixin's
+        # _on_theme_cb_toggled, which silently reset the theme to "dark"
+        # whenever the Settings page loaded with the theme checkbox off.
         self.config.set("theme", theme_name)
         for _save_attr in ("save", "_save", "save_config", "flush", "write"):
             _fn = getattr(self.config, _save_attr, None)

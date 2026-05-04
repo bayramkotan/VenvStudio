@@ -39,14 +39,21 @@ class AppearanceMixin:
 
 
     def _on_theme_cb_toggled(self, on):
-        """Enable/disable theme combo and apply theme live."""
+        """Enable/disable theme combo and apply theme live.
+
+        B184 fix: Previously this method called
+        ``self.config.set("theme", "dark")`` whenever the checkbox was
+        unchecked, which silently reset the theme on every Settings page
+        load (because the checkbox starts unchecked by default). That
+        caused View → Light Theme to be reverted on the next app start.
+        We now leave the existing theme alone when the checkbox is
+        unchecked — switching themes is the View menu's job.
+        """
         self.theme_combo.setEnabled(on)
         if on:
             self._on_theme_live_preview()
-        else:
-            # Checkbox unchecked → revert to dark
-            self.config.set("theme", "dark")
-            self.theme_changed.emit("dark")
+        # else: do NOT reset the theme — keep whatever the user picked
+        # via View menu or the previous Settings save.
 
     def _on_theme_live_preview(self, _idx=None):
         """Apply theme instantly when dropdown changes — no Save needed."""

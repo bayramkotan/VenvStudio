@@ -148,6 +148,13 @@ class _EnvSizeWorker(QThread):
                 for f in filenames:
                     fp = os.path.join(dirpath, f)
                     try:
+                        # B-conda-size: skip symlinks so the env size matches
+                        # `du -sh` and the env table column. Without this,
+                        # symlinks were counted as full file sizes — conda
+                        # envs (which symlink Python's stdlib) would report
+                        # roughly double the real on-disk usage.
+                        if os.path.islink(fp):
+                            continue
                         total += os.path.getsize(fp)
                     except OSError:
                         pass

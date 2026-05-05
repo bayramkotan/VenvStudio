@@ -2422,17 +2422,24 @@ class MainWindow(QMainWindow):
             if hasattr(self, "_cmd_panel_live"):
                 self._cmd_panel_live.setText(f"❌ {first_line}")
 
-    def _refresh_current_env_row(self) -> None:
+    def _refresh_current_env_row(self, pkg_count: int = -1) -> None:
         """Update only the active env's row after a package / launch app /
         preset install or uninstall finishes. We invalidate the env's
         cache (so package_count + size are recomputed), then re-read the
         single row in place. The other rows in the table aren't touched
         and the user doesn't see a "Refreshing..." banner.
 
+        ``pkg_count`` is the authoritative new package count from the
+        package panel (-1 = unknown). When provided, we bypass the
+        list_venvs_fast cache lookup entirely for the count to avoid the
+        race where the async pip-list refresh hasn't written the new
+        cache value yet.
+
         Falls back to a normal _refresh_env_list if anything goes wrong —
         the user always ends up with a current view, just maybe not as
         snappy.
         """
+        self._log.info(f"refresh_current_row: called (pkg_count={pkg_count})")
         try:
             # Find the active env path from the package panel
             pp = getattr(self, "package_panel", None)
@@ -2536,6 +2543,11 @@ class MainWindow(QMainWindow):
             self.env_table.setItem(row, 3, _runtime_item)
 
             _pkg = str(env_info.package_count) if env_info.package_count else "0"
+            # B182 race fix: when caller passed an authoritative pkg count,
+            # use it instead of env_info.package_count (which may still be
+            # the pre-install value while the async pip-list refresh runs).
+            if pkg_count >= 0:
+                _pkg = str(pkg_count)
             _pkg_item = QTableWidgetItem(f"  {_pkg}")
             _pkg_item.setFont(_bold)
             if _fg_dark is not None:
@@ -2558,7 +2570,7 @@ class MainWindow(QMainWindow):
                     self._update_env_summary()
             except Exception:
                 pass
-            self._log.debug(
+            self._log.info(
                 f"refresh_current_row: updated row {row} "
                 f"(pkgs={_pkg}, size={_size})"
             )

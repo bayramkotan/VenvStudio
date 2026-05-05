@@ -246,7 +246,7 @@ class CommandHintDialog(QDialog):
 
 class PackagePanel(QWidget):
     """Package management panel with catalog browsing and pip operations."""
-    env_refresh_requested = Signal()  # Signal to refresh env list in main window
+    env_refresh_requested = Signal(int)  # pkg_count (-1 = unknown, refresh from cache)
 
     def __init__(self, parent=None, config=None):
         super().__init__(parent)
@@ -1786,7 +1786,7 @@ class PackagePanel(QWidget):
                     self._update_env_info_bar(_cur_path, _cur_backend)
             except Exception:
                 pass
-            self.env_refresh_requested.emit()
+            self.env_refresh_requested.emit(-1)
             # Refresh card states then launch
             self._update_launcher_status()
             from PySide6.QtCore import QTimer
@@ -2240,7 +2240,7 @@ class PackagePanel(QWidget):
                     self._update_env_info_bar(_cur_path, _cur_backend)
             except Exception:
                 pass
-            self.env_refresh_requested.emit()
+            self.env_refresh_requested.emit(-1)
             # ─────────────────────────────────────────────────────────────────
 
             self._async_refresh_packages(force=True)
@@ -3845,6 +3845,18 @@ $s.Save()
             _current_env = self.pip_manager.venv_path.name if self.pip_manager else ""
             self._ql_update_callback(env_name=_current_env)
 
+        # B182 race fix: if an install/uninstall just finished and asked us
+        # to notify MainWindow when the new pkg count is known, emit now.
+        # The cache was just written above by _save_pkg_cache(packages), so
+        # MainWindow's _refresh_current_env_row will see the fresh value
+        # instead of racing with the async load.
+        if getattr(self, "_emit_env_refresh_after_load", False):
+            self._emit_env_refresh_after_load = False
+            try:
+                self.env_refresh_requested.emit(len(packages))
+            except Exception:
+                pass
+
     def refresh_packages(self):
         """Refresh installed packages list - invalidates cache and async reloads."""
         self._invalidate_pkg_cache()
@@ -5002,7 +5014,6 @@ dependencies:
             # Invalidate all caches so next read is fresh
             self._invalidate_cache()
             self._invalidate_env_cache()
-            self.refresh_packages()
             # B182 follow-up: refresh the env info bar at the top of the
             # Packages page (size + package count badges). Without this
             # the header still shows the pre-install values until the
@@ -5014,7 +5025,13 @@ dependencies:
                     self._update_env_info_bar(_cur_path, _cur_backend)
             except Exception:
                 pass
-            self.env_refresh_requested.emit()
+            # B182 race fix: refresh_packages() runs subprocess async.
+            # Emitting env_refresh_requested *now* would race with the
+            # cache write in _on_packages_loaded — MainWindow would read
+            # the OLD pkg count from cache. Set a flag instead so
+            # _on_packages_loaded emits *after* the new count is saved.
+            self._emit_env_refresh_after_load = True
+            self.refresh_packages()
         else:
             if "cancelled" not in message.lower():
                 # Friendly log message instead of popup

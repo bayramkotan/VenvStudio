@@ -786,7 +786,12 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         from src.gui.package_panel import PackagePanel
         self.package_panel = PackagePanel(config=self.config)
-        self.package_panel.env_refresh_requested.connect(self._refresh_env_list)
+        # B182 follow-up: when a package / launch app / preset finishes
+        # installing, refresh ONLY the current env's row (package count,
+        # size, runtime) — don't kick off a full re-scan of every env on
+        # disk. The full _refresh_env_list shows a "Refreshing..." banner
+        # for several seconds because it re-runs subprocess scans.
+        self.package_panel.env_refresh_requested.connect(self._refresh_current_env_row)
         self.package_panel._ql_update_callback = self._update_ql_buttons
         self.package_panel._ql_env_changed_callback = self._sync_ql_selector
         self.stack.addWidget(self.package_panel)             # Page 0
@@ -1260,7 +1265,7 @@ class MainWindow(QMainWindow):
         if index == 0 and self.package_panel is None:
             from src.gui.package_panel import PackagePanel
             self.package_panel = PackagePanel(config=self.config)
-            self.package_panel.env_refresh_requested.connect(self._refresh_env_list)
+            self.package_panel.env_refresh_requested.connect(self._refresh_current_env_row)
             self.package_panel._ql_update_callback = self._update_ql_buttons
             self.package_panel._ql_env_changed_callback = self._sync_ql_selector
             self.stack.removeWidget(self._packages_placeholder)
@@ -2416,6 +2421,153 @@ class MainWindow(QMainWindow):
             self._refresh_env_list()
             if hasattr(self, "_cmd_panel_live"):
                 self._cmd_panel_live.setText(f"❌ {first_line}")
+
+    def _refresh_current_env_row(self) -> None:
+        """Update only the active env's row after a package / launch app /
+        preset install or uninstall finishes. We invalidate the env's
+        cache (so package_count + size are recomputed), then re-read the
+        single row in place. The other rows in the table aren't touched
+        and the user doesn't see a "Refreshing..." banner.
+
+        Falls back to a normal _refresh_env_list if anything goes wrong —
+        the user always ends up with a current view, just maybe not as
+        snappy.
+        """
+        try:
+            # Find the active env path from the package panel
+            pp = getattr(self, "package_panel", None)
+            if pp is None:
+                self._refresh_env_list()
+                return
+            cur_path = getattr(pp, "_current_venv_path", None)
+            if not cur_path:
+                self._refresh_env_list()
+                return
+            from pathlib import Path as _P
+            cur_path = _P(str(cur_path))
+
+            # 1) Drop cache entries for this env so the next read recomputes
+            try:
+                self.venv_manager.invalidate_cache(cur_path)
+            except Exception as _e:
+                self._log.debug(f"refresh_current_row: invalidate_cache: {_e}")
+
+            # Also drop pkg_list and any meta cache entries from the on-disk cache
+            try:
+                from src.core.venv_manager import VenvManager
+                vm = VenvManager(_P(self.config.get_venv_base_dir()))
+                all_cache = vm._load_all_cache()
+                try:
+                    norm_path = vm._cache_key(cur_path)
+                except Exception:
+                    norm_path = str(cur_path).replace("\\", "/")
+                changed = False
+                for _k in (norm_path, "pkg_list:" + norm_path):
+                    if _k in all_cache:
+                        all_cache.pop(_k, None)
+                        changed = True
+                if changed:
+                    vm._save_all_cache(all_cache)
+            except Exception as _e:
+                self._log.debug(f"refresh_current_row: cache prune: {_e}")
+
+            # 2) Locate the row in the env table by path or name
+            row = -1
+            for r in range(self.env_table.rowCount()):
+                _path_item = self.env_table.item(r, 2)
+                _row_path = ""
+                if _path_item:
+                    _row_path = _path_item.toolTip() or _path_item.text().strip()
+                if _row_path and _P(_row_path).resolve() == cur_path.resolve():
+                    row = r
+                    break
+            if row < 0:
+                # Couldn't pinpoint the row; do a normal (light) refresh
+                self._refresh_env_list()
+                return
+
+            # 3) Re-read the env's metadata and update the row's cells in-place
+            env_info = None
+            try:
+                # list_venvs_fast returns all envs; pick the one with a matching path
+                _envs = self.venv_manager.list_venvs_fast(skip_calc=False)
+                for _e in _envs:
+                    try:
+                        if _P(str(_e.path)).resolve() == cur_path.resolve():
+                            env_info = _e
+                            break
+                    except Exception:
+                        pass
+            except Exception as _e:
+                self._log.debug(f"refresh_current_row: list_venvs_fast: {_e}")
+
+            if env_info is None:
+                # Last resort — a normal refresh will rebuild the whole table
+                self._refresh_env_list()
+                return
+
+            # Update only the cells that change: runtime (3), packages (4),
+            # size (5). Name / type / path / created stay the same.
+            from PySide6.QtWidgets import QTableWidgetItem
+            from PySide6.QtGui import QFont as _QFont, QColor as _QColor
+
+            _is_light = False
+            try:
+                _bg = (self._c().get("bg") or "").lstrip("#")
+                if len(_bg) >= 6:
+                    _r = int(_bg[0:2], 16)
+                    _g = int(_bg[2:4], 16)
+                    _b = int(_bg[4:6], 16)
+                    _is_light = (_r * 299 + _g * 587 + _b * 114) / 1000 > 128
+            except Exception:
+                pass
+            _bold = _QFont()
+            _bold.setBold(True)
+            _fg_dark = _QColor("#1f2937") if _is_light else None
+
+            _rv = str(env_info.python_version).strip()
+            _runtime_str = (
+                f"  Python {_rv}" if (_rv and _rv not in ("Unknown", "?", "...")) else "  ----"
+            )
+            _runtime_item = QTableWidgetItem(_runtime_str)
+            _runtime_item.setFont(_bold)
+            if _fg_dark is not None:
+                _runtime_item.setForeground(_fg_dark)
+            self.env_table.setItem(row, 3, _runtime_item)
+
+            _pkg = str(env_info.package_count) if env_info.package_count else "0"
+            _pkg_item = QTableWidgetItem(f"  {_pkg}")
+            _pkg_item.setFont(_bold)
+            if _fg_dark is not None:
+                _pkg_item.setForeground(_fg_dark)
+            self.env_table.setItem(row, 4, _pkg_item)
+
+            _size = (
+                env_info.size if env_info.size and env_info.size not in ("N/A", "?", "...")
+                else "0 MB"
+            )
+            _size_item = QTableWidgetItem(f"  {_size}")
+            _size_item.setFont(_bold)
+            if _fg_dark is not None:
+                _size_item.setForeground(_fg_dark)
+            self.env_table.setItem(row, 5, _size_item)
+
+            # Refresh the header summary strip (e.g. "3 env(s) · 2.4 GB")
+            try:
+                if hasattr(self, "_update_env_summary"):
+                    self._update_env_summary()
+            except Exception:
+                pass
+            self._log.debug(
+                f"refresh_current_row: updated row {row} "
+                f"(pkgs={_pkg}, size={_size})"
+            )
+        except Exception as e:
+            self._log.warning(f"_refresh_current_env_row failed: {e} — fallback to list refresh")
+            try:
+                self._refresh_env_list()
+            except Exception:
+                pass
 
     def _remove_env_row_inplace(self, name: str, path: str = None) -> None:
         """B182: surgically drop a single row from the env table without

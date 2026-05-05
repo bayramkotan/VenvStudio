@@ -3552,7 +3552,13 @@ $s.Save()
             self.env_path_label.setText("")
 
         # 3) Disk size — from cache or calculate
-        if size_str:
+        # B-conda-size: "N/A", "?", "..." are sentinel values for "size
+        # could not be computed" (typically conda envs where the env
+        # symlink target wasn't walkable). Treat them as missing so we
+        # try the async calculation again instead of leaving N/A on screen
+        # for ever.
+        _bad_sizes = {"N/A", "n/a", "?", "...", "…", "0 MB", "0 B"}
+        if size_str and size_str.strip() not in _bad_sizes:
             self.env_disk_label.setText(f"💾 {size_str}")
         else:
             # B175 perf fix: never run os.walk on the UI thread.

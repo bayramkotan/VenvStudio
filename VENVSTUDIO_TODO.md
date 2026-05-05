@@ -123,19 +123,23 @@ if hasattr(self, 'cli_log') and self.cli_log:
 
 ---
 
-### 🐛 B182 — pipx Silme Sonrası Tablo Cache'den Yenilenmiyor
+### ✅ B182 — pipx Silme Sonrası Tablo Cache'den Yenilenmiyor (TAMAMLANDI v1.4.90)
 
 **Sorun:** pipx env silindikten sonra env tablosunda hâlâ görünüyor. **Uygulama kapatılıp tekrar açılınca** kayboluyor → cache invalidation eksik.
 
-**Kök neden:** `delete_env` sonrası cache invalidate edilmiyor veya tablo refresh edilmiyor.
+**ASIL BUG ÇOK DAHA KÖTÜ ÇIKTI:** `delete_venv` pipx için `shutil.rmtree(~/.local/share/pipx)` yapıyordu → pipx'i tamamen + tüm kurulu app'leri (black, ruff, vs.) **siliyordu**!
 
-**Fix:**
-- Delete callback'inde: `vm.invalidate_cache(env_path)` + `_refresh_env_list(force=True)`
-- v1.4.85'te env create/delete cache fix yapıldı ama pipx için ayrı code path olabilir (`_uninstall_pipx_app` veya benzeri)
+**Fix v1.4.90 (`src/core/venv_manager.py`):**
+- pipx için sadece `.venvstudio_env` marker dosyası silinir, dizin korunur
+- Confirm dialog: "pipx itself and apps NOT removed"
 
-**Dosyalar:** `src/gui/main_window.py` (pipx delete handler), `src/core/venv_manager.py`
+**Fix v1.4.90 (`src/gui/main_window.py`):**
+- `_remove_env_row_inplace` — surgical row removal (full refresh yok)
+- `_readd_empty_pipx_row` — silme sonrası boş pipx satırı otomatik geri eklenir
+- `_refresh_current_env_row(pkg_count)` — install/uninstall sonrası sadece o satır güncellenir
+- Race condition fix: `Signal(int)` ile authoritative pkg_count taşınır, async refresh sonrası emit edilir
 
-**Öncelik:** 🔴 Yüksek — kullanıcıyı şaşırtıyor, "uygulama bozuk" hissi yaratıyor
+**Test edildi:** Linux (Bayram). macOS/Windows test bekleniyor.
 
 ---
 
@@ -236,7 +240,7 @@ oh-my-posh init pwsh --config "$env:USERPROFILE\.posh\themes\<tema_adi>.omp.json
 
 ---
 
-### 🧪 F172 — Terminal Otomatik Profil Kurulumu (KISMEN YAPILDI v1.4.88, TEST AŞAMASINDA)
+### 🧪 F172 — Terminal Otomatik Profil Kurulumu (KISMEN YAPILDI v1.4.89, TEST AŞAMASINDA)
 
 **Durum:** Linux'ta gnome-terminal/mate-terminal/konsole/alacritty/kitty/wezterm için adapter'lar yazıldı (`src/core/terminal_profile_setup.py`). Nerd Font kurulduktan sonra otomatik dialog açılıyor: "Terminalin algılandı, profil oluşturayım mı?" + "Default yapayım mı?".
 
@@ -316,31 +320,46 @@ Veya mevcut terminal oturumunda:
 
 ---
 
-### 🐛 B183 — Learn Sayfası ve Settings'teki Yeni Bloklar Light Tema'ya Geçmiyor
+### ✅ B183 — Learn Sayfası ve Settings'teki Yeni Bloklar Light Tema'ya Geçmiyor (TAMAMLANDI v1.4.90)
 
-**Sorun:** Tema değiştirildiğinde:
-- ✅ Ana pencere, env tablosu, package paneli light tema'ya geçiyor
-- ❌ Learn sayfası dark tema'da kalıyor
-- ❌ Settings altındaki yeni bloklar dark tema'da kalıyor (özellikle: CLI Tools card, Nerd Font bloğu, oh-my-posh theme card vb.)
+**Sorun:** Tema değiştirildiğinde Learn sayfası, Settings'teki yeni bloklar, Packages tab'ları, code block'lar dark tema'da kalıyordu. Hatta env tablosu light tema'da okunaksızdı.
 
-**Olası sebep:**
-- Learn sayfası kendi inline stylesheet'ini kullanıyor olabilir (`setStyleSheet(...)` hardcoded renklerle)
-- Yeni Settings bloklarındaki widget'lar `_c()` (color helper) kullanmıyor olabilir
-- Theme switch sırasında sadece `MainWindow.setStyleSheet()` çağrılıyor, child widget'ların `_refresh_styles()` veya `apply_theme()` metodu çağrılmıyor
+**Çözüm — Generic Palette Sweep:**
+- `_refresh_styles` (settings_page) ve `apply_theme` (package_panel, learn_page) artık eski palette renklerini yenisiyle **otomatik değiştirir** — hardcoded widget listesi yok
+- `_last_palette` snapshot tutulur, sonraki tema değişiminde swap yapılır
+- Yeni widget eklenince kod güncellemeye gerek yok
 
-**Yapılacak:**
-- Tüm "yeni bloklar"ı tara (CLI Tools card, Nerd Font, oh-my-posh, learn pages)
-- Hardcoded renkleri `self._c()['bg']`, `self._c()['fg']` ile değiştir
-- Theme switch'te `_refresh_styles()` recursive çağrılsın
-- `_apply_theme` MainWindow'da → tüm child'ların `apply_theme(theme)` çağırılmalı
+**Hardcoded renkler temizlendi:**
+- env_selector, sidebar launcher button, Presets "Installed" button (`#1e1e2e`, `#cdd6f4`, `#a6e3a1`, `#313244`, `#89b4fa`)
+- Code block'lar (`#11111b`, `#181825`, `#cdd6f4`)
+- Tip/Note/Warning callout box'ları (sabit dark renkler → palette + 22 alpha tint)
 
-**Dosyalar:**
-- `src/gui/learn_page.py` (Learn sayfası)
-- `src/gui/settings_appearance.py` (CLI Tools, Nerd Font blokları)
-- `src/gui/settings_*.py` (diğer settings bloklar)
-- `src/gui/main_window.py` (`_apply_theme` recursive)
+**Env tablosu light tema:**
+- Font 16px hardcoded + bold (QSS ile zorla)
+- Light theme detection (perceived luminance)
+- Light için koyu kontrast renkler: uv `#8a6d00`, poetry `#5b2c6f`, pipx `#0c5a72`, conda `#1b5e20`
+- `_apply_theme` artık env_table'ı re-render eder
 
-**Öncelik:** 🔴 Yüksek — light tema kullanıcıları için çok rahatsız edici, kısmen kullanılamaz hâlde
+**Dosyalar:** `src/gui/main_window.py`, `src/gui/settings_page.py`, `src/gui/package_panel.py`, `src/gui/learn_page.py`
+
+**Test:** Linux (Bayram). macOS/Windows test bekleniyor.
+
+---
+
+### ✅ B184 — View Menüsü Tema Disk'e Kaydetmiyordu (TAMAMLANDI v1.4.90)
+
+**Asıl bug:** Settings'teki theme checkbox **default işaretsiz** açılışta. Settings sayfasına geçince `_on_theme_cb_toggled(False)` tetikleniyor → `self.config.set("theme", "dark")` çağrılıyor → kullanıcının seçtiği tema dark'a geri yazılıyor.
+
+**Fix v1 (`src/gui/settings_appearance.py`):**
+- `_on_theme_cb_toggled` artık unchecked olunca theme'i dark'a geri yazmıyor
+
+**Bug v2:** View menüsü `_set_theme("light")` çağırıyordu ama theme module sadece `light-latte`, `light-github`, `dark` gibi spesifik isimleri tanır. Bare `"light"` sessizce dark'a fallback.
+
+**Fix v2 (`src/gui/main_window.py`):**
+- `_set_theme` "light" → "light-latte" map'liyor
+- Init'te legacy "light" config değeri auto-migrate
+
+**Test:** Linux + Windows (Bayram).
 
 ---
 

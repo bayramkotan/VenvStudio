@@ -1776,6 +1776,16 @@ class PackagePanel(QWidget):
                     _vm.invalidate_cache(self.pip_manager.venv_path)
                 except Exception:
                     pass
+            # B182 follow-up: refresh the Packages page header (size + pkg
+            # count) after a system tool install. Without this the badge
+            # at the top would stay stale until the user navigates away.
+            try:
+                _cur_path = getattr(self, "_current_venv_path", None)
+                _cur_backend = getattr(self, "_current_backend", "pip")
+                if _cur_path:
+                    self._update_env_info_bar(_cur_path, _cur_backend)
+            except Exception:
+                pass
             self.env_refresh_requested.emit()
             # Refresh card states then launch
             self._update_launcher_status()
@@ -2218,6 +2228,16 @@ class PackagePanel(QWidget):
                 venv_path_str = str(self.pip_manager.venv_path)
                 if "pipx" in venv_path_str.lower():
                     _vm.invalidate_all_caches()
+            except Exception:
+                pass
+            # B182 follow-up: refresh the Packages page header (size + pkg
+            # count) after a launch app install. Without this the badge
+            # at the top would stay stale until the user navigates away.
+            try:
+                _cur_path = getattr(self, "_current_venv_path", None)
+                _cur_backend = getattr(self, "_current_backend", "pip")
+                if _cur_path:
+                    self._update_env_info_bar(_cur_path, _cur_backend)
             except Exception:
                 pass
             self.env_refresh_requested.emit()
@@ -3091,6 +3111,10 @@ $s.Save()
             backend = "conda"
         elif self._current_env_type == "pipx":
             backend = "pipx"
+
+        # B182 follow-up: remember the active backend so post-install
+        # callbacks can refresh the env info bar without guessing.
+        self._current_backend = backend
 
         self.pip_manager = PipManager(venv_path, backend=backend)
         self._current_venv_path = venv_path
@@ -4979,6 +5003,17 @@ dependencies:
             self._invalidate_cache()
             self._invalidate_env_cache()
             self.refresh_packages()
+            # B182 follow-up: refresh the env info bar at the top of the
+            # Packages page (size + package count badges). Without this
+            # the header still shows the pre-install values until the
+            # user navigates away and back.
+            try:
+                _cur_path = getattr(self, "_current_venv_path", None)
+                _cur_backend = getattr(self, "_current_backend", "pip")
+                if _cur_path:
+                    self._update_env_info_bar(_cur_path, _cur_backend)
+            except Exception:
+                pass
             self.env_refresh_requested.emit()
         else:
             if "cancelled" not in message.lower():

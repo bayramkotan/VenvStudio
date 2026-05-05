@@ -3441,20 +3441,31 @@ $s.Save()
                 backend = "pipx"
 
             self.pip_manager = PipManager(venv_path, backend=backend)
-        # Inject shared cache dir if enabled (pip/uv only)
-        if self.pip_manager and self._current_env_type in ("venv", "uv"):
-            try:
-                _cfg = getattr(self, "config", None)
-                if _cfg and _cfg.get("shared_cache_enabled", False):
-                    from src.utils.constants import DEFAULT_SHARED_CACHE_DIR
-                    _cp = _cfg.get("shared_cache_dir", "") or DEFAULT_SHARED_CACHE_DIR
-                    self.pip_manager._shared_cache_dir = _cp
-            except Exception:
-                pass
+            # B182 follow-up: remember the active backend so post-install
+            # callbacks can refresh the env info bar without guessing.
+            self._current_backend = backend
 
+            # Inject shared cache dir if enabled (pip/uv only)
+            if self.pip_manager and self._current_env_type in ("venv", "uv"):
+                try:
+                    _cfg = getattr(self, "config", None)
+                    if _cfg and _cfg.get("shared_cache_enabled", False):
+                        from src.utils.constants import DEFAULT_SHARED_CACHE_DIR
+                        _cp = _cfg.get("shared_cache_dir", "") or DEFAULT_SHARED_CACHE_DIR
+                        self.pip_manager._shared_cache_dir = _cp
+                except Exception:
+                    pass
+
+            # B182 fix: previously the rest of this method (info bar update,
+            # tabs refresh, async pkg load, QL callback) was nested inside
+            # the "venv/uv only" if-block above, so poetry/pipx/conda envs
+            # silently skipped it — leaving the info bar (path, size,
+            # backend, last_used) blank in the UI when those envs were
+            # selected from the dropdown. Move it back out to the common
+            # path.
             if hasattr(self, "_env_bar_terminal_btn"):
                 self._env_bar_terminal_btn.setEnabled(True)
-            self.status_label.setText(f"Loading packages...")
+            self.status_label.setText("Loading packages...")
             self._update_env_info_bar(venv_path, backend)
             self._update_tabs_for_env_type()
             # Notify main window to sync QL selector immediately

@@ -316,11 +316,23 @@ class PipManager:
         packages: List[str],
         callback=None,
     ) -> Tuple[bool, str]:
-        """Uninstall one or more packages."""
+        """Uninstall one or more packages.
+
+        Flag handling per backend:
+        - pip:  needs ``-y`` (otherwise prompts "Proceed (Y/n)?")
+        - uv:   does NOT accept ``-y`` (it's already non-interactive;
+                ``uv pip uninstall -y …`` errors out with
+                "unexpected argument '-y' found"). This was B-uv-uninst.
+        Other backends (poetry, pipx, conda) are handled outside
+        PipManager — see package_panel.py command templates.
+        """
         if not packages:
             return False, "No packages specified"
 
-        cmd = ["uninstall", "-y"] + packages
+        cmd = ["uninstall"]
+        if self._backend != "uv":
+            cmd.append("-y")
+        cmd.extend(packages)
 
         try:
             if callback:

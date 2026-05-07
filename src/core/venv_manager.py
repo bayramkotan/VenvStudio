@@ -5,6 +5,7 @@ Core operations: create, delete, list, inspect venvs
 
 import os
 import sys
+import stat
 import shutil
 import subprocess
 import json
@@ -37,6 +38,31 @@ except Exception:
 
 # Suppress terminal windows on Windows (EXE builds)
 _SUBPROCESS_FLAGS = subprocess.CREATE_NO_WINDOW if _platform.system().lower() == "windows" else 0
+
+
+def _robust_rmtree(path: Path) -> None:
+    """Delete a directory tree, handling read-only files on Windows.
+
+    On Windows, package files (especially in Poetry/pip caches) are often
+    marked read-only, causing shutil.rmtree to raise PermissionError /
+    [WinError 5] Access is denied. This helper clears the read-only bit
+    on the offending file and retries the deletion.
+
+    Raises the original exception if the retry also fails.
+    """
+    def _on_error(func, target, exc_info):
+        # exc_info is (type, value, tb) on Python <3.12 with onerror,
+        # or just the exception on Python 3.12+ with onexc — handle both.
+        try:
+            os.chmod(target, stat.S_IWRITE | stat.S_IREAD)
+            func(target)
+        except Exception:
+            # Re-raise the original error so rmtree fails loudly
+            raise
+
+    # Python 3.12+ deprecated onerror in favour of onexc; both still work.
+    # Use onerror for max compatibility (works on 3.10+).
+    shutil.rmtree(path, onerror=_on_error)
 
 
 def _find_windows_python() -> str:
@@ -626,7 +652,7 @@ class VenvManager:
                     ],
                 )
                 return True, f"pipx tracking for '{name}' removed (pipx itself untouched)"
-            shutil.rmtree(venv_path)
+            _robust_rmtree(venv_path)
             # For poetry: also delete the project marker dir in base_dir if different
             if env_type == "poetry" and env_path:
                 for _item in self.base_dir.iterdir():
@@ -638,7 +664,10 @@ class VenvManager:
                             import json as _json
                             _data = _json.loads(_marker.read_text())
                             if _data.get("poetry_venv_path", "") == str(env_path):
-                                shutil.rmtree(_item, ignore_errors=True)
+                                try:
+                                    _robust_rmtree(_item)
+                                except Exception as _re:
+                                    _log.warning(f"delete_venv: could not remove poetry marker dir {_item}: {_re}")
                                 break
                         except Exception:
                             pass

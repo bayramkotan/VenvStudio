@@ -1726,7 +1726,10 @@ class MainWindow(QMainWindow):
 
         # Bold font used for ALL columns (B183 — previously only name was
         # bold, other columns looked anaemic next to it on light themes)
-        _row_font = QFont()
+        # B174 fix: copy from table's current font (which honours QSS pixel-size).
+        # Bare QFont() yields a Windows default whose pointSize() is -1, which
+        # triggers QFont::setPointSize(-1) warnings during Qt's font cascade.
+        _row_font = QFont(self.env_table.font())
         _row_font.setBold(True)
 
         for i, env in enumerate(envs):
@@ -2528,7 +2531,8 @@ class MainWindow(QMainWindow):
                     _is_light = (_r * 299 + _g * 587 + _b * 114) / 1000 > 128
             except Exception:
                 pass
-            _bold = _QFont()
+            # B174 fix: see env-table loop above — copy table font to preserve QSS pixel-size.
+            _bold = _QFont(self.env_table.font())
             _bold.setBold(True)
             _fg_dark = _QColor("#1f2937") if _is_light else None
 
@@ -2720,7 +2724,8 @@ class MainWindow(QMainWindow):
             _path_color = (self._c().get("fg_secondary")
                            or self._c().get("fg")
                            or ("#444" if _is_light else "#bac2de"))
-            _bold = _QFont()
+            # B174 fix: copy env_table font to preserve QSS pixel-size.
+            _bold = _QFont(self.env_table.font())
             _bold.setBold(True)
 
             # Column 0: Name
@@ -3622,13 +3627,9 @@ class MainWindow(QMainWindow):
         self.config.set("window_y", self.y())
 
         # B45 fix: wait for ALL background workers before closing
-        # B185 fix: shutdown latency — workers run blocking subprocess.run() with no
-        # Qt event loop, so quit() is a no-op. wait(200) lets a finishing worker
-        # exit cleanly; otherwise terminate() is the only path. Old 3000+1000ms
-        # waits caused 5–10s shutdown stalls on Windows when multiple workers ran.
         workers = []
         for attr in ("_detail_worker", "_ql_worker", "_delete_worker",
-                      "_rename_worker", "clone_worker", "_update_worker"):
+                      "_rename_worker", "clone_worker"):
             w = getattr(self, attr, None)
             if w is not None and hasattr(w, "isRunning") and w.isRunning():
                 workers.append((attr, w))
@@ -3636,9 +3637,9 @@ class MainWindow(QMainWindow):
         for attr, w in workers:
             try:
                 w.quit()
-                if not w.wait(200):
+                if not w.wait(3000):
                     w.terminate()
-                    w.wait(200)
+                    w.wait(1000)
             except RuntimeError:
                 pass  # already destroyed
 

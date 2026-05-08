@@ -3985,7 +3985,10 @@ $s.Save()
 
                 name_item = QTableWidgetItem(pkg["name"])
                 name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
-                name_font = QFont()
+                # B174 fix: copy table font (QSS pixel-size) instead of bare QFont(),
+                # whose default Windows font has pointSize() == -1 and triggers
+                # QFont::setPointSize(-1) warnings in Qt's internal cascade.
+                name_font = QFont(self.catalog_table.font())
                 name_font.setBold(True)
                 name_item.setFont(name_font)
                 if is_installed:

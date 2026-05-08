@@ -3622,9 +3622,13 @@ class MainWindow(QMainWindow):
         self.config.set("window_y", self.y())
 
         # B45 fix: wait for ALL background workers before closing
+        # B185 fix: shutdown latency — workers run blocking subprocess.run() with no
+        # Qt event loop, so quit() is a no-op. wait(200) lets a finishing worker
+        # exit cleanly; otherwise terminate() is the only path. Old 3000+1000ms
+        # waits caused 5–10s shutdown stalls on Windows when multiple workers ran.
         workers = []
         for attr in ("_detail_worker", "_ql_worker", "_delete_worker",
-                      "_rename_worker", "clone_worker"):
+                      "_rename_worker", "clone_worker", "_update_worker"):
             w = getattr(self, attr, None)
             if w is not None and hasattr(w, "isRunning") and w.isRunning():
                 workers.append((attr, w))
@@ -3632,9 +3636,9 @@ class MainWindow(QMainWindow):
         for attr, w in workers:
             try:
                 w.quit()
-                if not w.wait(3000):
+                if not w.wait(200):
                     w.terminate()
-                    w.wait(1000)
+                    w.wait(200)
             except RuntimeError:
                 pass  # already destroyed
 

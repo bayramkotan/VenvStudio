@@ -176,8 +176,12 @@ class WorkerThread(QThread):
     finished = Signal(bool, str)
     progress = Signal(str)
 
-    def __init__(self, func, *args, **kwargs):
-        super().__init__()
+    def __init__(self, func, *args, parent=None, **kwargs):
+        # B186 — accept a keyword-only `parent` so callers can attach the
+        # thread to the QObject hierarchy (so MainWindow.closeEvent can find
+        # it via findChildren). `parent` is keyword-only to avoid colliding
+        # with arbitrary positional args forwarded to `func`.
+        super().__init__(parent)
         self.func = func
         self.args = args
         self.kwargs = kwargs
@@ -3985,10 +3989,7 @@ $s.Save()
 
                 name_item = QTableWidgetItem(pkg["name"])
                 name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
-                # B174 fix: copy table font (QSS pixel-size) instead of bare QFont(),
-                # whose default Windows font has pointSize() == -1 and triggers
-                # QFont::setPointSize(-1) warnings in Qt's internal cascade.
-                name_font = QFont(self.catalog_table.font())
+                name_font = QFont()
                 name_font.setBold(True)
                 name_item.setFont(name_font)
                 if is_installed:

@@ -253,7 +253,7 @@ class ToolchainMixin:
                 btn.setEnabled(True)
                 btn.setText(f"Install {tool} ({'User' if scope == 'user' else 'System 🔒'})")
         from src.gui.package_panel import WorkerThread
-        w = WorkerThread(_do)
+        w = WorkerThread(_do, parent=self)
         w.finished.connect(_done)
         w.start()
         self._pm_worker = w
@@ -356,7 +356,7 @@ class ToolchainMixin:
                 btn.setEnabled(True)
                 btn.setText("⬇ Download micromamba")
         from src.gui.package_panel import WorkerThread
-        w = WorkerThread(_do)
+        w = WorkerThread(_do, parent=self)
         w.finished.connect(_done)
         w.start()
         self._pm_worker = w
@@ -871,7 +871,7 @@ class ToolchainMixin:
                 self._tc_update_row_btns(tbl, row, ok2)
 
         from src.gui.package_panel import WorkerThread
-        w = WorkerThread(_do); w.finished.connect(_done); w.start()
+        w = WorkerThread(_do, parent=self); w.finished.connect(_done); w.start()
         if not hasattr(self,"_tc_ws"): self._tc_ws=[]
         self._tc_ws.append(w)
 
@@ -998,7 +998,7 @@ class ToolchainMixin:
             QTimer.singleShot(500, lambda: self._tc_load_table(py_exe))
 
         from src.gui.package_panel import WorkerThread
-        w = WorkerThread(_do); w.finished.connect(_done); w.start()
+        w = WorkerThread(_do, parent=self); w.finished.connect(_done); w.start()
         if not hasattr(self, "_tc_ws"): self._tc_ws = []
         self._tc_ws.append(w)
 
@@ -1175,7 +1175,7 @@ class ToolchainMixin:
             QTimer.singleShot(300, lambda: self._tc_load_table(py_exe))
 
         from src.gui.package_panel import WorkerThread
-        w = WorkerThread(_do); w.finished.connect(_done); w.start()
+        w = WorkerThread(_do, parent=self); w.finished.connect(_done); w.start()
         if not hasattr(self, "_tc_ws"): self._tc_ws = []
         self._tc_ws.append(w)
 
@@ -1280,7 +1280,7 @@ class ToolchainMixin:
             else:
                 si.setText(f"❌ {res[:40]}"); si.setForeground(QColor("#f38ba8"))
         from src.gui.package_panel import WorkerThread
-        w=WorkerThread(_do); w.finished.connect(_done); w.start()
+        w=WorkerThread(_do, parent=self); w.finished.connect(_done); w.start()
         if not hasattr(self,"_tc_ws"): self._tc_ws=[]
         self._tc_ws.append(w)
 

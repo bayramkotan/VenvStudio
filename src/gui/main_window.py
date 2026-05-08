@@ -180,6 +180,89 @@ class MainWindow(QMainWindow):
         self._log = get_logger("venvstudio.main_window")
         self._log.info("MainWindow.__init__ started")
 
+        # ── B186 DEBUG HOOKS — TEMPORARY, REMOVE WHEN BUG SOLVED ──
+        # Patches subprocess.Popen and QThread to log every creation with a
+        # short traceback so we can correlate "QThread: Destroyed" FATALs with
+        # the actual call site that started the orphan thread.
+        if not getattr(MainWindow, "_b186_hooks_installed", False):
+            MainWindow._b186_hooks_installed = True
+            try:
+                import subprocess as _sp
+                import traceback as _tb
+                from PySide6.QtCore import QThread as _QT
+                _hook_log = get_logger("venvstudio.b186")
+
+                # Track live Popen objects
+                _live_popens = {}
+                _orig_popen_init = _sp.Popen.__init__
+                _orig_popen_del = getattr(_sp.Popen, "__del__", None)
+
+                def _patched_popen_init(self, *args, **kwargs):
+                    _orig_popen_init(self, *args, **kwargs)
+                    try:
+                        cmd = args[0] if args else kwargs.get("args", "?")
+                        if isinstance(cmd, (list, tuple)):
+                            cmd_str = " ".join(str(c) for c in cmd)[:120]
+                        else:
+                            cmd_str = str(cmd)[:120]
+                        # 4-frame caller stack (skip this hook + popen internals)
+                        stack = _tb.extract_stack()[:-1]
+                        # find first frame outside subprocess module
+                        callers = []
+                        for frame in reversed(stack):
+                            if "subprocess" in frame.filename:
+                                continue
+                            callers.append(f"{frame.filename.split(chr(92))[-1].split('/')[-1]}:{frame.lineno}({frame.name})")
+                            if len(callers) >= 3:
+                                break
+                        _live_popens[id(self)] = (self.pid, cmd_str)
+                        _hook_log.info(f"[POPEN+] pid={self.pid} cmd={cmd_str!r} from={' ← '.join(callers)}")
+                    except Exception as _e:
+                        _hook_log.warning(f"[POPEN+] hook error: {_e}")
+
+                def _patched_popen_del(self):
+                    try:
+                        info = _live_popens.pop(id(self), None)
+                        if info:
+                            _hook_log.info(f"[POPEN-] pid={info[0]} cmd={info[1]!r} (gc'd)")
+                    except Exception:
+                        pass
+                    if _orig_popen_del is not None:
+                        try:
+                            _orig_popen_del(self)
+                        except Exception:
+                            pass
+
+                _sp.Popen.__init__ = _patched_popen_init
+                _sp.Popen.__del__ = _patched_popen_del
+                MainWindow._b186_live_popens = _live_popens
+
+                # Track QThread creations
+                _orig_qt_init = _QT.__init__
+                def _patched_qt_init(self, *args, **kwargs):
+                    _orig_qt_init(self, *args, **kwargs)
+                    try:
+                        cls = type(self).__name__
+                        stack = _tb.extract_stack()[:-1]
+                        callers = []
+                        for frame in reversed(stack):
+                            if "PySide6" in frame.filename or "shiboken" in frame.filename:
+                                continue
+                            callers.append(f"{frame.filename.split(chr(92))[-1].split('/')[-1]}:{frame.lineno}({frame.name})")
+                            if len(callers) >= 3:
+                                break
+                        parent = args[0] if args else kwargs.get("parent", None)
+                        pname = type(parent).__name__ if parent is not None else "<NO-PARENT>"
+                        _hook_log.info(f"[QTHREAD+] class={cls} parent={pname} from={' ← '.join(callers)}")
+                    except Exception as _e:
+                        _hook_log.warning(f"[QTHREAD+] hook error: {_e}")
+                _QT.__init__ = _patched_qt_init
+
+                self._log.info("B186 debug hooks installed (subprocess.Popen + QThread)")
+            except Exception as _e:
+                self._log.warning(f"B186 debug hooks failed to install: {_e}")
+        # ── END B186 DEBUG HOOKS ──
+
         self.config = ConfigManager()
         # B184 v2: legacy "light" config values get auto-upgraded to a real
         # theme id. Older builds saved bare "light" which the styles module
@@ -213,7 +296,14 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(300, self._open_default_env)
 
         if self.config.get("check_updates", False):
-            QTimer.singleShot(3000, self._auto_check_update)
+            # B186 — keep timer as a member so closeEvent can stop() pending
+            # fires. Plain QTimer.singleShot() can't be cancelled, and if the
+            # user closes the window before the 3s elapse the callback may
+            # still fire during teardown and start an orphaned QThread.
+            self._check_update_timer = QTimer(self)
+            self._check_update_timer.setSingleShot(True)
+            self._check_update_timer.timeout.connect(self._auto_check_update)
+            self._check_update_timer.start(3000)
 
         self._log.info("MainWindow.__init__ complete")
 
@@ -231,7 +321,12 @@ class MainWindow(QMainWindow):
                 except Exception:
                     pass
 
-        self._update_worker = _UpdateWorker()
+        # B186 — pass parent=self so the worker becomes a QObject child of
+        # MainWindow. Without this, findChildren(QThread) in closeEvent can't
+        # see it, and Python interpreter teardown destroys the QThread C++
+        # object while the network call is still running ("QThread: Destroyed
+        # while thread '' is still running" FATAL).
+        self._update_worker = _UpdateWorker(self)
         self._update_worker.update_found.connect(self._on_update_found)
         self._update_worker.start()
 
@@ -3626,22 +3721,153 @@ class MainWindow(QMainWindow):
         self.config.set("window_x", self.x())
         self.config.set("window_y", self.y())
 
-        # B45 fix: wait for ALL background workers before closing
+        # B185 / B186 — comprehensive worker shutdown with diagnostics.
+        # Workers run blocking subprocess.run() or os.walk() with no Qt event
+        # loop, so quit() is a no-op. requestInterruption() lets cooperative
+        # workers (e.g. _EnvSizeWorker checks isInterruptionRequested in its
+        # walk loop) bail out early. wait() is the only reliable join.
+        #
+        # If a "QThread: Destroyed while thread is still running" FATAL is
+        # logged after this, the diagnostics below identify which worker
+        # was the culprit.
+        import time as _time
+        _t0 = _time.monotonic()
+        try:
+            from src.utils.logger import get_logger as _get_logger
+            _log = _get_logger("venvstudio.shutdown")
+        except Exception:
+            class _NullLog:
+                def info(self, *a, **kw): pass
+                def warning(self, *a, **kw): pass
+                def debug(self, *a, **kw): pass
+            _log = _NullLog()
+
+        _log.info("🔥 closeEvent ENTERED")
+
+        # B186 — stop pending update-check timer so it doesn't fire during
+        # teardown and spawn an orphaned QThread after closeEvent has run.
+        try:
+            if hasattr(self, "_check_update_timer") and self._check_update_timer is not None:
+                if self._check_update_timer.isActive():
+                    _log.info("   • stopping pending _check_update_timer")
+                    self._check_update_timer.stop()
+        except RuntimeError:
+            pass
+
+        # Step 1: Collect known workers from MainWindow + PackagePanel by name.
         workers = []
         for attr in ("_detail_worker", "_ql_worker", "_delete_worker",
-                      "_rename_worker", "clone_worker"):
+                      "_rename_worker", "clone_worker", "_update_worker"):
             w = getattr(self, attr, None)
             if w is not None and hasattr(w, "isRunning") and w.isRunning():
-                workers.append((attr, w))
+                workers.append((f"MainWindow.{attr}", w))
+        if hasattr(self, "package_panel") and self.package_panel is not None:
+            for attr in ("_pkg_loader", "_size_worker", "_outdated_worker", "current_worker"):
+                w = getattr(self.package_panel, attr, None)
+                if w is not None and hasattr(w, "isRunning") and w.isRunning():
+                    workers.append((f"PackagePanel.{attr}", w))
 
-        for attr, w in workers:
+        # Step 2: Sweep ALL QThread children (catches anonymous/inline threads
+        # that aren't stored as named attributes). Deduplicate against the
+        # named list above by Python id().
+        try:
+            from PySide6.QtCore import QThread
+            from PySide6.QtWidgets import QApplication
+            _seen_ids = {id(w) for _, w in workers}
+            # 2a — descendants of MainWindow
+            for child in self.findChildren(QThread):
+                if child is None or id(child) in _seen_ids:
+                    continue
+                if hasattr(child, "isRunning") and child.isRunning():
+                    cname = type(child).__name__
+                    oname = child.objectName() or "<no-objectName>"
+                    workers.append((f"findChildren(self):{cname}({oname})", child))
+                    _seen_ids.add(id(child))
+            # 2b — descendants of QApplication (catches parent=None or
+            # parent=QApplication threads that MainWindow can't see)
+            _app = QApplication.instance()
+            if _app is not None:
+                for child in _app.findChildren(QThread):
+                    if child is None or id(child) in _seen_ids:
+                        continue
+                    if hasattr(child, "isRunning") and child.isRunning():
+                        cname = type(child).__name__
+                        oname = child.objectName() or "<no-objectName>"
+                        parent = child.parent()
+                        pname = type(parent).__name__ if parent is not None else "<NO-PARENT>"
+                        workers.append((f"findChildren(app):{cname}({oname})/parent={pname}", child))
+                        _seen_ids.add(id(child))
+        except Exception as _e:
+            _log.warning(f"findChildren(QThread) sweep failed: {_e}")
+
+        # Step 2c — also enumerate all Python threading.Thread objects so we
+        # can see if it's a non-Qt thread keeping the process alive (urllib,
+        # ThreadPoolExecutor, daemon=True helpers, etc.). These can't be
+        # joined by us but are useful diagnostic context.
+        try:
+            import threading as _threading
+            _alive = [t for t in _threading.enumerate() if t.is_alive() and t is not _threading.main_thread()]
+            if _alive:
+                _log.info(f"   [py-threads] {len(_alive)} alive Python thread(s):")
+                for t in _alive:
+                    _log.info(f"      - name='{t.name}' daemon={t.daemon} ident={t.ident}")
+        except Exception as _e:
+            _log.warning(f"threading.enumerate() failed: {_e}")
+
+        # Step 2d — B186 debug: list live subprocess.Popen objects (those
+        # whose __del__ hasn't fired yet). A subprocess that's still alive
+        # at closeEvent likely ties down a _readerthread which in turn may
+        # be holding a QThread alive past app exit.
+        try:
+            _live = getattr(MainWindow, "_b186_live_popens", None)
+            if _live:
+                _log.info(f"   [popen] {len(_live)} live Popen object(s):")
+                for _id, (_pid, _cmd) in list(_live.items()):
+                    _log.info(f"      - pid={_pid} cmd={_cmd!r}")
+        except Exception as _e:
+            _log.warning(f"popen enumeration failed: {_e}")
+
+        _log.info(f"🔥 closeEvent: {len(workers)} running worker(s) detected")
+        for label, w in workers:
+            try:
+                cname = type(w).__name__
+                oname = w.objectName() or "<no-objectName>"
+                parent = w.parent()
+                pname = type(parent).__name__ if parent is not None else "<no-parent>"
+                _log.info(f"   • {label}  class={cname}  objectName='{oname}'  parent={pname}")
+            except Exception as _e:
+                _log.warning(f"   • {label}  (introspection failed: {_e})")
+
+        # Step 3: Ask every worker to interrupt cooperatively, then quit().
+        for label, w in workers:
+            try:
+                w.requestInterruption()
+            except Exception:
+                pass
             try:
                 w.quit()
-                if not w.wait(3000):
-                    w.terminate()
-                    w.wait(1000)
+            except Exception:
+                pass
+
+        # Step 4: Wait for each worker. 1500ms is enough for an os.walk over
+        # a few hundred MB or a finishing pip-list subprocess; for stuck
+        # threads we fall back to terminate() + a final short wait.
+        for label, w in workers:
+            try:
+                if w.wait(1500):
+                    _log.debug(f"   ✓ {label} stopped cleanly")
+                    continue
+                _log.warning(f"   ⚠ {label} did not stop in 1500ms — terminate()")
+                w.terminate()
+                if w.wait(500):
+                    _log.debug(f"   ✓ {label} stopped after terminate()")
+                else:
+                    _log.warning(f"   ☠ {label} STILL RUNNING after terminate() — likely Qt FATAL source")
             except RuntimeError:
                 pass  # already destroyed
+
+        _dt = (_time.monotonic() - _t0) * 1000.0
+        _log.info(f"🔥 closeEvent EXITED ({_dt:.0f}ms)")
 
         super().closeEvent(event)
 

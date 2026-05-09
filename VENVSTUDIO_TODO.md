@@ -1,5 +1,266 @@
 # VENVSTUDIO_TODO.md
 
+## ✅ v1.4.91'de ÇÖZÜLEN EK BUG'LAR (numara verilmemiş — buraya kayıt)
+
+Bu oturumda numarasız ama önemli bug'lar fix edildi. İleride benzer sorun çıkarsa buradan çözüm yolu bulunabilir:
+
+- **B185 — Windows Kapanış 5-10sn Kasma:** `closeEvent`'te worker `wait()` süreleri 3000/1000ms idi → 500/500ms (B186 fix'iyle birleştirildi). Worker'lar event loop'lu olmadığı için `quit()` zaten no-op, bekleme boşa.
+- **B186 — `QThread: Destroyed while thread '' is still running` FATAL:** `settings_toolchain.py`'deki 6 `WorkerThread(_do)` çağrısı `parent=None` ile yaratılıyordu → `findChildren(QThread)` bulamıyordu → orphan teardown → FATAL. Çözüm: `WorkerThread.__init__`'a keyword-only `parent=None` ekledik, settings_toolchain çağrılarını `parent=self` ile düzelttik. Ek olarak `_UpdateWorker(self)` parent eklendi ve `_check_update_timer` üye değişkeni `closeEvent`'te `stop()` çağrılıyor.
+- **Path kolonu kesik gösterim:** `PathElideMiddleDelegate(QStyledItemDelegate)` eklendi (`main_window.py`), env tablosu Path kolonu için `setItemDelegateForColumn(2, ...)`. Drive harfi + env adı görünür kalır, orta `…` ile kısalır.
+- **Pipx Routing Bozuk (`[Errno 2]` patlaması):** Pipx tracker marker writer (`main_window.py::_readd_empty_pipx_row`) `"env_type": "pipx"` yazıyordu ama reader (`package_panel.py::set_venv`) `"type"` arıyordu → fallback `"system_tools"` → pip yoluna düşüş → `<pipx>/bin/python` yok → patlama. Writer `"type"`'a alındı, reader **geriye uyumlu** yapıldı: `_m.get("type") or _m.get("env_type") or "system_tools"`. Ek olarak `_install_packages` pre-flight check'leri pipx için skip edildi (`if _env_type != "pipx":`).
+- **Pipx Preset/Catalog Library Install:** `_do_pipx_install`'da `cmd.append("--include-deps")` eklendi. Pipx default'ta sadece CLI tool yükler ("No apps associated with package X"); `--include-deps` library paketleri için pipx'in **kendi tasarımcılarının** sağladığı resmi workaround. ML Starter (numpy/pandas/sklearn/...) artık çalışıyor.
+
+**Detaylar:** Handoff'ta v1.4.91 oturum kaydı + KESİN KURALLAR #14 (pipx).
+
+---
+
+## 🧪 ÖNCELIK #0 — SİSTEMATİK BUTON & SEKME TEST TURU
+
+**Amaç:** Tüm UI butonlarının ve sekmelerinin her env tipi için çalıştığından emin olmak. Hatalar bulundukça düzeltilecek.
+
+**Test yöntemi:** Bayram tek tek butonlara basar, hataları aşağıdaki formatla bildirir. Claude düzeltir.
+
+### Hata Bildirme Formatı
+
+```
+Buton: [hangi buton/sekme/aksiyon]
+Env Tipi: [venv / uv / Poetry / Conda / pipx]
+Beklenen: [ne olmalıydı]
+Gerçekleşen: [ne oldu]
+Traceback: [varsa terminal çıktısı]
+```
+
+---
+
+### 📍 Environments Sayfası — Butonlar
+
+Her buton, her env tipi için ayrı ayrı test edilecek.
+
+| # | Buton | venv | uv | Poetry | Conda | pipx |
+|---|-------|------|----|--------|-------|------|
+| 1 | Manage Packages | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| 2 | Open Terminal | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| 3 | Clone | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| 4 | Rename (Name) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| 5 | Rename (Full) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| 6 | Export ▾ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| 7 | Make Default | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| 8 | Delete | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| 9 | Refresh | ⏳ | — | — | — | — |
+
+**Durum işaretleri:** ⏳ test edilmedi · ✅ çalışıyor · ❌ hata var · ⚠ kısmen çalışıyor
+
+---
+
+### 📍 Export ▾ — Alt Seçenekler
+
+Her format, her env tipi için test edilecek.
+
+| Format | venv | uv | Poetry | Conda | pipx |
+|--------|------|----|--------|-------|------|
+| requirements.txt | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| environment.yml | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| pyproject.toml | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| Dockerfile | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| (diğer formatlar) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+
+---
+
+### 📍 + New Environment — Tüm Backend'ler
+
+| Backend | Test |
+|---------|------|
+| venv | ⏳ |
+| uv | ⏳ |
+| Poetry | ⏳ |
+| Conda | ⏳ |
+| pipx | ⏳ |
+
+---
+
+### 📍 Packages Sayfası — Sekmeler
+
+#### Launch Sekmesi
+Her launcher kartı (JupyterLab, Jupyter Notebook, Orange Data Mining, Spyder IDE, IPython, Streamlit, Gradio, Dash, Panel, vb.) için:
+
+| Aksiyon | Test |
+|---------|------|
+| ► Launch | ⏳ |
+| Uninstall | ⏳ |
+| 📌 Create Desktop Shortcut | ⏳ |
+| 📋 Copy Install Command | ⏳ |
+| 📋 Copy Run Command | ⏳ |
+| 🔗 Links toggle | ⏳ |
+| Not-installed → Launch (auto-install) | ⏳ |
+
+#### Installed Sekmesi
+| Aksiyon | Test |
+|---------|------|
+| Paket listesini görüntüle | ⏳ |
+| Sağ-tık → Package Info | ⏳ |
+| Sağ-tık → Uninstall | ⏳ |
+| Sağ-tık → Update | ⏳ |
+| Multi-select uninstall | ⏳ |
+| Search/filter | ⏳ |
+
+#### Catalog Sekmesi
+| Aksiyon | venv | uv | Poetry | Conda | pipx |
+|---------|------|----|--------|-------|------|
+| Paket arama | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| Kategori filtreleme | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| Install butonu | ⏳ | ⏳ | ⏳ | ⏳ | ✅ (v1.4.91) |
+| Package Info dialog | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| Home/PyPI link butonları (B171 ile bağlantılı) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+
+#### Presets Sekmesi
+| Aksiyon | venv | uv | Poetry | Conda | pipx |
+|---------|------|----|--------|-------|------|
+| Preset listesi görünüyor | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| "Install Preset" çalışıyor | ⏳ | ⏳ | ⏳ | ✅ (v1.4.91) | ✅ (v1.4.91) |
+| "Installed" badge doğru | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| Preset içeriği görüntüleniyor | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+
+#### Manual Install Sekmesi
+| Aksiyon | venv | uv | Poetry | Conda | pipx |
+|---------|------|----|--------|-------|------|
+| Paket adıyla install | ⏳ | ⏳ | ⏳ | ⏳ | ✅ (v1.4.91 — `black`) |
+| Versiyon belirterek install (`pkg==1.2.3`) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| Multiple paket aynı anda | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| Hatalı paket adı hata mesajı | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+
+---
+
+---
+
+### 📍 Settings Sayfası — Tüm Bölümler
+
+#### ⚙️ General
+| Aksiyon | Test |
+|---------|------|
+| Default base directory değiştir | ⏳ |
+| Auto-refresh toggle | ⏳ |
+| Confirm before delete toggle | ⏳ |
+| Create Desktop Shortcut butonu | ⏳ |
+| Reset to defaults | ⏳ |
+
+#### 🎨 Appearance
+| Aksiyon | Test |
+|---------|------|
+| Theme combo (dark / light-latte / light-github / vb.) | ⏳ |
+| Font family değiştir | ⏳ |
+| Font size değiştir | ⏳ |
+| UI Scale (varsa F168) | ⏳ |
+| Theme persist (kapat-aç) | ⏳ |
+
+#### 🐍 Python Versions
+| Aksiyon | Test |
+|---------|------|
+| Yüklü Python versiyonları listele | ⏳ |
+| Yeni Python versiyonu indir (Astral CDN) | ⏳ |
+| Python uninstall | ⏳ |
+| Python set as default | ⏳ |
+| Mirror seçimi (F123) | ⏳ |
+
+#### 📦 Package Managers (KRİTİK)
+| Tool | Detect | Install | Update | Uninstall | Path doğru |
+|------|--------|---------|--------|-----------|-----------|
+| pip | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| uv | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| poetry | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| pipx | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| conda / micromamba | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| mamba | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| virtualenv | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| pixi (varsa) | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+
+**Kontrol noktaları:**
+- User vs System install scope toggle (PEP668)
+- Module-only fallback (`python -m pipx`) çalışıyor mu
+- pkexec / UAC şifre dialog'u çıkıyor mu
+- Install başarısızsa açık terminal komutu gösteriyor mu
+
+#### 🖥️ Terminal Emulators (F135)
+| Tool | Detect | Install | Uninstall | Launch |
+|------|--------|---------|-----------|--------|
+| WezTerm | ⏳ | ⏳ | ⏳ | ⏳ |
+| Alacritty | ⏳ | ⏳ | ⏳ | ⏳ |
+| Tabby | ⏳ | ⏳ | ⏳ | ⏳ |
+| Ghostty | ⏳ | ⏳ | ⏳ | ⏳ |
+| Hyper | ⏳ | ⏳ | ⏳ | ⏳ |
+| Kitty (varsa) | ⏳ | ⏳ | ⏳ | ⏳ |
+
+#### 🎨 CLI/TUI Tools (KRİTİK — F171, F172, F173, F174)
+| Tool | Detect | Install | Configure | Uninstall | Theme switch |
+|------|--------|---------|-----------|-----------|--------------|
+| oh-my-posh | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| Starship | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| zoxide | ⏳ | ⏳ | — | ⏳ | — |
+| fzf | ⏳ | ⏳ | — | ⏳ | — |
+| eza / lsd | ⏳ | ⏳ | — | ⏳ | — |
+| bat | ⏳ | ⏳ | — | ⏳ | — |
+| ripgrep | ⏳ | ⏳ | — | ⏳ | — |
+| fd | ⏳ | ⏳ | — | ⏳ | — |
+| btop / htop | ⏳ | ⏳ | — | ⏳ | — |
+| tmux / zellij | ⏳ | ⏳ | ⏳ | ⏳ | — |
+| neovim | ⏳ | ⏳ | — | ⏳ | — |
+
+**oh-my-posh özel testleri (B181 v3 sonrası):**
+- Install sonrası `~/.posh/oh-my-posh` ve `~/.posh/themes/` doğru mu
+- 122 tema themes.zip'ten indi mi
+- Auto-configure çalıştı mı (default tema)
+- `.bashrc` / `$PROFILE` marker block'u eklendi mi
+- Theme değiştirme: eski block siliniyor, yenisi yazılıyor mu
+- Uninstall: `~/.posh/` siliniyor + shell init satırları temizleniyor mu
+
+**Terminal restart popup (F174):**
+- Configure sonrası popup çıkıyor mu
+- Platform-specific komutlar doğru mu
+- 📋 Komutu Kopyala çalışıyor mu
+
+#### 🔤 Nerd Fonts (F172 ile bağlantılı)
+| Aksiyon | Test |
+|---------|------|
+| Yüklü font listesi | ⏳ |
+| Font kurulum (FiraCode, JetBrainsMono, Hack, vb.) | ⏳ |
+| Font uninstall | ⏳ |
+| Kurulum sonrası terminal profili dialog'u (F172) | ⏳ |
+| "Default yap" işaretle | ⏳ |
+| gnome-terminal / mate-terminal / konsole / alacritty / kitty / wezterm adapter'ları | ⏳ |
+| macOS Terminal.app / iTerm2 (henüz yok) | ❌ |
+| Windows Terminal (henüz yok) | ❌ |
+
+#### 🛠️ Editor Integration
+| Editor | Detect | Open in editor | Add as launcher |
+|--------|--------|----------------|-----------------|
+| VS Code | ⏳ | ⏳ | ⏳ |
+| Cursor | ⏳ | ⏳ | ⏳ |
+| Windsurf | ⏳ | ⏳ | ⏳ |
+| Zed | ⏳ | ⏳ | ⏳ |
+| PyCharm | ⏳ | ⏳ | ⏳ |
+| Spyder (F136 — eklenecek) | ❌ | ❌ | ❌ |
+
+#### 📚 Catalog Yönetimi
+| Aksiyon | Test |
+|---------|------|
+| Catalog yenile | ⏳ |
+| Custom paket ekle | ⏳ |
+| Paket bilgisi düzenle (F124) | ⏳ |
+
+#### 🌐 Channels / Mirrors (F175 — yoksa not düş)
+| Aksiyon | Test |
+|---------|------|
+| pip index URL ayarla | ⏳ |
+| conda channel ekle/sil | ⏳ |
+| Per-env channel override | ⏳ |
+
+---
+
+### 🐛 Bulunan Buglar
+
+(Bayram test ettikçe buraya eklenecek)
+
+---
+
 ## 🔴 ÖNCELIK #1 — Startup Hız Optimizasyonu (Hedef: 3-5 saniye)
 
 ### PERF-001 — Açılış süresi (güncel durum)
@@ -903,7 +1164,20 @@ Bunlar Faz 2'nin parçası. Detayı yukarıdaki ilgili madde başlıklarında.
 **Öncelik:** 🔴 Yüksek — kullanıcı deneyimi için kritik
 
 ---
-### 🔴 B174 — Windows'ta `QFont::setPointSize: Point size <= 0 (-1)` Spam Uyarısı
+### ✅ B174 — Windows'ta `QFont::setPointSize: Point size <= 0 (-1)` Spam Uyarısı (TAMAMLANDI v1.4.91)
+
+**Çözüm (v1.4.91):** Boş `QFont()` constructor Windows'ta default sistem fontunu alıyor; bu font pixel-size based, `pointSize()` `-1` döner. Tablo widget'ının QSS'i `font-size: 13px` (pixel) olduğu için Qt internal cascade `setPointSize(-1)` çağırıyor → uyarı.
+
+**Fix (4 nokta):**
+- `main_window.py` env_table satırları × 3: `QFont()` → `QFont(self.env_table.font())`
+- `package_panel.py` catalog_table × 1: `QFont()` → `QFont(self.catalog_table.font())`
+
+Tablonun mevcut font'unu kopyala (zaten QSS pixel-size ile uyumlu), sadece `setBold(True)` ekle.
+
+**Detaylı handoff:** v1.4.91 oturum kayıtları.
+
+---
+**[Aşağıdaki bölüm orijinal teşhis kaydı — referans için saklanır]**
 
 **Sorun:** Windows'ta uygulama açılışından itibaren, env değiştirince ve page switch yapınca terminale şu uyarı düşüyor:
 ```

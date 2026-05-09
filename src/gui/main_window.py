@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
     QPushButton, QFrame, QTableWidget, QTableWidgetItem,
     QHeaderView, QMessageBox, QFileDialog,
     QStackedWidget, QInputDialog, QApplication, QProgressDialog,
-    QMenu, QComboBox,
+    QMenu, QComboBox, QStyledItemDelegate,
 )
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QFont, QAction, QColor
@@ -27,6 +27,33 @@ from src.utils.platform_utils import (
 )
 from src.utils.constants import APP_NAME, APP_VERSION, UI_TOOLTIPS
 from src.utils.i18n import tr
+
+
+class PathElideMiddleDelegate(QStyledItemDelegate):
+    """
+    Renders a table cell's text with middle-elision (e.g. ``C:\\Users\\…\\pppp-py3.13``)
+    instead of the default right-elision Qt applies to QTableWidgetItem.
+
+    Used for the Path column of the environment table where Poetry / pipx
+    paths are long and the meaningful part (env name) is at the end, while
+    the drive letter / Linux root at the start is also useful for context.
+    The full path is preserved in the item's tooltip and accessible via
+    ``item.toolTip()`` / ``item.text()`` regardless of how it's drawn.
+    """
+    def initStyleOption(self, option, index):
+        super().initStyleOption(option, index)
+        # Replace the text with a middle-elided version so Qt's normal
+        # painter draws bold/foreground/selection like every other column.
+        text = option.text
+        if not text:
+            return
+        # Reserve a small margin (matches the QSS ::item padding 8px 12px)
+        # so the ellipsis doesn't kiss the cell border.
+        avail = max(0, option.rect.width() - 24)
+        if avail <= 0:
+            return
+        option.text = option.fontMetrics.elidedText(text, Qt.ElideMiddle, avail)
+        option.textElideMode = Qt.ElideMiddle
 
 
 class SidebarButton(QPushButton):
@@ -878,6 +905,11 @@ class MainWindow(QMainWindow):
         self.env_table.horizontalHeader().setSectionResizeMode(7, QHeaderView.Fixed)
         self.env_table.setColumnWidth(7, 70)
         self.env_table.horizontalHeader().setStretchLastSection(False)
+        # Path column uses middle-elision so long Poetry/pipx paths stay readable:
+        # both the drive letter at the start and the env name at the end remain
+        # visible (full path is in the cell's tooltip).
+        self._path_elide_delegate = PathElideMiddleDelegate(self.env_table)
+        self.env_table.setItemDelegateForColumn(2, self._path_elide_delegate)
         self.env_table.setSelectionBehavior(QTableWidget.SelectRows)
         self.env_table.setSelectionMode(QTableWidget.SingleSelection)
         self.env_table.setAlternatingRowColors(True)
@@ -2701,7 +2733,7 @@ class MainWindow(QMainWindow):
         try:
             marker_data = {
                 "name": "pipx",
-                "env_type": "pipx",
+                "type": "pipx",
                 "created": _dt.now().strftime("%Y-%m-%d %H:%M"),
                 "python_version": f"{_sys.version_info.major}.{_sys.version_info.minor}.{_sys.version_info.micro}",
             }

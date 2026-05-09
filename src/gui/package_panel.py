@@ -3102,7 +3102,14 @@ $s.Save()
                 import json as _json
                 with open(marker) as f:
                     _m = _json.load(f)
-                self._current_env_type = _m.get("type", "system_tools")
+                # Backwards-compat: older pipx-tracker markers wrote the
+                # field as "env_type" instead of "type"; honour both so an
+                # existing on-disk marker keeps working without manual fix.
+                self._current_env_type = (
+                    _m.get("type")
+                    or _m.get("env_type")
+                    or "system_tools"
+                )
             except Exception:
                 self._current_env_type = "system_tools"
         else:
@@ -3431,7 +3438,13 @@ $s.Save()
                     import json as _json
                     with open(marker) as f:
                         _m = _json.load(f)
-                    self._current_env_type = _m.get("type", "system_tools")
+                    # Backwards-compat: see _set_venv comment above —
+                    # accept both "type" and the older "env_type" key.
+                    self._current_env_type = (
+                        _m.get("type")
+                        or _m.get("env_type")
+                        or "system_tools"
+                    )
                 except Exception:
                     self._current_env_type = "system_tools"
             else:
@@ -4161,29 +4174,38 @@ $s.Save()
             QMessageBox.warning(self, "Warning", "No environment selected.\nPlease select an environment first.")
             return
 
+        # Pipx envs have no central <env>/bin/python, so the pre-flight checks
+        # below (list_packages and `python --version`) raise FileNotFoundError
+        # and surface as "Install FAILED: [Errno 2] No such file or directory:
+        # '<pipx>/bin/python'" before _do_install / _do_pipx_install can run.
+        # Skip them for pipx; the install path itself (_do_pipx_install) is
+        # already pipx-aware and handles per-app isolation correctly.
+        _env_type = getattr(self, "_current_env_type", "venv")
+
         # Kurulu paketleri filtrele — sadece kurulu olmayanları kur
-        try:
-            installed = {p.name.lower() for p in self.pip_manager.list_packages()}
-            import re
-            not_installed = []
-            already_installed = []
-            for pkg in packages:
-                pkg_name = re.split(r'[><=!~;]', pkg)[0].lower().replace("-", "_")
-                pkg_name2 = pkg_name.replace("_", "-")
-                if pkg_name in installed or pkg_name2 in installed:
-                    already_installed.append(pkg)
-                else:
-                    not_installed.append(pkg)
-            if not not_installed:
-                QMessageBox.information(self, "Info", "All packages are already installed.")
-                return
-            packages = not_installed
-        except Exception:
-            pass  # Filtreleme başarısız olursa tüm paketlerle devam et
+        if _env_type != "pipx":
+            try:
+                installed = {p.name.lower() for p in self.pip_manager.list_packages()}
+                import re
+                not_installed = []
+                already_installed = []
+                for pkg in packages:
+                    pkg_name = re.split(r'[><=!~;]', pkg)[0].lower().replace("-", "_")
+                    pkg_name2 = pkg_name.replace("_", "-")
+                    if pkg_name in installed or pkg_name2 in installed:
+                        already_installed.append(pkg)
+                    else:
+                        not_installed.append(pkg)
+                if not not_installed:
+                    QMessageBox.information(self, "Info", "All packages are already installed.")
+                    return
+                packages = not_installed
+            except Exception:
+                pass  # Filtreleme başarısız olursa tüm paketlerle devam et
 
         # Check Python version — warn if old (some packages may not have pre-built wheels)
         py_warning = ""
-        if self.pip_manager:
+        if _env_type != "pipx" and self.pip_manager:
             try:
                 venv_key = str(self.pip_manager.venv_path)
                 env_py_version = self._launcher_py_version_cache.get(venv_key)
@@ -4290,6 +4312,14 @@ $s.Save()
                     else:
                         _pipx_exe2 = shutil.which("pipx")
                         cmd = [_pipx_exe2, "install", pkg] if _pipx_exe2 else [sys.executable, "-m", "pipx", "install", pkg]
+                    # --include-deps lets library packages (numpy, pandas,
+                    # flask, sqlalchemy, ...) install successfully. Without
+                    # it pipx refuses with "No apps associated with package
+                    # X" because pipx is built for CLI tools only. Pipx
+                    # itself documents this flag as the workaround. Apps of
+                    # dependent packages (e.g. numpy's f2py) are still
+                    # exposed which is harmless.
+                    cmd.append("--include-deps")
                     if _pipx_python:
                         cmd += ["--python", _pipx_python]
                     r = subprocess.run(
@@ -4300,6 +4330,18 @@ $s.Save()
                         installed.append(pkg)
                     else:
                         failed.append(pkg)
+                        # Surface pipx's own error so we can diagnose future
+                        # failures without re-running by hand. Truncated to
+                        # keep log readable.
+                        try:
+                            from src.utils.logger import get_logger as _gl
+                            _err = (r.stderr or r.stdout or "").strip()
+                            if _err:
+                                _gl("venvstudio.install").warning(
+                                    f"pipx install {pkg} failed (rc={r.returncode}): {_err[:400]}"
+                                )
+                        except Exception:
+                            pass
                 if failed:
                     return (False, f"pipx install failed for: {', '.join(failed)}")
                 return (True, f"pipx installed: {', '.join(installed)}")

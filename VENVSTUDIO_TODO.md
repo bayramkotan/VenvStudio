@@ -1,5 +1,15 @@
 # VENVSTUDIO_TODO.md
 
+## ✅ v1.4.92'de ÇÖZÜLEN BUG'LAR + DAVRANIŞ DEĞİŞİKLİĞİ
+
+- **Pipx Silme = Klasörü Tamamen Sil + Boş Kurulum (davranış değişikliği):** Eski B182 davranışı sadece marker dosyasını siliyordu, kullanıcı GUI'de "Delete" basıp 1.8 GB klasörün yerinde kalmasıyla şaşırıyordu. Yeni davranış: `_robust_rmtree(venv_path)` ile tüm `~/.local/share/pipx/` silinir, ardından `ensure_pipx_env()` ile boş bir pipx home kurulur. Confirm dialog metni güncellendi.
+- **Pipx Size = ~0 B Bug'ı:** `venv_manager.py::list_venvs_fast` pipx size hesaplaması `venvs/` only + symlink filter kullanıyordu — ama pipx symlink kullanır (`venvs/<pkg>/lib/.../site-packages/` `shared/`'a link). Çözüm: tüm `_pipx_home_path` (venvs + shared + py) symlink filter olmadan tara. `write_cache` çağrı sırası da düzeltildi (önce hesapla, sonra yaz). Aynı bloğun **duplicate kopyası** vardı, doğru sonucu eziyordu — silindi.
+- **Pipx Readd Sonrası Header Refresh Yapılmıyordu:** `_readd_empty_pipx_row` `Size` hücresine `"—"` yazıyordu, üst istatistik bandı `pipx • 1 env(s) • 199.8 MB` (eski değer) gösteriyordu. Fix: Size `"0.0 B"` (klasör silindi, gerçekten boş) + `_update_env_summary()` çağrısı (`hasattr` korumalı).
+
+**Detaylar:** Handoff v1.4.92 oturum + KESİN KURALLAR #14 alt-kurallar F/G/H.
+
+---
+
 ## ✅ v1.4.91'de ÇÖZÜLEN EK BUG'LAR (numara verilmemiş — buraya kayıt)
 
 Bu oturumda numarasız ama önemli bug'lar fix edildi. İleride benzer sorun çıkarsa buradan çözüm yolu bulunabilir:

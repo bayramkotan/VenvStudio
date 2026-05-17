@@ -2354,11 +2354,11 @@ class MainWindow(QMainWindow):
 
         if _env_type == "pipx":
             confirm_msg = (
-                f"Stop tracking the '{name}' pipx installation?\n\n"
-                f"This will remove the row from VenvStudio's environment list.\n\n"
-                f"⚠ Your installed pipx apps and pipx itself will NOT be removed.\n"
-                f"To uninstall a specific app, use the package panel "
-                f"or run: pipx uninstall <app>"
+                f"Delete the '{name}' pipx environment?\n\n"
+                f"⚠ This will permanently remove ALL pipx apps installed in "
+                f"this environment.\n\n"
+                f"After deletion an empty pipx environment will be re-created "
+                f"so you can install fresh apps."
             )
         else:
             confirm_msg = (
@@ -2806,8 +2806,11 @@ class MainWindow(QMainWindow):
             pkg_item.setFlags(pkg_item.flags() & ~_Qt.ItemIsEditable)
             self.env_table.setItem(row, 4, pkg_item)
 
-            # Column 5: Size — unknown, leave blank
-            size_item = QTableWidgetItem("—")
+            # Column 5: Size — directory was just wiped by delete_venv, so
+            # the fresh pipx home is empty (0 B). Reflect that in the cell
+            # instead of an inscrutable "—" so the user sees their delete
+            # actually freed the space.
+            size_item = QTableWidgetItem("0.0 B")
             size_item.setFlags(size_item.flags() & ~_Qt.ItemIsEditable)
             self.env_table.setItem(row, 5, size_item)
 
@@ -2817,6 +2820,16 @@ class MainWindow(QMainWindow):
             self.env_table.setItem(row, 6, created_item)
 
             self._log.info(f"pipx readd: row inserted at index {row}")
+
+            # Refresh the header summary line ("/home/... • N env(s) • X GB",
+            # "pipx • 1 env(s) • Y MB", "total • Z GB") so it reflects the
+            # post-delete state. Without this the header still shows the
+            # pre-delete pipx size until the next manual Refresh.
+            try:
+                if hasattr(self, "_update_env_summary"):
+                    self._update_env_summary()
+            except Exception as _se:
+                self._log.debug(f"pipx readd: summary refresh skipped: {_se}")
         except Exception as e:
             self._log.warning(f"pipx readd: table insert failed: {e}")
             # Last resort: just trigger a light refresh, no force

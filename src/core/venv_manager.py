@@ -622,36 +622,41 @@ class VenvManager:
         try:
             if callback:
                 callback(f"Deleting {name}...")
-            # B182 fix: for pipx, do NOT rmtree the whole pipx home — that
-            # would nuke pipx itself plus every app the user installed
-            # outside VenvStudio. Instead, remove only the marker file so
-            # the env disappears from our listing. The actual pipx apps
-            # are managed by `pipx uninstall <app>` which is done from
-            # the package panel, not here.
+            # Pipx delete (v1.4.92): wipe the whole pipx home and re-create
+            # a fresh empty marker. User expectation when deleting from the
+            # GUI is "remove everything", not "untrack only" — terminal users
+            # who want CLI-managed pipx should manage it via `pipx uninstall`
+            # outside VenvStudio anyway. Earlier B182 behaviour preserved
+            # disk contents which surprised users (folder still 1.8 GB after
+            # "delete"). After rmtree we call ensure_pipx_env() so the row
+            # comes back empty, ready for fresh installs.
             if env_type == "pipx":
-                marker = venv_path / ".venvstudio_env"
-                if marker.exists():
-                    try:
-                        marker.unlink()
-                        _log.info(f"delete_venv: removed pipx marker {marker}")
-                    except Exception as _me:
-                        _log.warning(f"delete_venv: could not remove pipx marker: {_me}")
-                # Also drop our cache entry for this pipx home so list_venvs_fast
-                # doesn't keep showing the row from cache
+                try:
+                    _robust_rmtree(venv_path)
+                    _log.info(f"delete_venv: removed pipx home {venv_path}")
+                except Exception as _re:
+                    _log.warning(f"delete_venv: rmtree pipx home failed: {_re}")
+                # Drop cache entry so listing doesn't show stale row
                 try:
                     self.invalidate_cache(venv_path)
                 except Exception:
                     pass
+                # Re-seed an empty pipx home with marker so the env row
+                # reappears clean (0 packages, 0 B) on the next refresh.
+                try:
+                    self.ensure_pipx_env()
+                except Exception as _ee:
+                    _log.warning(f"delete_venv: ensure_pipx_env after rmtree failed: {_ee}")
                 if callback:
-                    callback(f"Removed pipx tracking for {name}")
+                    callback(f"Deleted pipx home for {name}")
                 banner_success(
-                    f"pipx tracking removed for '{name}'",
+                    f"pipx environment '{name}' deleted",
                     details=[
-                        "pipx itself and your installed apps were NOT removed.",
-                        "To uninstall a specific app, use `pipx uninstall <app>`.",
+                        f"Removed: {venv_path}",
+                        "All previously installed pipx apps were removed.",
                     ],
                 )
-                return True, f"pipx tracking for '{name}' removed (pipx itself untouched)"
+                return True, f"Environment '{name}' deleted successfully"
             _robust_rmtree(venv_path)
             # For poetry: also delete the project marker dir in base_dir if different
             if env_type == "poetry" and env_path:
@@ -784,47 +789,43 @@ class VenvManager:
                                 _info.package_count = len(_lines)
                         except Exception:
                             _info.package_count = 0
-                        self.write_cache(_pipx_home_path, _info.python_version, _info.package_count, _info.size or "")
-                    # Size: scan pipx venvs directory
+                        # Size has to be computed BEFORE write_cache below,
+                        # otherwise size=N/A gets cached and the Size column
+                        # in the env table shows "N/A" forever.
+                    # Size: scan the full pipx home (venvs + shared + py).
+                    # Pipx symlinks site-packages from venvs/<pkg>/lib/.../
+                    # into shared/, so scanning only venvs/ with islink
+                    # filtering yields ~0 B even when ~/.local/share/pipx
+                    # is hundreds of MB. We walk the whole home dir and
+                    # count regular files; this matches `du -sh` closely
+                    # enough for the env table.
                     try:
-                        _venvs_dir = _pipx_home_path / "venvs"
-                        if _venvs_dir.exists():
-                            _total = 0
-                            for _dp, _dns, _fns in os.walk(str(_venvs_dir)):
+                        _total = 0
+                        if _pipx_home_path.exists():
+                            for _dp, _dns, _fns in os.walk(str(_pipx_home_path)):
                                 for _fn in _fns:
                                     _fp = os.path.join(_dp, _fn)
-                                    if not os.path.islink(_fp):
+                                    try:
                                         _total += os.path.getsize(_fp)
-                            # Format size
-                            for _unit in ["B", "KB", "MB", "GB"]:
-                                if _total < 1024:
-                                    _info.size = f"{_total:.1f} {_unit}"
-                                    break
-                                _total /= 1024
-                            else:
-                                _info.size = f"{_total:.1f} TB"
+                                    except OSError:
+                                        pass
+                        for _unit in ["B", "KB", "MB", "GB"]:
+                            if _total < 1024:
+                                _info.size = f"{_total:.1f} {_unit}"
+                                break
+                            _total /= 1024
+                        else:
+                            _info.size = f"{_total:.1f} TB"
                     except Exception:
                         pass
-                    # Size: scan pipx venvs directory
-                    _venvs_dir = _pipx_home_path / "venvs"
-                    if _venvs_dir.exists():
-                        _total = 0
-                        for _dp, _dns, _fns in os.walk(str(_venvs_dir)):
-                            for _fn in _fns:
-                                _fp = os.path.join(_dp, _fn)
-                                try:
-                                    if not os.path.islink(_fp):
-                                        _total += os.path.getsize(_fp)
-                                except OSError:
-                                    pass
-                        _sz = _total
-                        for _unit in ["B", "KB", "MB", "GB"]:
-                            if _sz < 1024:
-                                _info.size = f"{_sz:.1f} {_unit}"
-                                break
-                            _sz /= 1024
-                        else:
-                            _info.size = f"{_sz:.1f} TB"
+                    # Now that size is known, persist the cache entry. This
+                    # write was previously above (before size was computed)
+                    # which made every pipx row stuck on "N/A" in the Size
+                    # column until a manual refresh forced recomputation.
+                    try:
+                        self.write_cache(_pipx_home_path, _info.python_version, _info.package_count, _info.size or "")
+                    except Exception:
+                        pass
                     venvs.append(_info)
         except Exception:
             import traceback; traceback.print_exc()

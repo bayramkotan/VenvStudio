@@ -1,5 +1,19 @@
 # VENVSTUDIO_TODO.md
 
+## ✅ v1.4.94'te ÇÖZÜLEN BUG'LAR (Settings > Python Versions > Download Python)
+
+- **python.org Windows MSI/EXE artık sessizce kuruluyor:** `msiexec /qn` + per-user flags (UAC yok). v1.4.64'te eklenen "manuel kurulum yap" placeholder davranışı silindi.
+- **Bozuk install_dir kalıntısı:** `install_dir.exists()` kontrolü yetersizdi — bozuk EXE kalıntısı duruyorsa "already installed" yalanı çıkıyordu. Artık `get_python_exe(install_dir)` ile içerde gerçek python varlığı doğrulanıyor, yoksa wipe + retry.
+- **PowerShell BOM:** `Out-File -Encoding utf8` Windows'ta BOM prepend ediyordu, `startswith("OK")` False döndürüyordu → System Install başarılı olsa bile "System install failed: OK" hatası çıkıyordu. Fix: `encoding='utf-8-sig'` (BOM otomatik kırp).
+- **`pip_exe` NameError:** Set System Default fonksiyonunda `pip_exe` kullanılıyor ama hiç tanımlanmamıştı (cross-platform tanım eklendi).
+
+**Detaylar:** Handoff v1.4.94 oturum.
+
+### ⚠️ Açık Konu (gelecek versiyon)
+- python.org indirilebilir versiyonlar listesi **"0 MB"** gösteriyor. python.org HTML scrape ettiği için size yok. HEAD request veya release notes parse ile çekilebilir.
+
+---
+
 ## ✅ v1.4.92'de ÇÖZÜLEN BUG'LAR + DAVRANIŞ DEĞİŞİKLİĞİ
 
 - **Pipx Silme = Klasörü Tamamen Sil + Boş Kurulum (davranış değişikliği):** Eski B182 davranışı sadece marker dosyasını siliyordu, kullanıcı GUI'de "Delete" basıp 1.8 GB klasörün yerinde kalmasıyla şaşırıyordu. Yeni davranış: `_robust_rmtree(venv_path)` ile tüm `~/.local/share/pipx/` silinir, ardından `ensure_pipx_env()` ile boş bir pipx home kurulur. Confirm dialog metni güncellendi.

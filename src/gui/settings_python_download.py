@@ -513,7 +513,11 @@ try {{
             time.sleep(1)
 
             if os.path.exists(result_file):
-                with open(result_file, 'r', encoding='utf-8') as f:
+                # PowerShell's Out-File -Encoding utf8 prepends a BOM (\ufeff)
+                # on Windows, which a plain utf-8 read keeps in the string and
+                # makes the "OK" check fail even when the install succeeded.
+                # Using utf-8-sig auto-strips it.
+                with open(result_file, 'r', encoding='utf-8-sig') as f:
                     result_text = f.read().strip()
                 if result_text.startswith("OK"):
                     shutil.rmtree(str(source), ignore_errors=True)

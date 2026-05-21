@@ -448,10 +448,20 @@ def download_python(version_info: dict, progress_callback=None) -> Path:
 
     install_dir = get_pythons_dir() / f"cpython-{version}"
 
+    # Only short-circuit if the directory has a working python — earlier
+    # broken downloads (e.g. an MSI/EXE that we no longer support, or a
+    # partial extract) would leave the directory in place and previously
+    # caused "already installed" to lie about the install state.
     if install_dir.exists():
+        existing_exe = get_python_exe(install_dir)
+        if existing_exe and existing_exe.exists():
+            if progress_callback:
+                progress_callback(f"Python {version} already installed at {install_dir}")
+            return install_dir
+        # Stale/broken install — wipe so the fresh download can write here.
         if progress_callback:
-            progress_callback(f"Python {version} already installed at {install_dir}")
-        return install_dir
+            progress_callback(f"Removing stale install at {install_dir}...")
+        shutil.rmtree(str(install_dir), ignore_errors=True)
 
     if progress_callback:
         size_mb = total_size / (1024 * 1024) if total_size else 0
@@ -524,19 +534,68 @@ def download_python(version_info: dict, progress_callback=None) -> Path:
         elif fn_lower.endswith(".zip"):
             with zipfile.ZipFile(tmp_file, 'r') as z:
                 z.extractall(str(install_dir))
-        elif fn_lower.endswith((".exe", ".msi")):
-            # python.org Windows: we don't silently install the MSI;
-            # move the installer into the install_dir and let the user run it.
-            target = install_dir / filename
-            shutil.move(tmp_file, str(target))
-            tmp_file = None  # don't delete it via finally
+        elif fn_lower.endswith(".msi"):
+            # python.org Windows MSI — silent per-user install into our
+            # install_dir. Uses msiexec quiet mode (/qn) with TargetDir +
+            # user-mode properties so no UAC prompt is shown.
+            #
+            # MSI properties (python.org installer):
+            #   TargetDir        — where to install
+            #   InstallAllUsers  — 0 = per-user (no UAC)
+            #   Include_launcher — 0 = skip global py.exe (no UAC)
+            #   PrependPath      — 0 = don't touch %PATH%
+            #   Shortcuts        — 0 = no Start Menu entries
+            #   Include_test     — 0 = skip test suite (smaller)
             if progress_callback:
-                progress_callback(
-                    f"Downloaded installer → {target}\n"
-                    f"Windows: run the installer manually to complete installation."
+                progress_callback(f"Installing Python {version} silently...")
+            msi_log = install_dir / "install.log"
+            msi_args = [
+                "msiexec", "/i", tmp_file,
+                "/qn", "/norestart",
+                f"TargetDir={install_dir}",
+                "InstallAllUsers=0",
+                "Include_launcher=0",
+                "PrependPath=0",
+                "Shortcuts=0",
+                "Include_test=0",
+                "/L*v", str(msi_log),
+            ]
+            result = subprocess.run(
+                msi_args,
+                capture_output=True, text=True, timeout=600,
+                **subprocess_args()
+            )
+            if result.returncode != 0:
+                # MSI exit 1602 = user cancel, 1603 = fatal; surface the log path.
+                raise RuntimeError(
+                    f"MSI install failed (exit={result.returncode}). "
+                    f"See log: {msi_log}\n{result.stderr or result.stdout}"
                 )
-            # Early return — nothing else to do for MSI/EXE from python.org
-            return install_dir
+        elif fn_lower.endswith(".exe"):
+            # python.org Windows EXE installer — same silent flags as MSI,
+            # passed through the EXE's command line.
+            if progress_callback:
+                progress_callback(f"Installing Python {version} silently...")
+            exe_args = [
+                tmp_file,
+                "/quiet",
+                f"TargetDir={install_dir}",
+                "InstallAllUsers=0",
+                "Include_launcher=0",
+                "PrependPath=0",
+                "Shortcuts=0",
+                "Include_test=0",
+            ]
+            result = subprocess.run(
+                exe_args,
+                capture_output=True, text=True, timeout=600,
+                **subprocess_args()
+            )
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"Installer failed (exit={result.returncode}).\n"
+                    f"{result.stderr or result.stdout}"
+                )
         else:
             raise RuntimeError(f"Unknown archive format: {filename}")
 

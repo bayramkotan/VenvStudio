@@ -564,6 +564,12 @@ class PythonMixin:
 
         python_dir = os.path.normpath(os.path.dirname(python_path))
         scripts_dir = os.path.join(python_dir, "Scripts")
+        # pip executable lives in Scripts/ on Windows and bin/ on POSIX.
+        # Used further below to surface a warning if pip is missing.
+        if os.name == "nt":
+            pip_exe = os.path.join(scripts_dir, "pip.exe")
+        else:
+            pip_exe = os.path.join(python_dir, "bin", "pip")
 
         scope_label = "User" if scope == "user" else "System"
 

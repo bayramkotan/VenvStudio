@@ -1,6 +1,14 @@
 # VENVSTUDIO_TODO.md
 
-## ✅ v1.4.94'te ÇÖZÜLEN BUG'LAR (Settings > Python Versions > Download Python)
+## ✅ v1.4.96'te ÇÖZÜLEN BUG
+
+- **B187 — PkgCache çapraz kirlenmesi (async race):** `pip list` worker'ı env A için bittiğinde, kullanıcı zaten env B'ye geçmişse `_save_pkg_cache` yeni env'in cache key'i altına eski env'in paketlerini yazıyordu. Sonuç: ml env'de "111 paket" denilirken Packages sekmesi 38 paket gösteriyor, Data Science Starter "Install (5 packages)" butonuna basınca "All packages are already installed" diyaloğu çıkıyordu (çelişki). Fix: `PkgLoader.done` sinyaline venv_path snapshot eklendi, `_on_packages_loaded` mevcut env ile karşılaştırıp uyuşmazsa stale sonucu discard ediyor.
+
+**Detaylar:** Handoff v1.4.96 oturum.
+
+---
+
+## ✅ v1.4.95'te ÇÖZÜLEN BUG'LAR (Settings > Python Versions > Download Python)
 
 - **python.org Windows MSI/EXE artık sessizce kuruluyor:** `msiexec /qn` + per-user flags (UAC yok). v1.4.64'te eklenen "manuel kurulum yap" placeholder davranışı silindi.
 - **Bozuk install_dir kalıntısı:** `install_dir.exists()` kontrolü yetersizdi — bozuk EXE kalıntısı duruyorsa "already installed" yalanı çıkıyordu. Artık `get_python_exe(install_dir)` ile içerde gerçek python varlığı doğrulanıyor, yoksa wipe + retry.

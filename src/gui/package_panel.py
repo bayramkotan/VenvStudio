@@ -3721,7 +3721,8 @@ $s.Save()
                         self.name = name
                         self.version = version
                 pkgs = [_Pkg(p["name"], p["version"]) for p in cached]
-                self._on_packages_loaded(pkgs)
+                _hit_path = str(self.pip_manager.venv_path) if self.pip_manager.venv_path else ""
+                self._on_packages_loaded(pkgs, _hit_path)
                 return
             try:
                 from src.utils.logger import get_logger
@@ -3760,13 +3761,22 @@ $s.Save()
 
         # Use QThread for background loading
         class PkgLoader(QThread):
-            done = Signal(list)
+            # B187: emit the venv_path snapshot alongside the package list
+            # so the receiver can verify the result still belongs to the
+            # currently-selected env. Without this, a slow `pip list` for
+            # env A finishes after the user switched to env B and the
+            # callback writes A's packages under B's cache key, causing the
+            # preset badges and package count to lie about what is really
+            # installed. The path is a plain string to keep the Qt signal
+            # signature simple and avoid pickling Path objects.
+            done = Signal(list, str)
             def __init__(self, pip_mgr, env_type, venv_path, parent=None):
                 super().__init__(parent)
                 self.pip_mgr = pip_mgr
                 self.env_type = env_type
                 self.venv_path = venv_path
             def run(self):
+                _emit_path = str(self.venv_path) if self.venv_path else ""
                 try:
                     if self.env_type == "conda" and self.venv_path:
                         from src.core.micromamba_installer import list_conda_packages
@@ -3806,9 +3816,9 @@ $s.Save()
                             pass
                     else:
                         pkgs = self.pip_mgr.list_packages()
-                    self.done.emit(pkgs)
+                    self.done.emit(pkgs, _emit_path)
                 except Exception:
-                    self.done.emit([])
+                    self.done.emit([], _emit_path)
 
         self._pkg_loader = PkgLoader(pip_mgr_snapshot, _env_type, _venv_path, parent=self)
         self._pkg_loader.done.connect(self._on_packages_loaded)
@@ -3831,17 +3841,45 @@ $s.Save()
                 lookup[name.lower().replace("_", "-")] = (desc, cat_name)
         return lookup
 
-    def _on_packages_loaded(self, packages):
-        """Called when async package loading finishes."""
+    def _on_packages_loaded(self, packages, loaded_for_path: str = ""):
+        """Called when async package loading finishes.
+
+        ``loaded_for_path`` is the venv path the background worker was
+        scanning when it emitted. If the user has switched envs since the
+        scan started, that snapshot won't match the currently-selected
+        pip_manager.venv_path — in that case we **must** discard the result
+        instead of caching it. Otherwise env A's packages get written under
+        env B's cache key, which silently breaks the preset badges, the
+        package count header, and any other code that trusts the cache.
+        """
         try:
             from src.utils.logger import get_logger
+            _current_path = ""
+            if self.pip_manager and getattr(self.pip_manager, "venv_path", None):
+                _current_path = str(self.pip_manager.venv_path)
             get_logger("venvstudio.pkg_cache").debug(
-                f"[PkgCache] _on_packages_loaded called count={len(packages) if packages else 0}"
+                f"[PkgCache] _on_packages_loaded called count={len(packages) if packages else 0} "
+                f"loaded_for={loaded_for_path!r} current={_current_path!r}"
             )
         except Exception:
             pass
         if not self.pip_manager:
             return
+
+        # Stale-result check (B187 race fix): if the worker emitted for a
+        # different env than the one currently selected, drop the result.
+        # Comparing string forms because the worker captures a snapshot.
+        try:
+            _current = str(self.pip_manager.venv_path) if self.pip_manager.venv_path else ""
+            if loaded_for_path and _current and loaded_for_path != _current:
+                from src.utils.logger import get_logger
+                get_logger("venvstudio.pkg_cache").info(
+                    f"[PkgCache] discarding stale result: was for {loaded_for_path!r}, "
+                    f"now on {_current!r}"
+                )
+                return
+        except Exception:
+            pass
 
         # Save to cache
         self._save_pkg_cache(packages)

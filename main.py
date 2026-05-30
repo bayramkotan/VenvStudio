@@ -413,6 +413,41 @@ def main():
         logger = setup_logging()
         logger.info(f"Starting {APP_NAME} v{APP_VERSION}")
 
+        # ── Version-based cache invalidation (B187 follow-up) ──
+        # On upgrade, drop env_cache.json so old buggy entries (e.g. from the
+        # pre-v1.4.96 pip-list race) don't survive into the new version.
+        try:
+            from src.utils.platform_utils import get_config_dir
+            _cfg_dir = get_config_dir()
+            _marker = _cfg_dir / ".venvstudio_last_version"
+            _cache_file = _cfg_dir / "env_cache.json"
+            _prev = ""
+            if _marker.exists():
+                try:
+                    _prev = _marker.read_text(encoding="utf-8").strip()
+                except Exception:
+                    _prev = ""
+            if _prev != APP_VERSION:
+                if _cache_file.exists():
+                    try:
+                        _cache_file.unlink()
+                        logger.info(
+                            f"Version change detected ({_prev or '<none>'} -> {APP_VERSION}) "
+                            f"- removed stale env cache at {_cache_file}"
+                        )
+                    except Exception as _ce:
+                        logger.warning(f"Could not remove stale cache: {_ce}")
+                try:
+                    _cfg_dir.mkdir(parents=True, exist_ok=True)
+                    _marker.write_text(APP_VERSION, encoding="utf-8")
+                except Exception as _ve:
+                    logger.warning(f"Could not write version marker: {_ve}")
+        except Exception as _e:
+            try:
+                logger.warning(f"Version-based cache invalidation skipped: {_e}")
+            except Exception:
+                pass
+
         # ── Qt message handler → route to logger ──
         qt_log = get_logger("venvstudio.qt")
 

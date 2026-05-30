@@ -54,6 +54,41 @@ def main():
         log = setup_logging()
         log.info(f"Starting {APP_NAME}")
 
+        # ── Version-based cache invalidation (B187 follow-up) ──
+        # On version upgrade, drop the env cache so old buggy entries don't
+        # survive into the new version. See src_main.py for the rationale.
+        try:
+            from src.utils.platform_utils import get_config_dir
+            _cfg_dir = get_config_dir()
+            _version_marker = _cfg_dir / ".venvstudio_last_version"
+            _cache_file = _cfg_dir / "env_cache.json"
+            _prev_version = ""
+            if _version_marker.exists():
+                try:
+                    _prev_version = _version_marker.read_text(encoding="utf-8").strip()
+                except Exception:
+                    _prev_version = ""
+            if _prev_version != APP_VERSION:
+                if _cache_file.exists():
+                    try:
+                        _cache_file.unlink()
+                        log.info(
+                            f"Version change detected ({_prev_version or '<none>'} → {APP_VERSION}) — "
+                            f"removed stale cache at {_cache_file}"
+                        )
+                    except Exception as _ce:
+                        log.warning(f"Could not remove stale cache: {_ce}")
+                try:
+                    _cfg_dir.mkdir(parents=True, exist_ok=True)
+                    _version_marker.write_text(APP_VERSION, encoding="utf-8")
+                except Exception as _ve:
+                    log.warning(f"Could not write version marker: {_ve}")
+        except Exception as _e:
+            try:
+                log.warning(f"Version-based cache invalidation skipped: {_e}")
+            except Exception:
+                pass
+
         app = QApplication(sys.argv)
         app.setApplicationName(APP_NAME)
         app.setApplicationVersion(APP_VERSION)

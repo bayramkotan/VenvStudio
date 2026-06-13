@@ -1,14 +1,20 @@
 # VENVSTUDIO_TODO.md
 
-## ✅ v1.4.96'te ÇÖZÜLEN BUG
+## ✅ v1.4.98'de ÇÖZÜLEN (Windows PowerShell 7 + Themes)
 
-- **B187 — PkgCache çapraz kirlenmesi (async race):** `pip list` worker'ı env A için bittiğinde, kullanıcı zaten env B'ye geçmişse `_save_pkg_cache` yeni env'in cache key'i altına eski env'in paketlerini yazıyordu. Sonuç: ml env'de "111 paket" denilirken Packages sekmesi 38 paket gösteriyor, Data Science Starter "Install (5 packages)" butonuna basınca "All packages are already installed" diyaloğu çıkıyordu (çelişki). Fix: `PkgLoader.done` sinyaline venv_path snapshot eklendi, `_on_packages_loaded` mevcut env ile karşılaştırıp uyuşmazsa stale sonucu discard ediyor.
+- **PowerShell 7+ (pwsh) terminal listesine eklendi:** Windows combo'da `shutil.which("pwsh")` ile sürümden bağımsız algılama. `open_terminal_at` pwsh terminal_type desteği. "PowerShell" → "Windows PowerShell" etiketi (5.1 vs 7+ ayrımı).
+- **"CLI/TUI Operations" → "🎨 Themes":** GroupBox başlığı değişti.
 
-**Detaylar:** Handoff v1.4.96 oturum.
+## 🆕 AÇIK İŞLER — Terminal Tema & Görünüm
+
+- **[Yeni özellik] Terminal açıldığında TUI + temasını göster:** Üst bilgi satırında font ve emoji font gösteriliyor; yanına varsa aktif TUI (oh-my-posh / starship) ve seçili temasını da ekle.
+- **[Yeni özellik] Settings'teki seçili tema neyse onu göster:** Görünen tema, Settings altında kayıtlı/aktif tema ile tutarlı olmalı.
+- **[Bug — Linux] `sudo: a terminal is required to read the password`:** `_detect_terminals` (settings_appearance.py) GUI'den `sudo apt-get install` doğrudan çağrılıyor; askpass yok → patlıyor. pkexec'e düş veya `SUDO_ASKPASS`/`-S` ile çöz.
+- **[Bug — Windows] oh-my-posh kurulumu eski Windows PowerShell profiline yazıyor:** pwsh 7 profiline (`~/Documents/PowerShell/Microsoft.PowerShell_profile.ps1`) yazmalı. pwsh artık algılandığı için çözülebilir.
 
 ---
 
-## ✅ v1.4.95'te ÇÖZÜLEN BUG'LAR (Settings > Python Versions > Download Python)
+## ✅ v1.4.94'te ÇÖZÜLEN BUG'LAR (Settings > Python Versions > Download Python)
 
 - **python.org Windows MSI/EXE artık sessizce kuruluyor:** `msiexec /qn` + per-user flags (UAC yok). v1.4.64'te eklenen "manuel kurulum yap" placeholder davranışı silindi.
 - **Bozuk install_dir kalıntısı:** `install_dir.exists()` kontrolü yetersizdi — bozuk EXE kalıntısı duruyorsa "already installed" yalanı çıkıyordu. Artık `get_python_exe(install_dir)` ile içerde gerçek python varlığı doğrulanıyor, yoksa wipe + retry.

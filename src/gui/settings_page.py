@@ -748,7 +748,7 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
 
     def _setup_cliops_section(self, layout):
         # ── CLI/TUI OPERATIONS ──────────────────────────────────────────────────
-        ops_group = QGroupBox("🖥️ CLI/TUI Operations")
+        ops_group = QGroupBox("🎨 Themes")
         ops_layout = QVBoxLayout()
         ops_layout.setSpacing(10)
 
@@ -764,10 +764,17 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         self.terminal_combo.setEnabled(False)
         _platform = get_platform()
         if _platform == "windows":
-            self.terminal_combo.addItem("PowerShell", "powershell")
+            import os as _os2, shutil as _sh2
+            # Windows PowerShell (5.1, ships with Windows) — always present
+            self.terminal_combo.addItem("Windows PowerShell", "powershell")
+            # PowerShell 7+ (pwsh.exe) — cross-version: detect by executable,
+            # not a hardcoded version, so pwsh 7/8/9 all work. Installed via
+            # MSI/winget/store; lives on PATH as pwsh.exe.
+            _pwsh = _sh2.which("pwsh") or _sh2.which("pwsh.exe")
+            if _pwsh:
+                self.terminal_combo.addItem("PowerShell 7+", "pwsh")
             self.terminal_combo.addItem("CMD", "cmd")
             self.terminal_combo.addItem("Windows Terminal", "wt")
-            import os as _os2, shutil as _sh2
             _git_paths = [
                 r"C:/Program Files/Git/bin/bash.exe",
                 r"C:/Program Files (x86)/Git/bin/bash.exe",

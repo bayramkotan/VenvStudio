@@ -480,6 +480,11 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                 )
                 return (f'start "" "{git_bash}" --login -c '
                         f'"cd \'{path}\' && {bash_activate} && exec bash"')
+            elif terminal_type == "pwsh":
+                # PowerShell 7+ — same activation hook as Windows PowerShell,
+                # just launched through pwsh instead of powershell.
+                return (f'start pwsh -NoExit -Command '
+                        f'"Set-Location \'{path}\'; {ps_activate}"')
             elif terminal_type == "powershell":
                 return (f'start powershell -NoExit -Command '
                         f'"Set-Location \'{path}\'; {ps_activate}"')
@@ -491,6 +496,12 @@ def open_terminal_at(path: Path, terminal_type: str = "",
             activate_bat = path / "Scripts" / "activate.bat"
             activate_ps1 = path / "Scripts" / "Activate.ps1"
             if terminal_type == "cmd":
+                return f'start cmd /k "cd /d {path} && {activate_bat}"'
+            elif terminal_type == "pwsh":
+                # PowerShell 7+ via pwsh.exe; activate through Activate.ps1
+                if activate_ps1.exists():
+                    return (f'start pwsh -NoExit -Command '
+                            f'"Set-Location \'{path}\'; & \'{activate_ps1}\'"')
                 return f'start cmd /k "cd /d {path} && {activate_bat}"'
             elif terminal_type == "wt":
                 if activate_ps1.exists():

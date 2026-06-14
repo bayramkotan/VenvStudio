@@ -224,6 +224,31 @@ jobs:
 
           ls -la *.AppImage 2>/dev/null || echo "No AppImage created"
 
+      - name: Smoke-test AppImage (headless)
+        run: |
+          set +e
+          sudo apt-get install -y xvfb >/dev/null 2>&1
+          APP=$(ls VenvStudio*.AppImage 2>/dev/null | head -1)
+          if [ -z "$APP" ]; then
+            echo "::error::No AppImage to test"
+            exit 0
+          fi
+          chmod +x "$APP"
+          echo "=== Testing $APP under xvfb (offscreen) ==="
+          # Run with a virtual X server + faulthandler. If it hangs, timeout
+          # sends SIGABRT so Python dumps the stack showing exactly where it
+          # froze. We don't fail the build on hang — this is diagnostic only.
+          PYTHONFAULTHANDLER=1 xvfb-run -a timeout -s SIGABRT 40 "./$APP" > /tmp/appimage-test.log 2>&1
+          CODE=$?
+          echo "=== exit code: $CODE ==="
+          echo "=== last 60 lines of output ==="
+          tail -60 /tmp/appimage-test.log || true
+          if grep -q "MainWindow.__init__ complete\|entering event loop" /tmp/appimage-test.log; then
+            echo "✅ AppImage reached event loop — startup OK"
+          else
+            echo "::warning::AppImage did not reach event loop within 40s (see log above)"
+          fi
+
       - uses: actions/upload-artifact@v4
         with:
           name: VenvStudio-Linux-AppImage

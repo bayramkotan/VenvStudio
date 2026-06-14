@@ -3,7 +3,7 @@ VenvStudio - Constants and Popular Package Catalog
 """
 
 APP_NAME = "VenvStudio"
-APP_VERSION = "1.5.1"
+APP_VERSION = "1.5.2"
 
 # ─── Shared Package Cache ─────────────────────────────────────────────────────
 # Default path for pip/uv shared download cache.

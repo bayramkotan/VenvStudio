@@ -89,7 +89,17 @@ def _check_and_install_linux_deps(app, config, logger):
     if config.get("linux_deps_checked", False):
         return
 
-    python_exe = shutil.which("python3") or shutil.which("python") or sys.executable
+    # Find a REAL python interpreter for the `-m pip` / `-m venv` probes
+    # below. We must never fall back to sys.executable in a frozen build:
+    # there sys.executable is the VenvStudio binary, so `[sys.executable,
+    # "-m", "pip", ...]` re-launches the GUI instead of running pip — the
+    # same self-replicating relaunch that froze startup. If no system python
+    # is found while frozen, skip the probe entirely rather than risk it.
+    python_exe = shutil.which("python3") or shutil.which("python")
+    if not python_exe:
+        if getattr(sys, "frozen", False):
+            return
+        python_exe = sys.executable
     missing = []
 
     # Check pip
@@ -335,6 +345,20 @@ def _check_qt_xcb_deps():
     import subprocess, shutil
 
     if sys.platform != "linux":
+        return
+
+    # ── CRITICAL: never run in a frozen build ──
+    # This function probes Qt by launching `sys.executable -c "<python>"`.
+    # In a PyInstaller/AppImage build sys.executable is the VenvStudio
+    # binary itself (NOT a python interpreter), so passing "-c <code>" does
+    # not run that snippet — it just re-launches the whole GUI, which
+    # re-enters main(), which calls this probe again... a self-replicating
+    # fork bomb. (Observed: dozens of
+    #   /tmp/.mount_*/usr/bin/VenvStudio -c "from PySide6.QtWidgets import ..."
+    # processes spawning every second until the machine froze.) The AppImage
+    # already bundles its own Qt + xcb plugins, so this host-dependency probe
+    # is meaningless when frozen. Skip it entirely.
+    if getattr(sys, "frozen", False):
         return
 
     # Quick test: can Qt load xcb platform?

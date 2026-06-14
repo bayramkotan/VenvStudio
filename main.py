@@ -12,8 +12,45 @@ import os
 import traceback
 import multiprocessing
 
-# PyInstaller freeze support — Windows'ta subprocess yeni pencere açmasını engeller
+# ── Frozen-mode multiprocessing safety (fixes AppImage startup hang) ──
+# In a PyInstaller --onedir/AppImage build, sys.executable is VenvStudio
+# itself, not a python interpreter. With the default Linux "fork" start
+# method, any library that touches multiprocessing (or its resource_tracker
+# / semaphore helpers) can cause the frozen executable to re-launch itself.
+# Each relaunch re-enters main(), opens another QLocalSocket to the single-
+# instance server, spawns more Qt threads, and the whole thing snowballs into
+# dozens of processes busy-looping on read() — which is exactly the hang we
+# saw (90+ PIDs, 40k+ read() syscalls) before the window ever appears.
+#
+# freeze_support() MUST run before anything else so a child process started
+# by multiprocessing exits immediately instead of falling through to our GUI
+# main(). Forcing the "spawn" start method makes child processes start clean
+# (re-import, hit freeze_support, exit) instead of fork-cloning all the live
+# Qt/thread state. Together these stop the relaunch storm.
 multiprocessing.freeze_support()
+try:
+    if multiprocessing.get_start_method(allow_none=True) != "spawn":
+        multiprocessing.set_start_method("spawn", force=True)
+except RuntimeError:
+    # Start method already fixed by something else — safe to ignore.
+    pass
+
+# Hard guard: if this interpreter was launched *as* a multiprocessing child
+# (resource tracker, semaphore tracker, spawned worker, etc.), bail out now
+# so we never build a second GUI / single-instance socket from a child.
+if getattr(sys, "frozen", False):
+    _mp_child_markers = (
+        "--multiprocessing-fork",
+        "tracker",            # resource_tracker / semaphore_tracker
+        "from multiprocessing",
+    )
+    _argv_blob = " ".join(sys.argv[1:])
+    if any(_m in _argv_blob for _m in _mp_child_markers):
+        # Let multiprocessing's own machinery handle it, then stop.
+        try:
+            multiprocessing.freeze_support()
+        finally:
+            sys.exit(0)
 
 # PyInstaller ile paketlendiğinde doğru path'i bul
 if getattr(sys, 'frozen', False):

@@ -227,26 +227,50 @@ jobs:
       - name: Smoke-test AppImage (headless)
         run: |
           set +e
-          sudo apt-get install -y xvfb >/dev/null 2>&1
+          sudo apt-get install -y xvfb strace >/dev/null 2>&1
           APP=$(ls VenvStudio*.AppImage 2>/dev/null | head -1)
           if [ -z "$APP" ]; then
             echo "::error::No AppImage to test"
             exit 0
           fi
           chmod +x "$APP"
-          echo "=== Testing $APP under xvfb (offscreen) ==="
-          # Run with a virtual X server + faulthandler. If it hangs, timeout
-          # sends SIGABRT so Python dumps the stack showing exactly where it
-          # froze. We don't fail the build on hang — this is diagnostic only.
-          PYTHONFAULTHANDLER=1 xvfb-run -a timeout -s SIGABRT 40 "./$APP" > /tmp/appimage-test.log 2>&1
-          CODE=$?
-          echo "=== exit code: $CODE ==="
-          echo "=== last 60 lines of output ==="
-          tail -60 /tmp/appimage-test.log || true
-          if grep -q "MainWindow.__init__ complete\|entering event loop" /tmp/appimage-test.log; then
-            echo "✅ AppImage reached event loop — startup OK"
+
+          echo "==================== TEST 1: AppImage direct (xvfb) ===================="
+          PYTHONFAULTHANDLER=1 xvfb-run -a timeout -s SIGABRT 30 "./$APP" > /tmp/t1.log 2>&1
+          echo "exit=$?"
+          tail -40 /tmp/t1.log || true
+
+          echo "==================== Extract + inspect ===================="
+          "./$APP" --appimage-extract >/dev/null 2>&1
+          echo "--- fonts.conf present? ---"
+          find squashfs-root -name fonts.conf
+          echo "--- main binary ldd (missing libs?) ---"
+          ldd squashfs-root/usr/bin/VenvStudio 2>&1 | grep -i "not found" || echo "(no missing libs reported)"
+
+          echo "==================== TEST 2: direct binary, xvfb, faulthandler ===================="
+          export APPDIR="$PWD/squashfs-root"
+          export FONTCONFIG_FILE="$APPDIR/usr/bin/_internal/etc/fonts/fonts.conf"
+          export QT_QPA_PLATFORM=xcb
+          export QT_DEBUG_PLUGINS=1
+          PYTHONFAULTHANDLER=1 xvfb-run -a timeout -s SIGABRT 30 \
+            ./squashfs-root/usr/bin/VenvStudio > /tmp/t2.log 2>&1
+          echo "exit=$?"
+          echo "--- t2 tail (non-fontconfig) ---"
+          grep -av "Fontconfig" /tmp/t2.log | tail -50 || true
+
+          echo "==================== TEST 3: strace last syscalls ===================="
+          # Capture where it blocks at the syscall level (futex/read/poll = deadlock)
+          xvfb-run -a timeout -s SIGKILL 20 \
+            strace -f -e trace=network,desc,futex -o /tmp/strace.log \
+            ./squashfs-root/usr/bin/VenvStudio > /dev/null 2>&1
+          echo "--- last 30 strace lines ---"
+          tail -30 /tmp/strace.log 2>/dev/null || echo "(no strace output)"
+
+          echo "==================== verdict ===================="
+          if grep -q "MainWindow.__init__ complete\|entering event loop" /tmp/t1.log /tmp/t2.log; then
+            echo "✅ reached event loop"
           else
-            echo "::warning::AppImage did not reach event loop within 40s (see log above)"
+            echo "::warning::startup hang reproduced in CI (see logs above)"
           fi
 
       - uses: actions/upload-artifact@v4

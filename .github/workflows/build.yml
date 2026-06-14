@@ -106,6 +106,29 @@ jobs:
 
           cp -r dist/VenvStudio/* AppDir/usr/bin/
 
+          # ── Bundle a minimal, self-contained fontconfig config ──
+          # The host's /etc/fonts/conf.d may use a newer fontconfig syntax
+          # (<const xsi:nil/>) that the bundled libfontconfig can't parse,
+          # which stalls font enumeration and freezes startup. This minimal
+          # config only declares standard system font dirs + a cache dir and
+          # pulls in the host's local.conf if present, without sourcing the
+          # incompatible conf.d. AppRun points FONTCONFIG_FILE at this.
+          mkdir -p AppDir/usr/bin/_internal/etc/fonts
+          cat > AppDir/usr/bin/_internal/etc/fonts/fonts.conf << 'FONTSCONF'
+          <?xml version="1.0"?>
+          <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+          <fontconfig>
+            <dir>/usr/share/fonts</dir>
+            <dir>/usr/local/share/fonts</dir>
+            <dir prefix="xdg">fonts</dir>
+            <dir>~/.fonts</dir>
+            <cachedir prefix="xdg">fontconfig</cachedir>
+            <cachedir>~/.fontconfig</cachedir>
+            <config></config>
+          </fontconfig>
+          FONTSCONF
+          sed -i 's/^          //' AppDir/usr/bin/_internal/etc/fonts/fonts.conf
+
           cat > AppDir/usr/share/applications/venvstudio.desktop << 'DESKTOP'
           [Desktop Entry]
           Name=VenvStudio
@@ -124,6 +147,30 @@ jobs:
           fi
 
           cp AppDir/usr/share/applications/venvstudio.desktop AppDir/venvstudio.desktop
+
+          # ── apprun-hook for linuxdeploy ──
+          # linuxdeploy generates its own AppRun and sources any scripts in
+          # AppDir/apprun-hooks/ at launch. We set the same env here so the
+          # PRIMARY (linuxdeploy) AppImage also forces xcb and the bundled
+          # fontconfig — not just the appimagetool fallback below.
+          mkdir -p AppDir/apprun-hooks
+          cat > AppDir/apprun-hooks/linuxdeploy-venvstudio-env.sh << 'HOOK'
+          #!/bin/bash
+          export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
+          export QT_ENABLE_HIGHDPI_SCALING="${QT_ENABLE_HIGHDPI_SCALING:-1}"
+          for _fc in \
+            "${APPDIR}/usr/bin/_internal/etc/fonts/fonts.conf" \
+            "${APPDIR}/usr/bin/etc/fonts/fonts.conf" \
+            "${APPDIR}/etc/fonts/fonts.conf"; do
+            if [ -f "${_fc}" ]; then
+              export FONTCONFIG_FILE="${_fc}"
+              export FONTCONFIG_PATH="$(dirname "${_fc}")"
+              break
+            fi
+          done
+          HOOK
+          sed -i 's/^          //' AppDir/apprun-hooks/linuxdeploy-venvstudio-env.sh
+          chmod +x AppDir/apprun-hooks/linuxdeploy-venvstudio-env.sh
 
           export LDAI_UPDATE_INFORMATION="zsync|https://github.com/${{ github.repository }}/releases/latest/download/VenvStudio-x86_64.AppImage.zsync"
           DEPLOY_GTK_VERSION=3 ./linuxdeploy-x86_64.AppImage \
@@ -146,6 +193,28 @@ jobs:
           export LD_LIBRARY_PATH="${HERE}/usr/bin:${HERE}/usr/lib:${LD_LIBRARY_PATH}"
           export QT_PLUGIN_PATH="${HERE}/usr/bin/PySide6/Qt/plugins"
           export QT_QPA_PLATFORM_PLUGIN_PATH="${HERE}/usr/bin/PySide6/Qt/plugins/platforms"
+          # Force the xcb platform plugin — without this Qt may pick an
+          # unavailable backend and hang before the window appears.
+          export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
+          # Some hosts ship a newer fontconfig config syntax (e.g. <const xsi:nil/>)
+          # than the libfontconfig bundled here can parse. When the host
+          # /etc/fonts files fail to load, fontconfig can stall during font
+          # enumeration and the app never draws its first window. If the AppImage
+          # ships its own fontconfig config, point fontconfig at it so we never
+          # read the (possibly incompatible) host /etc/fonts. We only override
+          # when a bundled config actually exists, so normal hosts are untouched.
+          for _fc in \
+            "${HERE}/usr/bin/_internal/etc/fonts/fonts.conf" \
+            "${HERE}/usr/bin/etc/fonts/fonts.conf" \
+            "${HERE}/etc/fonts/fonts.conf"; do
+            if [ -f "${_fc}" ]; then
+              export FONTCONFIG_FILE="${_fc}"
+              export FONTCONFIG_PATH="$(dirname "${_fc}")"
+              break
+            fi
+          done
+          # High-DPI defaults (harmless if already set by the app)
+          export QT_ENABLE_HIGHDPI_SCALING="${QT_ENABLE_HIGHDPI_SCALING:-1}"
           exec "${HERE}/usr/bin/VenvStudio" "$@"
           APPRUN
             sed -i 's/^          //' AppDir/AppRun

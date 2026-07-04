@@ -171,6 +171,22 @@ jobs:
             <dir>~/.local/share/fonts</dir>
             <cachedir prefix="xdg">fontconfig</cachedir>
             <cachedir>~/.fontconfig</cachedir>
+
+            <!-- Render-quality defaults. Our minimal config does NOT source
+                 the host's /etc/fonts/conf.d (it may use syntax the bundled
+                 libfontconfig can't parse), but that also means we lose the
+                 antialiasing/hinting rules those files normally provide — so
+                 text rendered jagged/ugly compared to the pip build. Declare
+                 sane defaults here so glyphs are smooth and properly hinted. -->
+            <match target="font">
+              <edit name="antialias" mode="assign"><bool>true</bool></edit>
+              <edit name="hinting" mode="assign"><bool>true</bool></edit>
+              <edit name="hintstyle" mode="assign"><const>hintslight</const></edit>
+              <edit name="rgba" mode="assign"><const>rgb</const></edit>
+              <edit name="lcdfilter" mode="assign"><const>lcddefault</const></edit>
+              <edit name="autohint" mode="assign"><bool>false</bool></edit>
+            </match>
+
             <config></config>
           </fontconfig>
           FONTSCONF

@@ -3561,10 +3561,20 @@ class MainWindow(QMainWindow):
 
     def _apply_linux_emoji_fix(self):
         """On Linux, check and offer to install Noto Color Emoji font."""
+        import sys as _sys
         import platform as _platform
         if _platform.system().lower() != "linux":
             return
 
+        # Skip entirely in a frozen build (AppImage). The AppImage bundles
+        # Noto Color Emoji and installs it to the user's font dir on launch,
+        # so the host doesn't need its own copy. Worse, this probe runs an
+        # `fc-list` that may not yet see the freshly-installed font, so it
+        # false-positives and nags the user with an "Emoji Font Missing"
+        # dialog for a font that IS present. Only run in a normal pip/source
+        # install, where prompting to install a system font makes sense.
+        if getattr(_sys, "frozen", False):
+            return
 
         import shutil, subprocess
         # Check if Noto Color Emoji is installed, offer to install if missing

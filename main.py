@@ -723,7 +723,13 @@ def main():
         app.setFont(font)
 
         # ── Linux-only: show a friendly warning dialog if no emoji font ──
-        if sys.platform == "linux" and not any(
+        # Skip entirely in a frozen build: the AppImage bundles Noto Color
+        # Emoji and installs it to the user font dir on launch, so the host
+        # doesn't need its own emoji font. The QFontDatabase check here also
+        # runs before fontconfig has fully picked up the just-installed font,
+        # so it would false-positive and nag the user about a font that IS
+        # actually present. Only prompt in a normal (pip/source) run.
+        if (not getattr(sys, "frozen", False)) and sys.platform == "linux" and not any(
             f in available_fonts for f in (
                 "Noto Color Emoji", "Twemoji Mozilla", "EmojiOne Color",
                 "JoyPixels", "Symbola"

@@ -106,17 +106,21 @@ jobs:
 
           cp -r dist/VenvStudio/* AppDir/usr/bin/
 
-          # ── Remove bundled libfreetype so the system one is used ──
-          # PyInstaller bundles a libfreetype that renders emoji as flat
-          # monochrome glyphs (no COLR/CBDT colour layers), so 🖥 🐍 ⭐ show
-          # up grey/black even when the colour font is present. The host's
-          # libfreetype does render colour emoji (proven by the pip build
-          # looking correct). Dropping our copy lets the dynamic linker fall
-          # back to the system libfreetype, giving colour emoji on any modern
-          # distro. If a host somehow lacks libfreetype, Qt still starts —
-          # only emoji colour is affected, not startup.
+          # ── Remove bundled libfreetype + libharfbuzz for colour emoji ──
+          # PyInstaller bundles libfreetype AND libharfbuzz. Both take part in
+          # rendering colour emoji: freetype loads the COLR/CBDT colour glyph
+          # tables, harfbuzz shapes the text run. The bundled pair renders 🖥
+          # 🐍 ⭐ as flat grey/black glyphs even when the colour font exists.
+          # The host's freetype+harfbuzz do render colour emoji (proven by the
+          # pip build looking correct), so we drop BOTH bundled copies and let
+          # the dynamic linker use the system ones. Removing only freetype is
+          # not enough — the bundled harfbuzz still flattens the glyphs, which
+          # is why an earlier "delete just libfreetype" attempt didn't help.
+          # Qt still starts if a host lacks these; only emoji colour is
+          # affected, never startup.
           find AppDir/usr/bin -name "libfreetype.so*" -delete 2>/dev/null || true
-          echo "Removed bundled libfreetype (using system copy for colour emoji)"
+          find AppDir/usr/bin -name "libharfbuzz.so*" -delete 2>/dev/null || true
+          echo "Removed bundled libfreetype + libharfbuzz (using system copies for colour emoji)"
 
           # ── Bundle Noto Color Emoji into the AppImage ──
           # Emoji glyphs (🖥 🐍 ⭐ 📁) are used as button/section icons. On

@@ -85,7 +85,7 @@ jobs:
           sudo apt-get install -y libxcb-cursor0 libxcb-xinerama0 libegl1 \
             libxcb-icccm4 libxkbcommon-x11-0 libxcb-keysyms1 libxcb-image0 \
             libxcb-render-util0 libxcb-shape0 libxcb-xfixes0 libxcb-randr0 \
-            libxcb-sync1 libxcb-shm0 fuse libfuse2
+            libxcb-sync1 libxcb-shm0 fuse libfuse2 fonts-noto-color-emoji
 
       - name: Install Python deps
         run: |
@@ -106,13 +106,34 @@ jobs:
 
           cp -r dist/VenvStudio/* AppDir/usr/bin/
 
+          # ── Bundle Noto Color Emoji into the AppImage ──
+          # Emoji glyphs (🖥 🐍 ⭐ 📁) are used as button/section icons. On
+          # hosts that lack an emoji font — or whose fontconfig is too broken
+          # to enumerate one — those icons render as grey boxes and the app
+          # shows an "Emoji Font Missing" dialog. Shipping the font inside the
+          # AppImage makes icons render everywhere, independent of the host.
+          mkdir -p AppDir/usr/share/fonts/truetype/noto
+          for _src in \
+            /usr/share/fonts/truetype/noto/NotoColorEmoji.ttf \
+            /usr/share/fonts/noto/NotoColorEmoji.ttf \
+            /usr/share/fonts/google-noto/NotoColorEmoji.ttf; do
+            if [ -f "$_src" ]; then
+              cp "$_src" AppDir/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf
+              echo "Bundled emoji font from $_src"
+              break
+            fi
+          done
+          ls -la AppDir/usr/share/fonts/truetype/noto/ || echo "WARNING: emoji font not bundled"
+
           # ── Bundle a minimal, self-contained fontconfig config ──
           # The host's /etc/fonts/conf.d may use a newer fontconfig syntax
           # (<const xsi:nil/>) that the bundled libfontconfig can't parse,
           # which stalls font enumeration and freezes startup. This minimal
           # config only declares standard system font dirs + a cache dir and
           # pulls in the host's local.conf if present, without sourcing the
-          # incompatible conf.d. AppRun points FONTCONFIG_FILE at this.
+          # incompatible conf.d. AppRun points FONTCONFIG_FILE at this. The
+          # FIRST <dir> is the AppImage's own bundled font dir so the emoji
+          # font is always found even when the host has none.
           mkdir -p AppDir/usr/bin/_internal/etc/fonts
           cat > AppDir/usr/bin/_internal/etc/fonts/fonts.conf << 'FONTSCONF'
           <?xml version="1.0"?>
@@ -122,6 +143,7 @@ jobs:
             <dir>/usr/local/share/fonts</dir>
             <dir prefix="xdg">fonts</dir>
             <dir>~/.fonts</dir>
+            <dir>~/.local/share/fonts</dir>
             <cachedir prefix="xdg">fontconfig</cachedir>
             <cachedir>~/.fontconfig</cachedir>
             <config></config>
@@ -168,6 +190,18 @@ jobs:
               break
             fi
           done
+          # Install the bundled emoji font into the user's font dir on first
+          # run so fontconfig can find it (our fonts.conf lists ~/.local/share/
+          # fonts). This makes emoji icons render even on hosts with no emoji
+          # font, and silences the "Emoji Font Missing" dialog. Idempotent.
+          _emoji_src="${APPDIR}/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf"
+          _emoji_dst="${HOME}/.local/share/fonts/NotoColorEmoji.ttf"
+          if [ -f "${_emoji_src}" ] && [ ! -f "${_emoji_dst}" ]; then
+            mkdir -p "${HOME}/.local/share/fonts" 2>/dev/null \
+              && cp "${_emoji_src}" "${_emoji_dst}" 2>/dev/null \
+              && command -v fc-cache >/dev/null 2>&1 \
+              && fc-cache -f "${HOME}/.local/share/fonts" >/dev/null 2>&1 || true
+          fi
           HOOK
           sed -i 's/^          //' AppDir/apprun-hooks/linuxdeploy-venvstudio-env.sh
           chmod +x AppDir/apprun-hooks/linuxdeploy-venvstudio-env.sh
@@ -215,6 +249,16 @@ jobs:
           done
           # High-DPI defaults (harmless if already set by the app)
           export QT_ENABLE_HIGHDPI_SCALING="${QT_ENABLE_HIGHDPI_SCALING:-1}"
+          # Install bundled emoji font into the user's font dir (see hook above
+          # for rationale). Idempotent; makes emoji icons render on any host.
+          _emoji_src="${HERE}/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf"
+          _emoji_dst="${HOME}/.local/share/fonts/NotoColorEmoji.ttf"
+          if [ -f "${_emoji_src}" ] && [ ! -f "${_emoji_dst}" ]; then
+            mkdir -p "${HOME}/.local/share/fonts" 2>/dev/null \
+              && cp "${_emoji_src}" "${_emoji_dst}" 2>/dev/null \
+              && command -v fc-cache >/dev/null 2>&1 \
+              && fc-cache -f "${HOME}/.local/share/fonts" >/dev/null 2>&1 || true
+          fi
           exec "${HERE}/usr/bin/VenvStudio" "$@"
           APPRUN
             sed -i 's/^          //' AppDir/AppRun

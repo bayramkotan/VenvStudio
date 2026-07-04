@@ -120,7 +120,16 @@ jobs:
           # affected, never startup.
           find AppDir/usr/bin -name "libfreetype.so*" -delete 2>/dev/null || true
           find AppDir/usr/bin -name "libharfbuzz.so*" -delete 2>/dev/null || true
-          echo "Removed bundled libfreetype + libharfbuzz (using system copies for colour emoji)"
+          # libpng too: Noto Color Emoji stores its colour glyphs as embedded
+          # PNGs (CBDT/CBLC). freetype decodes them via libpng. If the bundled
+          # libpng is used with the system freetype, the versions mismatch and
+          # the PNG colour glyphs fail to decode — emoji fall back to flat
+          # monochrome. Dropping the bundled libpng lets the system freetype +
+          # system libpng pair up correctly, which is what makes emoji render
+          # in colour (verified locally: removing freetype+harfbuzz alone was
+          # NOT enough; libpng had to go too).
+          find AppDir/usr/bin -name "libpng16.so*" -delete 2>/dev/null || true
+          echo "Removed bundled libfreetype + libharfbuzz + libpng16 (using system copies for colour emoji)"
 
           # ── Bundle Noto Color Emoji into the AppImage ──
           # Emoji glyphs (🖥 🐍 ⭐ 📁) are used as button/section icons. On

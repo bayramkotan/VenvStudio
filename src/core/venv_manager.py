@@ -1762,7 +1762,17 @@ class VenvManager:
 
         # ── venv clone (default): pip freeze → create → pip install -r ─────
         source_pip = get_pip_executable(source_path_obj)
-        if not source_pip.exists():
+
+        # Resolve a python interpreter in the source env as a fallback for
+        # reading packages. A folder-renamed env can have a pip whose shebang
+        # still points at the old path (so `source_pip freeze` dies with
+        # "No such file or directory"), but `python -m pip freeze` via the
+        # interpreter still works. We try pip first, then python -m pip.
+        _src_py = source_path_obj / (
+            "Scripts" if sys.platform == "win32" else "bin"
+        ) / ("python.exe" if sys.platform == "win32" else "python")
+
+        if not source_pip.exists() and not _src_py.exists():
             return False, (
                 f"Source pip not found at {source_pip}.\n\n"
                 f"This env appears to have no pip installed. Install pip first, or\n"
@@ -1770,11 +1780,56 @@ class VenvManager:
             )
 
         try:
-            result = _run(
-                [str(source_pip), "freeze"],
-                capture_output=True, text=True, timeout=15,
-            )
-            requirements = result.stdout
+            requirements = ""
+            _freeze_ok = False
+            _last_err = ""
+
+            # 1) Try the pip executable directly (fast path). exists() can be
+            #    True for a DANGLING symlink (the link file exists but its
+            #    target doesn't), in which case running it raises FileNotFound —
+            #    so we guard the call in try/except and fall through on any
+            #    failure instead of aborting the whole clone.
+            if source_pip.exists():
+                try:
+                    result = _run(
+                        [str(source_pip), "freeze"],
+                        capture_output=True, text=True, timeout=15,
+                    )
+                    if result.returncode == 0:
+                        requirements = result.stdout
+                        _freeze_ok = True
+                    else:
+                        _last_err = (result.stderr or "").strip()
+                except (FileNotFoundError, OSError) as e:
+                    _last_err = str(e)  # dangling pip symlink → try python next
+
+            # 2) Fall back to `python -m pip freeze` via the interpreter when
+            #    the pip script is missing or broken (e.g. stale/dangling after
+            #    a folder rename). The python symlink usually still resolves.
+            if not _freeze_ok and _src_py.exists():
+                if callback:
+                    callback(f"Reading packages from '{source_name}' (python -m pip)...")
+                try:
+                    result = _run(
+                        [str(_src_py), "-m", "pip", "freeze"],
+                        capture_output=True, text=True, timeout=20,
+                    )
+                    if result.returncode == 0:
+                        requirements = result.stdout
+                        _freeze_ok = True
+                    else:
+                        _last_err = (result.stderr or "").strip() or _last_err
+                except (FileNotFoundError, OSError) as e:
+                    _last_err = str(e) or _last_err
+
+            if not _freeze_ok:
+                return False, (
+                    f"Could not read packages from '{source_name}'.\n\n"
+                    f"{_last_err or 'pip freeze failed'}\n\n"
+                    f"The env's pip/python may be broken (e.g. a dangling symlink "
+                    f"after a folder-only rename). Recreate the env, or delete it "
+                    f"and start fresh."
+                )
 
             success, msg = self.create_venv(target_name, callback=callback)
             if not success:
@@ -1883,18 +1938,85 @@ class VenvManager:
 
         try:
             old_path_obj.rename(new_path_obj)
-            banner_success(
-                f"Renamed '{old_name}' → '{new_name}'",
-                details=[
-                    f"Old path: {old_path_obj}",
-                    f"New path: {new_path_obj}",
-                    "⚠ Note: activate scripts may contain old path — run Rename (Full) for a full rewrite",
-                ],
+
+            # ── Relocate the venv so it keeps working after the move ──
+            # A bare folder rename leaves the old absolute path baked into
+            # pyvenv.cfg and the shebang lines of bin/* scripts (pip, etc.),
+            # so `new_env/bin/pip` still points at the OLD path and fails with
+            # "No such file or directory" on the next operation. Rewrite those
+            # references to the new location. venv/uv only; best-effort.
+            relocated, reloc_note = self._relocate_venv_paths(
+                new_path_obj, old_path_obj, new_path_obj
             )
+
+            _details = [
+                f"Old path: {old_path_obj}",
+                f"New path: {new_path_obj}",
+            ]
+            if relocated:
+                _details.append("Scripts + pyvenv.cfg updated to new path")
+            else:
+                _details.append(
+                    "⚠ Note: activate scripts may contain old path — "
+                    "run Rename (Full) for a full rewrite"
+                )
+            banner_success(f"Renamed '{old_name}' → '{new_name}'", details=_details)
             return True, f"Environment '{old_name}' renamed to '{new_name}'"
         except Exception as e:
             banner_error(f"Could not rename '{old_name}'", details=[str(e)])
             return False, f"Error renaming environment: {str(e)}"
+
+    def _relocate_venv_paths(self, venv_dir, old_base, new_base) -> tuple[bool, str]:
+        """Rewrite absolute paths inside a moved venv so it keeps working.
+
+        Updates ``pyvenv.cfg`` and the shebang / path references in ``bin/``
+        (or ``Scripts/`` on Windows) that still point at the old location.
+        Best-effort and non-fatal: returns (ok, note). venv/uv layouts only.
+        """
+        import os as _os
+        old_s = str(old_base)
+        new_s = str(new_base)
+        if old_s == new_s:
+            return True, "no change needed"
+        try:
+            changed = 0
+
+            # pyvenv.cfg — home = /old/path/bin  (and possibly others)
+            cfg = venv_dir / "pyvenv.cfg"
+            if cfg.exists():
+                txt = cfg.read_text(encoding="utf-8", errors="replace")
+                if old_s in txt:
+                    cfg.write_text(txt.replace(old_s, new_s), encoding="utf-8")
+                    changed += 1
+
+            # bin/ (POSIX) or Scripts/ (Windows) — shebangs + activate scripts
+            scripts_dir = venv_dir / ("Scripts" if _os.name == "nt" else "bin")
+            if scripts_dir.is_dir():
+                for entry in scripts_dir.iterdir():
+                    if not entry.is_file():
+                        continue
+                    try:
+                        raw = entry.read_bytes()
+                    except Exception:
+                        continue
+                    # Skip real binaries: only rewrite text-ish files that
+                    # actually contain the old path.
+                    if old_s.encode() not in raw:
+                        continue
+                    try:
+                        new_raw = raw.replace(old_s.encode(), new_s.encode())
+                        entry.write_bytes(new_raw)
+                        changed += 1
+                    except Exception:
+                        # e.g. permission / busy — leave that file as-is
+                        continue
+
+            if changed:
+                return True, f"relocated {changed} file(s)"
+            return True, "nothing to rewrite"
+        except Exception as e:
+            _log.debug(f"_relocate_venv_paths failed: {e}")
+            return False, str(e)
 
     def rename_full_venv(self, old_name: str, new_name: str, callback=None,
                          old_path: Optional[str] = None, env_type: str = "venv") -> tuple[bool, str]:

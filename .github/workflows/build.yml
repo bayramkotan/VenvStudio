@@ -221,10 +221,21 @@ jobs:
           #!/bin/bash
           export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-xcb}"
           export QT_ENABLE_HIGHDPI_SCALING="${QT_ENABLE_HIGHDPI_SCALING:-1}"
+          # linuxdeploy's AppRun usually exports APPDIR before sourcing hooks,
+          # but not always (observed: FONTCONFIG_FILE ended up unset because
+          # $APPDIR was empty at hook time, so the app fell back to the host's
+          # broken /etc/fonts and rendered text badly). Derive APPDIR from this
+          # hook's own location as a fallback: the hook lives at
+          # $APPDIR/apprun-hooks/<name>.sh, so two dirs up is APPDIR.
+          _AD="${APPDIR}"
+          if [ -z "${_AD}" ] || [ ! -d "${_AD}" ]; then
+            _self="${BASH_SOURCE[0]:-$0}"
+            _AD="$(cd "$(dirname "${_self}")/.." 2>/dev/null && pwd)"
+          fi
           for _fc in \
-            "${APPDIR}/usr/bin/_internal/etc/fonts/fonts.conf" \
-            "${APPDIR}/usr/bin/etc/fonts/fonts.conf" \
-            "${APPDIR}/etc/fonts/fonts.conf"; do
+            "${_AD}/usr/bin/_internal/etc/fonts/fonts.conf" \
+            "${_AD}/usr/bin/etc/fonts/fonts.conf" \
+            "${_AD}/etc/fonts/fonts.conf"; do
             if [ -f "${_fc}" ]; then
               export FONTCONFIG_FILE="${_fc}"
               export FONTCONFIG_PATH="$(dirname "${_fc}")"
@@ -235,7 +246,7 @@ jobs:
           # run so fontconfig can find it (our fonts.conf lists ~/.local/share/
           # fonts). This makes emoji icons render even on hosts with no emoji
           # font, and silences the "Emoji Font Missing" dialog. Idempotent.
-          _emoji_src="${APPDIR}/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf"
+          _emoji_src="${_AD}/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf"
           _emoji_dst="${HOME}/.local/share/fonts/NotoColorEmoji.ttf"
           if [ -f "${_emoji_src}" ] && [ ! -f "${_emoji_dst}" ]; then
             mkdir -p "${HOME}/.local/share/fonts" 2>/dev/null \

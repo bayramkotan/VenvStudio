@@ -1,5 +1,24 @@
 # VENVSTUDIO_TODO.md
 
+## ✅ v1.5.0 → v1.6.0'da ÇÖZÜLEN (AppImage tam çözümü + refactor + fix'ler)
+
+**AppImage (yıllardır bozuktu — hepsi Bayram'ın makinesinde kanıtlandı):**
+- **Fork bomb (v1.5.2):** `main.py::_check_qt_xcb_deps` frozen modda `sys.executable -c "..."` çağırıp GUI'yi recursive relaunch ediyordu → 90+ process → donma. Frozen guard'la çözüldü. AppImage artık **açılıyor**. (B110 AppImage Quick Launch ve genel AppImage-açılmıyor durumu bununla düzeldi.)
+- **Renkli emoji (v1.5.7):** bundle libfreetype+libharfbuzz+libpng16 silindi → sistem kütüphaneleriyle CBDT PNG renkli emoji render ediliyor. (B140/B152/F125 emoji sorunlarının AppImage kısmı.)
+- **Emoji Font Missing dialog (v1.5.6):** `main_window._apply_linux_emoji_fix` frozen'da atlanıyor.
+- **Font monospace/jagged (v1.6.0):** bundled fonts.conf artık host config include + strong `sans-serif→Cantarell` alias + hinting içeriyor; apprun-hook APPDIR'i `BASH_SOURCE`'tan türetip FONTCONFIG_FILE'ı doğru set ediyor.
+
+**Refactor (main_window.py bölme — 1. adım):**
+- 5 QThread worker → yeni `src/gui/workers.py` (~127 satır azaldı). Junk "(a copy from computer KTN)" dosyaları silindi. Bu, aşağıdaki "main_window.py — BEKLIYOR" REFACTOR maddesinin ilk adımıdır (worker kısmı ✅, env/ql kısmı hâlâ açık).
+
+**Log (logger.py):** RichHandler'a `log_time_format` verildi — konsol banner MM/DD/YY tutarsızlığı düzeldi.
+
+**Rename/Clone (venv_manager.py):** folder-only rename artık `_relocate_venv_paths` ile pyvenv.cfg + bin/ scriptlerini yeni path'e yazıyor (B51 "Windows Only Name Rename sonrası pip bozuluyor" + genel folder-rename-pip-kırılması çözüldü). clone_venv kırık/dangling pip symlink'e karşı `python -m pip freeze` fallback'i aldı.
+
+**Kalan refactor adımları:** `PathElideMiddleDelegate`+`SidebarButton` → `widgets.py`; export metodları (7 tane) → mixin/`env_export.py`; main_window env/ql metodları → ayrı modül.
+
+---
+
 ## ✅ v1.4.98'de ÇÖZÜLEN (Windows PowerShell 7 + Themes)
 
 - **PowerShell 7+ (pwsh) terminal listesine eklendi:** Windows combo'da `shutil.which("pwsh")` ile sürümden bağımsız algılama. `open_terminal_at` pwsh terminal_type desteği. "PowerShell" → "Windows PowerShell" etiketi (5.1 vs 7+ ayrımı).

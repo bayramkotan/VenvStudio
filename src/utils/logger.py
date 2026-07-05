@@ -491,6 +491,7 @@ def setup_logging() -> logging.Logger:
             rh = RichHandler(
                 console=_rich_console,
                 show_time=True,
+                log_time_format="[%d-%m-%Y %H:%M:%S]",
                 show_level=True,
                 show_path=False,
                 markup=True,

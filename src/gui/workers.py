@@ -140,3 +140,42 @@ class RenameFullWorker(QThread):
             self.old_name, self.new_name, callback=self.progress.emit
         )
         self.finished.emit(success, msg)
+
+
+class CreateWorker(QThread):
+    """Worker thread for async environment creation."""
+    progress = Signal(str)
+    finished = Signal(bool, str)
+
+    def __init__(self, venv_manager, name, python_path, with_pip, system_site_packages):
+        super().__init__()
+        self.venv_manager = venv_manager
+        self.name = name
+        self.python_path = python_path
+        self.with_pip = with_pip
+        self.system_site_packages = system_site_packages
+        self._cancelled = False
+
+    def run(self):
+        success, msg = self.venv_manager.create_venv(
+            name=self.name,
+            python_path=self.python_path,
+            with_pip=self.with_pip,
+            system_site_packages=self.system_site_packages,
+            callback=self._on_progress,
+        )
+        if self._cancelled:
+            import shutil
+            venv_path = self.venv_manager.base_dir / self.name
+            if venv_path.exists():
+                shutil.rmtree(venv_path, ignore_errors=True)
+            self.finished.emit(False, "Creation cancelled by user")
+        else:
+            self.finished.emit(success, msg)
+
+    def _on_progress(self, message):
+        if not self._cancelled:
+            self.progress.emit(message)
+
+    def cancel(self):
+        self._cancelled = True

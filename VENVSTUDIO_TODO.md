@@ -1,5 +1,28 @@
 # VENVSTUDIO_TODO.md
 
+## 📐 BÜYÜK DOSYA BÖLME REFACTOR — İLERLEME (güncel)
+
+**Kural:** dışa açık API + import yolu değişmez. Saf veri → ast auto-script. Mantık → mixin (+ dependency-free `*_common.py` ile döngüsel import önle). Her bölmeden sonra `python3 main.py` + GERÇEK fonksiyonel test (create/clone/rename/delete) BEFORE commit. Satır sonu tipini (CRLF/LF) koru.
+
+**✅ Tamamlanan (hepsi push edildi, versiyon bump yok):**
+- ✅ i18n.py 1492 → 52 (→ `src/utils/i18n_data/<lang>.py` ×11)
+- ✅ learn_page.py 3318 → 765 (→ `src/gui/learn_content.py`, LEARN_CATEGORIES)
+- ✅ venv_manager.py 2108 → 1262 (mixin: `_common`/`_cache`/`_clone`/`_rename`)
+- ✅ CreateWorker → workers.py (env_dialog 1538 → 1504; 6 worker tek yerde)
+
+**⏳ Kalan büyük dosyalar (risk sırası — en güvenliden):**
+- **settings_page.py (1708)** — sonraki ideal hedef; orta boy, tek dosya. Yapıyı `grep -n "^class \|^    def "` ile çıkar, section/tab bazlı ya da mixin böl.
+- **env_dialog.py (1504)** — asıl büyük parça `_create` metodu (~575 satır, iç içe env-type mantığı). Riskli; env-type handler'larını ayrı fonksiyon/mixin'e çıkar. `_install_tool` (~245) ve `_setup_ui` (~260) de büyük.
+- **main_window.py (3645)** — worker'lar ✅ zaten çıktı. Kalan: `PathElideMiddleDelegate`+`SidebarButton` → `widgets.py`; export metodları (7 tane) → `env_export.py` mixin; env/quicklaunch metodları → ayrı modül.
+- **package_panel.py (5390)** — EN BÜYÜK, EN SON, EN DİKKATLİ. En çok iç bağımlılık burada. Önce yapı analizi, sonra kademeli.
+
+**⚠️ Refactor'da öğrenilen tuzaklar (venv_manager mixin'den):**
+- Mixin'de class-level attribute → `type(self).foo`, `ClassName.foo` DEĞİL (isim tanımlı değil).
+- Her mixin kendi importlarını içermeli (os/json/_run vb. kolayca kaçar).
+- import+MRO+parite testi YETMEZ — runtime path'lerini gerçekten çalıştır (fonksiyonel test).
+
+---
+
 ## ✅ v1.5.0 → v1.6.0'da ÇÖZÜLEN (AppImage tam çözümü + refactor + fix'ler)
 
 **AppImage (yıllardır bozuktu — hepsi Bayram'ın makinesinde kanıtlandı):**

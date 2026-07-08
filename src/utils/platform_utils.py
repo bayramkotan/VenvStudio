@@ -812,6 +812,45 @@ def get_venv_size(venv_path: Path) -> str:
     return f"{total:.1f} TB"
 
 
+def open_url(url: str) -> tuple[bool, str]:
+    """Open a URL in the default web browser — AppImage-safe.
+
+    Inside an AppImage, webbrowser.open() spawns xdg-open/the browser with
+    the AppImage-injected environment (LD_LIBRARY_PATH, APPDIR, ...), which
+    makes the host browser fail to start silently. Same root cause that
+    open_folder() below already handles for file managers.
+
+    Linux + AppImage → spawn an opener with appimage_clean_env().
+    Everything else  → plain webbrowser.open() (works fine).
+
+    Returns (success, message).
+    """
+    if get_platform() not in ("windows", "macos") and os.environ.get("APPIMAGE"):
+        clean_env = appimage_clean_env() or os.environ.copy()
+        candidates = ("xdg-open", "x-www-browser", "sensible-browser",
+                      "firefox", "chromium", "chromium-browser", "google-chrome")
+        for tool in candidates:
+            exe = shutil.which(tool, path=clean_env.get("PATH"))
+            if not exe:
+                continue
+            try:
+                subprocess.Popen(
+                    [exe, url], env=clean_env,
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                    start_new_session=True,
+                )
+                return True, f"Opened {url}"
+            except Exception:
+                continue
+        return False, "No usable browser opener found (AppImage)"
+    try:
+        import webbrowser
+        webbrowser.open(url)
+        return True, f"Opened {url}"
+    except Exception as e:
+        return False, f"Could not open URL: {e}"
+
+
 def open_folder(path) -> tuple[bool, str]:
     """Open a folder in the system file manager.
 

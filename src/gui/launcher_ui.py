@@ -486,7 +486,7 @@ class LauncherUIMixin:
                             f"QPushButton:hover {{ text-decoration: underline; color: white; }}"
                         )
                         _lb.setCursor(Qt.PointingHandCursor)
-                        _lb.clicked.connect(lambda _, u=_url: __import__('webbrowser').open(u))
+                        _lb.clicked.connect(lambda _, u=_url: __import__('src.utils.platform_utils', fromlist=['open_url']).open_url(u))
                         container.layout().addWidget(_lb)
                     container.layout().addStretch()
                     if not _has_any:

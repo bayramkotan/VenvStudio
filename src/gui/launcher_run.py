@@ -248,9 +248,9 @@ class LauncherRunMixin:
             url = app_def.get("open_browser")
             if url:
                 from PySide6.QtCore import QTimer
-                import webbrowser
+                from src.utils.platform_utils import open_url
                 delay = app_def.get("browser_delay", 2)
-                QTimer.singleShot(delay * 1000, lambda: webbrowser.open(url))
+                QTimer.singleShot(delay * 1000, lambda: open_url(url))
         except Exception as e:
             QMessageBox.critical(self, f"{name} — Launch Error", str(e))
 
@@ -387,10 +387,11 @@ class LauncherRunMixin:
             self.status_label.setText(f"🚀 Running {os.path.basename(filepath)}")
 
             if url:
-                import threading, webbrowser, time as _t
+                import threading, time as _t
+                from src.utils.platform_utils import open_url
                 def _open(u):
                     _t.sleep(3)
-                    webbrowser.open(u)
+                    open_url(u)
                 threading.Thread(target=_open, args=(url,), daemon=True).start()
 
         except Exception as e:
@@ -662,11 +663,12 @@ class LauncherRunMixin:
             # Open browser if app requested it (e.g. Streamlit, Jupyter)
             open_browser_url = app_def.get("open_browser", "")
             if open_browser_url:
-                import threading, webbrowser, time as _time
+                import threading, time as _time
+                from src.utils.platform_utils import open_url
                 delay = app_def.get("browser_delay", 3)
                 def _open_browser(url, d):
                     _time.sleep(d)
-                    webbrowser.open(url)
+                    open_url(url)
                 threading.Thread(target=_open_browser, args=(open_browser_url, delay), daemon=True).start()
 
         except Exception as e:

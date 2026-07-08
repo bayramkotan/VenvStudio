@@ -18,6 +18,19 @@ from pathlib import Path
 
 _log = logging.getLogger("venvstudio.core.venv_manager")
 
+
+def _fmt_path(p) -> str:
+    """Display-only path formatting for log messages.
+
+    Cache keys are intentionally normalized to forward slashes (v1.4.82 fix)
+    and MUST stay that way internally. This helper only affects how paths
+    LOOK in the logs: native separators per OS (Windows: backslash,
+    Linux/macOS: forward slash). Never use this for cache keys or for paths
+    passed to subprocess/filesystem calls.
+    """
+    s = str(p)
+    return s.replace("/", "\\") if os.name == "nt" else s.replace("\\", "/")
+
 # Banner helpers for visual terminal output
 try:
     from src.utils.logger import banner_start, banner_success, banner_error, banner_warning
@@ -139,7 +152,7 @@ def _run(*args, **kwargs):
             cmd_str = " ".join(str(c) for c in cmd)
         else:
             cmd_str = str(cmd)
-        _log.debug(f"▶ subprocess: {cmd_str}")
+        _log.debug(f"🚀 subprocess: {cmd_str}")
     except Exception:
         pass
 
@@ -152,9 +165,9 @@ def _run(*args, **kwargs):
             stderr_preview = ""
             if hasattr(result, "stderr") and result.stderr:
                 stderr_preview = str(result.stderr)[:200].replace("\n", " ")
-            _log.warning(f"  ↳ exit={rc}  stderr={stderr_preview!r}")
+            _log.warning(f"  ↳ ✖ exit={rc}  stderr={stderr_preview!r}")
         else:
-            _log.debug(f"  ↳ exit=0")
+            _log.debug(f"  ↳ ✔ exit=0")
     except Exception:
         pass
 

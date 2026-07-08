@@ -209,7 +209,7 @@ class _AnsiFormatter(logging.Formatter):
         self.use_color = use_color and _ansi_supported()
 
     def format(self, record):
-        ts = datetime.fromtimestamp(record.created).strftime("%H:%M:%S")
+        ts = datetime.fromtimestamp(record.created).strftime("%d.%m.%Y %H:%M:%S")
         level_color = self.LEVEL_COLORS.get(record.levelno, "")
         icon = self.LEVEL_ICONS.get(record.levelno, "·")
         reset = _ANSI["reset"] if self.use_color else ""
@@ -491,7 +491,7 @@ def setup_logging() -> logging.Logger:
             rh = RichHandler(
                 console=_rich_console,
                 show_time=True,
-                log_time_format="[%d-%m-%Y %H:%M:%S]",
+                log_time_format="[%d.%m.%Y %H:%M:%S]",
                 show_level=True,
                 show_path=False,
                 markup=True,
@@ -511,14 +511,15 @@ def setup_logging() -> logging.Logger:
 
     # ── Session header ──
     ctx = _collect_session_context()
-    logger.info("=" * 72)
-    logger.info(f"  VenvStudio v{ctx['app_version']} — Session {_session_id}")
-    logger.info(f"  OS: {ctx['os']} | Python: {ctx['python']} | Qt: {ctx['qt']} | PySide6: {ctx['pyside6']}")
-    logger.info(f"  Frozen: {ctx['frozen']} | PID: {ctx['pid']}")
+    logger.info("╭" + "─" * 71)
+    logger.info(f"│  🐍  VenvStudio v{ctx['app_version']}")
+    logger.info(f"│  🆔  Session {_session_id}")
+    logger.info(f"│  💻  {ctx['os']}  ·  Python {ctx['python']}  ·  Qt {ctx['qt']}  ·  PySide6 {ctx['pyside6']}")
+    logger.info(f"│  ⚙️  Frozen: {ctx['frozen']}  ·  PID: {ctx['pid']}")
     if ctx["screens"]:
         for s in ctx["screens"]:
-            logger.info(f"  Screen: {s['name']} {s['geometry']} @{s['dpr']}x")
-    logger.info("=" * 72)
+            logger.info(f"│  🖥️  Screen: {s['name']} {s['geometry']} @{s['dpr']}x")
+    logger.info("╰" + "─" * 71)
 
     _root_logger = logger
 

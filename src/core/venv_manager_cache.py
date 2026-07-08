@@ -13,6 +13,8 @@ import platform as _platform
 from pathlib import Path
 from typing import Optional, Dict, Any
 
+from src.core.venv_manager_common import _fmt_path
+
 _log = logging.getLogger("venvstudio.core.venv_manager")
 
 
@@ -53,7 +55,7 @@ class _CacheMixin:
             with open(cache_file, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
         except Exception as e:
-            _log.warning(f"[Cache] Write error: {e}")
+            _log.warning(f"⚠️ [Cache] Write error: {e}")
 
     def _cache_key(self, venv_path: Path) -> str:
         """Consistent cache key — always forward slashes, no leading slash on Windows."""
@@ -68,12 +70,12 @@ class _CacheMixin:
         key = self._cache_key(venv_path)
         entry = all_cache.get(key)
         if not entry:
-            _log.debug(f"[Cache] MISS: {key}")
+            _log.debug(f"📦 [Cache] MISS: {_fmt_path(key)}")
             return None
         if entry.get("needs_refresh", 1) == 1:
-            _log.debug(f"[Cache] STALE: {key} (needs_refresh=1)")
+            _log.debug(f"♻️ [Cache] STALE: {_fmt_path(key)} (needs_refresh=1)")
             return None
-        _log.debug(f"[Cache] HIT: {key} (py={entry.get('python_version','?')} pkgs={entry.get('package_count','?')})")
+        _log.debug(f"✅ [Cache] HIT: {_fmt_path(key)} (py={entry.get('python_version','?')} pkgs={entry.get('package_count','?')})")
         return entry
 
     def write_cache(self, venv_path: Path, python_version: str, package_count: int, size: str) -> None:
@@ -85,8 +87,8 @@ class _CacheMixin:
             "needs_refresh": 0,
         }
         self._save_all_cache(all_cache)
-        _log.info(f"[Cache] Written: {venv_path} → py={python_version} pkgs={package_count} size={size}")
-        _log.debug(f"[Cache] File: {self._get_cache_file()}")
+        _log.info(f"💾 [Cache] Written: {_fmt_path(venv_path)} → py={python_version} pkgs={package_count} size={size}")
+        _log.debug(f"📄 [Cache] File: {_fmt_path(self._get_cache_file())}")
 
     def invalidate_cache(self, venv_path: Path) -> None:
         all_cache = self._load_all_cache()

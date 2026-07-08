@@ -3,8 +3,8 @@
 ## Proje
 - **Repo:** https://github.com/bayramkotan/VenvStudio
 - **PyPI:** https://pypi.org/project/venvstudio/
-- **Son push edilmiş versiyon:** v1.6.1 (+ sonrasında i18n/learn_page/venv_manager/CreateWorker refactor commit'leri push edildi)
-- **Bu oturumda yapılacak versiyon:** v1.6.2 (bir sonraki push hedefi)
+- **Son push edilmiş versiyon:** v1.6.3 (log iyileştirmeleri release'i)
+- **Bu oturumda yapılacak versiyon:** v1.6.4 (bir sonraki push hedefi)
 - **Proje dizini (Windows):** `C:\Github\VenvStudio`
 - **Proje dizini (Linux - CachyOS/Pardus):** `~/Github/VenvStudio`
 - **Handoff dizini (Windows):** `C:\Users\bayram\Yandex.Disk\GitHub_Handoff_Files\VenvStudio\VenvStudio_Handoff.md`
@@ -3010,6 +3010,58 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 
 ---
 
+## Bu Oturumda Yapılanlar (v1.6.3)
+
+### v1.6.2 release
+- v1.6.1 sonrası push edilmiş mixin refactor zinciri v1.6.2 olarak tag'lenip yayınlandı.
+
+### Log iyileştirmeleri (v1.6.3 release)
+- **`src/utils/logger.py`:**
+  - Konsol timestamp'ine tarih eklendi: `%H:%M:%S` → `%d.%m.%Y %H:%M:%S` (örn. `08.07.2026 14:40:43`)
+  - RichHandler'daki MEVCUT `log_time_format` (v1.6.0'da eklenmişti, tire formatında) nokta formatına çevrildi — konsol ile tutarlı. ⚠️ Ders: logger.py'de log_time_format ZATEN VAR, tekrar ekleme (duble → SyntaxError).
+  - Session header `====` bloğu → kutu çizgili banner (`╭─ │ ╰─`), emoji'li satırlar (🐍 versiyon, 🆔 session, 💻 sistem, ⚙️ frozen/PID, 🖥️ ekranlar banner içine alındı). Sağ kenar bilinçli olarak açık — emoji çift-genişlik olduğu için sağ hiza platformlar arası bozulur.
+- **`src/core/venv_manager_common.py`:**
+  - YENİ `_fmt_path()` helper — **display-only** path formatı: Windows'ta `\`, Linux/macOS'ta `/`. ⚠️ Cache key'ler içerde `/` normalize KALIR (v1.4.82 fix'i) — `_fmt_path` ASLA key üretiminde/subprocess'te kullanılmaz, SADECE log satırlarında.
+  - `▶ subprocess:` → `🚀 subprocess:`, `↳ exit=0` → `↳ ✔ exit=0`, hata → `↳ ✖ exit={rc}`
+- **`src/core/venv_manager_cache.py`:**
+  - `from src.core.venv_manager_common import _fmt_path` eklendi
+  - Emoji + _fmt_path: 📦 MISS · ✅ HIT · ♻️ STALE · 💾 Written · 📄 File · ⚠️ Write error
+- **`src/core/venv_manager.py`:**
+  - 📝 [Poetry] cache check / write_cache satırları + `_fmt_path` (common import bloğuna eklendi)
+
+### ⚠️ ÖNEMLİ DERS — Windows repo senkron sorunu
+- Windows'taki repo v1.4.98'de kalmıştı (v1.5.x, v1.6.x ve TÜM mixin refactor'u pull edilmemişti). `python main.py` v1.4.98 gösterince karışıklık çıktı (kurulu PyPI paketi v1.6.2 idi).
+- **Yeni pratik:** Dosya değişikliği yapılacak oturumlarda dosyalar kullanıcının makinesinden İSTENMEDEN ÖNCE `git log -1` + `APP_VERSION` kontrolü istenebilir; ya da dosyalar doğrudan GitHub'daki güncel repo'dan (`git clone --depth 1`) alınıp değişiklik ORAYA uygulanır — bu oturumda ikincisi yapıldı ve doğru çalıştı.
+- Kullanıcı makinesinde sıra her zaman: `git pull` → dosya kopyala → test → push.
+
+### settings_toolchain.py — [TC] print → logger (oturum sonunda eklendi, push edildi)
+- 3 çıplak `print("[TC] ...")` → `_log.debug/warning("🧰 [TC] ...")`; dosyaya `import logging` + `_log = logging.getLogger("venvstudio.gui.toolchain")` eklendi.
+- ⚠️ Bulunan ama DOKUNULMAYAN önceden-var-olan bug: `settings_toolchain.py` ~1595'te `sys.platform` kullanılıyor ama `sys` import edilmemiş (NameError riski) — aday: B181. Ayrıca repoda junk `src/gui/settings_toolchain.py.bak` var.
+
+### Kalan işler (log turu devamı)
+- `[PkgCache]` satırları (pkg_cache logger'ı — package_panel bölünmüş dosyalarından biri) henüz emoji/_fmt_path formatına GEÇMEDİ — sonraki oturumda aynı desenle yapılabilir.
+- `size=N/A` (conda env'lerde) hâlâ açık — hesapla veya gösterme.
+
+### TODO'ya eklenenler (bu oturum)
+- **F187–F196:** Conflict Preview, Conflict Hata Dialogu, Env Doctor, Bağımlılık Ağacı, pip-audit, Orphan Env Keşfi, uv Derinleşmesi, Crash Reporter, CI Matrisi, Dağıtım Kanalları
+- **F197:** Yeni Launcher Kartları (Marimo, Quarto, Datasette, Ollama+Open WebUI, NiceGUI, Reflex, Shiny, napari, Label Studio, Locust, ptpython, bpython)
+- **F198:** Özel Konumda Env Oluşturma & Takip (registry + Add Existing + stale yönetimi)
+- **F199:** Local LLM Environment Studio (preset'ler, donanım-farkında kurulum, Ollama, Learn)
+- **F200:** AI/LLM Workbench Full Paket (fine-tuning/RAG/agents/eval iş akışları + dalga planı)
+- **F201:** Tüm launcher kartları için Learn sekmesi (learn_topic_id bağlantısı, karttan Learn'e tek tık; F149'un kapsamlı hali)
+- **Karar notu:** yeni backend adayı sadece pixi; hatch/pdm en fazla tespit+listele; virtualenv/pipenv/rye eklenmeyecek
+
+### Dosya Konumları
+| Dosya | Değişiklik |
+|-------|-----------|
+| `src/utils/logger.py` | Tarih formatı, log_time_format nokta, kutu banner |
+| `src/core/venv_manager_common.py` | `_fmt_path()` yeni, 🚀/✔/✖ subprocess logları |
+| `src/core/venv_manager_cache.py` | Emoji + `_fmt_path` tüm [Cache] satırlarında |
+| `src/core/venv_manager.py` | 📝 [Poetry] + `_fmt_path` import |
+| `VENVSTUDIO_TODO.md` | F187–F200 + karar notu eklendi |
+
+---
+
 ## Sonraki Öncelikler
 1. F88 — Poetry/Rye create'te --python flag
 2. F83 — Force Delete
@@ -3020,7 +3072,7 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 7. B81 — Tool Environment kaldırılacak
 
 ## Sonraki Chat Başlangıç Promptu
-> VenvStudio devam — Handoff'u oku. Mevcut: v1.4.54.
+> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.3, sıradaki: v1.6.4.
 
 ## 📋 Dosya Kopyalama Kuralları
 

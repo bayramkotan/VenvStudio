@@ -3762,6 +3762,69 @@ Araştırılacak ve implemente edilecek:
 
 ---
 
+### 🔴 F200 — AI/LLM Workbench (Full Paket) (eklendi: 2026-07-08)
+
+**Vizyon:** VenvStudio klasik data science'ın yanında modern LLM mühendisliğini de kapsasın — hem akademik hem pratik. Konum: "From classic data science to modern LLM engineering — one GUI for every Python environment." F199'u 4 iş akışına genişletir.
+
+**İş Akışı 1 — Inference (F199'da büyük ölçüde var):**
+- F199 preset'lerine ek: **SGLang** (vLLM rakibi), quantization araçları (GPTQ/AWQ)
+- ⚠️ vLLM ve SGLang **Linux+CUDA only** — Windows/macOS'ta preset gri + "bu platformda desteklenmiyor" notu
+
+**İş Akışı 2 — Fine-tuning (YENİ):**
+- Preset: `transformers + peft + trl + bitsandbytes + accelerate + datasets` (LoRA/QLoRA standart stack)
+- Ayrı preset: **Unsloth** (tek GPU hızlı fine-tune)
+- VRAM rehberliği (F199-2/F183 ile): "8 GB → QLoRA 7B olur, full fine-tune olmaz"
+- ⚠️ Unsloth/bitsandbytes CUDA sürüm eşleşmesi nazlı — F187/F188 conflict altyapısı bu preset'lerden ÖNCE hazır olmalı
+
+**İş Akışı 3 — RAG & Agents (YENİ — en pratik iş yükü):**
+- RAG preset: `langchain / llamaindex + chromadb + sentence-transformers + faiss`
+- Agents preset: `anthropic + openai + pydantic-ai + langgraph + mcp` (MCP SDK dahil)
+- Launcher: **Chainlit** (yeni kart), Streamlit (var), Open WebUI (F197)
+
+**İş Akışı 4 — Evaluation & Akademik (YENİ):**
+- Eval preset: `lm-eval-harness + ragas + deepeval`
+- Deney takibi: `wandb` + MLflow (launcher var); Learn'de "deney loglama" konusu
+- Reproducibility hikâyesi: lockfile export + F178 (environment.yml) + F179 (Jupyter kernel) = "makaledeki deneyi aynen kur"
+- Quarto launcher'ı (F197) makale/rapor tarafını kapatır
+
+**Learn — yeni kategoriler (F144 formatında):**
+- 🔧 Fine-tuning (LoRA/QLoRA, PEFT, Unsloth, dataset hazırlama)
+- 📚 RAG (chunking, embedding, vector DB karşılaştırma, reranking)
+- 🤝 Agents & MCP (tool use, MCP server yazma, langgraph)
+- 📏 LLM Evaluation (benchmark'lar, ragas metrikleri, eval tasarımı)
+
+**Fizibilite notu:** Preset'ler + Learn + launcher kartları = mevcut altyapı üzerine SADECE VERİ (settings_catalog custom preset + learn_content.py + launcher_links.json) — düşük risk. Yeni kod sadece F183 hardware_detector ve ollama_manager.
+**İçerik eskime riski:** LLM ekosistemi 6 ayda değişiyor → Learn/preset verisini online güncellenebilir yapma fikri (content-as-data, F180 sonrası) stratejik önkoşul değil ama güçlü tamamlayıcı.
+
+**Dalga planı:**
+1. 🌊 RAG/Agents/Eval preset'leri + Learn içeriği + Chainlit kartı (ucuz, hemen)
+2. 🌊 F183 GPU detection + fine-tuning preset'leri + VRAM rehberliği
+3. 🌊 Ollama derin entegrasyon + platform-özel inference preset'leri (vLLM/SGLang/MLX)
+
+**İlgili dosyalar:** `src/gui/settings_catalog.py`, `src/gui/learn_content.py`, `src/gui/launcher_links.json`, `src/core/hardware_detector.py` (F183), `src/core/ollama_manager.py` (F199)
+
+**Öncelik:** 🔴 Yüksek — ürün vizyonunun ana ekseni; F199 ile birlikte planlanmalı.
+
+---
+
+### 🟡 F201 — Tüm Launcher Kartları için Learn Sekmesi (eklendi: 2026-07-08)
+
+**Hedef:** Her launcher kartının (mevcut 22 + F197 ile gelecekler) Learn'de karşılığı olan bir konusu olsun ve karttan tek tıkla o konuya gidilsin. F149'un (ertelenmişti) kapsamlı hali.
+
+**Kapsam:**
+- **Learn tarafı:** Her launcher uygulaması için bir Learn konusu — "nedir, ne zaman kullanılır, temel komutlar, resmi linkler" formatında. Eksik olanlar yazılır (mevcut Learn'de bazıları zaten var: Jupyter, Spyder, Streamlit, MLflow vb. — önce diff al).
+- **Launcher tarafı:** Karta "📖 Learn" butonu/ikonu → tıklayınca Learn sayfası açılır ve ilgili konuya scroll/focus olur.
+- **Bağlantı mekanizması:** `launcher_links.json`'a `learn_topic_id` alanı ekle; Learn konularına stabil `id` verilmemişse önce o (topic id altyapısı, F200 Learn kategorileriyle ortak temel).
+- **Ters yön (opsiyonel):** Learn konusundan launcher'a "🚀 Launch" butonu — uygulama kuruluysa başlat, değilse Install akışına götür.
+
+**İlgili dosyalar:** `src/gui/launcher_links.json` (learn_topic_id alanı), `src/gui/launcher_ui.py` (kart butonu), `src/gui/learn_page.py` (konuya scroll/focus API'si), `src/gui/learn_content.py` (eksik konular + topic id'ler)
+
+**İlişkili maddeler:** F149 (bunun öncüsü — kapatılıp F201'e devredilebilir), F197 (yeni kartlar da bu deseni izler), F200 (Learn kategori genişlemesi)
+
+**Öncelik:** 🟡 Orta — F197 ile aynı dalgada yapılırsa tek seferde biter.
+
+---
+
 ## 🆕 F187–F196 — Conflict Yönetimi, Kalite & Dağıtım (eklendi: 2026-07-08)
 
 **Öncelik önerisi:** F188 + F189 kısa vade (v1.6.x, düşük maliyet) → F187 + F193 FAZ 1'e → kalanlar arkasına.

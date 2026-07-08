@@ -1,4 +1,6 @@
 """VenvStudio - Settings: ToolchainMixin"""
+import logging
+
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QComboBox, QLineEdit, QSpinBox, QCheckBox, QGroupBox,
@@ -7,6 +9,8 @@ from PySide6.QtWidgets import (
     QHeaderView, QInputDialog, QDialog, QDialogButtonBox,
     QProgressBar, QListWidget, QListWidgetItem, QTextEdit,
 )
+
+_log = logging.getLogger("venvstudio.gui.toolchain")
 from PySide6.QtCore import Qt, Signal, QThread
 from PySide6.QtGui import QFont, QColor
 from src.utils.platform_utils import find_system_pythons, get_platform, subprocess_args
@@ -769,16 +773,16 @@ class ToolchainMixin:
         def _done(ok, result):
             import json, os
             if not ok:
-                print(f"[TC] _done called with ok=False, result={result[:120]!r}")
+                _log.warning(f"🧰 [TC] _done called with ok=False, result={result[:120]!r}")
                 return
             try:
                 data = json.loads(result)
                 _py = data["py"]
                 rows = data["rows"]
             except Exception as e:
-                print(f"[TC] JSON parse error: {e!r}, result={result[:120]!r}")
+                _log.warning(f"🧰 [TC] JSON parse error: {e!r}, result={result[:120]!r}")
                 return
-            print(f"[TC] _done: {len(rows)} rows loaded for {_py[:40]}")
+            _log.debug(f"🧰 [TC] _done: {len(rows)} rows loaded for {_py[:40]}")
             from PySide6.QtGui import QColor
             from PySide6.QtWidgets import QTableWidgetItem
             import os as _os

@@ -8,4 +8,4 @@ build/
 .vscode/
 .idea/
 *.spec
-VenvStudio_Handoff.md
+VenvStudio_Handoff.md*.bak

@@ -2,6 +2,7 @@
 Catalog population, install/uninstall, apply-changes logic
 (moved from package_panel.py).
 """
+from src.core.venv_manager_common import _fmt_path
 import os
 import sys
 import subprocess
@@ -149,8 +150,8 @@ class PackageOpsMixin:
             if self.pip_manager and getattr(self.pip_manager, "venv_path", None):
                 _current_path = str(self.pip_manager.venv_path)
             get_logger("venvstudio.pkg_cache").debug(
-                f"[PkgCache] _on_packages_loaded called count={len(packages) if packages else 0} "
-                f"loaded_for={loaded_for_path!r} current={_current_path!r}"
+                f"📥 [PkgCache] _on_packages_loaded called count={len(packages) if packages else 0} "
+                f"loaded_for={_fmt_path(loaded_for_path)!r} current={_fmt_path(_current_path)!r}"
             )
         except Exception:
             pass
@@ -165,8 +166,8 @@ class PackageOpsMixin:
             if loaded_for_path and _current and loaded_for_path != _current:
                 from src.utils.logger import get_logger
                 get_logger("venvstudio.pkg_cache").info(
-                    f"[PkgCache] discarding stale result: was for {loaded_for_path!r}, "
-                    f"now on {_current!r}"
+                    f"🗑️ [PkgCache] discarding stale result: was for {_fmt_path(loaded_for_path)!r}, "
+                    f"now on {_fmt_path(_current)!r}"
                 )
                 return
         except Exception:

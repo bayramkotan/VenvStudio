@@ -3,6 +3,7 @@ set_venv, env-type tab switching, env selector, size calc, async package
 loading (moved from package_panel.py). This is the core "which env am I
 showing" logic — the riskiest part of this split.
 """
+from src.core.venv_manager_common import _fmt_path
 import os
 import sys
 import subprocess
@@ -654,7 +655,7 @@ class EnvStateMixin:
                 try:
                     from src.utils.logger import get_logger
                     get_logger("venvstudio.pkg_cache").debug(
-                        f"[PkgCache] HIT key={self._get_pkg_cache_key()!r} count={len(cached)}"
+                        f"✅ [PkgCache] HIT key={_fmt_path(self._get_pkg_cache_key())!r} count={len(cached)}"
                     )
                 except Exception:
                     pass
@@ -669,7 +670,7 @@ class EnvStateMixin:
             try:
                 from src.utils.logger import get_logger
                 get_logger("venvstudio.pkg_cache").debug(
-                    f"[PkgCache] MISS key={self._get_pkg_cache_key()!r} force={force} → starting pip list"
+                    f"📦 [PkgCache] MISS key={_fmt_path(self._get_pkg_cache_key())!r} force={force} → starting pip list"
                 )
             except Exception:
                 pass

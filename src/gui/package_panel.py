@@ -14,6 +14,7 @@ package_panel_common.py and are re-exported below so
 codebase) keeps working unchanged.
 """
 
+from src.core.venv_manager_common import _fmt_path
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QTableWidget, QTableWidgetItem, QHeaderView, QLineEdit,
@@ -541,7 +542,7 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
             try:
                 from src.utils.logger import get_logger
                 get_logger("venvstudio.pkg_cache").debug(
-                    f"[PkgCache] SAVED key={key!r} count={len(packages)}"
+                    f"💾 [PkgCache] SAVED key={_fmt_path(key)!r} count={len(packages)}"
                 )
             except Exception:
                 pass
@@ -551,7 +552,7 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
                 from src.utils.logger import get_logger
                 _tb = traceback.format_exc()
                 get_logger("venvstudio.pkg_cache").warning(
-                    f"[PkgCache] SAVE FAILED: {type(_e).__name__}: {_e}\n{_tb}"
+                    f"⚠️ [PkgCache] SAVE FAILED: {type(_e).__name__}: {_e}\n{_tb}"
                 )
             except Exception:
                 pass

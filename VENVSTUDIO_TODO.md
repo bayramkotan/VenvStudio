@@ -9,17 +9,42 @@
 - ✅ learn_page.py 3318 → 765 (→ `src/gui/learn_content.py`, LEARN_CATEGORIES)
 - ✅ venv_manager.py 2108 → 1262 (mixin: `_common`/`_cache`/`_clone`/`_rename`)
 - ✅ CreateWorker → workers.py (env_dialog 1538 → 1504; 6 worker tek yerde)
+- ✅ settings_page.py 1708 → 325 (mixin: appearance/python/toolchain/catalog/advanced + yeni `settings_editors.py`, `settings_common.py`)
+- ✅ env_dialog.py 1504 → 111 (yeni `env_dialog_ui.py`, `env_dialog_tools.py`, `env_dialog_create.py` — `_create` dispatcher'a indirgendi, 3 alt metoda ayrıldı)
+- ✅ main_window.py 3645 → 1213 (yeni `widgets.py`, `env_list.py`, `env_operations.py`, `env_export.py`, `quicklaunch.py`, `window_theme.py`, `window_menu.py`, `linux_fixes.py`) — fonksiyonel test geçti (create/rename/delete/clone/export/quicklaunch/tema/menü/context-menu hepsi denendi)
 
 **⏳ Kalan büyük dosyalar (risk sırası — en güvenliden):**
-- **settings_page.py (1708)** — sonraki ideal hedef; orta boy, tek dosya. Yapıyı `grep -n "^class \|^    def "` ile çıkar, section/tab bazlı ya da mixin böl.
-- **env_dialog.py (1504)** — asıl büyük parça `_create` metodu (~575 satır, iç içe env-type mantığı). Riskli; env-type handler'larını ayrı fonksiyon/mixin'e çıkar. `_install_tool` (~245) ve `_setup_ui` (~260) de büyük.
-- **main_window.py (3645)** — worker'lar ✅ zaten çıktı. Kalan: `PathElideMiddleDelegate`+`SidebarButton` → `widgets.py`; export metodları (7 tane) → `env_export.py` mixin; env/quicklaunch metodları → ayrı modül.
-- **package_panel.py (5390)** — EN BÜYÜK, EN SON, EN DİKKATLİ. En çok iç bağımlılık burada. Önce yapı analizi, sonra kademeli.
+- **package_panel.py (5390)** — EN BÜYÜK, EN SON, EN DİKKATLİ, tek kalan hedef. En çok iç bağımlılık burada. Önce yapı analizi, sonra kademeli.
 
 **⚠️ Refactor'da öğrenilen tuzaklar (venv_manager mixin'den):**
 - Mixin'de class-level attribute → `type(self).foo`, `ClassName.foo` DEĞİL (isim tanımlı değil).
 - Her mixin kendi importlarını içermeli (os/json/_run vb. kolayca kaçar).
 - import+MRO+parite testi YETMEZ — runtime path'lerini gerçekten çalıştır (fonksiyonel test).
+- **main_window.py bölmesinde 2 kez eksik import kaçtı** (`tr` → `env_list.py`, `Signal` → `quicklaunch.py`, ikisi de metod içinde tanımlı local class'ta kullanılıyordu, elle grep taramasında gözden kaçtı). Çözüm: `py_compile` YETMEZ (sadece syntax kontrol eder, isim çözümlemez) — bundan sonra her mixin dosyasında **`python3 -m pyflakes <dosya>.py`** çalıştırılacak (undefined-name/F821 tespiti için), package_panel.py bölmesinde ilk adım olsun.
+
+---
+
+## ✅ FIX YAPILDI — Toolchain Manager: `venv` satırında Install/Upgrade crash
+
+**Nerede:** `settings_toolchain.py` → `_tc_do_install` (Toolchain Manager sekmesi).
+**Bulunduğu tarih:** settings_page.py refactor sonrası fonksiyonel testte ortaya çıktı, sonra env_dialog.py refactor testinde tekrar reprodüklendi.
+
+**Gerçek sebep (ilk teşhis — `_spa()` eksikliği — YANLIŞTI, düzeltiyorum):**
+`_TC_TOOLS` listesinde `("venv", None, "venv", "🐍")` — `venv`'in `pkg` değeri `None`, çünkü venv pip ile ayrı kurulan bir paket değil, Python stdlib'inin parçası. `venv` satırında **Upgrade (System scope)** butonuna basılınca `None` değeri `_pip_cmd` listesine (`[py_exe, "-m", "pip", "install", None, ...]`) karışıyor, `subprocess.run()` bunu bir path/str bekleyen argüman olarak açmaya çalışınca:
+```
+TypeError: expected str, bytes or os.PathLike object, not NoneType
+```
+`_tc_do_remove`'da zaten `if tool in ("pip", "venv"): return False, "...core Python component"` guard'ı vardı — ama `_tc_do_install`'da eşdeğeri yoktu.
+
+**Fix (v3 — gerçek update-checker):** v2'de buton direkt genel "Download Python" dialogunu açıyordu, gerçek bir karşılaştırma yapmıyordu — kullanıcı bunun yeterli olmadığını belirtti. Yeni `_tc_check_python_update()` metodu:
+- Tablodaki venv satırının Version kolonundan mevcut seçili Python sürümünü okuyor (örn. "3.14.6")
+- `get_available_versions()` ile (aynı fonksiyon, `PythonDownloadDialog`'un kullandığı — yeni indirme mantığı YOK) mevcut en yeni standalone build'i çekiyor
+- Sürüm karşılaştırması yapıyor: daha yeni bir sürüm varsa "Update Available: X mevcut, indirmek ister misin?" (Yes → download dialogunu açar); zaten en güncelse "Up to Date" mesajı gösteriyor
+- Ağ çağrısı `WorkerThread` ile arka planda yapılıyor (UI donmuyor), `QProgressDialog` ile "Checking for newer Python versions..." gösteriliyor
+
+Mock testte iki senaryo da (eski sürüm → update önerisi, güncel sürüm → "up to date") doğrulandı.
+
+**Not (v3.1):** İlk teslimde `_do()` fonksiyonu parametresiz tanımlanmıştı, ama bu dosyadaki `WorkerThread` her zaman `self.func(callback=...)` şeklinde çağırıyor (dosyadaki diğer 6 `_do(callback=None)` ile de doğrulandı) — `TypeError: got an unexpected keyword argument 'callback'` ile crash oluyordu. `_do(callback=None)` yapılarak düzeltildi.
 
 ---
 

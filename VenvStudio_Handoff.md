@@ -3034,12 +3034,8 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 - **Yeni pratik:** Dosya değişikliği yapılacak oturumlarda dosyalar kullanıcının makinesinden İSTENMEDEN ÖNCE `git log -1` + `APP_VERSION` kontrolü istenebilir; ya da dosyalar doğrudan GitHub'daki güncel repo'dan (`git clone --depth 1`) alınıp değişiklik ORAYA uygulanır — bu oturumda ikincisi yapıldı ve doğru çalıştı.
 - Kullanıcı makinesinde sıra her zaman: `git pull` → dosya kopyala → test → push.
 
-### settings_toolchain.py — [TC] print → logger (oturum sonunda eklendi, push edildi)
-- 3 çıplak `print("[TC] ...")` → `_log.debug/warning("🧰 [TC] ...")`; dosyaya `import logging` + `_log = logging.getLogger("venvstudio.gui.toolchain")` eklendi.
-- ⚠️ Bulunan ama DOKUNULMAYAN önceden-var-olan bug: `settings_toolchain.py` ~1595'te `sys.platform` kullanılıyor ama `sys` import edilmemiş (NameError riski) — aday: B181. Ayrıca repoda junk `src/gui/settings_toolchain.py.bak` var.
-
 ### Kalan işler (log turu devamı)
-- `[PkgCache]` satırları (pkg_cache logger'ı — package_panel bölünmüş dosyalarından biri) henüz emoji/_fmt_path formatına GEÇMEDİ — sonraki oturumda aynı desenle yapılabilir.
+- `[PkgCache]` satırları (pkg_cache logger'ı — package_panel bölünmüş dosyalarından biri) ve `[TC] _done:` çıplak print'i (settings_toolchain.py) henüz emoji/_fmt_path formatına GEÇMEDİ — sonraki oturumda aynı desenle yapılabilir.
 - `size=N/A` (conda env'lerde) hâlâ açık — hesapla veya gösterme.
 
 ### TODO'ya eklenenler (bu oturum)
@@ -3048,7 +3044,6 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 - **F198:** Özel Konumda Env Oluşturma & Takip (registry + Add Existing + stale yönetimi)
 - **F199:** Local LLM Environment Studio (preset'ler, donanım-farkında kurulum, Ollama, Learn)
 - **F200:** AI/LLM Workbench Full Paket (fine-tuning/RAG/agents/eval iş akışları + dalga planı)
-- **F201:** Tüm launcher kartları için Learn sekmesi (learn_topic_id bağlantısı, karttan Learn'e tek tık; F149'un kapsamlı hali)
 - **Karar notu:** yeni backend adayı sadece pixi; hatch/pdm en fazla tespit+listele; virtualenv/pipenv/rye eklenmeyecek
 
 ### Dosya Konumları

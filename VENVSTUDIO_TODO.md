@@ -3807,24 +3807,6 @@ Araştırılacak ve implemente edilecek:
 
 ---
 
-### 🟡 F201 — Tüm Launcher Kartları için Learn Sekmesi (eklendi: 2026-07-08)
-
-**Hedef:** Her launcher kartının (mevcut 22 + F197 ile gelecekler) Learn'de karşılığı olan bir konusu olsun ve karttan tek tıkla o konuya gidilsin. F149'un (ertelenmişti) kapsamlı hali.
-
-**Kapsam:**
-- **Learn tarafı:** Her launcher uygulaması için bir Learn konusu — "nedir, ne zaman kullanılır, temel komutlar, resmi linkler" formatında. Eksik olanlar yazılır (mevcut Learn'de bazıları zaten var: Jupyter, Spyder, Streamlit, MLflow vb. — önce diff al).
-- **Launcher tarafı:** Karta "📖 Learn" butonu/ikonu → tıklayınca Learn sayfası açılır ve ilgili konuya scroll/focus olur.
-- **Bağlantı mekanizması:** `launcher_links.json`'a `learn_topic_id` alanı ekle; Learn konularına stabil `id` verilmemişse önce o (topic id altyapısı, F200 Learn kategorileriyle ortak temel).
-- **Ters yön (opsiyonel):** Learn konusundan launcher'a "🚀 Launch" butonu — uygulama kuruluysa başlat, değilse Install akışına götür.
-
-**İlgili dosyalar:** `src/gui/launcher_links.json` (learn_topic_id alanı), `src/gui/launcher_ui.py` (kart butonu), `src/gui/learn_page.py` (konuya scroll/focus API'si), `src/gui/learn_content.py` (eksik konular + topic id'ler)
-
-**İlişkili maddeler:** F149 (bunun öncüsü — kapatılıp F201'e devredilebilir), F197 (yeni kartlar da bu deseni izler), F200 (Learn kategori genişlemesi)
-
-**Öncelik:** 🟡 Orta — F197 ile aynı dalgada yapılırsa tek seferde biter.
-
----
-
 ## 🆕 F187–F196 — Conflict Yönetimi, Kalite & Dağıtım (eklendi: 2026-07-08)
 
 **Öncelik önerisi:** F188 + F189 kısa vade (v1.6.x, düşük maliyet) → F187 + F193 FAZ 1'e → kalanlar arkasına.

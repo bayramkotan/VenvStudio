@@ -4,6 +4,7 @@ Launching apps/scripts, install/uninstall for launcher tools
 """
 import os
 import sys
+import logging
 import subprocess
 from pathlib import Path
 
@@ -12,6 +13,9 @@ from PySide6.QtCore import Qt, QTimer
 
 from src.utils.i18n import tr
 from src.utils.platform_utils import get_platform, get_python_executable, subprocess_args
+from src.core.venv_manager_common import _fmt_path
+
+_log = logging.getLogger("venvstudio.gui.launcher")
 from src.gui.package_panel_common import WorkerThread
 
 
@@ -30,6 +34,7 @@ class LauncherRunMixin:
 
         plat = get_platform()
         name = app_def["name"]
+        _log.info(f"🚀 [Launcher] Launching system app '{name}' (platform={plat})")
         icon_key = app_def.get("icon_key", "")
         installer = get_installer(icon_key)
 
@@ -213,6 +218,7 @@ class LauncherRunMixin:
         sys_cmds = app_def.get("system_commands", {})
         cmd_parts = sys_cmds.get(plat) or sys_cmds.get("linux", [exe_path])
         cmd = [exe_path] + list(cmd_parts[1:])
+        _log.info(f"🚀 [Launcher] Launching '{name}' exe: {_fmt_path(exe_path)}")
         work_dir = os.path.expanduser("~")
         try:
             show_console = app_def.get("needs_console", False)
@@ -394,6 +400,11 @@ class LauncherRunMixin:
         """Launch an app from the selected environment."""
         import os
         from PySide6.QtWidgets import QFileDialog
+
+        _env_name = ""
+        if self.pip_manager and getattr(self.pip_manager, "venv_path", None):
+            _env_name = self.pip_manager.venv_path.name
+        _log.info(f"🚀 [Launcher] Launching '{app_def.get('name', '?')}' in env '{_env_name or '(none)'}'")
 
         if not self.pip_manager:
             QMessageBox.warning(self, tr("warning"), tr("select_environment"))
@@ -586,6 +597,7 @@ class LauncherRunMixin:
         else:
             cmd = [str(python_exe)] + app_def["command"]
 
+        _log.debug(f"🚀 [Launcher] command: {' '.join(_fmt_path(c) for c in cmd)}")
         # Check if app needs console (e.g. IPython)
         show_console = app_def.get("needs_console", False)
 

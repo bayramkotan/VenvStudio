@@ -59,6 +59,15 @@ class WindowMenuMixin:
         shortcut_action.triggered.connect(self._create_desktop_shortcut)
         tools_menu.addAction(shortcut_action)
 
+        tools_menu.addSeparator()
+        logs_action = QAction("🪵 View Logs", self)
+        logs_action.triggered.connect(self._show_log_viewer)
+        tools_menu.addAction(logs_action)
+
+        logs_folder_action = QAction("📁 Open Logs Folder", self)
+        logs_folder_action.triggered.connect(self._open_logs_folder)
+        tools_menu.addAction(logs_folder_action)
+
         help_menu = menubar.addMenu(tr("help"))
         about_action = QAction(f"ℹ️ {tr('about')}", self)
         about_action.triggered.connect(self._show_about)
@@ -83,6 +92,20 @@ class WindowMenuMixin:
         help_menu.addAction(issues_action)
 
 
+
+    def _show_log_viewer(self):
+        """Open the log viewer dialog (frozen builds have no terminal)."""
+        from src.gui.log_viewer import LogViewerDialog
+        dlg = LogViewerDialog(self)
+        dlg.exec()
+
+    def _open_logs_folder(self):
+        """Open the logs directory in the system file manager."""
+        from src.utils.logger import get_log_dir
+        from src.utils.platform_utils import open_folder
+        ok, msg = open_folder(get_log_dir())
+        if not ok:
+            QMessageBox.warning(self, "Open Logs Folder", msg or "Could not open folder.")
 
     def _create_desktop_shortcut(self):
         """Create a desktop shortcut that runs 'venvstudio' command (pip-installed).

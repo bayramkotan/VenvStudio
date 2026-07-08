@@ -595,11 +595,19 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
             from src.core.config_manager import ConfigManager
             terminal_type = self._get_config("terminal_type", "")
             env_type = getattr(self, "_current_env_type", "venv")
-            print(f"[DEBUG] open_terminal_at path={self._current_venv_path} env_type={env_type}")
+            from src.utils.logger import get_logger
+            from src.core.venv_manager_common import _fmt_path
+            get_logger("venvstudio.gui.terminal").info(
+                f"🖥️ [Terminal] Opening at {_fmt_path(self._current_venv_path)} "
+                f"(env_type={env_type}, terminal_type={terminal_type or 'auto'})"
+            )
             open_terminal_at(self._current_venv_path, terminal_type,
                              env_type=env_type)
         except Exception as e:
-            print(f"[DEBUG] terminal error: {e}")
+            from src.utils.logger import get_logger
+            get_logger("venvstudio.gui.terminal").warning(
+                f"⚠️ [Terminal] Could not open terminal: {e}"
+            )
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.warning(self, "Error", f"Could not open terminal:\n{e}")
 

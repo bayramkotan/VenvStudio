@@ -3,6 +3,7 @@ VenvStudio - Platform-specific utilities
 Cross-platform support for Windows, macOS, and Linux
 """
 
+import logging
 import os
 import sys
 import platform
@@ -790,7 +791,9 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                 if _launch_linux_terminal(term):
                     break
     except Exception as e:
-        print(f"Could not open terminal: {e}")
+        logging.getLogger("venvstudio.gui.terminal").warning(
+            f"⚠️ [Terminal] Could not open terminal: {e}"
+        )
 
 
 def get_venv_size(venv_path: Path) -> str:

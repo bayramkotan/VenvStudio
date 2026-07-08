@@ -458,13 +458,24 @@ class LauncherUIMixin:
                 if _vis and not _loaded[0]:
                     _loaded[0] = True
                     try:
-                        import json as _j, os as _o
+                        import json as _j, os as _o, sys as _s
                         _p = _o.path.join(_o.path.dirname(_o.path.abspath(__file__)),
                                           "launcher_links.json")
+                        if not _o.path.exists(_p) and getattr(_s, "_MEIPASS", None):
+                            # Frozen builds (PyInstaller): data lives under _MEIPASS
+                            _p = _o.path.join(_s._MEIPASS, "src", "gui",
+                                              "launcher_links.json")
                         with open(_p, "r", encoding="utf-8") as _f:
                             _all = _j.load(_f)
                         _links = _all.get(app_name, {})
-                    except Exception:
+                    except Exception as _e:
+                        # Do NOT fail silently: this exact silence hid the
+                        # missing-JSON-in-AppImage bug for a long time.
+                        import logging as _lg
+                        _lg.getLogger("venvstudio.gui.launcher").warning(
+                            f"⚠️ [Launcher] links JSON load failed ({_e}) — "
+                            f"tried: {_p}"
+                        )
                         _links = {}
                     # Clear placeholder stretch
                     while container.layout().count():

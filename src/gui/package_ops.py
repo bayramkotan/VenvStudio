@@ -500,6 +500,7 @@ class PackageOpsMixin:
     # ── Install / Uninstall ──
 
     def _install_packages(self, packages: list, hint_name: str = ""):
+        self._pkg_op_hint = hint_name  # preset/app adı — _do_install loglar
         if not self.pip_manager:
             QMessageBox.warning(self, "Warning", "No environment selected.\nPlease select an environment first.")
             return
@@ -587,6 +588,21 @@ class PackageOpsMixin:
         """Actually start install worker (no confirm dialog)."""
         self._set_busy(True)
         self.output_log.clear()
+
+        # ── Merkezi kurulum logu: env + kaynak (preset/uygulama) + paketler ──
+        _env_name = ""
+        if self.pip_manager and getattr(self.pip_manager, "venv_path", None):
+            _env_name = self.pip_manager.venv_path.name
+        _hint = getattr(self, "_pkg_op_hint", "") or "Manual/Direct"
+        self._pkg_op_hint = ""
+        self._pkg_op_kind = "Install"
+        _pk = list(packages)
+        _shown = ", ".join(_pk[:8]) + (f" (+{len(_pk) - 8} more)" if len(_pk) > 8 else "")
+        from src.utils.logger import get_logger
+        get_logger("venvstudio.install").info(
+            f"📦 [Install] env='{_env_name}' source='{_hint}' "
+            f"packages({len(_pk)}): {_shown}"
+        )
 
         _env_type = getattr(self, "_current_env_type", "venv")
         if _env_type == "conda" and self.pip_manager and self.pip_manager.venv_path:
@@ -841,6 +857,16 @@ class PackageOpsMixin:
         )
         if reply != QMessageBox.Yes:
             return
+
+        _env_name = ""
+        if self.pip_manager and getattr(self.pip_manager, "venv_path", None):
+            _env_name = self.pip_manager.venv_path.name
+        self._pkg_op_kind = "Uninstall"
+        _shown = ", ".join(packages[:8]) + (f" (+{len(packages) - 8} more)" if len(packages) > 8 else "")
+        from src.utils.logger import get_logger
+        get_logger("venvstudio.install").info(
+            f"🗑️ [Uninstall] env='{_env_name}' packages({len(packages)}): {_shown}"
+        )
 
         _env_type = getattr(self, "_current_env_type", "venv")
         _uninstall_cmds = {

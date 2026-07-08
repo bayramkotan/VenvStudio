@@ -271,6 +271,11 @@ def build_command(one_file=True, debug=False):
         cmd.extend(["--add-data", f"config{sep}config"])
     if ICON_DIR.exists():
         cmd.extend(["--add-data", f"assets{sep}assets"])
+    _links_json = Path("src/gui/launcher_links.json")
+    if _links_json.exists():
+        # Launcher link definitions — without this, frozen builds (AppImage/
+        # exe/dmg) silently lose the "Links" buttons (JSON not in bundle).
+        cmd.extend(["--add-data", f"{_links_json}{sep}src/gui"])
 
     if IS_MACOS:
         cmd.extend(["--osx-bundle-identifier", "com.venvstudio.app"])

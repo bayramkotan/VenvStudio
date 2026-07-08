@@ -3,8 +3,8 @@
 ## Proje
 - **Repo:** https://github.com/bayramkotan/VenvStudio
 - **PyPI:** https://pypi.org/project/venvstudio/
-- **Son push edilmiş versiyon:** v1.6.3 (log iyileştirmeleri release'i)
-- **Bu oturumda yapılacak versiyon:** v1.6.4 (bir sonraki push hedefi)
+- **Son push edilmiş versiyon:** v1.6.4 (Log Viewer + conda size + PkgCache/TC log formatı)
+- **Bu oturumda yapılacak versiyon:** v1.6.5 (bir sonraki push hedefi)
 - **Proje dizini (Windows):** `C:\Github\VenvStudio`
 - **Proje dizini (Linux - CachyOS/Pardus):** `~/Github/VenvStudio`
 - **Handoff dizini (Windows):** `C:\Users\bayram\Yandex.Disk\GitHub_Handoff_Files\VenvStudio\VenvStudio_Handoff.md`
@@ -3034,9 +3034,41 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 - **Yeni pratik:** Dosya değişikliği yapılacak oturumlarda dosyalar kullanıcının makinesinden İSTENMEDEN ÖNCE `git log -1` + `APP_VERSION` kontrolü istenebilir; ya da dosyalar doğrudan GitHub'daki güncel repo'dan (`git clone --depth 1`) alınıp değişiklik ORAYA uygulanır — bu oturumda ikincisi yapıldı ve doğru çalıştı.
 - Kullanıcı makinesinde sıra her zaman: `git pull` → dosya kopyala → test → push.
 
-### Kalan işler (log turu devamı)
-- `[PkgCache]` satırları (pkg_cache logger'ı — package_panel bölünmüş dosyalarından biri) ve `[TC] _done:` çıplak print'i (settings_toolchain.py) henüz emoji/_fmt_path formatına GEÇMEDİ — sonraki oturumda aynı desenle yapılabilir.
-- `size=N/A` (conda env'lerde) hâlâ açık — hesapla veya gösterme.
+### settings_toolchain.py — [TC] print → logger (oturum sonunda eklendi, push edildi)
+- 3 çıplak `print("[TC] ...")` → `_log.debug/warning("🧰 [TC] ...")`; dosyaya `import logging` + `_log = logging.getLogger("venvstudio.gui.toolchain")` eklendi.
+- ⚠️ Bulunan ama DOKUNULMAYAN önceden-var-olan bug: `settings_toolchain.py` ~1595'te `sys.platform` kullanılıyor ama `sys` import edilmemiş (NameError riski) — aday: B181. Ayrıca repoda junk `src/gui/settings_toolchain.py.bak` var.
+
+## Bu Oturumda Yapılanlar — devam (v1.6.4 release)
+
+### [PkgCache] log turu tamamlandı
+- 3 dosyada 6 satır: `env_state.py` (✅ HIT / 📦 MISS), `package_panel.py` (💾 SAVED / ⚠️ SAVE FAILED), `package_ops.py` (📥 _on_packages_loaded / 🗑️ discarding stale)
+- Hepsine `from src.core.venv_manager_common import _fmt_path` eklendi; key/path'ler display-only native ayraçla. `venv_manager_common`'ın GUI bağımlılığı olmadığı doğrulandı (dairesel import yok).
+
+### Conda env size fix (size=N/A kökten çözüldü)
+- Tespit: geçmişteki size fix'i SADECE pipx yoluna aitti; conda dalında boyut hesabı HİÇ yazılmamıştı. `get_venv_size()` helper'ı zaten vardı (venv/uv/poetry kullanıyordu), conda unutulmuştu.
+- `venv_manager.py` conda dalı: (1) cache MISS'te `write_cache`'ten ÖNCE `get_venv_size(item)` (pipx sıralama dersi), (2) cache HIT'te self-heal — cache'te size boş/"N/A" ise yeniden hesapla + cache'i onar.
+
+### YENİ ÖZELLİK — Log Viewer (Tools menüsü)
+- Gerekçe: frozen build'lerde (exe/AppImage/.app) terminal yok; dosya log'u zaten vardı (`venvstudio.log`, 2 MB × 5 rotating, platform-özel logs dizini) ama UI'dan erişim yoktu.
+- YENİ dosya `src/gui/log_viewer.py`: `LogViewerDialog` — son 3000 satır tail, level filtresi (traceback devam satırları ait oldukları kayıtla birlikte görünür/gizlenir — regex `_LINE_RE` dosya-log formatına göre), 🔄 Refresh / 📋 Copy All / 📁 Open Logs Folder, monospace, auto-scroll.
+- `src/gui/window_menu.py`: Tools menüsüne "🪵 View Logs" + "📁 Open Logs Folder" aksiyonları ve `_show_log_viewer` / `_open_logs_folder` metodları.
+- Not: menü metinleri şimdilik İngilizce (Tools'daki mevcut aksiyonlar gibi) — i18n `tr()` anahtarları sonraki tura bırakıldı.
+
+### Dosya Konumları (v1.6.4)
+| Dosya | Değişiklik |
+|-------|-----------|
+| `src/gui/env_state.py` | ✅/📦 [PkgCache] + _fmt_path |
+| `src/gui/package_panel.py` | 💾/⚠️ [PkgCache] + _fmt_path |
+| `src/gui/package_ops.py` | 📥/🗑️ [PkgCache] + _fmt_path |
+| `src/core/venv_manager.py` | Conda size hesabı (miss + self-heal) |
+| `src/gui/log_viewer.py` | YENİ — LogViewerDialog |
+| `src/gui/window_menu.py` | Tools menüsü: View Logs / Open Logs Folder |
+
+### Kalan işler
+- Log Viewer menü metinlerinin i18n'i (11 dile `tr()` anahtarları)
+- **B181 adayı (dokunulmadı):** `settings_toolchain.py` ~1595 `sys.platform` kullanılıyor ama `sys` import edilmemiş — NameError riski
+- Repodaki junk `.bak` dosyaları (settings_toolchain.py.bak, env_dialog.py.bak, main_window.py.bak, package_panel.py.bak, settings_*.py.bak vb.) — temizlik turu
+- Startup performansı (PERF-001): MainWindow.__init__ ~9-12 sn — profiling'e göre UI build tarafı
 
 ### TODO'ya eklenenler (bu oturum)
 - **F187–F196:** Conflict Preview, Conflict Hata Dialogu, Env Doctor, Bağımlılık Ağacı, pip-audit, Orphan Env Keşfi, uv Derinleşmesi, Crash Reporter, CI Matrisi, Dağıtım Kanalları
@@ -3044,6 +3076,8 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 - **F198:** Özel Konumda Env Oluşturma & Takip (registry + Add Existing + stale yönetimi)
 - **F199:** Local LLM Environment Studio (preset'ler, donanım-farkında kurulum, Ollama, Learn)
 - **F200:** AI/LLM Workbench Full Paket (fine-tuning/RAG/agents/eval iş akışları + dalga planı)
+- **F201:** Tüm launcher kartları için Learn sekmesi (learn_topic_id bağlantısı, karttan Learn'e tek tık; F149'un kapsamlı hali)
+- **F202:** BSD (öncelik FreeBSD) için binary dağıtım — ports/pkg yolu, conda backend BSD'de kapalı, CI için vmactions/freebsd-vm notu
 - **Karar notu:** yeni backend adayı sadece pixi; hatch/pdm en fazla tespit+listele; virtualenv/pipenv/rye eklenmeyecek
 
 ### Dosya Konumları
@@ -3067,7 +3101,7 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 7. B81 — Tool Environment kaldırılacak
 
 ## Sonraki Chat Başlangıç Promptu
-> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.3, sıradaki: v1.6.4.
+> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.4, sıradaki: v1.6.5.
 
 ## 📋 Dosya Kopyalama Kuralları
 

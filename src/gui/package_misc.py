@@ -289,10 +289,11 @@ class PackageMiscMixin:
         try:
             from src.utils.logger import get_logger
             log = get_logger("venvstudio.install")
+            _kind = getattr(self, "_pkg_op_kind", "Install")
             if success:
-                log.info(f"Install OK: {message[:200]}")
+                log.info(f"✅ [{_kind}] OK: {message[:200]}")
             else:
-                log.warning(f"Install FAILED: {message[:500]}")
+                log.warning(f"❌ [{_kind}] FAILED: {message[:500]}")
         except Exception:
             pass
 

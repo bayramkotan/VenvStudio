@@ -3671,3 +3671,168 @@ Araştırılacak ve implemente edilecek:
   - Özel kanal ekleme
 
 **Not:** Tüm bu araçlar için env oluşturma, paket kurma, ve VenvStudio UI entegrasyonu yapılacak.
+
+**Karar notu (2026-07-08):** Yeni backend olarak yalnızca **pixi** ciddi aday. **hatch/pdm** backend olarak EKLENMEYECEK — en fazla "tespit et + listele" (read-only, F192 ile birlikte). **virtualenv/pipenv/rye** hiç eklenmeyecek (F137'deki virtualenv/pip-env maddeleri bu karara göre revize edilmeli).
+
+---
+
+### 🟡 F197 — Yeni Launcher Kartları (eklendi: 2026-07-08)
+
+**Ön adım:** `src/gui/launcher_links.json`'daki mevcut 22 kartla diff al — aşağıdakilerden zaten var olanları çıkar.
+
+**Güçlü adaylar (yüksek talep):**
+- **Marimo** — reaktif notebook, Jupyter'in modern rakibi (Learn'de var, launcher kartı yok)
+- **Quarto** — bilimsel yayıncılık, `quarto preview`
+- **Datasette** — veri keşfi, tek komutla çalışır
+- **Ollama** (+ **Open WebUI**) — local LLM; AI/LLM kitlesi için güçlü kart
+
+**İkinci halka:**
+- **NiceGUI** — yeni nesil Python web UI framework
+- **Reflex** — yeni nesil Python web UI framework
+- **Shiny for Python** — Posit destekli, data science tarafında büyüyor
+- **napari** — bilimsel görüntü analizi (mikroskopi/CV)
+- **Label Studio** — ML veri etiketleme, `label-studio start`
+- **Locust** — yük testi, web geliştirici kitlesi
+- **ptpython** — zengin REPL (IPython alternatifi, ucuz kart)
+- **bpython** — zengin REPL (IPython alternatifi, ucuz kart)
+
+**Eklenmeyecekler:** JupyterHub (çok kullanıcılı sunucu), Superset/Metabase (pip kurulumu sancılı, launcher'a uymaz).
+
+**Notlar:**
+- Her kart için: install komutu, run komutu, resmi linkler (launcher_links.json formatı), `needs_console` / `preferred_backend` alanları (B144 deseni)
+- Kart sayısı artacağı için PERF: launcher card lazy load (mevcut TODO maddesi) bu işten ÖNCE yapılmalı
+- İlgili dosyalar: `src/gui/launcher_ui.py`, `src/gui/launcher_run.py`, `src/gui/launcher_links.json`
+- Öncelik: 🟡 Orta (güçlü adaylar önce, ikinci halka sonra)
+
+---
+
+### 🔴 F198 — Özel Konumda Env Oluşturma & Takip (Custom Location Envs) (eklendi: 2026-07-08)
+
+**Hedef:** Env'ler yalnızca base_dir'de değil — kullanıcının seçtiği HERHANGİ bir konumda (proje klasörü, ikinci disk, USB, network drive) oluşturulabilsin ve VenvStudio bunları kalıcı olarak takip etsin.
+
+**Kapsam:**
+- **Oluşturma:** Env dialog'a "Location" alanı — Default (base_dir) / Custom path (klasör seç). venv, uv, poetry (`.venv in-project`), conda (`--prefix`) destekler; pipx hariç (kendi home'una bağlı).
+- **Kayıt sistemi (registry):** `~/.venvstudio/registered_envs.json` — base_dir dışındaki her env'in path + backend + created_at kaydı. Uygulama her açılışta registry'deki path'leri doğrular.
+- **Dışarıdan ekleme:** "Add Existing Environment" — kullanıcı mevcut bir env klasörünü gösterir → backend otomatik tespit (pyvenv.cfg / conda-meta / poetry) → registry'e eklenir. F192 (Orphan Env Keşfi) bulduklarını da buraya kaydeder.
+- **UI:** Environments listesinde konum gösterimi — base_dir env'leri normal, custom env'ler 📁 ikonu + path tooltip ile; opsiyonel "Group by location" görünümü.
+- **Stale yönetimi:** Path artık yoksa (disk çıkarıldı/klasör silindi) env kırmızı/soluk gösterilir — "Remove from list" veya "Locate..." (yeni path göster → `_relocate_venv_paths` ile onar).
+- **Tüm işlemler çalışmalı:** install/uninstall/export/clone/rename/delete custom-location env'lerde de aynı davranmalı (cache key'ler absolute path bazlı olduğundan mimari uygun).
+
+**İlişkili maddeler:** F140 (Proje İçine Env — bunun alt-durumu olur), F192 (Orphan keşfi → registry'e besler), F177 (Workspace — workspace.json custom env path'i referans alabilir).
+
+**İlgili dosyalar:** `src/core/venv_manager.py` (registry + path doğrulama), `src/gui/env_dialog.py` (Location alanı), `src/gui/env_list.py` (konum gösterimi), yeni `src/core/env_registry.py`
+
+**Öncelik:** 🔴 Yüksek — "tüm env'ler tek yerde" iddiasının tamamlayıcısı; F192 ile birlikte VenvStudio'yu disk-geneli env merkezi yapar.
+
+---
+
+### 🔴 F199 — Local LLM Environment Studio (eklendi: 2026-07-08)
+
+**Hedef:** Local LLM env kurulumunu (ekosistemin en sancılı kurulumu: CUDA, torch wheel, quantization) tek tıkla, donanım-farkında hale getir. İlişkili: F141/F181 (AI entegrasyonu), F183 (GPU detection), F197 (Ollama kartı).
+
+**1. LLM Presets (en ucuz, en hızlı kazanım):**
+- Catalog'a yeni "🤖 Local LLM" preset kategorisi:
+  - **llama.cpp stack:** `llama-cpp-python` (CUDA/Metal/CPU varyantı donanıma göre)
+  - **Transformers stack:** `torch` + `transformers` + `accelerate` + `bitsandbytes`
+  - **vLLM** (Linux+CUDA), **MLX** (macOS Apple Silicon), **Ollama client** (`ollama` paketi)
+  - **UI araçları:** `open-webui`, `text-generation-webui` gereksinimleri
+
+**2. Donanım-farkında kurulum (F183 ile birleşir):**
+- LLM preset seçilince donanım tespiti → doğru varyant önerisi:
+  - NVIDIA → doğru CUDA index-url (`--index-url .../whl/cu121`)
+  - AMD → ROCm wheel; Apple Silicon → MLX/Metal; hiçbiri → CPU/GGUF yolu
+- VRAM bazlı bilgi notu: "GPU'n 8 GB — 7B quantized modeller uygun"
+
+**3. Ollama entegrasyonu (F197 kartının derinleşmesi):**
+- Ollama kurulu mu tespit, `ollama list` ile indirilen modelleri göster
+- Popüler modelleri (llama3, qwen, mistral...) tek tıkla `ollama pull` — indirme progress'iyle
+
+**4. Learn içeriği — "Local LLM" kategorisi:**
+- GGUF nedir, quantization seviyeleri (Q4/Q5/Q8), VRAM hesabı
+- llama.cpp vs Ollama vs vLLM karşılaştırması (mevcut Learn formatında)
+
+**5. F141'e köprü:**
+- Ollama kuruluysa F141 AI asistan özellikleri API key gerektirmeden local modeli kullanır
+
+**Rekabet notu:** Anaconda "AI Navigator" kapalı ekosisteme bağlı — "açık kaynak, donanımını tanıyan, local LLM env'ini tek tıkla kuran GUI" farklılaştırıcı konum.
+
+**Öncelik sırası:** (1)+(4) ucuz → v1.6.x-1.7; (2) F183'e bağlı; (3) orta; (5) F141'le birlikte.
+
+**İlgili dosyalar:** `src/gui/settings_catalog.py` (preset kategorisi), `src/core/hardware_detector.py` (yeni, F183 ortak), yeni `src/core/ollama_manager.py`, `src/gui/learn_content.py`
+
+---
+
+## 🆕 F187–F196 — Conflict Yönetimi, Kalite & Dağıtım (eklendi: 2026-07-08)
+
+**Öncelik önerisi:** F188 + F189 kısa vade (v1.6.x, düşük maliyet) → F187 + F193 FAZ 1'e → kalanlar arkasına.
+
+### 🔴 F187 — Conflict Preview (Kurulum Öncesi Çakışma Önizleme)
+- Kur butonuna basılınca önce `pip install --dry-run --report` (pip 23+) veya uv resolve çalıştır
+- "Bu kurulum numpy'ı 2.1'e yükseltecek, scipy ile çakışacak" uyarısını **kurulum başlamadan** göster
+- Kullanıcı seçenekleri: Devam Et / İptal / Sürümü Değiştir
+- uv'de resolve saniyeler sürer → F193 konumlanmasıyla birebir örtüşür
+- İlgili dosyalar: `src/gui/package_ops.py`, `src/core/venv_manager.py`
+- Öncelik: 🔴 FAZ 1
+
+### 🔴 F188 — Conflict Hata Dialogu (Okunur Çakışma Ekranı)
+- Kurulum `ResolutionImpossible` / dependency conflict ile patlarsa ham log yerine parse edilmiş dialog:
+  hangi paket → hangi paketi → hangi sürüm aralığında istiyor, çakışan kim
+- Önerilen çözüm butonları: sürüm pinle, ayrı env oluştur, `--upgrade` dene
+- Mevcut CommandHintDialog / eğitici hata deseniyle uyumlu
+- İlgili dosya: `src/gui/package_ops.py` (hata yakalama noktası)
+- Öncelik: 🔴 Kısa vade (v1.6.x)
+
+### 🔴 F189 — Env Doctor (Sağlık Taraması)
+- Seçili env'i tara: `pip check` (kırık bağımlılıklar), kırık symlink, dangling pip,
+  EOL Python sürümü uyarısı, disk şişkinliği
+- Her sorun satırının yanında "Fix" butonu (onarılabilenler için)
+- Mevcut fix altyapısı çekirdek olur (`_relocate_venv_paths`, pip freeze fallback vb.)
+- Yeni dosyalar: `src/core/env_doctor.py`, `src/gui/doctor_dialog.py`
+- Öncelik: 🔴 Kısa vade (v1.6.x)
+
+### 🟡 F190 — Bağımlılık Ağacı Görünümü
+- Env paketlerini ağaç olarak göster: hangi paket neyi getirdi (pipdeptree mantığı,
+  `importlib.metadata` ile subprocess'siz)
+- Çakışan/kırık dallar kırmızı işaretli
+- Yeni dosya: `src/gui/deptree_widget.py`
+- Öncelik: 🟡 Orta
+
+### 🟡 F191 — Vulnerability Scan (pip-audit Entegrasyonu)
+- F159'un pratik hali: env'i `pip-audit` ile tara, bilinen CVE'leri listele
+- "Güvenli sürüme yükselt" butonu
+- Env Doctor'ın (F189) bir sekmesi olarak da uygulanabilir
+- Öncelik: 🟡 Orta
+
+### 🟡 F192 — Orphan Env Keşfi
+- Diski tara: VenvStudio'nun bilmediği `.venv` / conda / poetry env'lerini bul
+- Boyutlarıyla listele → İçe Aktar veya Sil
+- Sonuç özeti: "X GB kazandın"
+- Yeni dosya: `src/core/env_discovery.py`
+- Öncelik: 🟡 Orta
+
+### 🔴 F193 — uv Derinleşmesi ("uv'nin GUI'si" konumu)
+- uv.lock görüntüleme, `uv python` ile Python sürüm yönetimi, `uv tool` listesi
+- PEP 723 inline-metadata'lı scriptleri tek tıkla `uv run` ile çalıştırma
+- Stratejik not: uv'nin resmi GUI'si yok — bu boşluğu VenvStudio doldurur
+- İlgili dosyalar: `src/core/venv_manager.py`, `src/gui/settings_python.py`, yeni `src/core/uv_manager.py`
+- Öncelik: 🔴 FAZ 1
+
+### 🟡 F194 — Opt-in Crash Reporter
+- Hata olunca "Rapor Oluştur" butonu: traceback + sistem bilgisi →
+  panoya kopyala / GitHub issue şablonu aç
+- B180 gibi bugların erken haber alınmasını sağlar; telemetri yok, tamamen opt-in
+- İlgili dosya: `src/utils/logger.py` (excepthook)
+- Öncelik: 🟡 Orta
+
+### 🔴 F195 — CI Test Matrisi
+- GitHub Actions: Windows/Linux/macOS × Python 3.10–3.13
+- pytest-qt smoke test: uygulama açılıyor mu, ana sekmeler build oluyor mu
+- B180 sınıfı "başkasının makinesinde patlıyor" buglarını release öncesi yakalar
+- Yeni dosya: `.github/workflows/ci.yml` + `tests/` dizini
+- Öncelik: 🔴 Yüksek (altyapı — tüm gelecek işlerin sigortası)
+
+### 🟡 F196 — Dağıtım Kanalları
+- winget + Scoop (Windows), Flathub + AUR (Linux), sonra Homebrew (macOS)
+- CI'dan (F195) otomatik beslenebilir
+- Keşfedilebilirlik: PyPI'dan çok daha geniş kitle
+- Öncelik: 🟡 Orta (F195 sonrası)

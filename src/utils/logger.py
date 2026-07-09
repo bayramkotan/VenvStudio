@@ -295,6 +295,26 @@ def _visual_width(s: str) -> int:
     return width
 
 
+def _banner_to_file(style: str, title: str, details: Optional[List[str]] = None) -> None:
+    """Record a banner into the log FILE only (never the console handler).
+
+    Banners are printed to the console as Rich/ANSI boxes by banner();
+    routing them through the normal logger would duplicate them on the
+    console. Emitting directly to file handlers keeps venvstudio.log and
+    the Log Viewer complete — critical for frozen builds with no terminal.
+    """
+    try:
+        lg = logging.getLogger("venvstudio")
+        msg = f"[{style.upper()}] {title}" + \
+              ((" · " + " · ".join(details)) if details else "")
+        rec = lg.makeRecord("venvstudio", logging.INFO, "(banner)", 0, msg, None, None)
+        for h in lg.handlers:
+            if isinstance(h, logging.FileHandler):
+                h.handle(rec)
+    except Exception:
+        pass
+
+
 def banner(title: str, style: str = "info", details: Optional[List[str]] = None,
            logger: Optional[logging.Logger] = None) -> None:
     """
@@ -321,6 +341,9 @@ def banner(title: str, style: str = "info", details: Optional[List[str]] = None,
         "info":    {"color": "br_cyan",    "icon": "ℹ️ ", "rich_style": "cyan"},
     }
     cfg = style_config.get(style, style_config["info"])
+
+    # Always record to the log file (console gets the pretty box below)
+    _banner_to_file(style, title, details)
 
     # ── Try Rich panel ──
     if _has_rich():
@@ -349,10 +372,6 @@ def banner(title: str, style: str = "info", details: Optional[List[str]] = None,
                 expand=False,
             )
             console.print(panel)
-
-            if logger:
-                logger.info(f"[{style.upper()}] {title}" +
-                            (" · " + " · ".join(details) if details else ""))
             return
         except Exception:
             pass  # fall through to ANSI
@@ -382,10 +401,6 @@ def banner(title: str, style: str = "info", details: Optional[List[str]] = None,
         else:
             print(f"{color}│{reset} {dim}{line}{reset}{' ' * pad} {color}│{reset}")
     print(bot)
-
-    if logger:
-        logger.info(f"[{style.upper()}] {title}" +
-                    (" · " + " · ".join(details) if details else ""))
 
 
 def banner_start(title: str, details: Optional[List[str]] = None,

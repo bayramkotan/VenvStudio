@@ -2558,4 +2558,206 @@ LEARN_CATEGORIES = [
         ],
     },
 
+    {
+        "id": "ai_concepts",
+        "icon": "🤖",
+        "title": "AI Concepts",
+        "desc": "ML, Deep Learning, Transformers & Time Series — visual crash courses",
+        "color": "#cba6f7",
+        "topics": [
+            {
+                "title": "Machine Learning 101",
+                "body": (
+                    "**Machine Learning** = programs that learn patterns from data "
+                    "instead of following hand-written rules.\n\n"
+                    "Three main paradigms:\n"
+                    "• **Supervised** — learn from labeled examples (spam / not spam)\n"
+                    "• **Unsupervised** — find structure in unlabeled data (clustering)\n"
+                    "• **Reinforcement** — learn by trial & reward (game agents, robotics)"
+                ),
+                "diagram": (
+                    "                 ┌──────────────────────────┐\n"
+                    "   DATA ────────▶│         MODEL            │────▶ PREDICTION\n"
+                    "  (features X)   │  learns f(X) ≈ y         │      (ŷ)\n"
+                    "                 └────────────▲─────────────┘\n"
+                    "                              │ adjust weights\n"
+                    "   LABELS (y) ───▶ LOSS ──────┘  (training loop)\n"
+                    "\n"
+                    "  Supervised:    X + y  →  classify / regress\n"
+                    "  Unsupervised:  X only →  cluster / reduce dims\n"
+                    "  Reinforcement: state + reward → policy"
+                ),
+                "tip": (
+                    "Golden rule: **split your data** — train on one part, evaluate on "
+                    "unseen data. A model that only memorizes the training set is "
+                    "*overfitting*."
+                ),
+                "snippet": "from sklearn.model_selection import train_test_split\nfrom sklearn.ensemble import RandomForestClassifier\nfrom sklearn.metrics import accuracy_score\n\nX_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)\nmodel = RandomForestClassifier().fit(X_train, y_train)\nprint(accuracy_score(y_test, model.predict(X_test)))",
+                "packages": ["scikit-learn"],
+                "links": [("📖 scikit-learn", "https://scikit-learn.org/stable/user_guide.html"), ("▶ YouTube", "https://www.youtube.com/results?search_query=machine+learning+basics")],
+            },
+            {
+                "title": "Neural Networks & Deep Learning",
+                "body": (
+                    "A **neural network** stacks layers of simple units (neurons). "
+                    "Each layer transforms its input; depth lets the network learn "
+                    "hierarchical features (edges → shapes → objects).\n\n"
+                    "Training = **backpropagation**: compute the loss, flow gradients "
+                    "backwards, nudge every weight a little (gradient descent)."
+                ),
+                "diagram": (
+                    "   INPUT          HIDDEN LAYERS           OUTPUT\n"
+                    "                                          \n"
+                    "    x1 ──●━━━━━━━●━━━━━━●━━━━━━━●\n"
+                    "          ╲     ╱ ╲    ╱ ╲     ╱ ╲\n"
+                    "    x2 ──●━━╳━━━●━━╳━━●━━━╳━━━●──▶ ŷ (prediction)\n"
+                    "          ╱     ╲ ╱    ╲ ╱     ╲ ╱\n"
+                    "    x3 ──●━━━━━━━●━━━━━━●━━━━━━━●\n"
+                    "\n"
+                    "   forward pass ────────────────────▶\n"
+                    "   ◀──────────────── backpropagation (gradients)\n"
+                    "\n"
+                    "   each ● = neuron:  output = activation(Σ wᵢ·xᵢ + b)"
+                ),
+                "tip": (
+                    "Start small. A 2-layer network on clean data beats a 50-layer "
+                    "network on messy data. **GPU matters**: training is matrix math — "
+                    "see the Local LLM topics for hardware guidance."
+                ),
+                "snippet": "import torch.nn as nn\n\nmodel = nn.Sequential(\n    nn.Linear(3, 16), nn.ReLU(),\n    nn.Linear(16, 16), nn.ReLU(),\n    nn.Linear(16, 1),\n)\n# loss → backward() → optimizer.step()  (training loop)",
+                "packages": ["torch"],
+                "links": [("📖 PyTorch Tutorials", "https://pytorch.org/tutorials/"), ("🌐 3Blue1Brown NN", "https://www.3blue1brown.com/topics/neural-networks")],
+            },
+            {
+                "title": "CNN vs RNN — Which Architecture When?",
+                "body": (
+                    "• **CNN** (Convolutional): slides small filters over the input — "
+                    "perfect for **images** and any grid-like data.\n"
+                    "• **RNN/LSTM** (Recurrent): processes sequences step by step with "
+                    "memory — classic choice for **text & time series** (today mostly "
+                    "replaced by Transformers, but still worth knowing)."
+                ),
+                "diagram": (
+                    "  CNN — filters scan the image:        RNN — memory over steps:\n"
+                    "  ┌───────────────┐                                          \n"
+                    "  │ ▣ ▣ ░ ░ ░ ░ │   3×3 filter        x1 ──▶[h1]──▶[h2]──▶[h3]──▶ ŷ\n"
+                    "  │ ▣ ▣ ░ ░ ░ ░ │   slides →                 ▲      ▲      ▲\n"
+                    "  │ ░ ░ ░ ░ ░ ░ │                            x1     x2     x3\n"
+                    "  └───────────────┘                     hidden state h carries memory\n"
+                    "  edges → textures → shapes → objects"
+                ),
+                "tip": (
+                    "Rule of thumb (2026): images → CNN or Vision Transformer; "
+                    "text/sequences → Transformer; tiny sequential data on a budget → "
+                    "LSTM still fine."
+                ),
+                "snippet": "import torch.nn as nn\n\ncnn = nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3)\nlstm = nn.LSTM(input_size=8, hidden_size=32, batch_first=True)",
+                "packages": ["torch"],
+                "links": [("📖 CNN Explainer", "https://poloclub.github.io/cnn-explainer/"), ("▶ YouTube", "https://www.youtube.com/results?search_query=cnn+vs+rnn")],
+            },
+            {
+                "title": "Transformers & Attention",
+                "body": (
+                    "The **Transformer** (2017, *Attention Is All You Need*) replaced "
+                    "recurrence with **self-attention**: every token looks at every "
+                    "other token at once and decides *what matters*.\n\n"
+                    "Why it won: parallel training (no step-by-step), long-range "
+                    "context, and it scales — GPT, Claude, LLaMA are all Transformers."
+                ),
+                "diagram": (
+                    "   \"The  cat  sat  on  the  mat\"\n"
+                    "     │    │    │    │    │    │\n"
+                    "     ▼    ▼    ▼    ▼    ▼    ▼\n"
+                    "   ┌─────────────────────────────┐\n"
+                    "   │      SELF-ATTENTION          │  every token attends to\n"
+                    "   │  \"sat\" ◀──strong──▶ \"cat\"    │  every other token\n"
+                    "   │  \"sat\" ◀──weak────▶ \"the\"    │  (weighted by relevance)\n"
+                    "   └──────────────┬──────────────┘\n"
+                    "   ┌──────────────▼──────────────┐\n"
+                    "   │      FEED-FORWARD            │  × N layers (stacked blocks)\n"
+                    "   └──────────────┬──────────────┘\n"
+                    "                  ▼\n"
+                    "        next-token prediction\n"
+                    "\n"
+                    "   Attention(Q,K,V) = softmax(QKᵀ/√d)·V"
+                ),
+                "tip": (
+                    "**Tokens ≠ words** — text is split into subword pieces. Context "
+                    "window = how many tokens the model can attend to at once. This is "
+                    "the architecture behind every LLM you use."
+                ),
+                "snippet": "from transformers import pipeline\n\nclf = pipeline(\"sentiment-analysis\")\nprint(clf(\"VenvStudio makes environments painless!\"))",
+                "packages": ["transformers", "torch"],
+                "links": [("📖 Illustrated Transformer", "https://jalammar.github.io/illustrated-transformer/"), ("🤗 HF Course", "https://huggingface.co/learn/nlp-course")],
+            },
+            {
+                "title": "LLMs — Pretraining, Fine-tuning, RAG",
+                "body": (
+                    "A **Large Language Model** is a huge Transformer trained on "
+                    "internet-scale text to predict the next token.\n\n"
+                    "Three ways to adapt one to *your* problem:\n"
+                    "1. **Prompting** — just ask well (cheapest)\n"
+                    "2. **RAG** — retrieve your documents, stuff them into the prompt\n"
+                    "3. **Fine-tuning** (LoRA/QLoRA) — actually update the weights"
+                ),
+                "diagram": (
+                    "  PRETRAINING          FINE-TUNING            RAG\n"
+                    "  (once, $$$)          (your data)            (no training)\n"
+                    "  ┌──────────┐        ┌──────────┐        ┌───────────┐\n"
+                    "  │ internet │        │ base LLM │        │ your docs │\n"
+                    "  │  corpus  │        │  + LoRA  │        │  → vector │\n"
+                    "  └────┬─────┘        │ adapters │        │     DB    │\n"
+                    "       ▼              └────┬─────┘        └─────┬─────┘\n"
+                    "  ┌──────────┐             ▼               retrieve top-k\n"
+                    "  │ base LLM │        specialized               ▼\n"
+                    "  └──────────┘          model            prompt + context → LLM\n"
+                    "\n"
+                    "  Rule of thumb: try prompting → RAG → fine-tune, in that order."
+                ),
+                "tip": (
+                    "Running locally? **VRAM decides everything**: 7B quantized ≈ 6-8 GB, "
+                    "70B needs multiple GPUs. See the Ollama launcher card to get "
+                    "started in one click."
+                ),
+                "snippet": "# Local LLM via Ollama (after: ollama pull llama3)\nimport ollama\n\nresp = ollama.chat(model=\"llama3\", messages=[\n    {\"role\": \"user\", \"content\": \"Explain venvs in one sentence\"},\n])\nprint(resp[\"message\"][\"content\"])",
+                "packages": ["ollama"],
+                "links": [("🌐 Ollama", "https://ollama.com"), ("📖 LoRA paper", "https://arxiv.org/abs/2106.09685")],
+            },
+            {
+                "title": "Time Series Forecasting",
+                "body": (
+                    "**Time series** = data with a time order (sales, sensors, prices). "
+                    "Order matters — so the usual random train/test split is **wrong**.\n\n"
+                    "Classic decomposition: **Trend + Seasonality + Residual**. "
+                    "Models: ARIMA/Prophet (classical), gradient boosting on lag "
+                    "features, or Transformers for large multi-series data."
+                ),
+                "diagram": (
+                    "  value                                                \n"
+                    "   ▲        ╭─╮      ╭─╮      ╭─╮      ← seasonality   \n"
+                    "   │   ╭─╮ ╱   ╲╭─╮ ╱   ╲╭─╮ ╱   ╲                     \n"
+                    "   │  ╱   ╳     ╳   ╳     ╳   ╳    ╲  ↗ trend          \n"
+                    "   │ ╱                                                 \n"
+                    "   └──────────────────────────────────▶ time           \n"
+                    "\n"
+                    "   TRAIN ──────────────────┤ TEST ────┤                \n"
+                    "   past                    │ future   │                \n"
+                    "   ⚠ NEVER shuffle — always split by time!             \n"
+                    "   Cross-validation = expanding window:                \n"
+                    "   [train──][test]                                     \n"
+                    "   [train──────][test]                                 \n"
+                    "   [train──────────][test]"
+                ),
+                "tip": (
+                    "Always beat the **naive baseline** first (tomorrow = today). "
+                    "Many fancy models don't. Lag features + LightGBM is a brutally "
+                    "strong starting point."
+                ),
+                "snippet": "import pandas as pd\n\ndf[\"lag_1\"] = df[\"y\"].shift(1)\ndf[\"lag_7\"] = df[\"y\"].shift(7)\ndf[\"rolling_7\"] = df[\"y\"].shift(1).rolling(7).mean()\n\ncutoff = df.index[-30]          # last 30 days = test\ntrain, test = df[df.index < cutoff], df[df.index >= cutoff]",
+                "packages": ["pandas", "statsmodels"],
+                "links": [("📖 Forecasting book (fpp3)", "https://otexts.com/fpp3/"), ("🌐 sktime", "https://www.sktime.net")],
+            },
+        ],
+    },
+
 ]

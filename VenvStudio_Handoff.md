@@ -3,8 +3,8 @@
 ## Proje
 - **Repo:** https://github.com/bayramkotan/VenvStudio
 - **PyPI:** https://pypi.org/project/venvstudio/
-- **Son push edilmiş versiyon:** v1.6.4 (Log Viewer + conda size + PkgCache/TC log formatı)
-- **Bu oturumda yapılacak versiyon:** v1.6.5 (bir sonraki push hedefi)
+- **Son push edilmiş versiyon:** v1.6.7 (AI Concepts + launcher Learn 22/22 + Log Viewer live/font/delete)
+- **Bu oturumda yapılacak versiyon:** v1.6.8 (bir sonraki push hedefi)
 - **Proje dizini (Windows):** `C:\Github\VenvStudio`
 - **Proje dizini (Linux - CachyOS/Pardus):** `~/Github/VenvStudio`
 - **Handoff dizini (Windows):** `C:\Users\bayram\Yandex.Disk\GitHub_Handoff_Files\VenvStudio\VenvStudio_Handoff.md`
@@ -3091,6 +3091,49 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 
 ---
 
+## Bu Oturumda Yapılanlar — devam (v1.6.5, v1.6.6, v1.6.7)
+
+### v1.6.5 — AppImage-safe URL + Launcher logları
+- **KÖK NEDEN (Links tıklanınca tarayıcı açılmıyor):** AppImage ortamı LD_LIBRARY_PATH/APPDIR enjekte eder; `webbrowser.open` → xdg-open bu zehirli ortamı miras alır → host tarayıcı sessizce ölür. pip kurulumunda ortam temiz olduğundan sorun yok.
+- **YENİ `platform_utils.open_url(url)`:** AppImage'daysa `appimage_clean_env()` ile temiz ortamda xdg-open (+fallback tarayıcılar); değilse normal webbrowser. `launcher_ui.py` Links butonları + `launcher_run.py`'deki 3 gecikmeli browser açılışı buna geçirildi.
+- **`launcher_run.py`'de SIFIR log vardı** → 4 nokta eklendi: 🚀 [Launcher] Launching '<app>' in env '<env>' (INFO), spawn komutu (DEBUG, _fmt_path'li), system app + exe girişleri.
+- ⚠️ **KALAN AYNI BUG:** `learn_page.py`, `window_menu.py`, `main_window.py`'deki `webbrowser.open` çağrıları hâlâ open_url'e GEÇMEDİ — AppImage'da Learn/Help linkleri muhtemelen çalışmıyor.
+
+### v1.6.6 — AppImage Links butonlarının KAYBOLMA fix'i + operasyon logları
+- **KÖK NEDEN (tıklanan Links butonu yok oluyor):** `build.py` PyInstaller'a sadece config+assets veriyordu; `launcher_links.json` bundle'a GİRMİYORDU. Tıklanınca JSON okunamıyor → `except: pass` sessizce yutuyor → "link yok" sanılıp buton gizleniyor. PyPI wheel'inde JSON VAR (o yüzden pip çalışıyor — wheel indirilerek doğrulandı). Bug exe/dmg'de de vardı.
+- Fix: build.py `--add-data src/gui/launcher_links.json:src/gui` + launcher_ui'da `sys._MEIPASS` fallback + sessiz except → `⚠️ [Launcher] links JSON load failed (tried: <path>)` uyarı logu.
+- **Terminal logları:** package_panel'deki çıplak `print("[DEBUG] open_terminal_at...")` + platform_utils'teki hata print'i → `🖥️/⚠️ [Terminal]` logger'ına (`venvstudio.gui.terminal`).
+- **Install/Uninstall/Preset logları:** `_do_install` merkezi giriş: `📦 [Install] env='ml' source='<preset/hint>' packages(N): ...` (hint_name preset adını taşır); `_uninstall_selected`: `🗑️ [Uninstall] env=... packages(N): ...`; sonuç handler'ı artık tür-farkında: `✅/❌ [Install|Uninstall] OK/FAILED` (önceden uninstall bile "Install OK" yazıyordu).
+- ⚠️ **AppImage v1.6.6+ SAHA TESTİ HÂLÂ BEKLİYOR** — Links butonlarının kalıcılığı + tarayıcı açılması yeni AppImage'da doğrulanmadı (kullanıcı doğrulayacak).
+
+### v1.6.7 — Learn büyümesi + Log Viewer yükseltmesi
+- **🤖 AI Concepts kategorisi (learn_content.py):** 6 diagramlı topic — ML 101, NN & Deep Learning, CNN vs RNN, Transformers & Attention, LLMs (Pretraining/Fine-tuning/RAG), Time Series. F200'ün ilk tuğlası.
+- **Launcher Learn kapsaması 22/22:** Data & ML Apps 10→18 topic (+Orange, IPython, Dash, Panel, Voilà, R Console&RStudio, DBeaver, jamovi&JASP). Linkler launcher_links.json'dan alındı. F201'in içerik yarısı bitti.
+- **Log Viewer:** 🔴 Live modu (2 sn auto-refresh; akıllı scroll — en alttaysa takip, değilse dokunma; kapanınca timer durur), A−/A+ font (6-28pt), 🧹 Delete menüsü (7/30 gün, tarih öncesi GG.AA.YYYY, tümü — traceback devam satırları ebeveyniyle silinir; RotatingFileHandler acquire+stream reopen ile güvenli truncate; .1-.N yedekler de silinir).
+- **İKİ QSS DERSİ:** (1) Global QPushButton padding'i 36px fixed-width butonun etiketini tamamen kırptı → yerel `padding:4px 6px` + 48px. (2) Global QSS font kuralı `setFont()`'u ezer → Log Viewer fontu stylesheet üzerinden uygulanır (`_apply_text_font`). GUI'de font/boyut işi = HER ZAMAN stylesheet.
+- **GIT DERSİ:** log_viewer.py CRLF üretilmişti ama Linux'tan commit'te `autocrlf=input` LF'e normalize etti — dosya artık LF; düzenlemeden önce güncel satır sonunu kontrol et.
+
+### Dosya Konumları (v1.6.5–v1.6.7)
+| Dosya | Değişiklik |
+|-------|-----------|
+| `src/utils/platform_utils.py` | YENİ open_url (AppImage-safe), [Terminal] hata logu, import logging |
+| `src/gui/launcher_ui.py` | Links→open_url, _MEIPASS fallback, JSON hatası artık loglu |
+| `src/gui/launcher_run.py` | 🚀 [Launcher] logları (4 nokta), 3 browser açılışı→open_url |
+| `build.py` | --add-data launcher_links.json (frozen build fix) |
+| `src/gui/package_panel.py` | 🖥️ [Terminal] logları |
+| `src/gui/package_ops.py` | 📦 [Install]/🗑️ [Uninstall] başlangıç logları, _pkg_op_hint/_pkg_op_kind |
+| `src/gui/package_misc.py` | Tür-farkında ✅/❌ sonuç logu |
+| `src/gui/learn_content.py` | 🤖 AI Concepts (6 topic) + 8 launcher topic'i (22/22) |
+| `src/gui/log_viewer.py` | Live + A−/A+ + Delete menüsü + 2 QSS fix'i (dosya artık LF) |
+
+### Kalan işler (v1.6.8 adayları)
+- **AppImage saha testi:** v1.6.6/1.6.7 AppImage'da Links butonları + tarayıcı açılışı doğrulanacak
+- **webbrowser.open kalanları:** learn_page.py, window_menu.py, main_window.py → open_url'e geçir (AppImage'da Learn/Help linkleri için)
+- **F201 buton yarısı:** launcher_links.json'a learn_topic_id + kartlara 📖 Learn butonu + Learn'e konuya-scroll API'si
+- B181 (settings_toolchain sys importu), .bak temizliği, Log Viewer i18n, PERF-001 startup
+
+---
+
 ## Sonraki Öncelikler
 1. F88 — Poetry/Rye create'te --python flag
 2. F83 — Force Delete
@@ -3101,7 +3144,7 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 7. B81 — Tool Environment kaldırılacak
 
 ## Sonraki Chat Başlangıç Promptu
-> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.4, sıradaki: v1.6.5.
+> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.7, sıradaki: v1.6.8.
 
 ## 📋 Dosya Kopyalama Kuralları
 

@@ -3764,6 +3764,8 @@ Araştırılacak ve implemente edilecek:
 
 ### 🔴 F200 — AI/LLM Workbench (Full Paket) (eklendi: 2026-07-08)
 
+**⏳ İLK ADIM ATILDI (v1.6.7):** Learn'e "🤖 AI Concepts" kategorisi eklendi (ML 101, NN/DL, CNN vs RNN, Transformers, LLMs/RAG/Fine-tuning, Time Series — 6 diagramlı topic). Preset'ler ve F200'ün 4 detay kategorisi (Fine-tuning/RAG/Agents/Eval) henüz yapılmadı.
+
 **Vizyon:** VenvStudio klasik data science'ın yanında modern LLM mühendisliğini de kapsasın — hem akademik hem pratik. Konum: "From classic data science to modern LLM engineering — one GUI for every Python environment." F199'u 4 iş akışına genişletir.
 
 **İş Akışı 1 — Inference (F199'da büyük ölçüde var):**
@@ -3808,6 +3810,8 @@ Araştırılacak ve implemente edilecek:
 ---
 
 ### 🟡 F201 — Tüm Launcher Kartları için Learn Sekmesi (eklendi: 2026-07-08)
+
+**⏳ KISMEN TAMAMLANDI (v1.6.7):** İçerik yarısı bitti — 22/22 launcher uygulamasının Learn konusu var (Data & ML Apps kategorisi 10→18 topic). KALAN: `learn_topic_id` alanı + karttan Learn'e "📖 Learn" butonu + konuya scroll API'si.
 
 **Hedef:** Her launcher kartının (mevcut 22 + F197 ile gelecekler) Learn'de karşılığı olan bir konusu olsun ve karttan tek tıkla o konuya gidilsin. F149'un (ertelenmişti) kapsamlı hali.
 

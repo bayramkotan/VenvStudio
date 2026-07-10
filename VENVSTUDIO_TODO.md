@@ -3907,6 +3907,14 @@ Tek-blok body yerine bölümlü yapı:
 
 ---
 
+### ✅ F204 — venvstudio CLI + Settings "Install command" (TAMAMLANDI: 2026-07-10, v1.6.9 adayı)
+- YENİ `src/cli.py`: `list / create / delete / packages / install / uninstall / version` — GUI'yle aynı core (VenvManager/PipManager), **Qt'siz** (sunucu/SSH/CI'da çalışır). Uçtan uca test edildi.
+- `src/main.py`: alt komut varsa CLI, yoksa GUI; `--help` alt komutları listeler. Frozen build'lerde de çalışır (`./VenvStudio.AppImage list`).
+- Settings → "⌨️ Command Line" grubu: PATH durumu + "Install 'venvstudio' command" butonu (pip: bilgi; frozen Linux/macOS: ~/.local/bin wrapper + fish_add_path ipucu; Windows: %LOCALAPPDATA% shim + PowerShell ile user PATH — setx bilinçli kullanılmadı, 1024 karakter budama riski).
+- KALAN: CLI'a `clone/rename/doctor` alt komutları (F189 sonrası), man page/shell completion.
+
+---
+
 ## 🆕 F187–F196 — Conflict Yönetimi, Kalite & Dağıtım (eklendi: 2026-07-08)
 
 **Öncelik önerisi:** F188 + F189 kısa vade (v1.6.x, düşük maliyet) → F187 + F193 FAZ 1'e → kalanlar arkasına.

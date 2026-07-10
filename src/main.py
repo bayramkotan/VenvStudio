@@ -19,9 +19,15 @@ if _root not in sys.path:
 
 
 def main():
-    """Main entry point — launches VenvStudio GUI."""
+    """Main entry point — CLI if a subcommand is given, otherwise the GUI."""
     # Import and delegate to the real main
     sys.path.insert(0, _root)
+
+    # ── CLI dispatch: `venvstudio list|create|delete|packages|install|uninstall|version`
+    # Runs Qt-free; also works for frozen builds launched with arguments.
+    from src.cli import is_cli_invocation, run_cli
+    if is_cli_invocation(sys.argv):
+        sys.exit(run_cli(sys.argv))
 
     # Check for CLI flags
     if len(sys.argv) > 1 and sys.argv[1] in ("--version", "-V"):
@@ -34,9 +40,15 @@ def main():
         print(f"{APP_NAME} v{APP_VERSION}")
         print(f"Lightweight Python Virtual Environment Manager\n")
         print(f"Usage:")
-        print(f"  venvstudio          Launch GUI")
-        print(f"  venvstudio -V       Show version")
-        print(f"  venvstudio -h       Show this help")
+        print(f"  venvstudio                    Launch GUI")
+        print(f"  venvstudio list               List environments")
+        print(f"  venvstudio create NAME        Create a venv environment")
+        print(f"  venvstudio delete NAME [-y]   Delete an environment")
+        print(f"  venvstudio packages ENV       List packages in an environment")
+        print(f"  venvstudio install ENV PKG..  Install packages")
+        print(f"  venvstudio uninstall ENV PKG. Uninstall packages")
+        print(f"  venvstudio version | -V       Show version")
+        print(f"  venvstudio -h                 Show this help")
         return
 
     try:

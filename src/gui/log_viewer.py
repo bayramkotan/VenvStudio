@@ -130,6 +130,10 @@ class LogViewerDialog(QDialog):
         self._live_timer = QTimer(self)
         self._live_timer.setInterval(2000)
         self._live_timer.timeout.connect(self._load)
+        # accept()/reject() (Close button, ESC) do NOT go through closeEvent,
+        # which previously leaked a forever-running 2s timer on a hidden
+        # dialog. `finished` fires for every way the dialog ends.
+        self.finished.connect(self._live_timer.stop)
         if self._live_cb.isChecked():
             self._live_timer.start()
 

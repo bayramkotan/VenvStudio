@@ -3078,6 +3078,7 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 - **F200:** AI/LLM Workbench Full Paket (fine-tuning/RAG/agents/eval iş akışları + dalga planı)
 - **F201:** Tüm launcher kartları için Learn sekmesi (learn_topic_id bağlantısı, karttan Learn'e tek tık; F149'un kapsamlı hali)
 - **F202:** BSD (öncelik FreeBSD) için binary dağıtım — ports/pkg yolu, conda backend BSD'de kapalı, CI için vmactions/freebsd-vm notu
+- **F204 ✅ YAPILDI:** venvstudio CLI (src/cli.py, Qt'siz, uçtan uca testli) + main.py dispatch + Settings 'Install command' butonu. Ayrıca: Log Viewer Live timer LEAK fix'i (accept() closeEvent'i tetiklemez — finished sinyaliyle çözüldü), Settings'te About en alta alındı. ⚠️ AÇIK: 'venvstudio kapanmıyor' raporu — offscreen'de repro edilemedi (temiz çıkış, 0 thread), timer leak fix'i sonrası tekrar gözlenecek; sürerse: kapanma anındaki senaryo + son log satırları istenecek.
 - **F203:** Learn 2.0 — Derinlemesine İçerik Platformu (Bayram'ın vizyonu: her konu 30-50x detaylı mini ders; bölümlü şema + content-as-data + lazy-load + TOC/arama; pilot: AI Concepts; build.py --add-data UNUTULMASIN)
 - **Karar notu:** yeni backend adayı sadece pixi; hatch/pdm en fazla tespit+listele; virtualenv/pipenv/rye eklenmeyecek
 

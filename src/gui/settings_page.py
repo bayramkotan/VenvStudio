@@ -1676,6 +1676,35 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
             QMessageBox.critical(self, "Error", str(e))
 
     def _setup_launch_section(self, layout):
+        # ── Command Line ──
+        cli_group = QGroupBox("⌨️ Command Line")
+        cli_layout = QVBoxLayout()
+        cli_layout.setSpacing(8)
+
+        cli_info = QLabel(
+            "Use VenvStudio from the terminal: <code>venvstudio list</code>, "
+            "<code>venvstudio create ml</code>, <code>venvstudio install ml numpy</code>, "
+            "<code>venvstudio delete ml</code> … (see <code>venvstudio --help</code>)"
+        )
+        cli_info.setWordWrap(True)
+        cli_info.setTextFormat(Qt.RichText)
+        cli_layout.addWidget(cli_info)
+
+        cli_row = QHBoxLayout()
+        self.cli_status_label = QLabel("")
+        self.cli_status_label.setStyleSheet(f"font-size: {self._c()['fs_small']}px;")
+        cli_row.addWidget(self.cli_status_label, 1)
+
+        cli_install_btn = QPushButton("🔗 Install 'venvstudio' command")
+        cli_install_btn.setObjectName("secondary")
+        cli_install_btn.clicked.connect(self._install_cli_command)
+        cli_row.addWidget(cli_install_btn)
+
+        cli_layout.addLayout(cli_row)
+        cli_group.setLayout(cli_layout)
+        layout.addWidget(cli_group)
+        self._refresh_cli_status()
+
         about_group = QGroupBox(f"ℹ️ About {APP_NAME}")
         about_layout = QVBoxLayout()
         about_layout.setSpacing(8)
@@ -1705,4 +1734,5 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         about_layout.addLayout(update_row)
         about_group.setLayout(about_layout)
         layout.addWidget(about_group)
+
 

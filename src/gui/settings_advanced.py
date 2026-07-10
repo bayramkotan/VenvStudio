@@ -20,6 +20,83 @@ from .settings_python_download import _UpdateCheckWorker
 
 class AdvancedMixin:
     """Mixin for SettingsPage."""
+    # ── Command Line install ────────────────────────────────────────────
+
+    def _cli_target(self):
+        """(shim_path, launch_target) for the current install kind."""
+        import sys
+        from pathlib import Path
+        if getattr(sys, "frozen", False):
+            target = os.environ.get("APPIMAGE") or sys.executable
+        else:
+            target = None  # pip install — entry point already on PATH
+        if os.name == "nt":
+            shim = Path(os.environ.get("LOCALAPPDATA", str(Path.home()))) / "VenvStudio" / "bin" / "venvstudio.cmd"
+        else:
+            shim = Path.home() / ".local" / "bin" / "venvstudio"
+        return shim, target
+
+    def _refresh_cli_status(self):
+        import shutil as _sh
+        lbl = getattr(self, "cli_status_label", None)
+        if lbl is None:
+            return
+        found = _sh.which("venvstudio")
+        if found:
+            lbl.setText(f"✅ On PATH: {found}")
+        else:
+            lbl.setText("❌ 'venvstudio' is not on PATH")
+
+    def _install_cli_command(self):
+        """Create a global 'venvstudio' command (VS Code's 'install code command' style).
+
+        pip installs already ship a console entry point; this is mainly for
+        frozen builds (AppImage / .exe) which have nothing on PATH.
+        """
+        import sys
+        from PySide6.QtWidgets import QMessageBox
+        shim, target = self._cli_target()
+
+        if target is None:
+            QMessageBox.information(
+                self, "Command Line",
+                "You installed VenvStudio with pip — the 'venvstudio' command "
+                "is already provided by pip on your PATH.\n\n"
+                "If your shell cannot find it, ensure pip's script directory "
+                "is on PATH (e.g. ~/.local/bin on Linux).")
+            self._refresh_cli_status()
+            return
+
+        try:
+            shim.parent.mkdir(parents=True, exist_ok=True)
+            if os.name == "nt":
+                shim.write_text(f'@echo off\r\n"{target}" %*\r\n', encoding="utf-8")
+                # Add shim dir to the USER PATH persistently (no setx: it truncates >1024 chars)
+                import subprocess as _sp
+                _ps = (
+                    "$p=[Environment]::GetEnvironmentVariable('Path','User');"
+                    f"$d='{shim.parent}';"
+                    "if($p -notlike ('*'+$d+'*')){[Environment]::SetEnvironmentVariable('Path', $p+';'+$d, 'User')}"
+                )
+                _sp.run(["powershell", "-NoProfile", "-Command", _ps],
+                        **subprocess_args(capture_output=True, text=True, timeout=20))
+                extra = "\n\nNote: open a NEW terminal for PATH changes to take effect."
+            else:
+                shim.write_text(f'#!/bin/sh\nexec "{target}" "$@"\n', encoding="utf-8")
+                shim.chmod(0o755)
+                on_path = str(shim.parent) in os.environ.get("PATH", "")
+                extra = "" if on_path else (
+                    f"\n\nNote: {shim.parent} is not on your PATH. Add it, e.g.:\n"
+                    f"  fish:  fish_add_path {shim.parent}\n"
+                    f"  bash:  echo 'export PATH=\"$HOME/.local/bin:$PATH\"' >> ~/.bashrc")
+            QMessageBox.information(
+                self, "Command Line",
+                f"Created: {shim}\n→ launches: {target}\n\n"
+                f"Try it:  venvstudio list{extra}")
+        except Exception as e:
+            QMessageBox.critical(self, "Command Line", f"Could not install command:\n{e}")
+        self._refresh_cli_status()
+
     def _check_for_updates(self):
         """Check PyPI for new version."""
         self.update_status_label.setText("🔍 Checking...")

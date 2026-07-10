@@ -137,8 +137,8 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
             QMessageBox.Yes | QMessageBox.No
         )
         if reply == QMessageBox.Yes:
-            import webbrowser
-            webbrowser.open(result["release_url"])
+            from src.utils.platform_utils import open_url
+            open_url(result["release_url"])
 
     def _c(self) -> dict:
         """Return current theme color palette with font hierarchy."""
@@ -1115,8 +1115,8 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
                     QMessageBox.Yes | QMessageBox.No
                 )
                 if reply == QMessageBox.Yes:
-                    import webbrowser
-                    webbrowser.open(result.get("release_url", "https://github.com/bayramkotan/VenvStudio/releases"))
+                    from src.utils.platform_utils import open_url
+                    open_url(result.get("release_url", "https://github.com/bayramkotan/VenvStudio/releases"))
             else:
                 QMessageBox.information(
                     self, "✅ Up to Date",

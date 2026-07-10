@@ -80,15 +80,15 @@ class WindowMenuMixin:
         help_menu.addSeparator()
 
         github_action = QAction("⭐ GitHub Repository", self)
-        github_action.triggered.connect(lambda: __import__("webbrowser").open("https://github.com/bayramkotan/VenvStudio"))
+        github_action.triggered.connect(lambda: __import__("src.utils.platform_utils", fromlist=["open_url"]).open_url("https://github.com/bayramkotan/VenvStudio"))
         help_menu.addAction(github_action)
 
         pypi_action = QAction("📦 PyPI Page", self)
-        pypi_action.triggered.connect(lambda: __import__("webbrowser").open("https://pypi.org/project/venvstudio/"))
+        pypi_action.triggered.connect(lambda: __import__("src.utils.platform_utils", fromlist=["open_url"]).open_url("https://pypi.org/project/venvstudio/"))
         help_menu.addAction(pypi_action)
 
         issues_action = QAction("🐛 Report a Bug", self)
-        issues_action.triggered.connect(lambda: __import__("webbrowser").open("https://github.com/bayramkotan/VenvStudio/issues"))
+        issues_action.triggered.connect(lambda: __import__("src.utils.platform_utils", fromlist=["open_url"]).open_url("https://github.com/bayramkotan/VenvStudio/issues"))
         help_menu.addAction(issues_action)
 
 

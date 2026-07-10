@@ -438,8 +438,8 @@ class TopicCard(QFrame):
             QApplication.clipboard().setText(self._snippet_edit.toPlainText())
 
     def _open_url(self, url: str):
-        import webbrowser
-        webbrowser.open(url)
+        from src.utils.platform_utils import open_url
+        open_url(url)
 
     def _toggle_bookmark(self):
         self._bookmarked = not self._bookmarked

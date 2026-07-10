@@ -375,7 +375,7 @@ class PackageOpsMixin:
                         "color: #a6e3a1; border: 1px solid #45475a; border-radius: 3px; }"
                         "QPushButton:hover { background: #45475a; }"
                     )
-                    docs_btn.clicked.connect(lambda _, u=docs_url: __import__("webbrowser").open(u))
+                    docs_btn.clicked.connect(lambda _, u=docs_url: __import__("src.utils.platform_utils", fromlist=["open_url"]).open_url(u))
                     links_layout.addWidget(docs_btn)
 
                 links_layout.addStretch()

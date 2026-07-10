@@ -53,8 +53,8 @@ class AdvancedMixin:
                 QMessageBox.Yes | QMessageBox.No
             )
             if reply == QMessageBox.Yes:
-                import webbrowser
-                webbrowser.open(result["release_url"])
+                from src.utils.platform_utils import open_url
+                open_url(result["release_url"])
         else:
             self.update_status_label.setText(
                 f"✅ You're up to date! (v{result['current_version']})"
@@ -557,8 +557,8 @@ class AdvancedMixin:
             self._on_term_selector_toggled(True)
 
         def _open_site(_, url=tdata.get("url", "")):
-            import webbrowser
-            webbrowser.open(url)
+            from src.utils.platform_utils import open_url
+            open_url(url)
 
         install_btn.clicked.connect(_do_install)
         uninst_btn.clicked.connect(_do_uninstall)

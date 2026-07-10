@@ -3851,6 +3851,62 @@ Araştırılacak ve implemente edilecek:
 
 ---
 
+### 🔴 F203 — Learn 2.0: Derinlemesine İçerik Platformu (eklendi: 2026-07-10)
+
+**Vizyon (Bayram'ın talebi):** Mevcut Learn formatı (1 kısa body + 1 snippet + 1 tip) "hızlı referans kartı" seviyesinde. Hedef: her konunun **30-50 kat daha detaylı, çok güzel anlatılan mini bir ders** olması. Mevcut içerik BOZULMAYACAK — üzerine inşa edilecek.
+
+**A) Yeni topic şeması (derinlik için önkoşul):**
+Tek-blok body yerine bölümlü yapı:
+```python
+{
+  "title": "Transformers & Attention",
+  "difficulty": "intermediate",        # 🟢/🟡/🔴 rozet
+  "reading_time": 15,                  # dk
+  "sections": [
+     {"heading": "Neden Transformer?", "text": "...", "diagram": "..."},
+     {"heading": "Self-Attention adım adım", "text": "...", "code": "...", "code_caption": "..."},
+     {"heading": "Sık yapılan hatalar", "warning": "..."},
+     {"heading": "Kendini test et", "quiz": [{"q": "...", "a": "..."}]},
+  ],
+  "related": ["llm_basics", "fine_tuning"],
+  "links": [...], "packages": [...],
+}
+```
+- Bölüm tipleri: text, diagram (ASCII), code (çoklu blok!), warning, tip, table, quiz
+- Geriye uyumluluk: eski tek-blok şema da render edilmeye devam eder (sections yoksa mevcut yol)
+
+**B) Mimari önkoşul — content-as-data:**
+- learn_content.py şimdiden ~2.600 satır; 30-50x içerik = 100k+ satır .py → SÜRDÜRÜLEMEZ
+- İçerik ayrı veri dosyalarına taşınır: `src/gui/learn_content/<category_id>.json` (veya .md+frontmatter)
+- **Kategori bazlı lazy-load** → startup'a sıfır ek yük (PERF-001 ile uyumlu, hatta iyileştirir)
+- Bonus kapı: içerik uygulama sürümünden bağımsız güncellenebilir (GitHub'dan opsiyonel çekme — F180 sonrası)
+
+**C) learn_page render yükseltmesi:**
+- Bölümlü sayfa: başlık hiyerarşisi, çoklu kod blokları (her birinde Copy), katlanabilir bölümler
+- Sağda/üstte **mini içindekiler (TOC)** — uzun konularda gezinme
+- "İlgili konular" linkleri (related), zorluk + okuma süresi rozetleri
+- Tam metin arama (başlık DEĞİL içerik) — 30-50x içerikte arama olmadan gezinilmez
+
+**D) İçerik üretim planı (fazlı):**
+1. **Pilot:** 🤖 AI Concepts kategorisi tam derinliğe çıkarılır (6 topic × ~8-12 bölüm) → şablon ve ton burada oturur
+2. Quick Start + Environments temelleri (en çok okunan kategoriler)
+3. Data & ML Apps (22 uygulama — her biri: kurulum, ilk proje, ileri kullanım, sık hatalar)
+4. Kalan kategoriler + F200'ün 4 yeni kategorisi (Fine-tuning/RAG/Agents/Eval) doğrudan bu formatta doğar
+- Her oturumda 1 kategori derinleştirilebilir — içerik işi Claude oturumlarıyla paralel yürür
+
+**E) Kapsam notları:**
+- TR/EN içerik ayrımı (i18n) bu şemayla kolaylaşır ama ayrı iş — F203'e dahil değil, kapı açık bırakılır
+- "Run in env" butonu (snippet'i seçili env'de çalıştır) F186 Playground ile birleşir — Faz 2+
+- Quiz'ler basit göster/gizle; puanlama/ilerleme takibi (Learning Paths) ayrı gelecek maddesi
+
+**İlgili dosyalar:** `src/gui/learn_content.py` (şema + loader), yeni `src/gui/learn_content/` veri dizini, `src/gui/learn_page.py` (bölümlü renderer + TOC + arama), `build.py` (veri dizini --add-data! — launcher_links.json dersi)
+
+**İlişkili maddeler:** F200 (AI kategorileri bu formatta), F201 (launcher konuları derinleşir), F144, F180 (online içerik), F186 (Run in env), PERF-001 (lazy-load katkısı)
+
+**Öncelik:** 🔴 Yüksek — Learn, VenvStudio'yu "araç"tan "öğrenme platformu"na taşıyan farklılaştırıcı; hiçbir rakipte yok.
+
+---
+
 ## 🆕 F187–F196 — Conflict Yönetimi, Kalite & Dağıtım (eklendi: 2026-07-08)
 
 **Öncelik önerisi:** F188 + F189 kısa vade (v1.6.x, düşük maliyet) → F187 + F193 FAZ 1'e → kalanlar arkasına.

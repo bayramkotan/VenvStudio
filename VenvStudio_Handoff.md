@@ -3078,6 +3078,7 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 - **F200:** AI/LLM Workbench Full Paket (fine-tuning/RAG/agents/eval iş akışları + dalga planı)
 - **F201:** Tüm launcher kartları için Learn sekmesi (learn_topic_id bağlantısı, karttan Learn'e tek tık; F149'un kapsamlı hali)
 - **F202:** BSD (öncelik FreeBSD) için binary dağıtım — ports/pkg yolu, conda backend BSD'de kapalı, CI için vmactions/freebsd-vm notu
+- **F203:** Learn 2.0 — Derinlemesine İçerik Platformu (Bayram'ın vizyonu: her konu 30-50x detaylı mini ders; bölümlü şema + content-as-data + lazy-load + TOC/arama; pilot: AI Concepts; build.py --add-data UNUTULMASIN)
 - **Karar notu:** yeni backend adayı sadece pixi; hatch/pdm en fazla tespit+listele; virtualenv/pipenv/rye eklenmeyecek
 
 ### Dosya Konumları

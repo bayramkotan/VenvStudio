@@ -119,6 +119,37 @@ class PackageMiscMixin:
         except Exception:
             pass
 
+        # pip yoksa (uv env'leri pip'siz gelir!) pip show her pakette boş döner
+        # ve her şey yanlışlıkla "Not installed" görünürdü (B182).
+        # Fallback: env python'ıyla stdlib importlib.metadata — pip gerektirmez.
+        if not info_text:
+            try:
+                _code = (
+                    "import sys\n"
+                    "from importlib.metadata import metadata, PackageNotFoundError\n"
+                    "try:\n"
+                    "    m = metadata(sys.argv[1])\n"
+                    "except PackageNotFoundError:\n"
+                    "    sys.exit(3)\n"
+                    "for k in ('Name', 'Version', 'Summary', 'Author',\n"
+                    "          'Author-email', 'License', 'Home-page',\n"
+                    "          'Requires-Python'):\n"
+                    "    v = m.get(k)\n"
+                    "    if v:\n"
+                    "        print(f\"{k}: {v}\")\n"
+                    "reqs = m.get_all('Requires-Dist') or []\n"
+                    "if reqs:\n"
+                    "    print('Requires: ' + ', '.join(reqs))\n"
+                )
+                result = subprocess.run(
+                    [str(python_exe), "-c", _code, pkg_name],
+                    **subprocess_args(capture_output=True, text=True, timeout=10)
+                )
+                if result.returncode == 0 and result.stdout.strip():
+                    info_text = result.stdout.strip()
+            except Exception:
+                pass
+
         # Not installed — fetch from PyPI JSON API
         if not info_text:
             from_pypi = True
@@ -231,12 +262,12 @@ class PackageMiscMixin:
             home_btn = QPushButton("🌐 Home")
             home_btn.setObjectName("secondary")
             home_btn.setToolTip("Open Homepage")
-            home_btn.clicked.connect(lambda: __import__("webbrowser").open(pypi_url))
+            home_btn.clicked.connect(lambda: __import__("src.utils.platform_utils", fromlist=["open_url"]).open_url(pypi_url))
             btn_row.addWidget(home_btn)
         pypi_btn = QPushButton("📦 PyPI")
         pypi_btn.setObjectName("secondary")
         pypi_btn.setToolTip(f"Open {pkg_name} on PyPI")
-        pypi_btn.clicked.connect(lambda: __import__("webbrowser").open(f"https://pypi.org/project/{pkg_name}/"))
+        pypi_btn.clicked.connect(lambda: __import__("src.utils.platform_utils", fromlist=["open_url"]).open_url(f"https://pypi.org/project/{pkg_name}/"))
         btn_row.addWidget(pypi_btn)
         copy_btn = QPushButton("📋 Copy")
         copy_btn.setObjectName("secondary")
@@ -259,8 +290,8 @@ class PackageMiscMixin:
 
     def _open_pypi(self, package_name):
         """Open package page on PyPI."""
-        import webbrowser
-        webbrowser.open(f"https://pypi.org/project/{package_name}/")
+        from src.utils.platform_utils import open_url
+        open_url(f"https://pypi.org/project/{package_name}/")
 
     def _filter_installed(self, text: str):
         for row in range(self.packages_table.rowCount()):

@@ -19,15 +19,25 @@ class EnvOperationsMixin:
     def _create_env(self):
         from src.gui.env_dialog import EnvCreateDialog
         dialog = EnvCreateDialog(self.venv_manager, self.config, self)
+        _created = {"any": False}
+
         def _on_env_created(name):
+            _created["any"] = True
             self._log.info(f"env_created: name={name!r} → invalidating cache + refreshing list")
             self.venv_manager.invalidate_all_caches()
             self._refresh_env_list()
+
         dialog.env_created.connect(_on_env_created)
         dialog.exec()
-        self._log.debug("_create_env: dialog closed → final cache invalidate + refresh")
-        self.venv_manager.invalidate_all_caches()
-        self._refresh_env_list()
+        # Previously this ALWAYS invalidated every env cache after the
+        # dialog closed — even on Cancel — causing a full multi-second
+        # subprocess rescan of all envs (and a SECOND one after a real
+        # creation, since _on_env_created had already done it).
+        if _created["any"]:
+            self._log.debug("_create_env: dialog closed after creation → final list refresh")
+            self._refresh_env_list()
+        else:
+            self._log.debug("_create_env: dialog closed without creating → skipping invalidate/refresh")
 
     def _get_new_name_for_rename(self, name):
         """Yeni isim giriş dialog'u — ortak kullanım."""

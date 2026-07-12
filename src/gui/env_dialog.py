@@ -509,9 +509,9 @@ class EnvCreateDialog(QDialog):
             "conda": (
                 _title("🦎", "Conda (micromamba)", "#89dceb") +
                 _note("conda-forge — 25,000+ packages incl. R, RStudio") +
-                _line(_cmd("micromamba") + " create -n " + _path("myenv") + " python=" + _ver("3.12")) +
+                _line(_cmd("micromamba") + " create -n " + _path(_name) + " python=" + _ver("3.12")) +
                 _note("Activate:") +
-                _line(_cmd("micromamba") + " activate " + _path("myenv")) +
+                _line(_cmd("micromamba") + " activate " + _path(_name)) +
                 _note("Install packages:") +
                 _line(_cmd("micromamba") + " install -c conda-forge " + _kw("numpy") + " " + _kw("r-base")) +
                 _note("List environments:") +

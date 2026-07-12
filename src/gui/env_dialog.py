@@ -3,6 +3,8 @@ VenvStudio - Environment Creation Dialog
 With progress bar, status messages, and cancel support
 """
 
+import sys
+
 from pathlib import Path
 
 from PySide6.QtWidgets import (
@@ -443,6 +445,11 @@ class EnvCreateDialog(QDialog):
             self.subtitle_label.setText(subtitles.get(env_type, subtitles["venv"]))
 
         # Progress panel hints — rich HTML with syntax colors
+        # Example commands use the ACTUAL name typed by the user (falls
+        # back to 'myproject' while the field is empty).
+        _name = "myproject"
+        if hasattr(self, "name_input"):
+            _name = self.name_input.text().strip() or "myproject"
         def _cmd(t): return f"<span style='color:#89b4fa;font-family:Consolas,monospace;font-size:15px;'>{t}</span>"
         def _path(t): return f"<span style='color:#a6e3a1;font-family:Consolas,monospace;font-size:15px;'>{t}</span>"
         def _kw(t): return f"<span style='color:#cba6f7;font-family:Consolas,monospace;font-weight:bold;font-size:15px;'>{t}</span>"
@@ -454,11 +461,11 @@ class EnvCreateDialog(QDialog):
             "venv": (
                 _title("🐍", "Python venv", "#89b4fa") +
                 _note("Standard library virtual environment") +
-                _line(_kw("python") + " -m " + _cmd("venv") + " " + _path("myproject")) +
+                _line(_kw("python") + " -m " + _cmd("venv") + " " + _path(_name)) +
                 _note("Activate — Linux/macOS:") +
-                _line(_cmd("source") + " " + _path("myproject/bin/activate")) +
+                _line(_cmd("source") + " " + _path(_name + "/bin/activate")) +
                 _note("Activate — Windows:") +
-                _line(_path("myproject\\Scripts\\activate")) +
+                _line(_path(_name + "\\Scripts\\activate")) +
                 _note("Install packages:") +
                 _line(_cmd("pip") + " install " + _kw("numpy") + " " + _kw("pandas")) +
                 _note("Deactivate:") +
@@ -467,9 +474,9 @@ class EnvCreateDialog(QDialog):
             "uv": (
                 _title("⚡", "uv — Ultra Fast", "#f9e2af") +
                 _note("10-100x faster than pip. Rust-powered.") +
-                _line(_cmd("uv") + " venv " + _path("myproject")) +
+                _line(_cmd("uv") + " venv " + _path(_name)) +
                 _note("With specific Python version:") +
-                _line(_cmd("uv") + " venv --python " + _ver("3.12") + " " + _path("myproject")) +
+                _line(_cmd("uv") + " venv --python " + _ver("3.12") + " " + _path(_name)) +
                 _note("Install packages:") +
                 _line(_cmd("uv") + " pip install " + _kw("numpy") + " " + _kw("pandas")) +
                 _note("Run without activating:") +
@@ -480,8 +487,8 @@ class EnvCreateDialog(QDialog):
                 _note("Dependency management + virtual environments") +
                 _line(_cmd("pip") + " install " + _kw("poetry")) +
                 _note("Create new project:") +
-                _line(_cmd("poetry") + " new " + _path("myproject")) +
-                _line(_cmd("cd") + " " + _path("myproject") + " &amp;&amp; " + _cmd("poetry") + " install") +
+                _line(_cmd("poetry") + " new " + _path(_name)) +
+                _line(_cmd("cd") + " " + _path(_name) + " &amp;&amp; " + _cmd("poetry") + " install") +
                 _note("Add dependencies:") +
                 _line(_cmd("poetry") + " add " + _kw("numpy") + " " + _kw("pandas")) +
                 _note("Run scripts:") +

@@ -3,8 +3,8 @@
 ## Proje
 - **Repo:** https://github.com/bayramkotan/VenvStudio
 - **PyPI:** https://pypi.org/project/venvstudio/
-- **Son push edilmiş versiyon:** v1.6.7 (AI Concepts + launcher Learn 22/22 + Log Viewer live/font/delete)
-- **Bu oturumda yapılacak versiyon:** v1.6.8 (bir sonraki push hedefi)
+- **Son push edilmiş versiyon:** v1.6.9 (venvstudio CLI! + Command Line settings + timer leak fix) — SAHADA DOĞRULANDI: `venvstudio list` 5 backend/6 env listeledi
+- **Bu oturumda yapılacak versiyon:** v1.6.10 (bir sonraki push hedefi)
 - **Proje dizini (Windows):** `C:\Github\VenvStudio`
 - **Proje dizini (Linux - CachyOS/Pardus):** `~/Github/VenvStudio`
 - **Handoff dizini (Windows):** `C:\Users\bayram\Yandex.Disk\GitHub_Handoff_Files\VenvStudio\VenvStudio_Handoff.md`
@@ -3078,6 +3078,8 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 - **F200:** AI/LLM Workbench Full Paket (fine-tuning/RAG/agents/eval iş akışları + dalga planı)
 - **F201:** Tüm launcher kartları için Learn sekmesi (learn_topic_id bağlantısı, karttan Learn'e tek tık; F149'un kapsamlı hali)
 - **F202:** BSD (öncelik FreeBSD) için binary dağıtım — ports/pkg yolu, conda backend BSD'de kapalı, CI için vmactions/freebsd-vm notu
+- **F205 eklendi (karar TENTATİF):** Environment type genişletme planı — pixi tam backend + sistem mamba tespiti (F176) + pyenv/mise Python kaynakları + hatch/pdm read-only; Docker export-only kalır, ölü tipler kalıcı red listesinde. Bayram 'çok emin değilim' dedi → uygulamadan önce tekrar onay al.
+- **F204 saha notları (v1.6.9 doğrulandı):** `-help` (tek tire) GUI açıyor — kabul listesine eklenebilir; cache boşken `list` bazı env'lerde `...` gösteriyor → CLI'a `--refresh`/on-demand hesap eklenebilir.
 - **F204 ✅ YAPILDI:** venvstudio CLI (src/cli.py, Qt'siz, uçtan uca testli) + main.py dispatch + Settings 'Install command' butonu. Ayrıca: Log Viewer Live timer LEAK fix'i (accept() closeEvent'i tetiklemez — finished sinyaliyle çözüldü), Settings'te About en alta alındı. ⚠️ AÇIK: 'venvstudio kapanmıyor' raporu — offscreen'de repro edilemedi (temiz çıkış, 0 thread), timer leak fix'i sonrası tekrar gözlenecek; sürerse: kapanma anındaki senaryo + son log satırları istenecek.
 - **F203:** Learn 2.0 — Derinlemesine İçerik Platformu (Bayram'ın vizyonu: her konu 30-50x detaylı mini ders; bölümlü şema + content-as-data + lazy-load + TOC/arama; pilot: AI Concepts; build.py --add-data UNUTULMASIN)
 - **Karar notu:** yeni backend adayı sadece pixi; hatch/pdm en fazla tespit+listele; virtualenv/pipenv/rye eklenmeyecek
@@ -3146,7 +3148,7 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 7. B81 — Tool Environment kaldırılacak
 
 ## Sonraki Chat Başlangıç Promptu
-> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.7, sıradaki: v1.6.8.
+> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.9, sıradaki: v1.6.10.
 
 ## 📋 Dosya Kopyalama Kuralları
 

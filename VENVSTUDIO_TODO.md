@@ -3915,6 +3915,30 @@ Tek-blok body yerine bölümlü yapı:
 
 ---
 
+### 🟡 F205 — Environment Type Genişletme Planı (eklendi: 2026-07-12)
+
+**⚠️ Karar durumu:** Bayram "çok emin değilim, şimdilik ekle" dedi — uygulamaya başlamadan önce tekrar onay alınacak. **Kesin ilke: ölecek / işe yaramayacak / terkedilecek tipler ASLA eklenmeyecek** (virtualenv, pipenv, Rye, asdf-python → kalıcı red listesi).
+
+**Maliyet gerçeği:** Yeni bir tam backend = ~8 temas noktası (env_dialog combo+eğitim kartı, venv_manager create/detect/delete+cache, pip_manager, disk tespiti/marker, cli.py eşlemesi, launcher preferred_backend, export/import, test×3 platform). "Combo'ya satır eklemek" değil, dikey dilim.
+
+**Nihai tablo (öneri):**
+| Katman | İçerik |
+|---|---|
+| Tam backend (5+1) | venv · uv · poetry · conda · pipx · **pixi (YENİ — tek ciddi aday)** |
+| Conda motoru | bundled micromamba + **sistem mamba/miniconda/miniforge tespiti** (F176 ile birleşir; Settings: "Conda engine: Auto/Bundled") |
+| Read-only tespit | hatch · pdm — create YOK, sadece tanı+listele (F198 Add Existing üzerinden) |
+| Python kaynakları | sistem + **pyenv** (`~/.pyenv/versions/`) + **mise** (`~/.local/share/mise/installs/python/`) → create dialog Python dropdown'ına |
+| Export-only | Docker (Dockerfile/compose export ZATEN VAR — env tipi OLMAYACAK) · K8s (F185 dipte) |
+
+**Fazlar:**
+1. **pixi tam backend** (2-3 oturum): micromamba entegrasyonu şablon — binary indirme, `pixi init/add/list` subprocess deseni, `.pixi/` marker tespiti, eğitim kartı (canlı isimli format hazır). uv'deki fırsatın aynısı: pixi'nin GUI'si yok.
+2. **F176 conda motoru** + **pyenv/mise Python kaynak taraması** (düşük maliyet, yüksek algı)
+3. **(Opsiyonel refactor)** `EnvBackend` tanım sözlüğü — backend'ler if/elif dallarından declarative kayda (CodeReady definitions.sh deseninin Python'u); yeni tip eklemek "sözlüğe kayıt" seviyesine iner, F180 plugin'e kapı açar.
+
+**İlişkili:** F134/F176 (mamba), F198 (Add Existing → hatch/pdm read-only), F180 (plugin backend), F185 (K8s dipte kalır), F196 (dağıtım)
+
+---
+
 ## 🆕 F187–F196 — Conflict Yönetimi, Kalite & Dağıtım (eklendi: 2026-07-08)
 
 **Öncelik önerisi:** F188 + F189 kısa vade (v1.6.x, düşük maliyet) → F187 + F193 FAZ 1'e → kalanlar arkasına.

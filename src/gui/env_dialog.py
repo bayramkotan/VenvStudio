@@ -152,6 +152,11 @@ class EnvCreateDialog(QDialog):
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("e.g., my-project, data-science, web-api")
         self.name_input.returnPressed.connect(self._create)
+        # Live-refresh the example commands card as the user types the name
+        self.name_input.textChanged.connect(
+            lambda _t: self._on_env_type_changed(self.env_type_combo.currentIndex())
+            if hasattr(self, "env_type_combo") else None
+        )
         self._name_form_label = QLabel("Name:")
         form_layout.addRow(self._name_form_label, self.name_input)
 
@@ -379,6 +384,11 @@ class EnvCreateDialog(QDialog):
         btn_layout.addWidget(self.create_btn)
 
         root.addLayout(btn_layout)
+
+        # Render the command card for the DEFAULT type immediately.
+        # currentIndexChanged never fires for the initial selection, so the
+        # panel used to sit on the placeholder until the user changed type.
+        self._on_env_type_changed(self.env_type_combo.currentIndex())
 
     def _on_env_type_changed(self, index):
         """Show/hide rows based on env type."""

@@ -345,6 +345,11 @@ class EnvDialogUIMixin:
 
         root.addLayout(btn_layout)
 
+        # Render the command card for the DEFAULT type immediately.
+        # currentIndexChanged never fires for the initial selection, so the
+        # panel used to sit on the placeholder until the user changed type.
+        self._on_env_type_changed(self.env_type_combo.currentIndex())
+
     def _on_env_type_changed(self, index):
         """Show/hide rows based on env type."""
         env_type = self.env_type_combo.currentData()

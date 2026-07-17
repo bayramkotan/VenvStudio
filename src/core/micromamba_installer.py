@@ -2,6 +2,7 @@
 micromamba installer + MicromambaEnv manager
 """
 
+import logging
 import os
 import platform
 import shutil
@@ -137,6 +138,9 @@ def download_micromamba(progress_cb=None) -> Path:
 
 # ─── Conda env management ─────────────────────────────────────────────────────
 
+_log = logging.getLogger("venvstudio.conda")
+
+
 def _run_micromamba(args: list, progress_cb=None, timeout=600) -> subprocess.CompletedProcess:
     """Run micromamba with given args, streaming output to progress_cb."""
     exe = get_micromamba_exe()
@@ -147,6 +151,7 @@ def _run_micromamba(args: list, progress_cb=None, timeout=600) -> subprocess.Com
     cmd = [str(exe)] + args
     if progress_cb:
         progress_cb(f"$ {' '.join(cmd[:6])}...")
+    _log.debug(f"🚀 micromamba: {' '.join(cmd)}")
 
     result = subprocess.run(
         cmd,
@@ -155,11 +160,75 @@ def _run_micromamba(args: list, progress_cb=None, timeout=600) -> subprocess.Com
         timeout=timeout,
         env={**os.environ, "MAMBA_NO_LOW_SPEED_LIMIT": "1"},
     )
+    if result.returncode == 0:
+        _log.debug(f"  ↳ ✔ micromamba exit=0")
+    else:
+        # DEBUG here: a failed first attempt may be rescued by the mirror
+        # fallback — create/install log a WARNING with full stderr only
+        # when the operation FINALLY fails.
+        _log.debug(
+            f"  ↳ ✖ micromamba exit={result.returncode}\n"
+            f"--- stderr ---\n{(result.stderr or '')[:1500]}"
+        )
     if progress_cb and result.stdout:
         for line in result.stdout.strip().splitlines()[-10:]:
             if line.strip():
                 progress_cb(line.strip())
     return result
+
+
+_CONDA_FORGE_MIRROR = "https://repo.prefix.dev/conda-forge"
+
+
+def _mirror_preferred() -> bool:
+    try:
+        from src.core.config_manager import ConfigManager
+        return bool(ConfigManager().get("conda_use_mirror", False))
+    except Exception:
+        return False
+
+
+def _remember_mirror_works() -> None:
+    try:
+        from src.core.config_manager import ConfigManager
+        cfg = ConfigManager()
+        if not cfg.get("conda_use_mirror", False):
+            cfg.set("conda_use_mirror", True)
+            cfg.save()
+            _log.info("🌐 [Conda] prefix.dev mirror works on this "
+                      "network — saved as preferred channel host")
+    except Exception:
+        pass
+
+
+
+def _is_network_error(err: str) -> bool:
+    e = err.lower()
+    return any(s in e for s in (
+        "ssl connect error", "connection was reset", "download error",
+        "could not resolve host", "connection timed out", "recv failure",
+    ))
+
+
+def _mirror_channels(channels):
+    """Swap conda-forge for its prefix.dev mirror (IDENTICAL content).
+
+    Unlike the removed "defaults" fallback this is safe: same channel,
+    same packages — only the CDN hostname changes. Needed because some
+    networks reset TLS to conda.anaconda.org while the mirror is fine.
+    """
+    return [_CONDA_FORGE_MIRROR if c == "conda-forge" else c for c in channels]
+
+
+def _friendly_conda_error(err: str) -> str:
+    """Turn known micromamba failures into actionable messages."""
+    if "being used by another process" in err or "file in use" in err.lower():
+        return (
+            "A file inside the environment is locked by another process.\n"
+            "Close any terminals opened for this environment (and any running "
+            "Python/Jupyter from it), then retry.\n\n--- details ---\n" + err[:400]
+        )
+    return err[:500]
 
 
 def create_conda_env(env_path: Path, python_version: str = "",
@@ -205,6 +274,10 @@ def create_conda_env(env_path: Path, python_version: str = "",
 
     # Attempt 1: conda-forge
     try:
+        if _mirror_preferred() and "conda-forge" in channels:
+            _log.debug("🌐 [Conda] using prefix.dev mirror "
+                       "(saved preference for this network)")
+            channels = _mirror_channels(channels)
         result = _run_micromamba(_build_args(channels),
                                  progress_cb, timeout=600)
         if result.returncode == 0:
@@ -213,22 +286,31 @@ def create_conda_env(env_path: Path, python_version: str = "",
             return True
 
         err = result.stderr or ""
+        # NOTE: no "defaults" channel fallback. "defaults" is Anaconda's
+        # COMMERCIAL channel (ToS!) and mixing it into a conda-forge env makes
+        # the solver rip out core packages (python/pip/vc14) — observed on
+        # Windows: a simple preset install started unlinking python itself.
 
-        # Attempt 2: fallback to defaults channel
-        if "conda-forge" in channels:
-            fallback_channels = ["defaults"] + [c for c in channels if c != "conda-forge"]
+        # Network trouble reaching conda.anaconda.org? Retry via the
+        # prefix.dev mirror of conda-forge (identical packages).
+        if _is_network_error(err) and "conda-forge" in channels:
+            _log.info("🌐 [Conda] conda-forge CDN unreachable — "
+                      "retrying via prefix.dev mirror (same packages)")
             if progress_cb:
-                progress_cb("conda-forge failed — retrying with defaults channel...")
-            result = _run_micromamba(_build_args(fallback_channels),
+                progress_cb("conda-forge CDN unreachable — retrying via "
+                            "prefix.dev mirror (same packages)...")
+            result = _run_micromamba(_build_args(_mirror_channels(channels)),
                                      progress_cb, timeout=600)
             if result.returncode == 0:
+                _remember_mirror_works()
                 if progress_cb:
                     progress_cb("Conda environment created!")
                 return True
-            err = result.stderr or "" ""
+            err = result.stderr or ""
 
+        _log.warning(f"[Conda] create FAILED\n--- stderr ---\n{err[:1500]}")
         if progress_cb:
-            progress_cb(f"Error: {err[:500]}")
+            progress_cb(f"Error: {_friendly_conda_error(err)}")
         return False
 
     except subprocess.TimeoutExpired:
@@ -266,6 +348,10 @@ def install_conda_packages(env_path: Path, packages: list,
         return a
 
     try:
+        if _mirror_preferred() and "conda-forge" in channels:
+            _log.debug("🌐 [Conda] using prefix.dev mirror "
+                       "(saved preference for this network)")
+            channels = _mirror_channels(channels)
         result = _run_micromamba(_build_args(channels),
                                  progress_cb, timeout=600)
         if result.returncode == 0:
@@ -274,22 +360,25 @@ def install_conda_packages(env_path: Path, packages: list,
             return True
 
         err = result.stderr or ""
-
-        # Fallback channel
-        if "conda-forge" in channels:
-            fallback = ["defaults"] + [c for c in channels if c != "conda-forge"]
+        # NOTE: no "defaults" channel fallback — see create path for rationale.
+        if _is_network_error(err) and "conda-forge" in channels:
+            _log.info("🌐 [Conda] conda-forge CDN unreachable — "
+                      "retrying via prefix.dev mirror (same packages)")
             if progress_cb:
-                progress_cb("Retrying with defaults channel...")
-            result = _run_micromamba(_build_args(fallback),
+                progress_cb("conda-forge CDN unreachable — retrying via "
+                            "prefix.dev mirror (same packages)...")
+            result = _run_micromamba(_build_args(_mirror_channels(channels)),
                                      progress_cb, timeout=600)
             if result.returncode == 0:
+                _remember_mirror_works()
                 if progress_cb:
                     progress_cb(f"Installed: {', '.join(packages)}")
                 return True
             err = result.stderr or ""
 
+        _log.warning(f"[Conda] install FAILED\n--- stderr ---\n{err[:1500]}")
         if progress_cb:
-            progress_cb(f"Install failed: {err[:500]}")
+            progress_cb(f"Install failed: {_friendly_conda_error(err)}")
         return False
 
     except subprocess.TimeoutExpired:

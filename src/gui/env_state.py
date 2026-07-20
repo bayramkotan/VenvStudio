@@ -285,6 +285,14 @@ class EnvStateMixin:
                     self.launcher_grid.addWidget(card, row, col)
                     card.setVisible(True)
 
+        # Keep the Quick Launch sidebar in sync with the newly built grid
+        # (previously it only refreshed via the card-status path, so an env
+        # switch alone never updated it — conda apps stayed invisible).
+        try:
+            self._update_quick_sidebar()
+        except Exception:
+            pass
+
         # Update preset copy button tooltips for current env type
         _cmd_prefixes = {
             "venv":   "pip install",

@@ -873,7 +873,15 @@ class LauncherUIMixin:
                     """conda-forge installs (e.g. r-base) live INSIDE the env,
                     not on system PATH — previously such apps never appeared
                     in Quick Launch even when installed."""
-                    envp = getattr(self, "_current_venv_path", None)
+                    # Use the SAME source launcher_run uses to find the env
+                    # (pip_manager.venv_path) — _current_venv_path does not
+                    # exist on this object, which silently skipped every app.
+                    envp = None
+                    _pm = getattr(self, "pip_manager", None)
+                    if _pm is not None:
+                        envp = getattr(_pm, "venv_path", None)
+                    if not envp:
+                        envp = getattr(self, "_current_venv_path", None)
                     if not envp or not exe:
                         return False
                     # NOTE: no env-type gate — the path probe alone is safe
@@ -901,7 +909,7 @@ class LauncherUIMixin:
                 _qlog.debug(
                     f"[QuickLaunch] {name!r}: exe={_exe!r} env_hit={_env_hit} "
                     f"found={_found} env_path="
-                    f"{getattr(self, '_current_venv_path', None)!r}"
+                    f"{getattr(getattr(self, 'pip_manager', None), 'venv_path', None)!r}"
                 )
                 if not _found:
                     continue  # not found — skip sidebar

@@ -1690,6 +1690,48 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         cli_info.setTextFormat(Qt.RichText)
         cli_layout.addWidget(cli_info)
 
+        # ── Preferred terminal (used by every "Open Terminal" action) ──
+        term_row = QHBoxLayout()
+        term_row.addWidget(QLabel("Preferred terminal:"))
+        self.terminal_type_combo = QComboBox()
+        _terms = [
+            ("Auto-detect", ""),
+            ("GNOME Terminal", "gnome-terminal"),
+            ("GNOME Console (kgx)", "kgx"),
+            ("Konsole", "konsole"),
+            ("Xfce Terminal", "xfce4-terminal"),
+            ("Alacritty", "alacritty"),
+            ("Kitty", "kitty"),
+            ("WezTerm", "wezterm"),
+            ("foot", "foot"),
+            ("Tilix", "tilix"),
+            ("xterm", "xterm"),
+        ]
+        if get_platform() == "windows":
+            _terms = [
+                ("Auto-detect", ""),
+                ("Windows Terminal", "wt"),
+                ("PowerShell 7", "pwsh"),
+                ("Windows PowerShell", "powershell"),
+                ("cmd", "cmd"),
+                ("Git Bash", "git-bash"),
+            ]
+        elif get_platform() == "macos":
+            _terms = [("Auto-detect (Terminal.app)", ""), ("iTerm2", "iterm2")]
+        for _label, _val in _terms:
+            self.terminal_type_combo.addItem(_label, _val)
+        _cur = self.config.get("terminal_type", "")
+        _idx = self.terminal_type_combo.findData(_cur)
+        self.terminal_type_combo.setCurrentIndex(_idx if _idx >= 0 else 0)
+
+        def _on_terminal_changed(_i):
+            self.config.set("terminal_type", self.terminal_type_combo.currentData())
+            self.config.save()
+        self.terminal_type_combo.currentIndexChanged.connect(_on_terminal_changed)
+        term_row.addWidget(self.terminal_type_combo)
+        term_row.addStretch()
+        cli_layout.addLayout(term_row)
+
         cli_row = QHBoxLayout()
         self.cli_status_label = QLabel("")
         self.cli_status_label.setStyleSheet(f"font-size: {self._c()['fs_small']}px;")

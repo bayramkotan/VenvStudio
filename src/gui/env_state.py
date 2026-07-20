@@ -63,6 +63,11 @@ class EnvStateMixin:
             elif "pipx" in _vp_str:
                 self._current_env_type = "pipx"
 
+        try:
+            self._update_terminal_tooltip()
+        except Exception:
+            pass
+
         # Override backend based on env type
         if self._current_env_type == "uv":
             backend = "uv"
@@ -248,13 +253,22 @@ class EnvStateMixin:
         # Rebuild launcher grid — remove gaps from hidden cards
         if hasattr(self, "launcher_cards") and hasattr(self, "launcher_grid"):
             # Collect visible apps for this env type
-            # pip-based env types share the same launcher apps as venv
-            _filter_type = "venv" if env_type in ("uv", "poetry", "pipx") else env_type
+            # pip-based env types share the same launcher apps as venv.
+            # conda envs ship pip AND conda-forge carries these apps, so
+            # they get the pip cards PLUS the conda-only system apps —
+            # previously conda showed only 6 cards while Quick Launch
+            # correctly listed pip apps installed in the env.
+            if env_type in ("uv", "poetry", "pipx"):
+                _match = {"venv"}
+            elif env_type == "conda":
+                _match = {"venv", "conda"}
+            else:
+                _match = {env_type}
             visible_apps = [
                 app for app in self.app_definitions
-                if _filter_type in app.get("env_types",
+                if _match & set(app.get("env_types",
                     ["venv"] if not app.get("system_app")
-                    else ["conda", "system_tools"])
+                    else ["conda", "system_tools"]))
             ]
 
             # Hide all cards first

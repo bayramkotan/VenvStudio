@@ -113,8 +113,18 @@ class LauncherRunMixin:
 
             # Already installed — find exe in conda env and launch
             conda_bin = env_path / ("Scripts" if plat == "windows" else "bin")
-            exe_candidates = [name, name.lower(), name + ".exe",
-                              name.upper(), name.upper() + ".exe"]
+            # The REAL executable name comes from the card's system_commands
+            # (e.g. "R Console" → R.exe). Deriving it from the display name
+            # produced nonsense like "Scripts\r console" (bug seen on R).
+            exe_candidates = []
+            _sys_cmd = (app_def.get("system_commands") or {}).get(plat) or []
+            if _sys_cmd:
+                _first = _sys_cmd[0]
+                exe_candidates += [_first,
+                                   _first[:-4] if _first.lower().endswith(".exe")
+                                   else _first + ".exe"]
+            exe_candidates += [name, name.lower(), name + ".exe",
+                               name.upper(), name.upper() + ".exe"]
             exe_path = None
             for candidate in exe_candidates:
                 p = conda_bin / candidate
@@ -125,13 +135,13 @@ class LauncherRunMixin:
                 exe_path = _shutil.which(name) or _shutil.which(name.lower())
 
             if exe_path:
-                self._launch_exe(exe_path, app_def)
+                self._launch_exe(exe_path, app_def, conda_prefix=env_path)
             else:
                 QMessageBox.information(
                     self, name,
                     f"{name} is installed but executable not found.\n"
                     f"Try launching from terminal:\n"
-                    f"  {conda_bin / name.lower()}"
+                    f"  {conda_bin / (exe_candidates[0] if exe_candidates else name)}"
                 )
             return
         # ─────────────────────────────────────────────────────────────────
@@ -210,11 +220,29 @@ class LauncherRunMixin:
         # 5. Found — launch
         self._launch_exe(exe_path, app_def)
 
-    def _launch_exe(self, exe_path: str, app_def: dict):
-        """Launch an executable with proper detach/console flags."""
+    def _launch_exe(self, exe_path: str, app_def: dict, conda_prefix=None):
+        """Launch an executable with proper detach/console flags.
+
+        conda_prefix: if the exe lives in a conda env, its runtime DLLs
+        (Library\\bin, mingw-w64) must be on PATH — launching bare R.exe
+        gave "libgcc_s_seh-1.dll was not found" on Windows.
+        """
         from src.utils.platform_utils import get_platform
         plat = get_platform()
         name = app_def["name"]
+        self._conda_launch_env = None
+        if conda_prefix:
+            from pathlib import Path as _P
+            _pfx = _P(conda_prefix)
+            _extra = [_pfx, _pfx / "Scripts", _pfx / "bin",
+                      _pfx / "Library" / "bin",
+                      _pfx / "Library" / "mingw-w64" / "bin",
+                      _pfx / "Library" / "usr" / "bin"]
+            _env = dict(os.environ)
+            _env["PATH"] = os.pathsep.join(
+                [str(x) for x in _extra if x.exists()] + [_env.get("PATH", "")])
+            _env["CONDA_PREFIX"] = str(_pfx)
+            self._conda_launch_env = _env
         sys_cmds = app_def.get("system_commands", {})
         cmd_parts = sys_cmds.get(plat) or sys_cmds.get("linux", [exe_path])
         cmd = [exe_path] + list(cmd_parts[1:])
@@ -225,9 +253,11 @@ class LauncherRunMixin:
             if plat == "windows":
                 if show_console:
                     subprocess.Popen(cmd, cwd=work_dir,
+                                     env=getattr(self, "_conda_launch_env", None),
                                      creationflags=subprocess.CREATE_NEW_CONSOLE)
                 else:
                     subprocess.Popen(cmd, cwd=work_dir,
+                                     env=getattr(self, "_conda_launch_env", None),
                                      creationflags=0x00000008 | 0x08000000,
                                      stdout=subprocess.DEVNULL,
                                      stderr=subprocess.DEVNULL)
@@ -243,6 +273,10 @@ class LauncherRunMixin:
                                       stderr=subprocess.DEVNULL, start_new_session=True)
                     if _ai_env is not None:
                         _popen_kw2["env"] = _ai_env
+                    _cenv = getattr(self, "_conda_launch_env", None)
+                    if _cenv is not None:
+                        _popen_kw2["env"] = {**_popen_kw2.get("env", {}), **_cenv} \
+                            if _popen_kw2.get("env") else _cenv
                     subprocess.Popen(cmd, **_popen_kw2)
             self.status_label.setText(f"✅ {name} launched")
             url = app_def.get("open_browser")

@@ -862,17 +862,49 @@ class LauncherUIMixin:
             # System apps: show in sidebar if detected on system
             if app_def.get("system_app"):
                 from src.core.system_tools_installer import get_installer as _get_installer
+                from src.utils.platform_utils import get_platform as _gp
+                import shutil as _shutil
+                from pathlib import Path as _P
+
+                _sys_cmds = app_def.get("system_commands", {})
+                _exe = (_sys_cmds.get(_gp()) or _sys_cmds.get("linux", [""]))[0]
+
+                def _in_current_conda_env(exe: str) -> bool:
+                    """conda-forge installs (e.g. r-base) live INSIDE the env,
+                    not on system PATH — previously such apps never appeared
+                    in Quick Launch even when installed."""
+                    envp = getattr(self, "_current_venv_path", None)
+                    if not envp or not exe:
+                        return False
+                    # NOTE: no env-type gate — the path probe alone is safe
+                    # (venv Scripts never contains R.exe etc.) and the type
+                    # attribute is not guaranteed on this object.
+                    base = _P(envp)
+                    for sub in (base / "Scripts", base / "bin",
+                                base / "Library" / "bin"):
+                        if (sub / exe).exists() or (sub / (exe + ".exe")).exists():
+                            return True
+                    return False
+
                 _installer = _get_installer(app_def.get("icon_key", ""))
-                if _installer:
-                    if not _installer.is_installed():
-                        continue
-                else:
-                    import shutil as _shutil
-                    from src.utils.platform_utils import get_platform as _gp
-                    _sys_cmds = app_def.get("system_commands", {})
-                    _exe = (_sys_cmds.get(_gp()) or _sys_cmds.get("linux", [""]))[0]
-                    if not _shutil.which(_exe):
-                        continue  # not found — skip sidebar
+                import logging as _lg
+                _qlog = _lg.getLogger("venvstudio.gui.launcher")
+                _env_hit = _in_current_conda_env(_exe)
+                _inst_hit = None
+                if _env_hit:
+                    _found = True
+                elif _installer:
+                    _inst_hit = _installer.is_installed()  # SINGLE call — the
+                    _found = _inst_hit                     # doubled call caused
+                else:                                      # visible slowdown
+                    _found = bool(_shutil.which(_exe)) if _exe else False
+                _qlog.debug(
+                    f"[QuickLaunch] {name!r}: exe={_exe!r} env_hit={_env_hit} "
+                    f"found={_found} env_path="
+                    f"{getattr(self, '_current_venv_path', None)!r}"
+                )
+                if not _found:
+                    continue  # not found — skip sidebar
             elif pkg not in self.installed_package_names:
                 continue
             btn = QPushButton(app_def["icon"])

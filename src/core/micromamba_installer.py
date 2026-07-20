@@ -180,21 +180,37 @@ def _run_micromamba(args: list, progress_cb=None, timeout=600) -> subprocess.Com
 _CONDA_FORGE_MIRROR = "https://repo.prefix.dev/conda-forge"
 
 
+def _mirror_flag_path():
+    """Marker file for the mirror preference.
+
+    Deliberately NOT stored in config.json: these helpers run inside
+    worker threads, and writing the shared config concurrently with the
+    GUI thread risks corrupting it (suspected intermittent-crash source).
+    A dedicated flag file has no such race.
+    """
+    from pathlib import Path
+    if os.name == "nt":
+        base = Path(os.environ.get("APPDATA", str(Path.home())))
+    else:
+        base = Path.home() / ".config"
+    d = base / "VenvStudio"
+    d.mkdir(parents=True, exist_ok=True)
+    return d / "conda_use_mirror.flag"
+
+
 def _mirror_preferred() -> bool:
     try:
-        from src.core.config_manager import ConfigManager
-        return bool(ConfigManager().get("conda_use_mirror", False))
+        return _mirror_flag_path().exists()
     except Exception:
         return False
 
 
 def _remember_mirror_works() -> None:
     try:
-        from src.core.config_manager import ConfigManager
-        cfg = ConfigManager()
-        if not cfg.get("conda_use_mirror", False):
-            cfg.set("conda_use_mirror", True)
-            cfg.save()
+        fp = _mirror_flag_path()
+        if not fp.exists():
+            fp.write_text("prefix.dev conda-forge mirror preferred\n",
+                          encoding="utf-8")
             _log.info("🌐 [Conda] prefix.dev mirror works on this "
                       "network — saved as preferred channel host")
     except Exception:

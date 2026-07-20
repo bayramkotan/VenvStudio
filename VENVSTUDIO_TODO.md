@@ -4013,3 +4013,17 @@ Tek-blok body yerine bölümlü yapı:
 - CI'dan (F195) otomatik beslenebilir
 - Keşfedilebilirlik: PyPI'dan çok daha geniş kitle
 - Öncelik: 🟡 Orta (F195 sonrası)
+
+
+---
+
+## 📋 Bayram'ın Saha Notları — v1.6.11 sonrası kuyruk (2026-07-20)
+1. **`vs` kısayolu:** `venvstudio`'ya ek `vs` komutu (pyproject scripts + CLI install shim'i) — kolay
+2. **Kütüphane yükleme logları eksik(?):** [Install] başlangıç/sonuç var; kullanıcı paket-paket ilerleme satırlarını da log'da istiyor olabilir — netleştir + pip çıktısını log'a akıt
+3. **Open Terminal hepsi için farklı + Activate komutları generic:** Preferred terminal ayarı v1.6.11'de geliyor (test bekliyor); terminal İÇİNDE tip-özel gerçek aktivasyonun çalıştığı doğrulanacak (conda→micromamba activate, pipx→gerektirmez)
+4. **Silme sonrası üst bar GB/size güncellenmiyor** — env silinince header istatistikleri yenilensin
+5. **pipx silinip yeniden oluşturulunca log'da banner yok** — pipx delete/create yolu banner_start/success çağırmıyor olabilir; denetle
+6. **Conda'da launcher'dan kurulan uygulama Quick Launch'a düşmüyor** — kurulum sonrası quick-launch yenileme conda yolunda eksik
+7. **RStudio kurulunca R de kurulsun** (bağımlılık: önce r-base sonra rstudio; RStudio'nun R'ı bulması için ortam) — conda_packages'a r-base ekle + sıralı kurulum
+8. **Conda'da preset'ler kuruluyor mu belirsiz** — progress/sonuç geri bildirimi conda yolunda zayıf; [Install] OK/FAILED banner'ı + tabloda sayı artışı net gösterilsin (kısmen v1.6.11 loglarıyla geldi; UI geri bildirimi güçlendirilecek)
+9. ✅ **R launch DLL hatası (libgcc_s_seh-1.dll)** — FIX v1.6.11: conda exe'leri artık env'in Library\bin + mingw-w64 PATH'iyle başlatılıyor

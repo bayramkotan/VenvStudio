@@ -753,8 +753,14 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                             [term_exe, "-e", f"{system_bash} --rcfile '{_rc_path}' -i"],
                             env=clean_env, **_snew
                         )
+                    logging.getLogger("venvstudio.gui.terminal").info(
+                        f"🖥️ [Terminal] launched via '{term}' ({term_exe}) env_type={env_type}"
+                    )
                     return True
-                except Exception:
+                except Exception as _le:
+                    logging.getLogger("venvstudio.gui.terminal").debug(
+                        f"[Terminal] '{term}' launch failed: {_le}"
+                    )
                     return False
 
             # Explicit terminal selected (not "default" or empty)

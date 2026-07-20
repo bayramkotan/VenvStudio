@@ -584,6 +584,30 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
         except Exception:
             pass
 
+    def _update_terminal_tooltip(self):
+        """Show the REAL, type-aware activation command for the current env."""
+        btn = getattr(self, "_env_bar_terminal_btn", None)
+        path = getattr(self, "_current_venv_path", None)
+        if btn is None or not path:
+            return
+        import os as _os
+        et = getattr(self, "_current_env_type", "venv") or "venv"
+        p = str(path)
+        if et == "conda":
+            cmd = f"micromamba activate {p}"
+        elif et == "poetry":
+            cmd = "poetry shell   (inside the project)"
+        elif et in ("pipx", "system_tools"):
+            cmd = "pipx-managed — apps run directly, no activation needed"
+        elif _os.name == "nt":
+            cmd = f"{p}\\Scripts\\Activate.ps1"
+        else:
+            cmd = f"source {p}/bin/activate"
+        btn.setToolTip(
+            "🖥️ Open a terminal with this env activated.\n\n"
+            f"💡 Equivalent command ({et}):\n  {cmd}"
+        )
+
     def _open_terminal_here(self):
         """Open terminal with current venv activated."""
         if not hasattr(self, "_current_venv_path") or not self._current_venv_path:

@@ -423,6 +423,22 @@ class PackageMiscMixin:
         )
         if reply == QMessageBox.Yes:
             pkg_names = [p.name for p in outdated]
+            # Log updates the same way installs are logged (previously the
+            # update path emitted nothing, so the log looked empty during
+            # package upgrades).
+            self._pkg_op_kind = "Update"  # so _on_install_finished logs [Update] OK/FAILED
+            try:
+                _env_name = self.pip_manager.venv_path.name if self.pip_manager else "?"
+                _shown = ", ".join(
+                    f"{p.name} {p.version}→{p.latest_version}" for p in outdated[:8]
+                ) + (f" (+{len(outdated) - 8} more)" if len(outdated) > 8 else "")
+                from src.utils.logger import get_logger
+                get_logger("venvstudio.install").info(
+                    f"📦 [Update] env='{_env_name}' "
+                    f"packages({len(pkg_names)}): {_shown}"
+                )
+            except Exception:
+                pass
             self._set_busy(True)
             self.current_worker = WorkerThread(
                 self.pip_manager.install_packages, pkg_names, upgrade=True

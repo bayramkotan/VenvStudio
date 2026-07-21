@@ -221,7 +221,7 @@ class _RenameMixin:
         """Set a display name override for a Poetry env (VenvStudio-only, doesn't touch Poetry itself).
         The override is stored in a .venvstudio_display_name file inside the poetry env dir.
         """
-        _log.info(f"set_poetry_display_name: path={env_path!r} new_name={new_display_name!r}")
+        _log.info(f"set_poetry_display_name: path={env_path} new_name={new_display_name!r}")
         try:
             _p = Path(env_path)
             if not _p.exists() or not _p.is_dir():

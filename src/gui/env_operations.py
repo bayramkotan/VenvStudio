@@ -254,11 +254,11 @@ class EnvOperationsMixin:
                     pkg_key = "pkg_list:" + norm_path
                     if pkg_key in all_cache:
                         all_cache.pop(pkg_key, None)
-                        self._log.debug(f"env_deleted: removed pkg_list cache key={pkg_key!r}")
+                        self._log.debug(f"env_deleted: removed pkg_list cache key={pkg_key}")
                     # Also remove env meta cache entry by the same normalised key
                     if norm_path in all_cache:
                         all_cache.pop(norm_path, None)
-                        self._log.debug(f"env_deleted: removed env meta cache key={norm_path!r}")
+                        self._log.debug(f"env_deleted: removed env meta cache key={norm_path}")
                     vm._save_all_cache(all_cache)
                     vm.invalidate_cache(real_path)
             except Exception as e:

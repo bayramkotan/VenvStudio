@@ -157,7 +157,7 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
         Create a new virtual environment.
         Returns (success, message).
         """
-        _log.info(f"create_venv: name={name!r} python={python_path!r} "
+        _log.info(f"create_venv: name={name!r} python={python_path} "
                   f"with_pip={with_pip} system_site={system_site_packages}")
         banner_start(
             f"Creating environment '{name}'",
@@ -484,7 +484,7 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
           the disk delete and reappear after the next refresh, which is B182).
         For other envs: deletes base_dir/name or env_path if given.
         """
-        _log.info(f"delete_venv: name={name!r} env_type={env_type!r} env_path={env_path!r}")
+        _log.info(f"delete_venv: name={name!r} env_type={env_type!r} env_path={env_path}")
         banner_start(
             f"Deleting environment '{name}'",
             details=[

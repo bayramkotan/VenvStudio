@@ -119,7 +119,15 @@ def get_python_executable(venv_path: Path) -> Path:
         except Exception:
             pass
     if get_platform() == "windows":
-        return venv_path / "Scripts" / "python.exe"
+        # conda envs put python.exe at the ROOT, not under Scripts\\.
+        # Probing Scripts\\python.exe (which doesn't exist) caused
+        # "[WinError 2] cannot find the file specified" when installing
+        # pip apps (e.g. Gradio) into a conda env.
+        _root_py = venv_path / "python.exe"
+        _scripts_py = venv_path / "Scripts" / "python.exe"
+        if _root_py.exists() and not _scripts_py.exists():
+            return _root_py
+        return _scripts_py
     return venv_path / "bin" / "python"
 
 
@@ -151,7 +159,11 @@ def get_pip_executable(venv_path: Path) -> Path:
         except Exception:
             pass
     if get_platform() == "windows":
-        return venv_path / "Scripts" / "pip.exe"
+        # conda: pip.exe (if present) sits in Scripts\\, but python is at root.
+        _scripts_pip = venv_path / "Scripts" / "pip.exe"
+        if _scripts_pip.exists():
+            return _scripts_pip
+        return _scripts_pip  # caller uses python -m pip when missing
     return venv_path / "bin" / "pip"
 
 def get_pipx_executable() -> Optional[str]:
@@ -753,14 +765,8 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                             [term_exe, "-e", f"{system_bash} --rcfile '{_rc_path}' -i"],
                             env=clean_env, **_snew
                         )
-                    logging.getLogger("venvstudio.gui.terminal").info(
-                        f"🖥️ [Terminal] launched via '{term}' ({term_exe}) env_type={env_type}"
-                    )
                     return True
-                except Exception as _le:
-                    logging.getLogger("venvstudio.gui.terminal").debug(
-                        f"[Terminal] '{term}' launch failed: {_le}"
-                    )
+                except Exception:
                     return False
 
             # Explicit terminal selected (not "default" or empty)

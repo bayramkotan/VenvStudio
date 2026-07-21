@@ -274,6 +274,22 @@ class PipManager:
         if not packages:
             return False, "No packages specified"
 
+        # conda envs may ship without pip (e.g. `micromamba create python=3.13`).
+        # Installing a pip app (Gradio, Streamlit...) then failed with
+        # "[WinError 2]". Bootstrap pip via ensurepip if it's missing.
+        try:
+            import subprocess as _sp
+            from src.utils.platform_utils import subprocess_args as _spa
+            _check = _sp.run([str(self.python_exe), "-m", "pip", "--version"],
+                             **_spa(capture_output=True, text=True, timeout=30))
+            if _check.returncode != 0:
+                if callback:
+                    callback("pip not found in this env — bootstrapping via ensurepip...")
+                _sp.run([str(self.python_exe), "-m", "ensurepip", "--upgrade"],
+                        **_spa(capture_output=True, text=True, timeout=120))
+        except Exception:
+            pass
+
         # If uv backend selected, ensure it's available
         if self._backend == "uv":
             if not self._ensure_uv(callback):

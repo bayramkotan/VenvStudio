@@ -637,6 +637,13 @@ class LauncherUIMixin:
 
     def _update_launcher_status(self):
         """Update launcher cards to show installed/not-installed status."""
+        # Drop any per-env conda "installed" caches so status reflects the
+        # CURRENT disk state. Without this, deleting + recreating an env at
+        # the same path kept showing stale "Installed (conda-forge)" (e.g.
+        # R appeared installed in a fresh conda1 until VS restarted).
+        for _attr in [a for a in list(vars(self))
+                      if a.startswith("_conda_installed_cache_")]:
+            delattr(self, _attr)
         # Get current env Python version — use cache to avoid subprocess on every call
         env_py_version = None
         if self.pip_manager:

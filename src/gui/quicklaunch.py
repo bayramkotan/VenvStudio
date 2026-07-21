@@ -144,9 +144,50 @@ class QuickLaunchMixin:
                 item.widget().deleteLater()
         c = self._c()
         app_defs = getattr(self.package_panel, "app_definitions", [])
+        import logging as _lg
+        _qll = _lg.getLogger("venvstudio")
+        _envp_dbg = None
+        if self.package_panel is not None and getattr(self.package_panel, "pip_manager", None):
+            _envp_dbg = self.package_panel.pip_manager.venv_path
+        _qll.info(f"[QL] rebuild: app_defs={len(app_defs)} "
+                  f"installed={len(installed)} env={_envp_dbg}")
         has_any = False
+        # env path for detecting system apps installed INSIDE a conda env
+        _envp = None
+        if self.package_panel is not None and getattr(self.package_panel, "pip_manager", None):
+            _envp = self.package_panel.pip_manager.venv_path
+
+        def _system_app_present(app) -> bool:
+            """System apps (package == '__system__') aren't pip packages, so
+            the pip-list check never matched them — R/DBeaver etc. installed
+            into a conda env were always filtered out. Detect them by exe:
+            on system PATH, or inside the current env's bin/Scripts."""
+            import shutil as _sh
+            from pathlib import Path as _P
+            from src.utils.platform_utils import get_platform as _gp
+            _cmds = app.get("system_commands", {})
+            _exe = (_cmds.get(_gp()) or _cmds.get("linux", [""]))[0]
+            if not _exe:
+                return False
+            _wh = _sh.which(_exe)
+            _hits = []
+            if _envp:
+                for sub in (_P(_envp) / "Scripts", _P(_envp) / "bin",
+                            _P(_envp) / "Library" / "bin"):
+                    for cand in (sub / _exe, sub / (_exe + ".exe")):
+                        if cand.exists():
+                            _hits.append(str(cand))
+            import logging as _lg2
+            _lg2.getLogger("venvstudio").info(
+                f"[QL] sysapp {app.get('name')!r}: exe={_exe!r} "
+                f"which={bool(_wh)} env_hits={_hits} envp={_envp}")
+            return bool(_wh) or bool(_hits)
+
         for app in app_defs:
-            if app["package"].lower() not in installed:
+            if app.get("system_app") or app.get("package", "").lower() == "__system__":
+                if not _system_app_present(app):
+                    continue
+            elif app["package"].lower() not in installed:
                 continue
             has_any = True
             btn = QPushButton(f"{app['icon']} {app['name']}")

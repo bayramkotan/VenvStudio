@@ -251,7 +251,10 @@ class LauncherUIMixin:
                 "env_types": ["conda"],
                 "package": "__system__",
                 "system_app": True,
-                "conda_packages": ["rstudio"],
+                # conda-forge package is "rstudio-desktop" (not "rstudio");
+                # list r-base first so the R interpreter RStudio needs is
+                # present in the same env.
+                "conda_packages": ["r-base", "rstudio-desktop"],
                 "conda_channels": ["conda-forge"],
                 "system_commands": {
                     "windows": ["rstudio.exe"],
@@ -730,7 +733,7 @@ class LauncherUIMixin:
                                     {p.get("name", "").lower()
                                      for p in list_conda_packages(_env_path)})
                         _installed = getattr(self, _cache_key)
-                        _found = _conda_pkgs[0].lower() in _installed
+                        _found = _conda_pkgs[-1].lower() in _installed
                         status = card._status_label
                         card._launch_btn.setEnabled(True)
                         card._launch_btn.setStyleSheet("")

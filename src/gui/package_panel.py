@@ -542,7 +542,7 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
             try:
                 from src.utils.logger import get_logger
                 get_logger("venvstudio.pkg_cache").debug(
-                    f"💾 [PkgCache] SAVED key={_fmt_path(key)!r} count={len(packages)}"
+                    f"💾 [PkgCache] SAVED key={_fmt_path(key)} count={len(packages)}"
                 )
             except Exception:
                 pass

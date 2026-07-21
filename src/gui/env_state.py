@@ -677,7 +677,7 @@ class EnvStateMixin:
                 try:
                     from src.utils.logger import get_logger
                     get_logger("venvstudio.pkg_cache").debug(
-                        f"✅ [PkgCache] HIT key={_fmt_path(self._get_pkg_cache_key())!r} count={len(cached)}"
+                        f"✅ [PkgCache] HIT key={_fmt_path(self._get_pkg_cache_key())} count={len(cached)}"
                     )
                 except Exception:
                     pass
@@ -692,7 +692,7 @@ class EnvStateMixin:
             try:
                 from src.utils.logger import get_logger
                 get_logger("venvstudio.pkg_cache").debug(
-                    f"📦 [PkgCache] MISS key={_fmt_path(self._get_pkg_cache_key())!r} force={force} → starting pip list"
+                    f"📦 [PkgCache] MISS key={_fmt_path(self._get_pkg_cache_key())} force={force} → starting pip list"
                 )
             except Exception:
                 pass

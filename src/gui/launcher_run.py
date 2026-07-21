@@ -47,6 +47,27 @@ class LauncherRunMixin:
             if marker.exists():
                 env_path = vp
 
+        # ── Windows: RStudio has no working conda-forge build ────────────
+        # rstudio-desktop "installs" on Windows but ships NO rstudio.exe
+        # (verified: nothing under the env matches rstudio*.exe). Point the
+        # user to the official installer instead of a phantom conda install.
+        # r-base still comes from conda so RStudio finds an R interpreter.
+        if plat == "windows" and app_def.get("icon_key") == "rstudio":
+            from PySide6.QtWidgets import QMessageBox as _QMB
+            import webbrowser as _wb
+            _r = _QMB.question(
+                self, name,
+                "RStudio has no Windows build on conda-forge, so it can't be "
+                "installed here automatically.\n\n"
+                "Open the official RStudio download page?\n"
+                "(Tip: install r-base from the R Console card first so RStudio "
+                "detects R.)",
+                _QMB.Yes | _QMB.No,
+            )
+            if _r == _QMB.Yes:
+                _wb.open("https://posit.co/download/rstudio-desktop/")
+            return
+
         # ── Conda env: use micromamba to install ─────────────────────────
         if env_type == "conda" and env_path:
             conda_pkgs = app_def.get("conda_packages", [])

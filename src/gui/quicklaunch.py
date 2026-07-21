@@ -144,13 +144,6 @@ class QuickLaunchMixin:
                 item.widget().deleteLater()
         c = self._c()
         app_defs = getattr(self.package_panel, "app_definitions", [])
-        import logging as _lg
-        _qll = _lg.getLogger("venvstudio")
-        _envp_dbg = None
-        if self.package_panel is not None and getattr(self.package_panel, "pip_manager", None):
-            _envp_dbg = self.package_panel.pip_manager.venv_path
-        _qll.info(f"[QL] rebuild: app_defs={len(app_defs)} "
-                  f"installed={len(installed)} env={_envp_dbg}")
         has_any = False
         # env path for detecting system apps installed INSIDE a conda env
         _envp = None
@@ -169,19 +162,14 @@ class QuickLaunchMixin:
             _exe = (_cmds.get(_gp()) or _cmds.get("linux", [""]))[0]
             if not _exe:
                 return False
-            _wh = _sh.which(_exe)
-            _hits = []
+            if _sh.which(_exe):
+                return True
             if _envp:
                 for sub in (_P(_envp) / "Scripts", _P(_envp) / "bin",
                             _P(_envp) / "Library" / "bin"):
-                    for cand in (sub / _exe, sub / (_exe + ".exe")):
-                        if cand.exists():
-                            _hits.append(str(cand))
-            import logging as _lg2
-            _lg2.getLogger("venvstudio").info(
-                f"[QL] sysapp {app.get('name')!r}: exe={_exe!r} "
-                f"which={bool(_wh)} env_hits={_hits} envp={_envp}")
-            return bool(_wh) or bool(_hits)
+                    if (sub / _exe).exists() or (sub / (_exe + ".exe")).exists():
+                        return True
+            return False
 
         for app in app_defs:
             if app.get("system_app") or app.get("package", "").lower() == "__system__":

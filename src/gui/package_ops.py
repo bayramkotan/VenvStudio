@@ -151,7 +151,7 @@ class PackageOpsMixin:
                 _current_path = str(self.pip_manager.venv_path)
             get_logger("venvstudio.pkg_cache").debug(
                 f"📥 [PkgCache] _on_packages_loaded called count={len(packages) if packages else 0} "
-                f"loaded_for={_fmt_path(loaded_for_path)!r} current={_fmt_path(_current_path)!r}"
+                f"loaded_for={_fmt_path(loaded_for_path)} current={_fmt_path(_current_path)}"
             )
         except Exception:
             pass
@@ -166,8 +166,8 @@ class PackageOpsMixin:
             if loaded_for_path and _current and loaded_for_path != _current:
                 from src.utils.logger import get_logger
                 get_logger("venvstudio.pkg_cache").info(
-                    f"🗑️ [PkgCache] discarding stale result: was for {_fmt_path(loaded_for_path)!r}, "
-                    f"now on {_fmt_path(_current)!r}"
+                    f"🗑️ [PkgCache] discarding stale result: was for {_fmt_path(loaded_for_path)}, "
+                    f"now on {_fmt_path(_current)}"
                 )
                 return
         except Exception:

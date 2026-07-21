@@ -17,6 +17,55 @@ from src.utils.i18n import tr
 class EnvListMixin:
     """Mixin for MainWindow: environment table refresh, selection, detail loading."""
 
+    def _update_env_summary(self):
+        """Recompute just the header summary line (counts + GB) from the
+        in-memory env list, without a full rescan. Called after add/delete
+        so the top bar's total size updates immediately. Previously this
+        method didn't exist and callers guarded with hasattr(), so the
+        summary only changed on a full _refresh_env_list()."""
+        try:
+            from pathlib import Path as _Path
+            base_key = getattr(self.venv_manager, "_base_key", None)
+            from src.core.venv_manager import VenvManager
+            envs = VenvManager._mem_envs.get(base_key, []) if base_key else []
+            if not envs:
+                return
+            _base_dir = str(self.venv_manager.base_dir)
+            _base_envs = [e for e in envs if str(e.path).startswith(_base_dir)
+                          and e.env_type not in ("poetry", "pipx")]
+            _poetry_envs = [e for e in envs if e.env_type == "poetry"]
+            _pipx_envs = [e for e in envs if e.env_type == "pipx"]
+
+            def _fmt_size(lst):
+                total = 0
+                for e in lst:
+                    s = e.size or "0 MB"
+                    try:
+                        n, u = s.strip().split()
+                        mult = {"B":1,"KB":1024,"MB":1024**2,
+                                "GB":1024**3,"TB":1024**4}.get(u, 1)
+                        total += float(n) * mult
+                    except Exception:
+                        pass
+                for unit in ("B", "KB", "MB", "GB", "TB"):
+                    if total < 1024:
+                        return f"{total:.1f} {unit}"
+                    total /= 1024
+                return "?"
+
+            parts = [f"\U0001f4c2 {self.venv_manager.base_dir}  \u2022  "
+                     f"{len(_base_envs)} env(s)  \u2022  {_fmt_size(_base_envs)}"]
+            if _poetry_envs:
+                parts.append(f"\U0001f4dc poetry  \u2022  {len(_poetry_envs)} "
+                             f"env(s)  \u2022  {_fmt_size(_poetry_envs)}")
+            if _pipx_envs:
+                parts.append(f"\U0001f4e6 pipx  \u2022  {len(_pipx_envs)} "
+                             f"env(s)  \u2022  {_fmt_size(_pipx_envs)}")
+            parts.append(f"\U0001f5c2 total  \u2022  {_fmt_size(envs)}")
+            self.info_label.setText("        ".join(parts))
+        except Exception:
+            pass
+
     def _refresh_env_list(self, force: bool = False):
         """Phase 1: Load from cache instantly. Phase 2: fetch missing in background.
         If force=True (manual Refresh button), invalidates all caches first.

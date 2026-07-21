@@ -486,6 +486,15 @@ class EnvOperationsMixin:
             if removed_row >= 0:
                 self.env_table.removeRow(removed_row)
                 self._log.debug(f"env_deleted: removed row {removed_row} from table")
+                # Refresh the header summary (e.g. "N env(s) · X GB") so the
+                # total size/count updates after a delete. The create/refresh
+                # path already did this; the delete path didn't, so the top
+                # bar kept showing the pre-delete GB total.
+                try:
+                    if hasattr(self, "_update_env_summary"):
+                        self._update_env_summary()
+                except Exception:
+                    pass
             else:
                 # Fallback — couldn't pinpoint the row, do a light refresh
                 self._log.debug(

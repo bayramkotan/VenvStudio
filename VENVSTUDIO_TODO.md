@@ -4023,7 +4023,31 @@ Tek-blok body yerine bölümlü yapı:
 3. **Open Terminal hepsi için farklı + Activate komutları generic:** Preferred terminal ayarı v1.6.11'de geliyor (test bekliyor); terminal İÇİNDE tip-özel gerçek aktivasyonun çalıştığı doğrulanacak (conda→micromamba activate, pipx→gerektirmez)
 4. **Silme sonrası üst bar GB/size güncellenmiyor** — env silinince header istatistikleri yenilensin
 5. **pipx silinip yeniden oluşturulunca log'da banner yok** — pipx delete/create yolu banner_start/success çağırmıyor olabilir; denetle
-6. **Conda'da launcher'dan kurulan uygulama Quick Launch'a düşmüyor** — kurulum sonrası quick-launch yenileme conda yolunda eksik
-7. **RStudio kurulunca R de kurulsun** (bağımlılık: önce r-base sonra rstudio; RStudio'nun R'ı bulması için ortam) — conda_packages'a r-base ekle + sıralı kurulum
+6. ✅ **Conda'da launcher'dan kurulan uygulama Quick Launch'a düşmüyor** — FIX v1.6.12: gerçek doldurucu quicklaunch.py, system-app'ler exe ile tespit — kurulum sonrası quick-launch yenileme conda yolunda eksik
+7. ⚠️ **RStudio kurulunca R de kurulsun** — KISMEN v1.6.12: r-base bağımlılığı eklendi AMA rstudio-desktop conda-forge'da Windows'ta YOK (linux/mac only). Windows'ta resmi installer'a yönlendiriliyor. **AÇIK KARAR:** Windows'ta kartı gizle mi, yönlendir mi (şu an yönlendir)? (bağımlılık: önce r-base sonra rstudio; RStudio'nun R'ı bulması için ortam) — conda_packages'a r-base ekle + sıralı kurulum
 8. **Conda'da preset'ler kuruluyor mu belirsiz** — progress/sonuç geri bildirimi conda yolunda zayıf; [Install] OK/FAILED banner'ı + tabloda sayı artışı net gösterilsin (kısmen v1.6.11 loglarıyla geldi; UI geri bildirimi güçlendirilecek)
 9. ✅ **R launch DLL hatası (libgcc_s_seh-1.dll)** — FIX v1.6.11: conda exe'leri artık env'in Library\bin + mingw-w64 PATH'iyle başlatılıyor
+
+
+---
+
+## ✅ v1.6.12'de KAPANAN Saha Notları (2026-07-21)
+- R Console Quick Launch görünürlüğü (uzun destan — gerçek fonksiyon quicklaunch.py'deydi)
+- R launch DLL hatası (libgcc_s_seh-1.dll — env PATH enjeksiyonu)
+- R exe bulma (system_commands'ten, görünen addan değil)
+- pip uygulamaları conda env'e kuruluyor (Gradio/Streamlit/Panel — conda kök python + ensurepip)
+- Hayalet "Installed" durumu (sil+yeniden yarat cache'i temizlendi)
+- conda env'de 22 kart (pip + conda-only)
+- log yolları tek backslash (repr kaldırıldı)
+- conda ağ dayanıklılığı: prefix.dev mirror + yapışkan bayrak-dosyası tercihi + tam loglama
+- PyPI→conda ad çevirisi
+
+## 📌 Bir sonraki oturum için AÇIK maddeler
+- **RStudio Windows kararı:** gizle vs resmi-installer-yönlendir (şu an yönlendir) — Bayram'ın onayı bekleniyor
+- `vs` kısayolu (venvstudio'ya ek kısa komut)
+- Kütüphane paket-paket yükleme log detayı (netleştir)
+- Silmede üst bar GB/size güncellenmiyor
+- pipx silinip yeniden oluşturulunca banner yok
+- conda preset UI geri bildirimi zayıf (kurulum belirsiz görünüyor)
+- Preferred terminal ayarı + terminal İÇİ aktivasyon doğrulaması (Bayram testi bekliyor)
+- "VS bazen çöküyor" — bayrak-dosyası fix'i sonrası izleniyor, traceback alınamadı

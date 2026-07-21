@@ -332,7 +332,9 @@ class PackageOpsMixin:
 
                 name_item = QTableWidgetItem(pkg["name"])
                 name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
-                name_font = QFont()
+                # Copy the table's font so pointSize is valid; a bare QFont()
+                # has pointSize -1 on Windows → QFont::setPointSize(-1) warning.
+                name_font = QFont(self.catalog_table.font())
                 name_font.setBold(True)
                 name_item.setFont(name_font)
                 if is_installed:

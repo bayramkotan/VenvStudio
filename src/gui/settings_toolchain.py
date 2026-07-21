@@ -462,7 +462,7 @@ class ToolchainMixin:
         for row, (tid, pkg, lbl, icon) in enumerate(self._TC_TOOLS):
             tbl.setRowHeight(row, 38)
             name = QTableWidgetItem(f"{icon}  {lbl}")
-            _f = QFont(); _f.setWeight(QFont.Medium); name.setFont(_f)
+            _f = QFont(tbl.font()); _f.setWeight(QFont.Medium); name.setFont(_f)
             tbl.setItem(row, 0, name)
             for col in (1, 2, 3):
                 ph = QTableWidgetItem("—")

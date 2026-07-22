@@ -567,22 +567,49 @@ class LauncherRunMixin:
                             _pipx_python = _mdata.get("python_path", "")
                         except Exception:
                             pass
-                def _do_pipx_launch_install(callback=None):
+                # Correct pipx model: install ONE main app, then `pipx inject`
+                # any extra libraries into that app's venv. The old code ran a
+                # separate `pipx install` for every dependency, so library-only
+                # packages (e.g. PyQtWebEngine, a dep of Orange3) failed with
+                # "no apps". Main pkg = the card's "package"; the rest are deps.
+                _main_pkg = app_def["package"]
+                _extra_pkgs = [p for p in pkgs_to_install if p != _main_pkg]
+
+                def _do_pipx_launch_install(callback=None,
+                                            _main=_main_pkg, _extras=_extra_pkgs,
+                                            _bin=_pipx_bin, _py=_pipx_python):
                     import subprocess, sys
                     from src.utils.platform_utils import subprocess_args
+                    _base = [_bin] if _bin else [sys.executable, "-m", "pipx"]
+
+                    # 1) install the main application
+                    if callback:
+                        callback(f"pipx install {_main}...")
+                    cmd = _base + ["install", _main]
+                    if _py:
+                        cmd += ["--python", _py]
+                    r = subprocess.run(cmd, capture_output=True, text=True,
+                                       timeout=600, **subprocess_args())
+                    # "already installed" is not a failure
+                    if r.returncode != 0 and "already seems to be installed" not in (r.stdout + r.stderr):
+                        return (False, f"pipx install failed for {_main}:\n"
+                                       f"{(r.stderr or r.stdout)[:400]}")
+
+                    # 2) inject any extra libraries INTO the app's venv
                     failed = []
-                    for pkg in pkgs_to_install:
+                    for pkg in _extras:
                         if callback:
-                            callback(f"pipx install {pkg}...")
-                        cmd = [_pipx_bin, "install", pkg] if _pipx_bin else [sys.executable, "-m", "pipx", "install", pkg]
-                        if _pipx_python:
-                            cmd += ["--python", _pipx_python]
-                        r = subprocess.run(cmd, capture_output=True, text=True, timeout=300, **subprocess_args())
+                            callback(f"pipx inject {_main} {pkg}...")
+                        cmd = _base + ["inject", _main, pkg]
+                        r = subprocess.run(cmd, capture_output=True, text=True,
+                                           timeout=300, **subprocess_args())
                         if r.returncode != 0:
                             failed.append(pkg)
                     if failed:
-                        return (False, f"pipx install failed for: {', '.join(failed)}")
-                    return (True, f"pipx installed: {', '.join(pkgs_to_install)}")
+                        return (False, "pipx inject failed for: "
+                                       + ", ".join(failed))
+                    return (True, f"pipx installed: {_main}"
+                            + (f" (+{len(_extras)} injected)" if _extras else ""))
                 self.current_worker = WorkerThread(_do_pipx_launch_install)
             else:
                 self.current_worker = WorkerThread(
@@ -645,8 +672,26 @@ class LauncherRunMixin:
             # 3. shutil.which (PATH)
             if not _exe_path:
                 _exe_path = _sh.which(_exe_name)
-            if _exe_path:
-                cmd = [_exe_path]
+            # Cards whose command is Python code (-c ...) must NOT be started
+            # via the bare console script: e.g. `gradio.exe` requires a
+            # demo_path argument and exits immediately. Run the card's code
+            # with the app's OWN pipx venv python instead.
+            _pipx_py = None
+            if _pipx_home:
+                _cand = _os.path.join(_pipx_home, "venvs", _pkg, _scripts_dir,
+                                      "python" + _exe_suffix)
+                if _os.path.isfile(_cand):
+                    _pipx_py = _cand
+            if _app_cmd and _app_cmd[0] == "-c" and _pipx_py:
+                cmd = [_pipx_py] + _app_cmd
+            elif _exe_path:
+                # keep extra args from '-m <mod> <args...>' (e.g. jupyter lab)
+                if len(_app_cmd) >= 2 and _app_cmd[0] == "-m":
+                    cmd = [_exe_path] + list(_app_cmd[2:])
+                else:
+                    cmd = [_exe_path]
+            elif _pipx_py:
+                cmd = [_pipx_py] + _app_cmd
             else:
                 # fallback: python -m ...
                 cmd = [str(python_exe)] + _app_cmd

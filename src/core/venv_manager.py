@@ -119,6 +119,16 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
         marker_dir.mkdir(parents=True, exist_ok=True)
         marker = marker_dir / ".venvstudio_env"
         if not marker.exists():
+            # Show the same create banner as other env types (previously the
+            # pipx marker was (re)created silently, so deleting + recreating
+            # pipx produced no banner while every other type did).
+            banner_start(
+                "Creating environment 'pipx'",
+                details=[
+                    "Type: pipx",
+                    f"Location: {marker_dir}",
+                ],
+            )
             try:
                 with open(marker, "w", encoding="utf-8") as _f:
                     _json.dump({
@@ -130,6 +140,10 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
                         "created": _dt.datetime.now().isoformat(),
                         "auto_detected": True,
                     }, _f, indent=2)
+                banner_success(
+                    "Environment 'pipx' is ready!",
+                    details=["Type: pipx", f"Path: {marker_dir}"],
+                )
             except Exception:
                 pass
         else:

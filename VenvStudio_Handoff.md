@@ -3,8 +3,9 @@
 ## Proje
 - **Repo:** https://github.com/bayramkotan/VenvStudio
 - **PyPI:** https://pypi.org/project/venvstudio/
-- **Son push edilmiş versiyon:** v1.6.9 (venvstudio CLI! + Command Line settings + timer leak fix) — SAHADA DOĞRULANDI: `venvstudio list` 5 backend/6 env listeledi
-- **Bu oturumda yapılacak versiyon:** v1.6.10 (bir sonraki push hedefi)
+- **Son push edilmiş versiyon:** v1.6.12 (conda launcher hardening) — SAHADA DOĞRULANDI: conda create/install prefix.dev mirror'dan, R Console Quick Launch'ta görünüyor+açılıyor, Gradio/Panel conda env'e kuruluyor, log yolları tek backslash
+- **Önceki sürümler:** v1.6.10 (create-env canlı isimli kartlar + iptal-taraması fix), v1.6.11 (conda ağ dayanıklılığı ilk dalga)
+- **Bir sonraki oturumun kuyruğu:** aşağıdaki "Saha Notları" + RStudio Windows kararı (gizle vs yönlendir)
 - **Proje dizini (Windows):** `C:\Github\VenvStudio`
 - **Proje dizini (Linux - CachyOS/Pardus):** `~/Github/VenvStudio`
 - **Handoff dizini (Windows):** `C:\Users\bayram\Yandex.Disk\GitHub_Handoff_Files\VenvStudio\VenvStudio_Handoff.md`
@@ -3178,3 +3179,30 @@ copy $env:USERPROFILE\Downloads\VENVSTUDIO_TODO.md C:\Github\VenvStudio\VENVSTUD
 - Handoff veya TODO istendiğinde **her ikisi de** güncellenir ve verilir
 - **Her zaman hem Windows hem Linux komutları verilir**
 - Platform fix'leri **her iki platforma da aynı anda uygulanır** ÖNCELİK: (1) main_window.py bölme, (2) package_panel.py bölme, (3) F83 force delete, (4) F86 env yolu sorunu, (5) F87 sidebar sıralama. ⚠️ Versiyon güncelleme komutlarını ben söylemeden verme!
+
+
+---
+
+## 🔑 v1.6.12 Oturumu — Kritik Dersler (2026-07-21)
+
+**conda alt sistemi (micromamba_installer.py):**
+- ASLA Anaconda ticari `defaults` kanalına fallback yapma (ToS + kanal karışımı solver'a python/pip/vc14 söktürüyor — Windows'ta env yarı yıkıldı). Yalnızca conda-forge.
+- Ağ hatası (SSL reset — TR ISS'lerde conda.anaconda.org resetleniyor) → `repo.prefix.dev/conda-forge` mirror'ına otomatik geç (birebir aynı paketler, farklı CDN). Mirror çalışınca **bayrak dosyasına** kaydet (`conda_use_mirror.flag`, AppData/~.config — config.json'a DEĞİL: worker-thread save yarışı = çökme riski).
+- micromamba komutları `venvstudio.conda` logger'ıyla; başarısız İLK deneme DEBUG (mirror kurtarırsa gürültü yok), yalnızca NİHAİ başarısızlık WARNING+stderr.
+- PyPI→conda-forge ad çevirisi (`_PYPI_TO_CONDA`): psycopg2-binary→psycopg2, django-rest-framework→djangorestframework, opencv-python→opencv, torch→pytorch, tables→pytables.
+- **rstudio-desktop conda-forge'da SADECE linux-64/macOS-64** (win-64 YOK, son sürüm 2024.04.2, terk edilmiş). Windows'ta resmi installer'a yönlendir (posit.co), R'ı conda'dan al. Web'den doğrulandı (anaconda.org/conda-forge/rstudio-desktop).
+
+**launcher / Quick Launch:**
+- Sol Quick Launch'ı `quicklaunch.py:_rebuild_ql_buttons` doldurur — `launcher_ui.py:_update_quick_sidebar` ÖLÜ KOD (`_sidebar_buttons` attribute'u yok, ilk satırda return). Günlerce yanlış fonksiyon düzeltildi.
+- system-app'ler (`package=="__system__"`: R/RStudio/DBeaver) pip listesinde OLMAZ → exe ile tespit et (sistem PATH + env'in Scripts/bin/Library\bin).
+- conda exe'leri env yolu olmadan başlatma → `libgcc_s_seh-1.dll` hatası; PATH'e env Scripts/bin/Library\bin/mingw-w64 ekle + CONDA_PREFIX.
+- exe adını GÖRÜNEN addan türetme ("R Console"→"r console" YANLIŞ); kartın `system_commands`'inden al (R.exe).
+- conda env'de python KÖKte (`<env>\python.exe`), Scripts'te değil → `get_python_executable` conda kökü kontrol etmeli. pip yoksa (micromamba python=3.13 pip'siz gelir) `ensurepip` ile bootstrap.
+- Kurulu-durumu cache'i (`_conda_installed_cache_<path>`) `if not hasattr` ile ASLA yenilenmiyordu → env sil+yeniden yarat = hayalet "Installed". Her status güncellemesinde temizle.
+- conda env kartları: küme mantığı — venv/uv/poetry/pipx→{venv}, conda→{venv,conda} (22 kart).
+
+**İş akışı tuzakları (ACI ÇEKİLDİ):**
+- **Downloads çift-indirme:** aynı ad tekrar inince `launcher_ui(1).py` birikir; `copy launcher_ui.py` EN ESKİYİ kopyalar. KURAL: kopyalamadan önce Downloads'ta çift-isim kontrolü, en yeniyi seç, **VS KAPALIYKEN** kopyala (açıkken kopyalama yarım-dosya→çökme).
+- **Teşhis logu görünürlüğü:** DEBUG bastırılabiliyor; teşhisi `venvstudio` logger'ında INFO bas yoksa göremezsin (bir tur boşa gitti).
+- **Log'da yol basarken `!r` (repr) KULLANMA** → `\\` çift backslash. Düz `{path}` bas (tek `\`). Not: `\\.\DISPLAY1` repr değil, Windows ekran aygıtının gerçek adı — dokunma.
+- **Ölü kod kontrolü:** bir fix işe yaramıyorsa, düzelttiğin fonksiyonun gerçekten ÇAĞRILDIĞINI doğrula (grep call-site; attribute-guard'la erken return var mı).

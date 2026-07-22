@@ -9,3 +9,5 @@ build/
 .idea/
 *.spec
 VenvStudio_Handoff.md*.bak
+
+VenvStudio_Handoff.md

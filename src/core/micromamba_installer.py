@@ -239,6 +239,19 @@ def _remember_mirror_works() -> None:
 
 
 
+def _is_mirror_data_error(err: str) -> bool:
+    """Mirror served unusable metadata (not a network problem).
+
+    Seen on repo.prefix.dev: "Shard package record for 'libgrpc' is missing
+    both md5 and sha256 checksums" — the solver gives up even though the
+    same package resolves fine on the canonical conda-forge CDN.
+    """
+    e = err.lower()
+    return ("missing both md5 and sha256" in e
+            or "failed to parse package record" in e
+            or "shard package record" in e)
+
+
 def _is_network_error(err: str) -> bool:
     e = err.lower()
     return any(s in e for s in (
@@ -408,6 +421,29 @@ def install_conda_packages(env_path: Path, packages: list,
                                      progress_cb, timeout=600)
             if result.returncode == 0:
                 _remember_mirror_works()
+                if progress_cb:
+                    progress_cb(f"Installed: {', '.join(packages)}")
+                return True
+            err = result.stderr or ""
+
+        # "Shard package record ... missing checksums" comes from a STALE
+        # LOCAL CACHE, not from the server: verified that `micromamba clean
+        # --all` then the same install succeeds. Clean and retry once
+        # (retrying against the canonical CDN is useless on networks where
+        # conda.anaconda.org is blocked).
+        if _is_mirror_data_error(err):
+            _log.info("🧹 [Conda] stale package cache detected — "
+                      "cleaning and retrying")
+            if progress_cb:
+                progress_cb("Package cache looks stale — cleaning and "
+                            "retrying (this can take a moment)...")
+            try:
+                _run_micromamba(["clean", "--all", "--yes"], None, timeout=300)
+            except Exception as _ce:
+                _log.debug(f"[Conda] cache clean failed: {_ce}")
+            result = _run_micromamba(_build_args(channels), progress_cb,
+                                     timeout=600)
+            if result.returncode == 0:
                 if progress_cb:
                     progress_cb(f"Installed: {', '.join(packages)}")
                 return True

@@ -551,6 +551,22 @@ class LauncherRunMixin:
                 pkgs_to_install = self._get_orange3_packages(python_exe)
             self._set_busy(True)
             self.status_label.setText(f"Installing {', '.join(pkgs_to_install)}...")
+            # Log launcher-driven installs like Packages-tab installs do.
+            _et = getattr(self, "_current_env_type", "venv")
+            _app_name = app_def.get("name", "?")
+            _n_pk = len(pkgs_to_install)
+            _shown_pk = ", ".join(pkgs_to_install[:8])
+            if _n_pk > 8:
+                _shown_pk += f" (+{_n_pk - 8} more)"
+            try:
+                from src.utils.logger import get_logger as _gl
+                _gl("venvstudio.install").info(
+                    f"📦 [Install] env='{_env_name}' type={_et} "
+                    f"source='Launcher: {_app_name}' "
+                    f"packages({_n_pk}): {_shown_pk}"
+                )
+            except Exception:
+                pass
 
             # pipx env: use pipx install instead of pip
             if getattr(self, "_current_env_type", "venv") == "pipx":
@@ -944,6 +960,26 @@ class LauncherRunMixin:
         )
         if reply != QMessageBox.Yes:
             return
+
+        # Log launcher-driven uninstalls too.
+        _et2 = getattr(self, "_current_env_type", "venv")
+        _env_name2 = ""
+        if self.pip_manager and getattr(self.pip_manager, "venv_path", None):
+            _env_name2 = self.pip_manager.venv_path.name
+        _app_name2 = app_def.get("name", "?")
+        _n_rm = len(pkgs_to_remove)
+        _shown_rm = ", ".join(pkgs_to_remove[:8])
+        if _n_rm > 8:
+            _shown_rm += f" (+{_n_rm - 8} more)"
+        try:
+            from src.utils.logger import get_logger as _gl2
+            _gl2("venvstudio.install").info(
+                f"🗑️ [Uninstall] env='{_env_name2}' type={_et2} "
+                f"source='Launcher: {_app_name2}' "
+                f"packages({_n_rm}): {_shown_rm}"
+            )
+        except Exception:
+            pass
 
         self._set_busy(True)
         self.status_label.setText(f"Uninstalling {app_def['name']}...")

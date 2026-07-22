@@ -600,13 +600,12 @@ class PackageOpsMixin:
         self._pkg_op_kind = "Install"
         _pk = list(packages)
         _shown = ", ".join(_pk[:8]) + (f" (+{len(_pk) - 8} more)" if len(_pk) > 8 else "")
+        _env_type = getattr(self, "_current_env_type", "venv")
         from src.utils.logger import get_logger
         get_logger("venvstudio.install").info(
-            f"📦 [Install] env='{_env_name}' source='{_hint}' "
-            f"packages({len(_pk)}): {_shown}"
+            f"📦 [Install] env='{_env_name}' type={_env_type} "
+            f"source='{_hint}' packages({len(_pk)}): {_shown}"
         )
-
-        _env_type = getattr(self, "_current_env_type", "venv")
         if _env_type == "conda" and self.pip_manager and self.pip_manager.venv_path:
             # Use conda install instead of pip for conda environments
             _env_path = self.pip_manager.venv_path
@@ -871,12 +870,13 @@ class PackageOpsMixin:
             _env_name = self.pip_manager.venv_path.name
         self._pkg_op_kind = "Uninstall"
         _shown = ", ".join(packages[:8]) + (f" (+{len(packages) - 8} more)" if len(packages) > 8 else "")
+        _env_type = getattr(self, "_current_env_type", "venv")
         from src.utils.logger import get_logger
         get_logger("venvstudio.install").info(
-            f"🗑️ [Uninstall] env='{_env_name}' packages({len(packages)}): {_shown}"
+            f"🗑️ [Uninstall] env='{_env_name}' type={_env_type} "
+            f"packages({len(packages)}): {_shown}"
         )
 
-        _env_type = getattr(self, "_current_env_type", "venv")
         _uninstall_cmds = {
             "venv":   "pip uninstall -y {packages}",
             "uv":     "uv pip uninstall {packages}",

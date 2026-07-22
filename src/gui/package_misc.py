@@ -428,13 +428,14 @@ class PackageMiscMixin:
             # package upgrades).
             self._pkg_op_kind = "Update"  # so _on_install_finished logs [Update] OK/FAILED
             try:
+                _et_upd = getattr(self, "_current_env_type", "venv")
                 _env_name = self.pip_manager.venv_path.name if self.pip_manager else "?"
                 _shown = ", ".join(
                     f"{p.name} {p.version}→{p.latest_version}" for p in outdated[:8]
                 ) + (f" (+{len(outdated) - 8} more)" if len(outdated) > 8 else "")
                 from src.utils.logger import get_logger
                 get_logger("venvstudio.install").info(
-                    f"📦 [Update] env='{_env_name}' "
+                    f"📦 [Update] env='{_env_name}' type={_et_upd} "
                     f"packages({len(pkg_names)}): {_shown}"
                 )
             except Exception:

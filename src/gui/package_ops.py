@@ -612,10 +612,16 @@ class PackageOpsMixin:
             _env_path = self.pip_manager.venv_path
             _pkgs = list(packages)
 
-            def _do_conda_install(callback=None):
+            def _do_conda_install(callback=None, _src=_hint, _n=len(_pkgs)):
                 from src.core.micromamba_installer import (
                     install_conda_packages, get_micromamba_exe, download_micromamba,
                 )
+                # Explicit start line: conda installs can run for minutes with
+                # little output, which looked like nothing was happening.
+                if callback:
+                    callback(f"\u26a1 Installing {_n} package(s) from "
+                             f"{_src or 'Manual'} via conda-forge — this can "
+                             f"take a few minutes...")
                 if not get_micromamba_exe():
                     if callback:
                         callback("Downloading micromamba...")

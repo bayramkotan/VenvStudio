@@ -153,12 +153,36 @@ def _run_micromamba(args: list, progress_cb=None, timeout=600) -> subprocess.Com
         progress_cb(f"$ {' '.join(cmd[:6])}...")
     _log.debug(f"🚀 micromamba: {' '.join(cmd)}")
 
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        timeout=timeout,
-        env={**os.environ, "MAMBA_NO_LOW_SPEED_LIMIT": "1"},
+    # Stream output live so the UI shows progress during long installs.
+    # subprocess.run(capture_output=True) blocked until completion, so a
+    # 4-5 minute conda preset install looked frozen ("is it installing?").
+    _env = {**os.environ, "MAMBA_NO_LOW_SPEED_LIMIT": "1"}
+    _out_lines, _err_lines = [], []
+    try:
+        from src.utils.platform_utils import subprocess_args as _spa
+        _kw = _spa()
+    except Exception:
+        _kw = {}
+    _proc = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        text=True, bufsize=1, env=_env, **_kw,
+    )
+    import time as _time
+    _t0 = _time.time()
+    try:
+        for _line in _proc.stdout:
+            _line = _line.rstrip()
+            _out_lines.append(_line)
+            if progress_cb and _line.strip():
+                progress_cb(_line.strip()[:200])
+            if _time.time() - _t0 > timeout:
+                _proc.kill()
+                raise subprocess.TimeoutExpired(cmd, timeout)
+    finally:
+        _proc.stdout.close()
+        _rc = _proc.wait()
+    result = subprocess.CompletedProcess(
+        cmd, _rc, "\n".join(_out_lines), "\n".join(_out_lines),
     )
     if result.returncode == 0:
         _log.debug(f"  ↳ ✔ micromamba exit=0")
@@ -170,10 +194,7 @@ def _run_micromamba(args: list, progress_cb=None, timeout=600) -> subprocess.Com
             f"  ↳ ✖ micromamba exit={result.returncode}\n"
             f"--- stderr ---\n{(result.stderr or '')[:1500]}"
         )
-    if progress_cb and result.stdout:
-        for line in result.stdout.strip().splitlines()[-10:]:
-            if line.strip():
-                progress_cb(line.strip())
+    # (output already streamed above — no tail replay needed)
     return result
 
 

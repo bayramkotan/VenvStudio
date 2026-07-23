@@ -354,17 +354,7 @@ class EnvStateMixin:
     def _safe_clear_env_state(self):
         """Safely clear all env-related state when no env is selected or env was deleted."""
         # Stop any running loader thread first
-        if hasattr(self, '_pkg_loader') and self._pkg_loader is not None:
-            if self._pkg_loader.isRunning():
-                try:
-                    self._pkg_loader.done.disconnect()
-                except Exception:
-                    pass
-                self._pkg_loader.quit()
-                if not self._pkg_loader.wait(2000):
-                    self._pkg_loader.terminate()
-                    self._pkg_loader.wait(500)
-            self._pkg_loader = None
+        self._retire_pkg_loader()
 
         self.pip_manager = None
         self.installed_package_names = set()
@@ -665,6 +655,57 @@ class EnvStateMixin:
             except Exception:
                 pass
 
+    def _retire_pkg_loader(self):
+        """Detach the running package loader instead of killing it.
+
+        Previously this called quit() + wait() + terminate(). Both steps were
+        wrong for this worker:
+
+        * quit() only unblocks a thread with a Qt event loop. PkgLoader has
+          none -- it sits inside subprocess.run() -- so quit() was a no-op.
+        * terminate() then killed the OS thread while it was suspended inside
+          subprocess.communicate(), corrupting the interpreter state. That is
+          the access violation seen in the crash log (<invalid frame> under
+          micromamba_installer.list_conda_packages), reproduced by launching a
+          pipx install while a slow conda package list was still running.
+
+        The safe alternative: disconnect the signals, flag the loader as
+        abandoned so it drops its result, and keep a reference so Python does
+        not garbage-collect the QThread object while the OS thread is alive
+        (a destroyed-while-running QThread is fatal on Windows). The loader
+        removes itself from _retired_loaders when it finishes.
+        """
+        loader = getattr(self, "_pkg_loader", None)
+        if loader is None:
+            return
+        self._pkg_loader = None
+        try:
+            loader.done.disconnect()
+        except Exception:
+            pass
+        if not loader.isRunning():
+            return
+        try:
+            loader.abandon()
+        except Exception:
+            pass
+        if not hasattr(self, "_retired_loaders"):
+            self._retired_loaders = []
+        self._retired_loaders.append(loader)
+        try:
+            from src.utils.logger import get_logger
+            get_logger("venvstudio.pkg_cache").debug(
+                f"\U0001f4a4 [PkgCache] loader abandoned (still running, {len(self._retired_loaders)} pending)"
+            )
+        except Exception:
+            pass
+
+    def _on_pkg_loader_finished(self):
+        """Drop references to loaders that have finished on their own."""
+        retired = getattr(self, "_retired_loaders", None)
+        if retired:
+            self._retired_loaders = [t for t in retired if t.isRunning()]
+
     def _async_refresh_packages(self, force: bool = False):
         """Load packages — from cache if available, otherwise background subprocess."""
         if not self.pip_manager:
@@ -698,17 +739,7 @@ class EnvStateMixin:
                 pass
 
         # Cancel / wait for any previous loader to avoid QThread crash
-        if hasattr(self, '_pkg_loader') and self._pkg_loader is not None:
-            if self._pkg_loader.isRunning():
-                try:
-                    self._pkg_loader.done.disconnect()
-                except Exception:
-                    pass
-                self._pkg_loader.quit()
-                if not self._pkg_loader.wait(3000):
-                    self._pkg_loader.terminate()
-                    self._pkg_loader.wait(1000)
-            self._pkg_loader = None
+        self._retire_pkg_loader()
 
         # Show loading state immediately
         self.packages_table.setRowCount(1)
@@ -740,6 +771,18 @@ class EnvStateMixin:
                 self.pip_mgr = pip_mgr
                 self.env_type = env_type
                 self.venv_path = venv_path
+                self._abandoned = False
+
+            def abandon(self):
+                """Mark this loader as stale.
+
+                The thread is blocked inside subprocess.run() and has no Qt
+                event loop, so quit() is a no-op and terminate() kills it in
+                the middle of subprocess.communicate() -> access violation
+                (crash log showed <invalid frame> in list_conda_packages).
+                Instead we let it finish naturally and drop its result.
+                """
+                self._abandoned = True
             def run(self):
                 _emit_path = str(self.venv_path) if self.venv_path else ""
                 try:
@@ -781,12 +824,15 @@ class EnvStateMixin:
                             pass
                     else:
                         pkgs = self.pip_mgr.list_packages()
-                    self.done.emit(pkgs, _emit_path)
+                    if not self._abandoned:
+                        self.done.emit(pkgs, _emit_path)
                 except Exception:
-                    self.done.emit([], _emit_path)
+                    if not self._abandoned:
+                        self.done.emit([], _emit_path)
 
         self._pkg_loader = PkgLoader(pip_mgr_snapshot, _env_type, _venv_path, parent=self)
         self._pkg_loader.done.connect(self._on_packages_loaded)
+        self._pkg_loader.finished.connect(self._on_pkg_loader_finished)
         self._pkg_loader.start()
 
 

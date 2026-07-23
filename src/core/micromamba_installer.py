@@ -590,6 +590,47 @@ def create_conda_env(env_path: Path, python_version: str = "",
         return False
 
 
+def remove_conda_packages(env_path: Path, packages: list,
+                          progress_cb=None) -> bool:
+    """Remove packages from a conda environment with micromamba.
+
+    Counterpart of install_conda_packages. Needed by the launcher: apps
+    installed as conda packages (r-base for R Console, and so on) used to
+    have no uninstall path at all, since the launcher only knew how to run
+    pip uninstall.
+    """
+    if not packages:
+        return False
+    if progress_cb:
+        progress_cb(f"Removing: {', '.join(packages)}...")
+    args = [
+        "remove",
+        "--prefix", str(env_path),
+        "--yes",
+        "--no-rc",
+        *packages,
+    ]
+    try:
+        result = _run_micromamba(args, progress_cb, timeout=600)
+        if result.returncode == 0:
+            if progress_cb:
+                progress_cb(f"Removed: {', '.join(packages)}")
+            return True
+        _err = result.stderr or ""
+        _log.warning(f"[Conda] remove FAILED\n--- stderr ---\n{_err[:1500]}")
+        if progress_cb:
+            progress_cb(f"Remove failed: {_friendly_conda_error(_err)}")
+        return False
+    except subprocess.TimeoutExpired:
+        if progress_cb:
+            progress_cb("Remove timed out")
+        return False
+    except Exception as e:
+        if progress_cb:
+            progress_cb(f"Error: {e}")
+        return False
+
+
 def install_conda_packages(env_path: Path, packages: list,
                            channels: list | None = None,
                            progress_cb=None) -> bool:

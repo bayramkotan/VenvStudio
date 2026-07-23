@@ -737,8 +737,15 @@ class LauncherUIMixin:
                         status = card._status_label
                         card._launch_btn.setEnabled(True)
                         card._launch_btn.setStyleSheet("")
-                        card._uninstall_btn.setVisible(False)
-                        card._shortcut_btn.setVisible(False)
+                        # Both buttons were hidden unconditionally here, so
+                        # a conda-installed app (R Console via r-base) offered
+                        # no way to remove it and no desktop shortcut, unlike
+                        # every other installed card. _uninstall_app now routes
+                        # system apps to micromamba remove, and
+                        # _create_desktop_shortcut targets the executable the
+                        # conda package installed inside the env.
+                        card._uninstall_btn.setVisible(bool(_found))
+                        card._shortcut_btn.setVisible(bool(_found))
                         if _found:
                             status.setText("✅ Installed (conda-forge)")
                             status.setStyleSheet(

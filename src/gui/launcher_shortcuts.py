@@ -33,21 +33,72 @@ class LauncherShortcutsMixin:
         platform = get_platform()
         desktop = Path.home() / "Desktop"
 
+        # System apps (package == "__system__") are not Python entry points:
+        # conda installs their own executable inside the env (R.exe for
+        # R Console). They have no "command" key, so the normal path would
+        # raise KeyError and point the shortcut at python.exe. Target the
+        # executable directly instead.
+        _target = python_exe
+        _args = app_def.get("command")
+        if _args is None:
+            _sys_cmds = app_def.get("system_commands", {})
+            _cmd = _sys_cmds.get(platform) or _sys_cmds.get("linux") or []
+            if not _cmd:
+                QMessageBox.warning(
+                    self, tr("warning"),
+                    f"{app_name} has no launch command for this platform."
+                )
+                return
+            _exe_name = _cmd[0]
+            _args = list(_cmd[1:])
+            _found_exe = None
+            for _sub in (venv_path / "Scripts", venv_path / "bin",
+                         venv_path / "Library" / "bin"):
+                for _cand in (_sub / _exe_name, _sub / (_exe_name + ".exe")):
+                    if _cand.exists():
+                        _found_exe = _cand
+                        break
+                if _found_exe:
+                    break
+            if _found_exe is None:
+                import shutil as _sh
+                _which = _sh.which(_exe_name)
+                if not _which:
+                    QMessageBox.warning(
+                        self, tr("warning"),
+                        f"Could not find {_exe_name} in {env_name}."
+                    )
+                    return
+                _found_exe = Path(_which)
+            _target = _found_exe
+
+            # A conda app needs its env on PATH: the runtime DLLs live in
+            # Library\\bin and Library\\mingw-w64\\bin, and a bare R.exe
+            # fails with "libgcc_s_seh-1.dll was not found". _launch_exe
+            # sets this up in-process; a desktop shortcut cannot, so point
+            # it at a wrapper script that exports PATH first.
+            _wrapper = self._write_conda_launch_wrapper(
+                venv_path, shortcut_name, _target, _args, platform
+            )
+            if _wrapper is not None:
+                _target = _wrapper
+                _args = []
+
         try:
             if platform == "windows":
                 self._create_windows_shortcut(
-                    desktop, shortcut_name, python_exe,
-                    app_def["command"], icon_path, needs_console, venv_path
+                    desktop, shortcut_name, _target,
+                    _args, icon_path, needs_console, venv_path
                 )
             elif platform == "linux":
                 self._create_linux_shortcut(
-                    desktop, shortcut_name, python_exe,
-                    app_def["command"], icon_path, venv_path
+                    desktop, shortcut_name, _target,
+                    _args, icon_path, venv_path
                 )
             elif platform == "macos":
                 self._create_macos_shortcut(
-                    desktop, shortcut_name, python_exe,
-                    app_def["command"], icon_path, venv_path
+                    desktop, shortcut_name, _target,
+                    _args, icon_path, venv_path
                 )
 
             # Show success
@@ -61,6 +112,50 @@ class LauncherShortcutsMixin:
                 self, tr("error"),
                 f"Failed to create shortcut:\n{e}"
             )
+
+    def _write_conda_launch_wrapper(self, venv_path, name, exe_path,
+                                    args, platform):
+        """Write a small script that puts the conda env on PATH, then runs exe.
+
+        Mirrors the PATH set up by _launch_exe. Returns the wrapper path, or
+        None if it could not be written (caller then falls back to the bare
+        executable).
+        """
+        try:
+            _pfx = Path(venv_path)
+            _dirs = [_pfx, _pfx / "Scripts", _pfx / "bin",
+                     _pfx / "Library" / "bin",
+                     _pfx / "Library" / "mingw-w64" / "bin",
+                     _pfx / "Library" / "usr" / "bin"]
+            _dirs = [str(x) for x in _dirs if x.exists()]
+            _safe = "".join(ch if ch.isalnum() else "_" for ch in name)
+            _args_str = " ".join(f'"{a}"' for a in (args or []))
+            _wrap_dir = _pfx / "venvstudio_launchers"
+            _wrap_dir.mkdir(parents=True, exist_ok=True)
+            if platform == "windows":
+                _wrapper = _wrap_dir / f"{_safe}.bat"
+                _path_line = ";".join(_dirs)
+                _wrapper.write_text(
+                    "@echo off\r\n"
+                    f'set "CONDA_PREFIX={_pfx}"\r\n'
+                    f'set "PATH={_path_line};%PATH%"\r\n'
+                    f'"{exe_path}" {_args_str} %*\r\n',
+                    encoding="utf-8",
+                )
+            else:
+                _wrapper = _wrap_dir / f"{_safe}.sh"
+                _path_line = ":".join(_dirs)
+                _wrapper.write_text(
+                    "#!/bin/bash\n"
+                    f'export CONDA_PREFIX="{_pfx}"\n'
+                    f'export PATH="{_path_line}:$PATH"\n'
+                    f'exec "{exe_path}" {_args_str} "$@"\n',
+                    encoding="utf-8",
+                )
+                os.chmod(str(_wrapper), 0o755)
+            return _wrapper
+        except Exception:
+            return None
 
     def _create_windows_shortcut(self, desktop, name, python_exe, cmd_args, icon_path, needs_console, venv_path):
         """Create Windows .lnk shortcut via PowerShell (no COM dependency)."""
@@ -84,7 +179,8 @@ $s.Description = "Launched via VenvStudio"
 $s.Save()
 '''
         # Write temp .ps1 and execute
-        ps_file = desktop / f"_venvstudio_shortcut_tmp.ps1"
+        import tempfile
+        ps_file = Path(tempfile.gettempdir()) / "_venvstudio_shortcut_tmp.ps1"
         ps_file.write_text(ps_script, encoding="utf-8")
         try:
             result = subprocess.run(

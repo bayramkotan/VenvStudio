@@ -343,6 +343,27 @@ class LauncherRunMixin:
             # Refresh card states then launch
             self._update_launcher_status()
             from PySide6.QtCore import QTimer
+            # Rebuild the Quick Launch sidebar in MainWindow. Package
+            # installs go through package_ops and call this callback, but the
+            # conda system-app path never did -- so an app installed here
+            # (R Console via r-base) showed "Installed (conda-forge)" on its
+            # card while the sidebar still said "No apps installed" until the
+            # user switched environments and came back.
+            #
+            # Delayed: the sidebar detects system apps by probing the env for
+            # the executable, and those files are not reliably visible the
+            # instant micromamba exits.
+            def _refresh_quick_launch():
+                _cb = getattr(self, "_ql_update_callback", None)
+                if callable(_cb):
+                    _env_name = (self.pip_manager.venv_path.name
+                                 if self.pip_manager else "")
+                    try:
+                        _cb(env_name=_env_name)
+                    except Exception:
+                        pass
+
+            QTimer.singleShot(1500, _refresh_quick_launch)
             QTimer.singleShot(500, lambda: self._launch_system_app(app_def))
         else:
             self.status_label.setText(f"❌ {name} install failed")
@@ -951,6 +972,18 @@ class LauncherRunMixin:
         # Get all packages to uninstall
         pkgs_to_remove = app_def.get("install_packages", [pkg_name])
 
+        # System apps have package == "__system__" and are installed as conda
+        # packages (r-base for R Console, and so on). Uninstalling them with
+        # pip removes nothing, so route them to micromamba instead.
+        _is_conda_app = (
+            (app_def.get("system_app")
+             or app_def.get("package", "").lower() == "__system__")
+            and app_def.get("conda_packages")
+            and getattr(self, "_current_env_type", "venv") == "conda"
+        )
+        if _is_conda_app:
+            pkgs_to_remove = list(app_def["conda_packages"])
+
         reply = QMessageBox.question(
             self, f"Uninstall {app_def['name']}",
             f"Are you sure you want to uninstall {app_def['name']}?\n\n"
@@ -983,12 +1016,81 @@ class LauncherRunMixin:
 
         self._set_busy(True)
         self.status_label.setText(f"Uninstalling {app_def['name']}...")
+
+        if _is_conda_app:
+            from src.core.micromamba_installer import remove_conda_packages
+            _env_path = self.pip_manager.venv_path
+            _rm_pkgs = pkgs_to_remove
+            _app_label = app_def["name"]
+
+            def _do_conda_remove(callback=None):
+                ok = remove_conda_packages(_env_path, _rm_pkgs,
+                                           progress_cb=callback)
+                return (ok,
+                        f"{_app_label} removed"
+                        if ok else f"{_app_label} conda remove failed")
+
+            self.current_worker = WorkerThread(_do_conda_remove)
+            self.current_worker.progress.connect(self._on_progress)
+            self.current_worker.finished.connect(
+                lambda ok, msg, a=app_def:
+                    self._on_system_uninstall_finished(ok, msg, a)
+            )
+            self.current_worker.start()
+            return
+
         self.current_worker = WorkerThread(
             self.pip_manager.uninstall_packages, pkgs_to_remove
         )
         self.current_worker.progress.connect(self._on_progress)
         self.current_worker.finished.connect(self._on_install_finished)
         self.current_worker.start()
+
+    def _on_system_uninstall_finished(self, success: bool, message: str,
+                                      app_def: dict):
+        """After removing a conda system app: clear caches and refresh."""
+        self._set_busy(False)
+        self._system_tool_cache.clear()
+        name = app_def["name"]
+        if not success:
+            self.status_label.setText(f"Failed to uninstall {name}")
+            QMessageBox.critical(
+                self, f"{name} - Uninstall Failed",
+                f"Could not remove {name}.\n\n{message}"
+            )
+            return
+        self.status_label.setText(f"{name} uninstalled")
+        if self.pip_manager:
+            _cache_key = f"_conda_installed_cache_{self.pip_manager.venv_path}"
+            if hasattr(self, _cache_key):
+                delattr(self, _cache_key)
+            try:
+                _vm = self._get_venv_manager(self.pip_manager.venv_path.parent)
+                _vm.invalidate_cache(self.pip_manager.venv_path)
+            except Exception:
+                pass
+        try:
+            _cur_path = getattr(self, "_current_venv_path", None)
+            _cur_backend = getattr(self, "_current_backend", "pip")
+            if _cur_path:
+                self._update_env_info_bar(_cur_path, _cur_backend)
+        except Exception:
+            pass
+        self.env_refresh_requested.emit(-1)
+        self._update_launcher_status()
+        from PySide6.QtCore import QTimer
+
+        def _refresh_quick_launch():
+            _cb = getattr(self, "_ql_update_callback", None)
+            if callable(_cb):
+                _env_name = (self.pip_manager.venv_path.name
+                             if self.pip_manager else "")
+                try:
+                    _cb(env_name=_env_name)
+                except Exception:
+                    pass
+
+        QTimer.singleShot(1500, _refresh_quick_launch)
 
     def _get_app_icon_path(self, app_def: dict) -> str | None:
         """Return the absolute path to the app's .ico (Windows) or .png (Linux/macOS) icon."""

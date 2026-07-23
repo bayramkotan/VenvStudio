@@ -97,9 +97,14 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
         self.base_dir = new_dir
         self.base_dir.mkdir(parents=True, exist_ok=True)
 
-    def ensure_pipx_env(self) -> bool:
+    def ensure_pipx_env(self, quiet_success: bool = False) -> bool:
         """Auto-create a pipx marker env in pipx home dir if pipx is installed.
-        Returns True if pipx env exists or was created, False if pipx not found."""
+        Returns True if pipx env exists or was created, False if pipx not found.
+
+        quiet_success: suppress the '... is ready!' success banner. Used by the
+        pipx delete path, where deleting is really a *reset*: the flow should
+        read Deleting -> removed -> Creating and stop there.
+        """
         import shutil, json as _json, datetime as _dt, sys as _sys
         from src.utils.platform_utils import get_pipx_executable, get_pipx_home, get_pipx_cmd
         pipx_exe = get_pipx_executable()
@@ -140,10 +145,11 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
                         "created": _dt.datetime.now().isoformat(),
                         "auto_detected": True,
                     }, _f, indent=2)
-                banner_success(
-                    "Environment 'pipx' is ready!",
-                    details=["Type: pipx", f"Path: {marker_dir}"],
-                )
+                if not quiet_success:
+                    banner_success(
+                        "Environment 'pipx' is ready!",
+                        details=["Type: pipx", f"Path: {marker_dir}"],
+                    )
             except Exception:
                 pass
         else:
@@ -539,19 +545,15 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
                     pass
                 # Re-seed an empty pipx home with marker so the env row
                 # reappears clean (0 packages, 0 B) on the next refresh.
+                # quiet_success=True: pipx delete is a reset, so the log ends
+                # on the 'Creating environment' banner. No 'is ready!' and no
+                # separate 'deleted' banner (both were noise after v1.6.13).
                 try:
-                    self.ensure_pipx_env()
+                    self.ensure_pipx_env(quiet_success=True)
                 except Exception as _ee:
                     _log.warning(f"delete_venv: ensure_pipx_env after rmtree failed: {_ee}")
                 if callback:
                     callback(f"Deleted pipx home for {name}")
-                banner_success(
-                    f"pipx environment '{name}' deleted",
-                    details=[
-                        f"Removed: {venv_path}",
-                        "All previously installed pipx apps were removed.",
-                    ],
-                )
                 return True, f"Environment '{name}' deleted successfully"
             _robust_rmtree(venv_path)
             # For poetry: also delete the project marker dir in base_dir if different

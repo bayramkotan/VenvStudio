@@ -4051,3 +4051,43 @@ Tek-blok body yerine bölümlü yapı:
 - conda preset UI geri bildirimi zayıf (kurulum belirsiz görünüyor)
 - Preferred terminal ayarı + terminal İÇİ aktivasyon doğrulaması (Bayram testi bekliyor)
 - "VS bazen çöküyor" — bayrak-dosyası fix'i sonrası izleniyor, traceback alınamadı
+
+
+---
+
+## 📌 2026-07-22 Oturumu — Durum ve Açık İşler
+
+### ✅ Bu oturumda çözülenler (v1.6.13 + sonrası)
+- **pipx paritesi:** çok-paketli uygulamalar `pipx install <ana>` + `pipx inject <dep>` ile kuruluyor (eskiden her bağımlılık ayrı `pipx install` ediliyor, PyQtWebEngine gibi kütüphaneler patlıyordu)
+- **pipx launcher:** `-c` komutlu kartlar (Gradio/Streamlit demoları) uygulamanın kendi venv python'ıyla açılıyor; çıplak console-script zorunlu argüman isteyip kapanıyordu
+- **Silmede üst bar GB güncellemesi:** `_update_env_summary` metodu hiç YOKTU (4 yerde hasattr guard'ıyla sessizce atlanıyordu) — yazıldı ve delete yoluna bağlandı
+- **pipx create banner'ı:** `ensure_pipx_env` artık diğer tipler gibi banner basıyor
+- **Tüm paket işlemleri loglanıyor:** install/update/uninstall + launcher kaynaklı olanlar, `type=venv/uv/poetry/conda/pipx` etiketiyle
+- **QFont setPointSize(-1) uyarısı:** çıplak `QFont()` yerine tablo fontu kopyalanıyor
+- **Conda canlı ilerleme:** micromamba çıktısı stream ediliyor (eskiden `subprocess.run` ile bloklu, 4-5 dk sessizlik)
+- **Skip mirror / Cancel:** çalışan micromamba süreci gerçekten öldürülüyor; timeout 600s→180s
+- **Conda cache yönetimi:** Settings → Paths'te boyut + Clean butonu; bayat shard hatasında otomatik `clean --all`
+- **Conda mirror listesi:** Settings'te düzenlenebilir (Add/↑/↓/Remove/Defaults), ilk sıra ⭐ default, hata/skip durumunda sırayla rotasyon, çalışan mirror'ı default yapma sorusu
+- **UTF-8 log decode:** `âœ" Done` tarzı mojibake giderildi
+- **Açılış hızı:** pipx boyutu her açılışta `os.walk` ile hesaplanıyordu (10-20 sn) → cache'ten okunuyor
+- **🎯 factory-boy gizemi ÇÖZÜLDÜ:** conda-forge'da adı `factory_boy` (alt çizgi). Windows'ta libgrpc metadata gürültüsü gerçek hatayı gizliyordu; Linux'ta net görüldü. Fix: `_PYPI_TO_CONDA` haritası + solver "paket yok" derse otomatik tire→alt çizgi denemesi
+- **Quick Launch env_types:** R sadece conda env'lerinde görünüyor (sistem PATH'inde olduğu için her env'de çıkıyordu)
+
+### ⏳ Test bekleyenler (Bayram doğrulayacak)
+- factory_boy ad çevirisi (Linux'ta manuel doğrulandı, VS içinden test edilecek)
+- Quick Launch env_types filtresi (R sadece conda'da)
+- Mirror rotasyonu + "default yap?" sorusu (Windows'ta prefix.dev bozuk, TUNA/NJU denenecek)
+
+### ❗ Açık maddeler
+- **Quick Launch env dropdown'u pipx'te çalışmıyor** — davranış netleştirilecek (listede yok mu / seçince tepki vermiyor mu?). `_get_env_path` pipx'i doğru çözüyor görünüyor, sorun başka yerde
+- **conda1 env'i bozulabiliyor:** çok sayıda kurulum/iptal/cache temizliği sonrası `pip list` VS'yi çökertti (traceback yok, native çökme). Env silinip yeniden yaratılınca düzeldi. Kök neden araştırılmalı — belki `pip list` timeout/koruma gerekiyor
+- **Windows'ta prefix.dev mirror'ı libgrpc kaydı bozuk** — mirror rotasyonu bunun için var, alternatif mirror'lar test edilecek
+- **RStudio Windows kararı:** gizle vs resmi installer'a yönlendir (şu an yönlendir)
+- `vs` kısayolu
+- Preset UI: "5 paket" diyor ama zaten kurulu olanlar hariç azını kuruyor — sayaç netleştirilecek
+- Preferred terminal ayarı + terminal içi aktivasyon doğrulaması
+
+### ⚠️ Çalışma düzeni dersi (bu oturumda acı çekildi)
+- **Her fix'ten sonra COMMIT ET.** Ortam sıfırlanınca commit edilmemiş çalışmalar kayboldu, aynı işler 2-3 kez yapıldı, sürüm karmaşası çıktı (UI mirror listesini bekliyordu ama motor dosyası eski sürümdeydi)
+- Dosya vermeden önce **GUI testi** (offscreen MainWindow oluşturma) şart — f-string içine gömülü `getattr` bir kez VS'yi açılışta çökertti
+- Çökme teşhisinde: önce `git checkout -- .` ile temiz hale dön, sonra ortamı (env'leri) şüpheli listesine al

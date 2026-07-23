@@ -171,7 +171,23 @@ class QuickLaunchMixin:
                         return True
             return False
 
+        # Respect each card's env_types, exactly like the launcher grid does.
+        # Without this, system apps that also exist on the system PATH (R,
+        # DBeaver...) showed up under EVERY env, not just conda ones.
+        _env_type = getattr(self.package_panel, "_current_env_type", "venv")
+        if _env_type in ("uv", "poetry", "pipx"):
+            _match = {"venv"}
+        elif _env_type == "conda":
+            _match = {"venv", "conda"}
+        else:
+            _match = {_env_type}
+
         for app in app_defs:
+            _types = set(app.get("env_types",
+                ["venv"] if not app.get("system_app")
+                else ["conda", "system_tools"]))
+            if not (_match & _types):
+                continue
             if app.get("system_app") or app.get("package", "").lower() == "__system__":
                 if not _system_app_present(app):
                     continue

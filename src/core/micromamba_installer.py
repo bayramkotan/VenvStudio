@@ -270,6 +270,60 @@ def _mirror_channels(channels):
     return [_CONDA_FORGE_MIRROR if c == "conda-forge" else c for c in channels]
 
 
+# PyPI names that differ on conda-forge. Presets/catalog store PyPI names
+# (correct for pip envs), so translate before handing them to micromamba.
+_PYPI_TO_CONDA = {
+    "factory-boy": "factory_boy",          # verified on conda-forge
+    "psycopg2-binary": "psycopg2",
+    "django-rest-framework": "djangorestframework",
+    "opencv-python": "opencv",
+    "opencv-python-headless": "opencv",
+    "tables": "pytables",
+    "torch": "pytorch",
+}
+
+
+def _to_conda_names(packages):
+    """Map known PyPI names to their conda-forge equivalents."""
+    out, changed = [], []
+    for pkg in packages:
+        c = _PYPI_TO_CONDA.get(pkg.lower(), pkg)
+        out.append(c)
+        if c != pkg:
+            changed.append(f"{pkg}\u2192{c}")
+    if changed:
+        _log.info("\U0001f501 [Conda] PyPI\u2192conda-forge name translation: "
+                  + ", ".join(changed))
+    return out
+
+
+def _missing_packages(err: str):
+    """Extract package names micromamba reported as non-existent."""
+    import re as _re
+    low = err.lower()
+    names = set()
+    for pat in (r"\u2514\u2500 ([\w.\-]+) =\* \* does not exist",
+                r"([\w.\-]+) =\* \* does not exist",
+                r"nothing provides(?: requested)? ([\w.\-]+)"):
+        names.update(_re.findall(pat, low))
+    return sorted(names)
+
+
+def _underscore_variants(packages, missing):
+    """conda-forge often uses "_" where PyPI uses "-" (factory-boy ->
+    factory_boy). Rewrite ONLY the packages reported missing."""
+    miss = {m.lower() for m in missing}
+    out, changed = [], []
+    for pkg in packages:
+        if pkg.lower() in miss and "-" in pkg:
+            alt = pkg.replace("-", "_")
+            out.append(alt)
+            changed.append(f"{pkg}\u2192{alt}")
+        else:
+            out.append(pkg)
+    return out, changed
+
+
 def _friendly_conda_error(err: str) -> str:
     """Turn known micromamba failures into actionable messages."""
     if "being used by another process" in err or "file in use" in err.lower():
@@ -378,6 +432,9 @@ def install_conda_packages(env_path: Path, packages: list,
                            progress_cb=None) -> bool:
     """Install packages into an existing conda environment."""
     channels = channels or ["conda-forge"]
+    # Preset/catalog entries use PyPI names; conda-forge sometimes differs
+    # (factory-boy -> factory_boy). Translate known ones up front.
+    packages = _to_conda_names(list(packages))
 
     if progress_cb:
         progress_cb(f"Installing: {', '.join(packages)}...")
@@ -448,6 +505,30 @@ def install_conda_packages(env_path: Path, packages: list,
                     progress_cb(f"Installed: {', '.join(packages)}")
                 return True
             err = result.stderr or ""
+
+        # conda-forge frequently uses "_" where PyPI uses "-" (factory-boy →
+        # factory_boy). If the solver says a package doesn't exist, retry the
+        # missing ones with underscores before giving up.
+        _missing = _missing_packages(err)
+        if _missing:
+            _alt, _changed = _underscore_variants(packages, _missing)
+            if _changed:
+                _log.info("🔁 [Conda] retrying with conda-style names: "
+                          + ", ".join(_changed))
+                if progress_cb:
+                    progress_cb("Retrying with conda-forge naming ("
+                                + ", ".join(_changed) + ")...")
+                _orig_pkgs = packages
+                packages = _alt
+                result = _run_micromamba(_build_args(channels), progress_cb,
+                                         timeout=600)
+                if result.returncode == 0:
+                    _log.info("✅ [Conda] succeeded after name correction")
+                    if progress_cb:
+                        progress_cb(f"Installed: {', '.join(packages)}")
+                    return True
+                packages = _orig_pkgs
+                err = result.stderr or err
 
         _log.warning(f"[Conda] install FAILED\n--- stderr ---\n{err[:1500]}")
         if progress_cb:

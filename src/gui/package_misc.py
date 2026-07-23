@@ -311,6 +311,11 @@ class PackageMiscMixin:
     def _on_progress(self, message: str):
         self.status_label.setText(message)
         self._append_log(message)
+        # Rotation reached a new mirror -> allow skipping this one too.
+        if message.startswith("Trying mirror ["):
+            _btn = getattr(self, "skip_mirror_btn", None)
+            if _btn is not None and _btn.isVisible():
+                _btn.setEnabled(True)
 
     def _on_install_finished(self, success: bool, message: str):
         self._set_busy(False)
@@ -561,7 +566,28 @@ class PackageMiscMixin:
     def _set_busy(self, busy: bool):
         self.progress_bar.setVisible(busy)
         self.cancel_btn.setVisible(busy)
+        # Mirror skipping only applies to conda (micromamba) operations.
+        _btn = getattr(self, "skip_mirror_btn", None)
+        if _btn is not None:
+            _is_conda = getattr(self, "_current_env_type", "venv") == "conda"
+            _btn.setVisible(busy and _is_conda)
+            _btn.setEnabled(True)
         self.tabs.setEnabled(not busy)
+
+    def _skip_conda_mirror(self):
+        """Abandon the current conda mirror and move to the next one."""
+        try:
+            from src.core.micromamba_installer import request_mirror_skip
+        except Exception:
+            return
+        _btn = getattr(self, "skip_mirror_btn", None)
+        if _btn is not None:
+            # One press per mirror: re-enabled by the next _set_busy(True).
+            _btn.setEnabled(False)
+        self.status_label.setText("Skipping to the next mirror...")
+        self._append_log("\nSkipping the current mirror - trying the "
+                         "next one in Settings > Paths...")
+        request_mirror_skip()
     def _on_tab_changed(self, index: int):
         """Build tab content lazily on first visit."""
         self._ensure_tab_built(index)

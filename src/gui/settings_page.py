@@ -714,9 +714,9 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         self._cache_reset_btn.clicked.connect(self._reset_cache_dir)
         _cache_path_layout.addWidget(self._cache_reset_btn)
 
-        self._cache_clear_btn = QPushButton("\U0001f5d1 Clear Cache")
+        self._cache_clear_btn = QPushButton("Clear Cache")
         self._cache_clear_btn.setObjectName("danger")
-        self._cache_clear_btn.setFixedWidth(110)
+        self._cache_clear_btn.setFixedWidth(130)
         self._cache_clear_btn.setEnabled(False)
         self._cache_clear_btn.setToolTip("Delete all cached packages from the shared cache directory.")
         self._cache_clear_btn.clicked.connect(self._clear_cache_dir)
@@ -735,8 +735,144 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         # Toggle enables/disables cache path controls
         self.shared_cache_cb.toggled.connect(self._on_shared_cache_toggled)
 
+        # ── Conda Mirrors ───────────────────────────────────────────────
+        _mirror_label = QLabel("Conda Mirrors:")
+        _mirror_box = QVBoxLayout()
+
+        self.conda_mirror_list = QListWidget()
+        self.conda_mirror_list.setFixedHeight(120)
+        self.conda_mirror_list.setToolTip(
+            "conda-forge mirrors, tried top to bottom.\n"
+            "All mirrors serve the same packages — only the download "
+            "server differs.\n"
+            "Put the fastest one for your network first."
+        )
+        _mirror_box.addWidget(self.conda_mirror_list)
+
+        _mirror_btns = QHBoxLayout()
+        for _txt, _w, _fn, _obj in (
+            ("Add...", 110, self._add_conda_mirror, "secondary"),
+            ("Move Up", 110, self._move_conda_mirror_up, "secondary"),
+            ("Move Down", 120, self._move_conda_mirror_down, "secondary"),
+            ("Remove", 110, self._remove_conda_mirror, "secondary"),
+            ("Defaults", 110, self._reset_conda_mirrors, "secondary"),
+        ):
+            _b = QPushButton(_txt)
+            _b.setObjectName(_obj)
+            _b.setFixedWidth(_w)
+            _b.clicked.connect(_fn)
+            _mirror_btns.addWidget(_b)
+        _mirror_btns.addStretch()
+        _mirror_box.addLayout(_mirror_btns)
+
+        paths_layout.addRow(_mirror_label, _mirror_box)
+
+        _mirror_note = QLabel(
+            "Used for conda environments only. Tried in order — if one is "
+            "slow or serves broken metadata, VenvStudio moves to the next. "
+            "During an install you can also press Skip Mirror to jump "
+            "ahead immediately."
+        )
+        _mirror_note.setStyleSheet(
+            f"color: {self._c()['fg_muted']}; "
+            f"font-size: {self._c()['fs_tiny']}px;"
+        )
+        _mirror_note.setWordWrap(True)
+        paths_layout.addRow("", _mirror_note)
+
+        self._load_conda_mirrors()
+
         paths_group.setLayout(paths_layout)
         layout.addWidget(paths_group)
+
+    # ── Conda mirror list helpers ──────────────────────────────────
+
+    def _load_conda_mirrors(self):
+        """Fill the list widget from settings (or the built-in defaults)."""
+        try:
+            from src.core.micromamba_installer import get_conda_mirrors
+            _mirrors = get_conda_mirrors()
+        except Exception:
+            _mirrors = []
+        self.conda_mirror_list.clear()
+        for _m in _mirrors:
+            self.conda_mirror_list.addItem(_m)
+
+    def _save_conda_mirrors(self):
+        """Persist the current list order to settings."""
+        _mirrors = [
+            self.conda_mirror_list.item(i).text()
+            for i in range(self.conda_mirror_list.count())
+        ]
+        try:
+            self.config.set("conda_mirrors", _mirrors)
+        except Exception:
+            pass
+
+    def _add_conda_mirror(self):
+        from PySide6.QtWidgets import QInputDialog
+        _url, _ok = QInputDialog.getText(
+            self, "Add Conda Mirror",
+            "Mirror URL (must point at a conda-forge channel):",
+            text="https://",
+        )
+        _url = (_url or "").strip().rstrip("/")
+        if not _ok or not _url:
+            return
+        if not _url.startswith(("http://", "https://")):
+            QMessageBox.warning(self, "Invalid URL",
+                                "The mirror URL must start with http:// or "
+                                "https://")
+            return
+        _existing = [
+            self.conda_mirror_list.item(i).text()
+            for i in range(self.conda_mirror_list.count())
+        ]
+        if _url in _existing:
+            QMessageBox.information(self, "Already Listed",
+                                    "That mirror is already in the list.")
+            return
+        self.conda_mirror_list.addItem(_url)
+        self._save_conda_mirrors()
+
+    def _move_conda_mirror_up(self):
+        _row = self.conda_mirror_list.currentRow()
+        if _row <= 0:
+            return
+        _item = self.conda_mirror_list.takeItem(_row)
+        self.conda_mirror_list.insertItem(_row - 1, _item)
+        self.conda_mirror_list.setCurrentRow(_row - 1)
+        self._save_conda_mirrors()
+
+    def _move_conda_mirror_down(self):
+        _row = self.conda_mirror_list.currentRow()
+        if _row < 0 or _row >= self.conda_mirror_list.count() - 1:
+            return
+        _item = self.conda_mirror_list.takeItem(_row)
+        self.conda_mirror_list.insertItem(_row + 1, _item)
+        self.conda_mirror_list.setCurrentRow(_row + 1)
+        self._save_conda_mirrors()
+
+    def _remove_conda_mirror(self):
+        _row = self.conda_mirror_list.currentRow()
+        if _row < 0:
+            return
+        if self.conda_mirror_list.count() <= 1:
+            QMessageBox.warning(self, "Cannot Remove",
+                                "At least one mirror must remain.")
+            return
+        self.conda_mirror_list.takeItem(_row)
+        self._save_conda_mirrors()
+
+    def _reset_conda_mirrors(self):
+        try:
+            from src.core.micromamba_installer import DEFAULT_CONDA_MIRRORS
+        except Exception:
+            return
+        self.conda_mirror_list.clear()
+        for _m in DEFAULT_CONDA_MIRRORS:
+            self.conda_mirror_list.addItem(_m)
+        self._save_conda_mirrors()
 
 
     def _setup_toolchain_ui_section(self, layout):

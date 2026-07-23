@@ -5,6 +5,7 @@ micromamba installer + MicromambaEnv manager
 import logging
 import os
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -172,6 +173,19 @@ def kill_active_micromamba() -> int:
     return _killed
 
 
+def _clean_micromamba_line(line: str) -> str:
+    """Strip micromamba spinner/progress glyphs from a status line.
+
+    micromamba pads its progress lines with box-drawing and spinner
+    characters that the UI font has no glyph for, so they showed up in the
+    status bar as empty boxes or mojibake.
+    """
+    for _g in ("\u29d6", "\u2714", "\u2718", "\u2500", "\u2588", "\u2591",
+               "\u2592", "\u2593", "\u25cf", "\u25cb", "\u23f3"):
+        line = line.replace(_g, "")
+    return " ".join(line.split())
+
+
 def _run_micromamba(args: list, progress_cb=None, timeout=600) -> subprocess.CompletedProcess:
     """Run micromamba with given args, streaming output to progress_cb."""
     exe = get_micromamba_exe()
@@ -196,7 +210,8 @@ def _run_micromamba(args: list, progress_cb=None, timeout=600) -> subprocess.Com
         _kw = {}
     _proc = subprocess.Popen(
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-        text=True, bufsize=1, env=_env, **_kw,
+        text=True, bufsize=1, env=_env,
+        encoding="utf-8", errors="replace", **_kw,
     )
     with _ACTIVE_PROCS_LOCK:
         _ACTIVE_PROCS.add(_proc)
@@ -207,7 +222,12 @@ def _run_micromamba(args: list, progress_cb=None, timeout=600) -> subprocess.Com
             _line = _line.rstrip()
             _out_lines.append(_line)
             if progress_cb and _line.strip():
-                progress_cb(_line.strip()[:200])
+                progress_cb(_clean_micromamba_line(_line)[:200])
+            if _skip_was_requested():
+                # User pressed "Skip mirror": stop this attempt now so the
+                # caller can move to the next mirror in the list.
+                _proc.kill()
+                break
             if _time.time() - _t0 > timeout:
                 _proc.kill()
                 raise subprocess.TimeoutExpired(cmd, timeout)
@@ -237,6 +257,50 @@ def _run_micromamba(args: list, progress_cb=None, timeout=600) -> subprocess.Com
 
 
 _CONDA_FORGE_MIRROR = "https://repo.prefix.dev/conda-forge"
+
+# Ordered conda-forge mirrors. All serve the SAME packages -- only the CDN
+# hostname differs -- so switching is always safe. The order is user-editable
+# in Settings > Paths > Conda Mirrors; DEFAULT_CONDA_MIRRORS is the reset
+# target and the fallback when the config has no list yet.
+DEFAULT_CONDA_MIRRORS = [
+    "https://repo.prefix.dev/conda-forge",
+    "https://conda.anaconda.org/conda-forge",
+    "https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge",
+    "https://mirror.nju.edu.cn/anaconda/cloud/conda-forge",
+    "https://mirrors.bfsu.edu.cn/anaconda/cloud/conda-forge",
+]
+
+
+def get_conda_mirrors() -> list:
+    """Mirror list from settings, falling back to the defaults."""
+    try:
+        from src.core.config_manager import ConfigManager
+        _m = ConfigManager().get("conda_mirrors")
+        if isinstance(_m, list) and _m:
+            return [str(x).strip() for x in _m if str(x).strip()]
+    except Exception:
+        pass
+    return list(DEFAULT_CONDA_MIRRORS)
+
+
+# Set by the UI "Skip mirror" button. _run_micromamba checks it, kills the
+# current child and reports the skip so the caller moves to the next mirror
+# instead of waiting out a slow one.
+_SKIP_REQUESTED = threading.Event()
+
+
+def request_mirror_skip() -> None:
+    """Abandon the running micromamba call and advance to the next mirror."""
+    _SKIP_REQUESTED.set()
+    kill_active_micromamba()
+
+
+def _clear_mirror_skip() -> None:
+    _SKIP_REQUESTED.clear()
+
+
+def _skip_was_requested() -> bool:
+    return _SKIP_REQUESTED.is_set()
 
 
 def _mirror_flag_path():
@@ -305,7 +369,19 @@ def _mirror_channels(channels):
     same packages — only the CDN hostname changes. Needed because some
     networks reset TLS to conda.anaconda.org while the mirror is fine.
     """
-    return [_CONDA_FORGE_MIRROR if c == "conda-forge" else c for c in channels]
+    return _channels_for_mirror(channels, _CONDA_FORGE_MIRROR)
+
+
+def _channels_for_mirror(channels, mirror_url):
+    """Point the conda-forge channel at a specific mirror URL."""
+    _known = set(DEFAULT_CONDA_MIRRORS) | set(get_conda_mirrors())
+    out = []
+    for c in channels:
+        if c == "conda-forge" or c in _known:
+            out.append(mirror_url)
+        else:
+            out.append(c)
+    return out
 
 
 # PyPI names that differ on conda-forge. Presets/catalog store PyPI names
@@ -364,6 +440,25 @@ def _underscore_variants(packages, missing):
 
 def _friendly_conda_error(err: str) -> str:
     """Turn known micromamba failures into actionable messages."""
+    _e = err.lower()
+    # Solver conflict: the package exists on conda-forge but not for this
+    # Python version / platform. Raw solver output buried this behind pages
+    # of unrelated checksum warnings, so the UI only said "install failed".
+    if ("could not solve for environment" in _e
+            or "is not installable" in _e
+            or "packages are incompatible" in _e):
+        _pin = ""
+        _m = re.search(r"pin on python\s*=?\s*([0-9.]+)", err)
+        if _m:
+            _pin = f" (this environment is pinned to Python {_m.group(1)})"
+        return (
+            "No version of this package works with this environment"
+            + _pin + ".\n"
+            "conda-forge may not ship it for this Python version or "
+            "platform. Options: pick an older Python when creating the "
+            "environment, or install it with pip instead.\n\n"
+            "--- solver output ---\n" + err[:600]
+        )
     if "being used by another process" in err or "file in use" in err.lower():
         return (
             "A file inside the environment is locked by another process.\n"
@@ -416,6 +511,7 @@ def create_conda_env(env_path: Path, python_version: str = "",
 
     # Attempt 1: conda-forge
     try:
+        _clear_mirror_skip()
         if _mirror_preferred() and "conda-forge" in channels:
             _log.debug("🌐 [Conda] using prefix.dev mirror "
                        "(saved preference for this network)")
@@ -428,6 +524,35 @@ def create_conda_env(env_path: Path, python_version: str = "",
             return True
 
         err = result.stderr or ""
+
+        # Mirror rotation -- see install_conda_packages for the rationale.
+        if (_skip_was_requested() or _is_mirror_data_error(err)
+                or _is_network_error(err)):
+            _mirrors = get_conda_mirrors()
+            _tried = {c for c in channels if c in set(_mirrors)}
+            for _i, _m in enumerate(_mirrors, 1):
+                if _m in _tried:
+                    continue
+                _clear_mirror_skip()
+                _host = _m.split("//")[-1].split("/")[0]
+                _log.info(f"🌐 [{_i}/{len(_mirrors)}] trying mirror "
+                          f"{_host}")
+                if progress_cb:
+                    progress_cb(f"Trying mirror [{_i}/{len(_mirrors)}] "
+                                f"{_host}...")
+                result = _run_micromamba(
+                    _build_args(_channels_for_mirror(channels, _m)),
+                    progress_cb, timeout=600)
+                _tried.add(_m)
+                if result.returncode == 0:
+                    if progress_cb:
+                        progress_cb("Conda environment created!")
+                    return True
+                err = result.stderr or ""
+                if not (_skip_was_requested() or _is_mirror_data_error(err)
+                        or _is_network_error(err)):
+                    break
+            _clear_mirror_skip()
         # NOTE: no "defaults" channel fallback. "defaults" is Anaconda's
         # COMMERCIAL channel (ToS!) and mixing it into a conda-forge env makes
         # the solver rip out core packages (python/pip/vc14) — observed on
@@ -493,6 +618,7 @@ def install_conda_packages(env_path: Path, packages: list,
         return a
 
     try:
+        _clear_mirror_skip()
         if _mirror_preferred() and "conda-forge" in channels:
             _log.debug("🌐 [Conda] using prefix.dev mirror "
                        "(saved preference for this network)")
@@ -505,6 +631,40 @@ def install_conda_packages(env_path: Path, packages: list,
             return True
 
         err = result.stderr or ""
+
+        # Mirror rotation. Triggered when the user pressed "Skip mirror" or
+        # when the mirror served unusable metadata / was unreachable. Every
+        # mirror carries the same packages, so trying the next one costs
+        # nothing but time -- and skipping saves exactly that.
+        if (_skip_was_requested() or _is_mirror_data_error(err)
+                or _is_network_error(err)):
+            _mirrors = get_conda_mirrors()
+            _tried = {c for c in channels if c in set(_mirrors)}
+            for _i, _m in enumerate(_mirrors, 1):
+                if _m in _tried:
+                    continue
+                _clear_mirror_skip()
+                _host = _m.split("//")[-1].split("/")[0]
+                _log.info(f"🌐 [{_i}/{len(_mirrors)}] trying mirror "
+                          f"{_host}")
+                if progress_cb:
+                    progress_cb(f"Trying mirror [{_i}/{len(_mirrors)}] "
+                                f"{_host}...")
+                result = _run_micromamba(
+                    _build_args(_channels_for_mirror(channels, _m)),
+                    progress_cb, timeout=600)
+                _tried.add(_m)
+                if result.returncode == 0:
+                    if progress_cb:
+                        progress_cb(f"Installed: {', '.join(packages)}")
+                    return True
+                err = result.stderr or ""
+                if not (_skip_was_requested() or _is_mirror_data_error(err)
+                        or _is_network_error(err)):
+                    # A real solver error (package not available for this
+                    # Python version, etc.) -- another mirror cannot help.
+                    break
+            _clear_mirror_skip()
         # NOTE: no "defaults" channel fallback — see create path for rationale.
         if _is_network_error(err) and "conda-forge" in channels:
             _log.info("🌐 [Conda] conda-forge CDN unreachable — "

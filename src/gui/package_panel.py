@@ -447,6 +447,20 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
         self.status_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px;")
         status_layout.addWidget(self.status_label, 1)
 
+        # Conda installs can sit on a slow mirror for minutes. This jumps
+        # to the next mirror in the Settings list instead of waiting it out.
+        # Only meaningful for conda, so _set_busy hides it for other types.
+        self.skip_mirror_btn = QPushButton("Skip Mirror")
+        self.skip_mirror_btn.setObjectName("secondary")
+        self.skip_mirror_btn.setFixedWidth(140)
+        self.skip_mirror_btn.setVisible(False)
+        self.skip_mirror_btn.setToolTip(
+            "Stop downloading from the current conda mirror and try the "
+            "next one.\nMirror order is configurable in Settings > Paths."
+        )
+        self.skip_mirror_btn.clicked.connect(self._skip_conda_mirror)
+        status_layout.addWidget(self.skip_mirror_btn)
+
         self.cancel_btn = QPushButton("⛔ Cancel")
         self.cancel_btn.setObjectName("danger")
         self.cancel_btn.setFixedWidth(100)

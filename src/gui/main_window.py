@@ -1185,6 +1185,19 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
             pass
 
         # Step 3 — interrupt + quit cooperatively.
+        #
+        # Kill any live micromamba child first: those workers block
+        # inside subprocess I/O and ignore requestInterruption(), so
+        # without this they survive the wait below and Qt aborts with
+        # "QThread: Destroyed while thread is still running" (B186).
+        if workers:
+            try:
+                from src.core.micromamba_installer import (
+                    kill_active_micromamba,
+                )
+                kill_active_micromamba()
+            except Exception:
+                pass
         for w in workers:
             try:
                 w.requestInterruption()
@@ -1195,13 +1208,27 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
             except Exception:
                 pass
 
-        # Step 4 — wait, escalate to terminate() if needed.
+        # Step 4 — wait, then let stragglers go.
+        #
+        # terminate() used to be the escalation here, but these workers
+        # block inside subprocess.communicate() and killing the OS
+        # thread at that point corrupts interpreter state -> Windows
+        # access violation on shutdown (same crash class as the
+        # env_state.py package loader). A worker that has not finished
+        # is left alone: the process is exiting anyway, and its child
+        # processes were already asked to stop in step 3.
         for w in workers:
             try:
                 if w.wait(1500):
                     continue
-                w.terminate()
-                w.wait(500)
+                try:
+                    from src.utils.logger import get_logger
+                    get_logger("venvstudio.main_window").debug(
+                        f"closeEvent: worker {type(w).__name__} still "
+                        f"running, leaving it to exit with the process"
+                    )
+                except Exception:
+                    pass
             except RuntimeError:
                 pass  # already destroyed
 

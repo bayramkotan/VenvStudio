@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 from pathlib import Path
 
 
@@ -140,6 +141,36 @@ def download_micromamba(progress_cb=None) -> Path:
 
 _log = logging.getLogger("venvstudio.conda")
 
+# Live micromamba processes, so a cancelled worker can actually stop the
+# download instead of only setting a flag. WorkerThread.cancel() used to
+# just flip _cancelled, which suppressed the result but left micromamba
+# running; the thread then outlived the window and Qt aborted with
+# "QThread: Destroyed while thread is still running" on shutdown (B186).
+_ACTIVE_PROCS = set()
+_ACTIVE_PROCS_LOCK = threading.Lock()
+
+
+def kill_active_micromamba() -> int:
+    """Kill every running micromamba child process.
+
+    Returns the number of processes signalled. Safe to call from any
+    thread; the reader loop in _run_micromamba sees the closed pipe and
+    unwinds normally, so no thread is killed mid-syscall.
+    """
+    with _ACTIVE_PROCS_LOCK:
+        procs = list(_ACTIVE_PROCS)
+    _killed = 0
+    for _p in procs:
+        try:
+            if _p.poll() is None:
+                _p.kill()
+                _killed += 1
+        except Exception:
+            pass
+    if _killed:
+        _log.info(f"\u26d4 [Conda] killed {_killed} running micromamba process(es)")
+    return _killed
+
 
 def _run_micromamba(args: list, progress_cb=None, timeout=600) -> subprocess.CompletedProcess:
     """Run micromamba with given args, streaming output to progress_cb."""
@@ -167,6 +198,8 @@ def _run_micromamba(args: list, progress_cb=None, timeout=600) -> subprocess.Com
         cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True, bufsize=1, env=_env, **_kw,
     )
+    with _ACTIVE_PROCS_LOCK:
+        _ACTIVE_PROCS.add(_proc)
     import time as _time
     _t0 = _time.time()
     try:
@@ -179,8 +212,13 @@ def _run_micromamba(args: list, progress_cb=None, timeout=600) -> subprocess.Com
                 _proc.kill()
                 raise subprocess.TimeoutExpired(cmd, timeout)
     finally:
-        _proc.stdout.close()
+        try:
+            _proc.stdout.close()
+        except Exception:
+            pass
         _rc = _proc.wait()
+        with _ACTIVE_PROCS_LOCK:
+            _ACTIVE_PROCS.discard(_proc)
     result = subprocess.CompletedProcess(
         cmd, _rc, "\n".join(_out_lines), "\n".join(_out_lines),
     )

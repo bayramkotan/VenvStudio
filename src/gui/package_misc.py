@@ -377,11 +377,50 @@ class PackageMiscMixin:
             if reply == QMessageBox.Yes:
                 self.status_label.setText("⛔ Cancelling...")
                 self.current_worker.cancel()
+                # Do NOT terminate(): the worker blocks inside
+                # subprocess.communicate(), and killing the OS thread
+                # there corrupts interpreter state -> Windows access
+                # violation (same crash class fixed in env_state.py).
+                # A worker that ignores cancel() is detached instead.
                 if not self.current_worker.wait(3000):
-                    self.current_worker.terminate()
+                    self._abandon_worker(self.current_worker)
                 self._set_busy(False)
                 self.status_label.setText("⛔ Operation cancelled")
                 self._append_log("\n⛔ Operation cancelled by user")
+
+    def _abandon_worker(self, worker):
+        """Detach a worker that ignored cancel() instead of killing it.
+
+        Disconnects its signals so a late result cannot land in the UI, and
+        keeps a reference so the QThread object is not garbage-collected
+        while its OS thread is still alive (destroying a running QThread is
+        fatal on Windows). Long conda operations can take minutes; they are
+        left to finish on their own with their result discarded.
+        """
+        if worker is None:
+            return
+        if getattr(self, "current_worker", None) is worker:
+            self.current_worker = None
+        for _sig in ("finished", "progress", "output", "error"):
+            try:
+                getattr(worker, _sig).disconnect()
+            except Exception:
+                pass
+        if not worker.isRunning():
+            return
+        if not hasattr(self, "_abandoned_workers"):
+            self._abandoned_workers = []
+        self._abandoned_workers = [w for w in self._abandoned_workers
+                                   if w.isRunning()]
+        self._abandoned_workers.append(worker)
+        try:
+            from src.utils.logger import get_logger
+            get_logger("venvstudio.install").info(
+                f"\U0001f4a4 [Cancel] worker did not stop in time; "
+                f"abandoned ({len(self._abandoned_workers)} pending)"
+            )
+        except Exception:
+            pass
 
     def _check_outdated(self):
         """Check for outdated packages and show update option."""

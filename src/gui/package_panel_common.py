@@ -102,7 +102,21 @@ class WorkerThread(QThread):
             self.progress.emit(message)
 
     def cancel(self):
+        """Cancel the operation and stop its child process.
+
+        Setting the flag alone only suppressed the result signal: the
+        underlying micromamba/pip process kept running, so the thread
+        outlived the cancel and, if the window closed meanwhile, Qt
+        aborted with "QThread: Destroyed while thread is still
+        running" (B186). Killing the child makes the worker return
+        within a second instead.
+        """
         self._cancelled = True
+        try:
+            from src.core.micromamba_installer import kill_active_micromamba
+            kill_active_micromamba()
+        except Exception:
+            pass
 
 class CommandHintDialog(QDialog):
     """Shows the equivalent pip command for educational purposes."""

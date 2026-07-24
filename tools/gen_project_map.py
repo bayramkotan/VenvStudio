@@ -1,0 +1,269 @@
+#!/usr/bin/env python3
+"""Generate PROJECT_MAP.md - an index of every class and function in src/.
+
+Why this exists
+---------------
+Finding "which file holds this function" used to mean a round of grep for
+every question, and a hand-written table in the handoff went stale fast: it
+listed _update_quick_sidebar as the sidebar refresh long after that function
+had become dead code. This script reads the actual source with ast, so the
+map cannot drift from reality - regenerate it and it is correct again.
+
+It also flags likely dead code: definitions whose name never appears anywhere
+else in src/. That is a heuristic, not proof - a name reached only through
+getattr(), a Qt signal connection built from a string, or an entry point
+declared in pyproject.toml will look unused here. Treat a flag as "worth
+checking", never as "safe to delete".
+
+Usage
+-----
+    python tools/gen_project_map.py            # writes PROJECT_MAP.md
+    python tools/gen_project_map.py --check    # exit 1 if the file is stale
+"""
+from __future__ import annotations
+
+import argparse
+import ast
+
+import re
+import sys
+from collections import defaultdict
+from pathlib import Path
+
+REPO_ROOT = Path(__file__).resolve().parent.parent
+SRC_DIR = REPO_ROOT / "src"
+OUT_FILE = REPO_ROOT / "PROJECT_MAP.md"
+
+# Dunder methods and Qt overrides are noise in an index like this: every
+# widget has them and nobody greps for "__init__".
+SKIP_NAMES = {
+    "__init__", "__repr__", "__str__", "__enter__", "__exit__",
+    "__eq__", "__hash__", "__len__", "__iter__", "__next__",
+}
+
+
+def iter_source_files():
+    for path in sorted(SRC_DIR.rglob("*.py")):
+        if "__pycache__" in path.parts:
+            continue
+        yield path
+
+
+def collect_definitions(path: Path):
+    """Return (classes, functions) for one file.
+
+    classes:   [(name, lineno, [(method, lineno, doc), ...]), ...]
+    functions: [(name, lineno, doc), ...]   - module level only
+    """
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+    except SyntaxError as exc:
+        print(f"  ! skipped {path.name}: {exc}", file=sys.stderr)
+        return [], []
+
+    classes, functions = [], []
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef):
+            methods = []
+            for sub in node.body:
+                if isinstance(sub, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    if sub.name in SKIP_NAMES:
+                        continue
+                    methods.append((sub.name, sub.lineno, first_doc_line(sub)))
+            classes.append((node.name, node.lineno, methods))
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            if node.name in SKIP_NAMES:
+                continue
+            functions.append((node.name, node.lineno, first_doc_line(node)))
+    return classes, functions
+
+
+def first_doc_line(node) -> str:
+    doc = ast.get_docstring(node) or ""
+    line = doc.strip().split("\n", 1)[0].strip()
+    return line[:100]
+
+
+def iter_reference_files():
+    """Every file that could reference a definition in src/.
+
+    Wider than iter_source_files on purpose: main.py, tools/ and tests/ call
+    into src/ too, and counting only src/ would report those entry points as
+    dead code.
+    """
+    seen = set()
+    for path in iter_source_files():
+        seen.add(path)
+        yield path
+    for extra in ("main.py", "setup.py", "pyproject.toml"):
+        p = REPO_ROOT / extra
+        if p.is_file() and p not in seen:
+            yield p
+    for folder in ("tools", "tests", "scripts"):
+        d = REPO_ROOT / folder
+        if not d.is_dir():
+            continue
+        for p in sorted(d.rglob("*.py")):
+            if "__pycache__" not in p.parts and p not in seen:
+                yield p
+
+
+def build_reference_index():
+    """Map every identifier to the files that mention it.
+
+    A plain text scan on purpose: it catches self.foo(), names used inside
+    Qt signal strings, and connect(self.foo) alike, which an ast-only pass
+    would miss and would then report as dead code.
+    """
+    refs = defaultdict(set)
+    word = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+    for path in iter_reference_files():
+        text = path.read_text(encoding="utf-8", errors="replace")
+        rel = path.relative_to(REPO_ROOT).as_posix()
+        for name in set(word.findall(text)):
+            refs[name].add(rel)
+    return refs
+
+
+def module_summary(path: Path) -> str:
+    """First line of the module docstring, or empty."""
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8", errors="replace"))
+    except SyntaxError:
+        return ""
+    doc = ast.get_docstring(tree) or ""
+    for line in doc.strip().split("\n"):
+        line = line.strip()
+        if line:
+            return line[:120]
+    return ""
+
+
+def render() -> str:
+    refs = build_reference_index()
+    out = []
+    add = out.append
+
+    add("# VenvStudio Project Map")
+    add("")
+    add("Generated by `tools/gen_project_map.py` - do not edit by hand.")
+    add("Regenerate after moving or renaming things:")
+    add("")
+    add("```")
+    add("python tools/gen_project_map.py")
+    add("```")
+    add("")
+    add("Line numbers drift as files change; treat them as a starting point, "
+        "not an address.")
+    add("")
+
+    files = list(iter_source_files())
+    total_classes = total_funcs = 0
+    unused = []
+
+    # ---- overview table -------------------------------------------------
+    add("## Files")
+    add("")
+    add("| File | Lines | What it holds |")
+    add("|---|---|---|")
+    for path in files:
+        rel = path.relative_to(REPO_ROOT).as_posix()
+        line_count = path.read_text(encoding="utf-8", errors="replace").count("\n") + 1
+        summary = module_summary(path) or "-"
+        add(f"| `{rel}` | {line_count} | {summary} |")
+    add("")
+
+    # ---- per-file detail ------------------------------------------------
+    add("## Definitions")
+    add("")
+    for path in files:
+        rel = path.relative_to(REPO_ROOT).as_posix()
+        classes, functions = collect_definitions(path)
+        if not classes and not functions:
+            continue
+        add(f"### `{rel}`")
+        add("")
+        for name, lineno, methods in classes:
+            total_classes += 1
+            add(f"**class {name}** (line {lineno})")
+            add("")
+            if methods:
+                add("| Method | Line | Doc |")
+                add("|---|---|---|")
+                for mname, mline, mdoc in methods:
+                    total_funcs += 1
+                    hits = refs.get(mname, set()) - {rel}
+                    flag = "" if hits else " ⚠"
+                    if not hits:
+                        unused.append((rel, f"{name}.{mname}", mline))
+                    add(f"| `{mname}`{flag} | {mline} | {mdoc or '-'} |")
+                add("")
+        if functions:
+            add("**module-level functions**")
+            add("")
+            add("| Function | Line | Doc |")
+            add("|---|---|---|")
+            for fname, fline, fdoc in functions:
+                total_funcs += 1
+                hits = refs.get(fname, set()) - {rel}
+                flag = "" if hits else " ⚠"
+                if not hits:
+                    unused.append((rel, fname, fline))
+                add(f"| `{fname}`{flag} | {fline} | {fdoc or '-'} |")
+            add("")
+
+    # ---- possibly-dead list ---------------------------------------------
+    add("## Referenced nowhere else (⚠)")
+    add("")
+    add("Names that appear in no other scanned file (`src/`, `main.py`, "
+        "`tools/`, `tests/`). Some are genuinely unused - this is how "
+        "`_update_quick_sidebar` was found to be dead code. Others are "
+        "reached through Qt signal strings or `getattr`. "
+        "**Check before deleting.**")
+    add("")
+    if unused:
+        add("| File | Name | Line |")
+        add("|---|---|---|")
+        for rel, name, line in unused:
+            add(f"| `{rel}` | `{name}` | {line} |")
+    else:
+        add("None.")
+    add("")
+
+    add("---")
+    add("")
+    add(f"{len(files)} files, {total_classes} classes, {total_funcs} "
+        f"functions/methods, {len(unused)} flagged.")
+    add("")
+    return "\n".join(out)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--check", action="store_true",
+                        help="exit 1 if PROJECT_MAP.md is out of date")
+    args = parser.parse_args()
+
+    if not SRC_DIR.is_dir():
+        print(f"src/ not found at {SRC_DIR}", file=sys.stderr)
+        return 2
+
+    content = render()
+
+    if args.check:
+        current = OUT_FILE.read_text(encoding="utf-8") if OUT_FILE.exists() else ""
+        if current != content:
+            print("PROJECT_MAP.md is out of date - run "
+                  "tools/gen_project_map.py", file=sys.stderr)
+            return 1
+        print("PROJECT_MAP.md is up to date.")
+        return 0
+
+    OUT_FILE.write_text(content, encoding="utf-8")
+    print(f"Wrote {OUT_FILE.relative_to(REPO_ROOT)} "
+          f"({content.count(chr(10)) + 1} lines)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -204,6 +204,29 @@ class EnvOperationsMixin:
         if reply == QMessageBox.Yes:
             # No popup — progress shown in Command Reference panel below
 
+            # Read the interpreter out of the pipx marker before the delete
+            # wipes it. _readd_empty_pipx_row writes a fresh marker right
+            # afterwards, and pipx installs apps with the "--python" value
+            # stored there -- without this the user's choice was silently
+            # replaced by whichever Python runs VenvStudio.
+            self._pipx_prev_python_path = ""
+            self._pipx_prev_python_version = ""
+            if _env_type == "pipx" and _env_path:
+                try:
+                    import json as _json_pre
+                    from pathlib import Path as _P_pre
+                    _pre_marker = _P_pre(_env_path) / ".venvstudio_env"
+                    if _pre_marker.exists():
+                        with open(_pre_marker, "r", encoding="utf-8") as _f:
+                            _pre = _json_pre.load(_f)
+                        self._pipx_prev_python_path = _pre.get(
+                            "python_path", "") or ""
+                        self._pipx_prev_python_version = _pre.get(
+                            "python_version", "") or ""
+                except Exception as _e:
+                    self._log.debug(
+                        f"pipx delete: could not read marker: {_e}")
+
             self._deleting_env_name = name
             _display_path = _env_path or str(self.venv_manager.base_dir / name)
             # B182: remember the real env path/type for cache invalidation in
@@ -282,6 +305,14 @@ class EnvOperationsMixin:
             # in one shot — no full _refresh_env_list, no "Refreshing..."
             # banner, no subprocess scans.
             if deleted_type == "pipx":
+                # Ask which interpreter the fresh environment should use,
+                # before re-creating it. pipx gives every app its own venv
+                # built with "--python", so this choice decides where apps
+                # installed from here on will land.
+                try:
+                    self._ask_pipx_python()
+                except Exception as _e:
+                    self._log.warning(f"pipx python prompt skipped: {_e}")
                 try:
                     self._readd_empty_pipx_row()
                 except Exception as _e:
@@ -533,6 +564,106 @@ class EnvOperationsMixin:
             self._log.warning(f"_remove_env_row_inplace failed: {e} — falling back")
             self._refresh_env_list()
 
+    def _ask_pipx_python(self) -> None:
+        """Ask which Python the re-created pipx environment should use.
+
+        Runs after the delete and before _readd_empty_pipx_row, so the
+        answer lands in the marker that method writes. Cancelling keeps
+        whatever was already chosen -- the environment is re-created either
+        way, since leaving the row out would be worse than a default.
+        """
+        from PySide6.QtWidgets import (
+            QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox,
+            QCheckBox, QDialogButtonBox,
+        )
+        import subprocess as _sp
+        from src.utils.platform_utils import (
+            find_system_pythons as _fsp, subprocess_args as _sa,
+        )
+
+        _preselect = getattr(self, "_pipx_prev_python_path", "") or ""
+        if not _preselect:
+            try:
+                _preselect = self.config.get("pipx_python", "") or ""
+            except Exception:
+                _preselect = ""
+
+        _dlg = QDialog(self)
+        _dlg.setWindowTitle("Re-creating pipx Environment")
+        _dlg.setMinimumWidth(560)
+        _lay = QVBoxLayout(_dlg)
+
+        _info = QLabel(
+            "Which Python should the new pipx environment use?\n\n"
+            "pipx builds a separate environment for every app it installs, "
+            "so this becomes the default interpreter for apps installed "
+            "from here on. Pick an older Python if the tools you need have "
+            "not caught up with the newest release yet."
+        )
+        _info.setWordWrap(True)
+        _lay.addWidget(_info)
+
+        _row = QHBoxLayout()
+        _row.addWidget(QLabel("Python:"))
+        _combo = QComboBox()
+        _combo.addItem("System default", "")
+        _seen = set()
+        try:
+            for _ver, _path in (_fsp() or []):
+                if not _path or _path in _seen:
+                    continue
+                _seen.add(_path)
+                _combo.addItem(
+                    f"Python {_ver}  \u2014  {_path}" if _ver else _path,
+                    _path)
+        except Exception as _e:
+            self._log.debug(f"pipx python prompt: scan failed: {_e}")
+        if _preselect:
+            _idx = _combo.findData(_preselect)
+            if _idx < 0:
+                _combo.addItem(f"{_preselect}  (not detected)", _preselect)
+                _idx = _combo.count() - 1
+            _combo.setCurrentIndex(_idx)
+        _row.addWidget(_combo, 1)
+        _lay.addLayout(_row)
+
+        _save_cb = QCheckBox("Also make this the default in Settings")
+        _save_cb.setChecked(True)
+        _lay.addWidget(_save_cb)
+
+        _btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        _btns.accepted.connect(_dlg.accept)
+        _btns.rejected.connect(_dlg.reject)
+        _lay.addWidget(_btns)
+
+        if _dlg.exec() != QDialog.Accepted:
+            self._log.info(
+                "pipx python prompt: cancelled, keeping current choice")
+            return
+
+        _chosen = _combo.currentData() or ""
+        self._pipx_prev_python_path = _chosen
+        self._pipx_prev_python_version = ""
+        if _chosen:
+            try:
+                _pv = _sp.run([_chosen, "--version"], capture_output=True,
+                              text=True, timeout=5, **_sa())
+                self._pipx_prev_python_version = (
+                    _pv.stdout.strip() or _pv.stderr.strip()
+                ).replace("Python ", "")
+            except Exception:
+                pass
+        if _save_cb.isChecked():
+            try:
+                self.config.set("pipx_python", _chosen)
+            except Exception as _e:
+                self._log.debug(f"pipx python prompt: save failed: {_e}")
+        self._log.info(
+            f"pipx python prompt: chose "
+            f"{self._pipx_prev_python_version or 'system default'} "
+            f"({_chosen or '-'})"
+        )
+
     def _readd_empty_pipx_row(self) -> None:
         """B182: re-create the pipx tracker marker and insert a fresh row
         into the env table — without calling _refresh_env_list (which
@@ -569,14 +700,46 @@ class EnvOperationsMixin:
             return
 
         # 2) Re-create the marker so VenvStudio recognises it again next start
+        #
+        # Carry the interpreter choice across the delete. pipx installs apps
+        # with "--python <path>" read from this marker, so writing only
+        # VenvStudio's own version here silently reset the user's choice:
+        # every app installed after a delete landed on the wrong Python.
+        # Preference order: what the marker said before the delete, then the
+        # Settings default, then VenvStudio's interpreter.
         marker = pipx_path / ".venvstudio_env"
+        _prev_py_path = getattr(self, "_pipx_prev_python_path", "") or ""
+        _prev_py_ver = getattr(self, "_pipx_prev_python_version", "") or ""
+        if not _prev_py_path:
+            try:
+                _prev_py_path = self.config.get("pipx_python", "") or ""
+            except Exception:
+                _prev_py_path = ""
+            _prev_py_ver = ""
+        if _prev_py_path and not _prev_py_ver:
+            try:
+                import subprocess as _sp
+                from src.utils.platform_utils import subprocess_args as _sa
+                _pv = _sp.run([_prev_py_path, "--version"],
+                              capture_output=True, text=True, timeout=5,
+                              **_sa())
+                _prev_py_ver = (_pv.stdout.strip()
+                                or _pv.stderr.strip()).replace("Python ", "")
+            except Exception:
+                _prev_py_ver = ""
         try:
             marker_data = {
                 "name": "pipx",
                 "type": "pipx",
                 "created": _dt.now().strftime("%Y-%m-%d %H:%M"),
-                "python_version": f"{_sys.version_info.major}.{_sys.version_info.minor}.{_sys.version_info.micro}",
+                "python_version": _prev_py_ver or f"{_sys.version_info.major}.{_sys.version_info.minor}.{_sys.version_info.micro}",
             }
+            if _prev_py_path:
+                marker_data["python_path"] = _prev_py_path
+                self._log.info(
+                    f"pipx readd: keeping Python {_prev_py_ver or '?'} "
+                    f"({_prev_py_path})"
+                )
             with open(marker, "w", encoding="utf-8") as f:
                 _json.dump(marker_data, f, indent=2)
             self._log.info(f"pipx readd: wrote marker at {marker}")

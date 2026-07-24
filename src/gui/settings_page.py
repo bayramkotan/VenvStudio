@@ -51,6 +51,30 @@ from src.utils.i18n import tr
 import os
 from pathlib import Path
 
+class _RefreshOnOpenComboBox(QComboBox):
+    """ComboBox that rebuilds its items each time it is opened.
+
+    The detected-Python table is populated asynchronously, so a combo built
+    from it during setup can be empty or stale. Refilling on open keeps it
+    correct without polling.
+    """
+
+    def __init__(self, refill, parent=None):
+        super().__init__(parent)
+        self.setFocusPolicy(Qt.StrongFocus)
+        self._refill = refill
+
+    def wheelEvent(self, event):
+        event.ignore()
+
+    def showPopup(self):
+        try:
+            self._refill()
+        except Exception:
+            pass
+        super().showPopup()
+
+
 class NoScrollComboBox(QComboBox):
     """ComboBox that ignores mouse wheel events unless explicitly focused by click."""
 
@@ -636,7 +660,6 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         self.default_python_combo.addItem(tr("system_default"), "")
         self.default_python_combo.setEnabled(False)
         default_py_layout.addWidget(self.default_python_combo, 1)
-        default_py_layout.addWidget(self.default_python_combo, 1)
         python_layout.addLayout(default_py_layout)
 
         python_group.setLayout(python_layout)
@@ -735,6 +758,38 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         # Toggle enables/disables cache path controls
         self.shared_cache_cb.toggled.connect(self._on_shared_cache_toggled)
 
+        # ── pipx default Python ──────────────────────────────────────
+        _pipx_py_layout = QHBoxLayout()
+        self.pipx_python_combo = _RefreshOnOpenComboBox(
+            lambda: self._load_pipx_python_choices())
+        self.pipx_python_combo.addItem("System default", "")
+        self.pipx_python_combo.setToolTip(
+            "Python used when pipx installs an app "
+            "(pipx install --python ...).\n"
+            "pipx gives every app its own environment, so this is the "
+            "default for new installs.\n"
+            "Useful when the newest Python is ahead of the packages you "
+            "need."
+        )
+        self.pipx_python_combo.currentIndexChanged.connect(
+            self._on_pipx_python_changed)
+        _pipx_py_layout.addWidget(self.pipx_python_combo, 1)
+        paths_layout.addRow("pipx Python:", _pipx_py_layout)
+
+        _pipx_py_note = QLabel(
+            "Applies to apps installed into the pipx environment from now "
+            "on. Existing apps keep the Python they were installed with. "
+            "Deleting the pipx environment no longer resets this choice."
+        )
+        _pipx_py_note.setStyleSheet(
+            f"color: {self._c()['fg_muted']}; "
+            f"font-size: {self._c()['fs_tiny']}px;"
+        )
+        _pipx_py_note.setWordWrap(True)
+        paths_layout.addRow("", _pipx_py_note)
+
+        self._load_pipx_python_choices()
+
         # ── Conda Mirrors ───────────────────────────────────────────────
         _mirror_label = QLabel("Conda Mirrors:")
         _mirror_box = QVBoxLayout()
@@ -784,6 +839,98 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
 
         paths_group.setLayout(paths_layout)
         layout.addWidget(paths_group)
+
+    # ── pipx Python helpers ───────────────────────────────────────
+
+    def _load_pipx_python_choices(self):
+        """Fill the pipx interpreter combo from the detected Python list."""
+        _combo = getattr(self, "pipx_python_combo", None)
+        if _combo is None:
+            return
+        _saved = ""
+        try:
+            _saved = self.config.get("pipx_python", "") or ""
+        except Exception:
+            pass
+        _combo.blockSignals(True)
+        _combo.clear()
+        _combo.addItem("System default", "")
+        _seen = set()
+        try:
+            for _row in range(self.python_table.rowCount()):
+                _ver_item = self.python_table.item(_row, 0)
+                _path_item = self.python_table.item(_row, 1)
+                if not _ver_item or not _path_item:
+                    continue
+                _path = _path_item.text().strip()
+                if not _path or _path in _seen:
+                    continue
+                _seen.add(_path)
+                _combo.addItem(
+                    f"Python {_ver_item.text().strip()}  —  {_path}", _path)
+        except Exception:
+            pass
+        if _saved:
+            _idx = _combo.findData(_saved)
+            if _idx >= 0:
+                _combo.setCurrentIndex(_idx)
+            else:
+                # Saved interpreter is no longer in the detected list (moved
+                # or uninstalled); keep showing it so the setting is visible
+                # rather than silently falling back to the system default.
+                _combo.addItem(f"{_saved}  (not detected)", _saved)
+                _combo.setCurrentIndex(_combo.count() - 1)
+        _combo.blockSignals(False)
+
+    def _on_pipx_python_changed(self, _idx):
+        """Persist the pipx interpreter choice."""
+        _combo = getattr(self, "pipx_python_combo", None)
+        if _combo is None:
+            return
+        _path = _combo.currentData() or ""
+        try:
+            self.config.set("pipx_python", _path)
+        except Exception:
+            return
+        # Write it into the pipx marker too, so installs pick it up without
+        # waiting for the environment to be re-created.
+        try:
+            self._write_pipx_marker_python(_path)
+        except Exception:
+            pass
+
+    def _write_pipx_marker_python(self, python_path: str):
+        """Update python_path inside the existing pipx marker file."""
+        import json as _json
+        import subprocess as _sp
+        from pathlib import Path as _P
+        from src.utils.platform_utils import (
+            get_pipx_home as _gph, subprocess_args as _sa,
+        )
+        _home = _gph()
+        if not _home:
+            return
+        _marker = _P(_home) / ".venvstudio_env"
+        if not _marker.exists():
+            return
+        with open(_marker, "r", encoding="utf-8") as _f:
+            _data = _json.load(_f)
+        if python_path:
+            _data["python_path"] = python_path
+            try:
+                _pv = _sp.run([python_path, "--version"],
+                              capture_output=True, text=True, timeout=5,
+                              **_sa())
+                _ver = (_pv.stdout.strip()
+                        or _pv.stderr.strip()).replace("Python ", "")
+                if _ver:
+                    _data["python_version"] = _ver
+            except Exception:
+                pass
+        else:
+            _data.pop("python_path", None)
+        with open(_marker, "w", encoding="utf-8") as _f:
+            _json.dump(_data, _f, indent=2)
 
     # ── Conda mirror list helpers ──────────────────────────────────
 

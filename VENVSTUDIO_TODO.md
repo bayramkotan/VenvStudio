@@ -162,6 +162,57 @@ tensorflow + Python 3.13 örneği: conda-forge'da win-64 için sadece TF 1.x var
 
 ---
 
+## ✅ v1.6.16'da ÇÖZÜLEN
+
+### 🚀 Conda launcher paritesi
+conda paketi olarak kurulan uygulamalar (R Console → `r-base`) artık pip ile
+kurulanlarla eşit: Quick Launch kurulumdan hemen sonra yenileniyor, Uninstall
+(`micromamba remove`) ve Desktop Shortcut butonları görünüyor. Kısayol, PATH'i
+kuran bir `.bat`/`.sh` sarmalayıcı üzerinden çalışıyor — çıplak `R.exe`
+`libgcc_s_seh-1.dll` bulamıyordu.
+
+### 🔧 pipx Python seçimi silince kayboluyordu
+Ayar zaten vardı (`env_dialog_create.py` marker'a `python_path` yazıyor,
+`pipx install --python` onu kullanıyor) ama `_readd_empty_pipx_row` silme sonrası
+yeni marker'a yazmıyordu. Artık: silmeden önce okunuyor → silme bitince
+**"hangi Python?" dialogu** → seçim marker'a yazılıyor. Ayrıca
+**Settings → Paths → pipx Python** varsayılan seçicisi eklendi.
+
+### 🗺️ Proje haritası aracı (F207)
+`tools/gen_project_map.py` → `PROJECT_MAP.md`. Aşağıya bak.
+
+---
+
+## 🟢 F207 — Proje Haritası (`PROJECT_MAP.md`) ✅ YAPILDI (v1.6.16)
+
+**Problem:** "Bu fonksiyon hangi dosyada?" sorusu her seferinde bir grep turu
+demekti. 2026-07-24 oturumunda bu tek başına saatler yedi: `settings_paths.py`
+diye bir dosya yok (Paths bölümü `settings_page.py:640` içinde), `pipx_manager.py`
+yok, Quick Launch sidebar'ı `launcher_ui.py`'de değil `quicklaunch.py`'de,
+`launcher_ui.py`'deki `_update_quick_sidebar` ise **ölü kod**.
+
+Handoff'taki el yazımı modül tablosu bunu çözmedi — çünkü kendisi bayatlamıştı
+(`_update_quick_sidebar`'ı çalışan sidebar sanıyordu).
+
+**Çözüm:** AST tabanlı üreteç. Kaynak koddan okuduğu için bayatlayamaz.
+
+```bash
+python tools/gen_project_map.py          # PROJECT_MAP.md üretir
+python tools/gen_project_map.py --check  # bayatsa exit 1
+```
+
+**Çıktı:** dosya listesi (satır sayısı + modül docstring'i), her sınıf/fonksiyon
+için satır no + docstring ilk satırı, ve **"⚠ hiçbir yerde referans yok"** bölümü.
+
+**⚠ bölümünün sınırı bilinçli:** `src/`, `main.py`, `tools/`, `tests/` taranır.
+Qt sinyal string'i veya `getattr` ile çağrılanlar yanlış işaretlenebilir —
+"silmeden önce kontrol et" listesi, "sil" listesi değil.
+
+**Bakım:** yapısal değişiklikten sonra elle çalıştırılır. Pre-commit hook'a
+bağlamak düşünüldü ama commit prosedürünü yavaşlatmamak için elle bırakıldı.
+
+---
+
 ## 🔴 F206 — Python Sürüm Uyumluluk Uyarıları
 
 **Problem:** Python 3.14 ekosistemin gerisinde ve VS bunu kullanıcıya anlatamıyor.

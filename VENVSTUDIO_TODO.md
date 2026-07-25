@@ -207,11 +207,13 @@ Sırayla işaretle. Her satır bağımsız test edilebilir.
 
 | # | Env | İşlem | Beklenen | Durum |
 |---|---|---|---|---|
-| E1 | conda | Manual Install `numpy` | logda `🚀 micromamba:` | ⬜ |
-| E2 | conda | Installed → Uninstall | `micromamba remove` | ⬜ |
+| E1 | conda | Manual Install `numpy` | logda `🚀 micromamba:` | ✅ 33→41 |
+| E2 | conda | Installed → Uninstall | `micromamba remove` | ✅ 41→33 |
 | E3 | pipx | Installed → Uninstall | `pipx uninstall` | ⬜ |
 | E4 | venv/uv | Installed → Uninstall | `pip` / `uv pip uninstall` | ⬜ |
 | E5 | her tür | Apply Changes (kaldır+kur) | aynı yollar | ⬜ |
+| E6 | **conda** | **Preset Uninstall** | `micromamba remove` — v1.6.20'de düzeltildi, test edilmedi | ⬜ |
+| E7 | pipx | Preset Uninstall | `pipx uninstall` | ⬜ |
 
 ### C. Env işlemleri
 
@@ -241,7 +243,69 @@ Sırayla işaretle. Her satır bağımsız test edilebilir.
 
 ---
 
-## ✅ v1.6.19'da ÇÖZÜLEN (COMMIT BEKLİYOR)
+## 🟡 F208 — Her Yerde Eğitici Komut Gösterimi — **ADIM 1+2 TAMAM**
+
+**Amaç:** Kullanıcı ne tıklarsa tıklasın, arkada çalışan terminal komutunu
+görebilsin. VenvStudio otomatikleştiriyor ama öğretmesi de gerekiyor.
+
+### Tasarım (2026-07-24'te kararlaştırıldı)
+- **1a** Alt panel + log; otomatik dialog YOK (akışı keser)
+- **2a** Logda kutu formatı (create/delete banner'larıyla aynı görsel dil)
+- **3a** Settings → General → "Show equivalent commands", varsayılan AÇIK
+
+### ✅ Adım 1 — altyapı (v1.6.18)
+`banner_command()` (logger), `show_command()` (main_window), Settings anahtarı,
+`config_manager` varsayılanı.
+
+### ✅ Adım 2 — mevcut noktalar bağlandı (v1.6.20)
+- [x] Install / Uninstall / Apply Changes — `package_misc::_show_command_hint`
+- [x] Uygulama başlatma (Quick Launch + launcher kartı) — `_log_launch_command`
+- [x] Env delete / clone / rename — `_update_cmd_panel`
+- [x] Launcher install (pipx'te `install` + `inject` olarak)
+- [x] Launcher uninstall
+- [x] Preset install + uninstall
+
+### ⬜ Adım 3 — kalan noktalar
+- [ ] **Open Terminal** — hangi aktivasyon komutu çalıştırıldı
+- [ ] **Export** — `pip freeze > requirements.txt` karşılığı
+- [ ] **Import** — `pip install -r requirements.txt`
+- [ ] **Env create** — `python -m venv` / `uv venv` / `micromamba create`
+- [ ] **Toolchain işlemleri** — pip/uv/poetry kurulumu
+- [ ] **Conda mirror rotasyonu** — hangi mirror'la denendiği
+
+**Mimari not:** İki gösterim mekanizması var — `_cmd_panel_live` (Environments
+sayfasındaki sarı panel) ve `_show_command_hint` (paket panelinin output log'u).
+İkisi de artık `banner_command` çağırıyor.
+
+---
+
+## ✅ v1.6.20'de ÇÖZÜLEN (COMMIT BEKLİYOR)
+
+### 🎓 F208 Adım 2 — komutlar logda kutu içinde
+Yukarıdaki listeye bak. Log çıktısı:
+```
+╭──────────────────────────────────────────────────────────╮
+│ 💻  COMMAND — Launch Voilà (env: ml)                     │
+│    /home/bayram/venv/ml/bin/python -m voila --no-browser │
+╰──────────────────────────────────────────────────────────╯
+```
+
+### 🔴 B202 — Preset uninstall: ÜÇÜNCÜ kaldırma yolu
+`package_misc::_uninstall_preset` `pip_manager.uninstall_packages`'ı doğrudan
+çağırıyordu. conda env'inde `pip uninstall` çalışıp hiçbir şey yapmıyor, üstelik
+**hiç loglanmıyordu**. v1.6.19'da düzeltilen iki yolun hiçbirinden geçmiyordu.
+Logda kutu eksikliği fark edilince ortaya çıktı.
+**Çözüm:** `_make_uninstall_worker` + `🗑 [Uninstall]` logu + komut ipucu.
+
+> 🚨 **Ders:** Bir işlemin kaç giriş noktası olduğunu varsayma. Uninstall için
+> üç ayrı yol vardı: Installed sekmesi butonu, Apply Changes, preset kartı.
+> ```bash
+> grep -rn "uninstall_packages\|install_packages" --include="*.py" src/
+> ```
+
+---
+
+## ✅ v1.6.19'da ÇÖZÜLEN (PUSH EDİLDİ)
 
 ### 🔴 B199 — Installed sekmesinde conda/pipx kaldırma çalışmıyordu
 `package_ops.py`'de kurulum env türüne göre dallanıyor ama kaldırma hep

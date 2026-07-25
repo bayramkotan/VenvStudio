@@ -241,6 +241,26 @@ class LauncherRunMixin:
         # 5. Found — launch
         self._launch_exe(exe_path, app_def)
 
+    def _log_launch_command(self, cmd, app_def):
+        """Box the command used to start an app, so the log teaches it.
+
+        The launcher already wrote this at DEBUG level, which meant the one
+        thing a curious user would want to copy was buried among cache lines.
+        """
+        try:
+            if not self._get_config("show_commands", True):
+                return
+            from src.utils.logger import banner_command
+            _env = ""
+            if getattr(self, "pip_manager", None) and getattr(
+                    self.pip_manager, "venv_path", None):
+                _env = self.pip_manager.venv_path.name
+            _name = app_def.get("name", "app")
+            _ctx = f"Launch {_name} (env: {_env})" if _env else f"Launch {_name}"
+            banner_command([str(c) for c in cmd if c], context=_ctx)
+        except Exception:
+            pass
+
     def _launch_exe(self, exe_path: str, app_def: dict, conda_prefix=None):
         """Launch an executable with proper detach/console flags.
 
@@ -269,6 +289,7 @@ class LauncherRunMixin:
         cmd = [exe_path] + list(cmd_parts[1:])
         _log.info(f"🚀 [Launcher] Launching '{name}' exe: {_fmt_path(exe_path)}")
         work_dir = os.path.expanduser("~")
+        self._log_launch_command(cmd, app_def)
         try:
             show_console = app_def.get("needs_console", False)
             if plat == "windows":
@@ -589,6 +610,27 @@ class LauncherRunMixin:
             except Exception:
                 pass
 
+            # Equivalent command, same as the package tabs show. pipx installs
+            # the main app and injects the rest, so the hint says so rather
+            # than pretending every package is a separate install.
+            _inst_cmds = {
+                "venv":   "pip install {packages}",
+                "uv":     "uv pip install {packages}",
+                "poetry": "poetry add {packages}",
+                "conda":  "conda install {packages}",
+            }
+            if _et == "pipx":
+                _main_hint = app_def.get("package") or pkgs_to_install[0]
+                _extra_hint = [p for p in pkgs_to_install if p != _main_hint]
+                _hint_cmd = f"pipx install {_main_hint}"
+                for _e in _extra_hint:
+                    _hint_cmd += f" && pipx inject {_main_hint} {_e}"
+            else:
+                _hint_cmd = _inst_cmds.get(
+                    _et, "pip install {packages}"
+                ).format(packages=" ".join(pkgs_to_install))
+            self._show_command_hint(f"Install {_app_name}", _hint_cmd)
+
             # pipx env: use pipx install instead of pip
             if getattr(self, "_current_env_type", "venv") == "pipx":
                 import shutil as _shutil
@@ -736,6 +778,7 @@ class LauncherRunMixin:
             cmd = [str(python_exe)] + app_def["command"]
 
         _log.debug(f"🚀 [Launcher] command: {' '.join(_fmt_path(c) for c in cmd)}")
+        self._log_launch_command(cmd, app_def)
         # Check if app needs console (e.g. IPython)
         show_console = app_def.get("needs_console", False)
 
@@ -1019,6 +1062,25 @@ class LauncherRunMixin:
             )
         except Exception:
             pass
+
+        # Show the equivalent command, like the package tabs do. pipx removes
+        # only the main app (its injected libraries go with the venv), so the
+        # hint has to reflect what actually runs, not the full package list.
+        _rm_cmds = {
+            "venv":   "pip uninstall -y {packages}",
+            "uv":     "uv pip uninstall {packages}",
+            "poetry": "poetry remove {packages}",
+            "conda":  "conda remove {packages}",
+            "pipx":   "pipx uninstall {packages}",
+        }
+        _hint_pkgs = pkgs_to_remove
+        if _is_pipx_env:
+            _hint_pkgs = [app_def.get("package") or pkgs_to_remove[0]]
+        self._show_command_hint(
+            f"Uninstall {app_def['name']}",
+            _rm_cmds.get(_et2, "pip uninstall -y {packages}")
+            .format(packages=" ".join(_hint_pkgs))
+        )
 
         self._set_busy(True)
         self.status_label.setText(f"Uninstalling {app_def['name']}...")

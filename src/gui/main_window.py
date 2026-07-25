@@ -687,6 +687,17 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
             live = "# VenvStudio-only label change — no shell command (writes .venvstudio_display_name)"
         self._cmd_panel_live.setText(f"▶ {live}")
 
+        # Same command into the log, boxed, so it survives past the moment the
+        # panel is showing it. Skipped for the display-rename case, which has
+        # no shell equivalent to teach.
+        if live and not live.startswith("#"):
+            try:
+                if self.config.get("show_commands", True):
+                    from src.utils.logger import banner_command
+                    banner_command(live, context=f"{action} (env: {name})")
+            except Exception:
+                pass
+
         # HTML helpers
         def _c(t): return f"<span style='color:#89b4fa;font-family:Consolas,monospace;font-size:18px;font-weight:bold;'>{t}</span>"
         def _p(t): return f"<span style='color:#a6e3a1;font-family:Consolas,monospace;font-size:18px;font-weight:bold;'>{t}</span>"

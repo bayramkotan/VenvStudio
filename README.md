@@ -38,6 +38,26 @@ pip install venvstudio
 venvstudio
 ```
 
+<details>
+<summary><b>🐧 On Linux, pip may refuse to install</b></summary>
+<br>
+
+Most current distributions mark the system Python as *externally managed*
+(PEP 668), so a plain `pip install` stops with
+`error: externally-managed-environment`. Two ways around it:
+
+```bash
+# Isolated — recommended, no system packages touched
+pipx install venvstudio
+
+# Into the system Python — needs the override flag
+sudo pip install venvstudio --break-system-packages -U
+```
+
+The same flag applies when upgrading a system-wide install later on.
+
+</details>
+
 Or download the standalone binary — **no Python required:**
 
 | Platform | File | Notes |
@@ -364,7 +384,24 @@ Export your environment from the **Export ▾** dropdown:
 
 ## ⬇️ Python Downloader
 
-Download standalone Python builds from [astral-sh/python-build-standalone](https://github.com/astral-sh/python-build-standalone) (same builds used by `uv`):
+Download standalone Python builds straight from VenvStudio — no system install,
+no admin rights needed.
+
+**Five sources, tried in order until one answers:**
+
+| Source | What it serves |
+|:-------|:---------------|
+| **Astral** *(default)* | [python-build-standalone](https://github.com/astral-sh/python-build-standalone) via GitHub Releases — the same builds `uv` uses |
+| **GitHub Releases** | Same builds, fetched directly |
+| **python.org** | Official CPython source tarballs |
+| **SourceForge** | Mirror — often faster in some regions |
+| **Custom URL** | Point it anywhere you like |
+
+The default chain is Astral → GitHub → python.org: if one is unreachable or slow,
+VenvStudio moves to the next on its own. Pick your preferred source in
+**Settings → Python**.
+
+**Install target:**
 
 - **User Install** — no admin required, stored in VenvStudio config
 - **System Install** — Windows (`C:\Program Files`), Linux (`/opt/python`), macOS (`/usr/local/python`)

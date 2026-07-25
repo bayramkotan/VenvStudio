@@ -303,10 +303,31 @@ class PackageMiscMixin:
     # ── Helpers ──
 
     def _show_command_hint(self, title, command):
-        """Show command hint in output log instead of blocking dialog."""
+        """Show the terminal command behind an action.
+
+        VenvStudio automates these operations, but the point is that the user
+        can also learn them: whatever they click, they should be able to see
+        what they would have typed. The command goes to the panel's output log
+        and to the application log in a box of its own, so it stands out from
+        the surrounding chatter and stays on one unbroken line to copy.
+
+        Silenced by turning off "Show equivalent commands" in Settings.
+        """
+        if not self._get_config("show_commands", True):
+            return
         if hasattr(self, "output_log"):
             self._append_log("\n💡 Equivalent command:")
             self._append_log(f"   {command}\n")
+        try:
+            from src.utils.logger import banner_command
+            _env = ""
+            if getattr(self, "pip_manager", None) and getattr(
+                    self.pip_manager, "venv_path", None):
+                _env = self.pip_manager.venv_path.name
+            _ctx = f"{title} (env: {_env})" if _env else str(title)
+            banner_command(command, context=_ctx)
+        except Exception:
+            pass
 
     def _on_progress(self, message: str):
         self.status_label.setText(message)
@@ -543,11 +564,44 @@ class PackageMiscMixin:
         if reply != QMessageBox.Yes:
             return
 
+        # Log it like every other package operation, and go through the shared
+        # worker factory. This path used to call pip_manager directly, which
+        # meant two things: nothing appeared in the log, and conda or pipx
+        # packages were "uninstalled" with pip, which removes nothing.
+        _env_name_pr = ""
+        if getattr(self.pip_manager, "venv_path", None):
+            _env_name_pr = self.pip_manager.venv_path.name
+        _env_type_pr = getattr(self, "_current_env_type", "venv")
+        self._pkg_op_kind = "Uninstall"
+        try:
+            from src.utils.logger import get_logger as _gl_pr
+            _shown_pr = ", ".join(installed_pkgs[:8])
+            if len(installed_pkgs) > 8:
+                _shown_pr += f" (+{len(installed_pkgs) - 8} more)"
+            _gl_pr("venvstudio.install").info(
+                f"\U0001f5d1 [Uninstall] env='{_env_name_pr}' "
+                f"type={_env_type_pr} source='{preset_name}' "
+                f"packages({len(installed_pkgs)}): {_shown_pr}"
+            )
+        except Exception:
+            pass
+
+        _uninstall_cmds_pr = {
+            "venv":   "pip uninstall -y {packages}",
+            "uv":     "uv pip uninstall {packages}",
+            "poetry": "poetry remove {packages}",
+            "conda":  "conda remove {packages}",
+            "pipx":   "pipx uninstall {packages}",
+        }
+        self._show_command_hint(
+            preset_name,
+            _uninstall_cmds_pr.get(_env_type_pr, "pip uninstall -y {packages}")
+            .format(packages=" ".join(installed_pkgs))
+        )
+
         self._set_busy(True)
         self.status_label.setText(f"Uninstalling {preset_name}...")
-        self.current_worker = WorkerThread(
-            self.pip_manager.uninstall_packages, installed_pkgs
-        )
+        self.current_worker = self._make_uninstall_worker(installed_pkgs)
         self.current_worker.progress.connect(self._on_progress)
         self.current_worker.finished.connect(self._on_install_finished)
         self.current_worker.start()

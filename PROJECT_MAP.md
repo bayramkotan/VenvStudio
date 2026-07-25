@@ -41,7 +41,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `src/gui/env_list.py` | 635 | VenvStudio - MainWindow: Environment List Mixin |
 | `src/gui/env_operations.py` | 914 | VenvStudio - MainWindow: Environment Operations Mixin |
 | `src/gui/env_state.py` | 839 | VenvStudio - Package Panel: Environment State Mixin |
-| `src/gui/launcher_run.py` | 1171 | VenvStudio - Package Panel: Launcher Run Mixin |
+| `src/gui/launcher_run.py` | 1233 | VenvStudio - Package Panel: Launcher Run Mixin |
 | `src/gui/launcher_shortcuts.py` | 230 | VenvStudio - Package Panel: Launcher Shortcuts Mixin |
 | `src/gui/launcher_ui.py` | 970 | VenvStudio - Package Panel: Launcher UI Mixin |
 | `src/gui/learn_content.py` | 2825 | learn_page content data — VenvStudio Learn categories/topics. |
@@ -49,9 +49,9 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `src/gui/learn_page.py` | 766 | learn_page.py — VenvStudio Learn Panel |
 | `src/gui/linux_fixes.py` | 200 | VenvStudio - MainWindow: Linux-specific Fixes Mixin |
 | `src/gui/log_viewer.py` | 333 | VenvStudio - Log Viewer Dialog |
-| `src/gui/main_window.py` | 1281 | VenvStudio - Main Application Window |
+| `src/gui/main_window.py` | 1292 | VenvStudio - Main Application Window |
 | `src/gui/package_export.py` | 297 | VenvStudio - Package Panel: Export Mixin |
-| `src/gui/package_misc.py` | 684 | VenvStudio - Package Panel: Misc Mixin |
+| `src/gui/package_misc.py` | 738 | VenvStudio - Package Panel: Misc Mixin |
 | `src/gui/package_ops.py` | 966 | VenvStudio - Package Panel: Package Operations Mixin |
 | `src/gui/package_panel.py` | 663 | VenvStudio - Package Management Panel |
 | `src/gui/package_panel_common.py` | 164 | VenvStudio - Package Panel: Common/Shared Classes |
@@ -671,15 +671,16 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | Method | Line | Doc |
 |---|---|---|
 | `_launch_system_app` | 25 | Detect and launch a system-level application. |
-| `_launch_exe` | 244 | Launch an executable with proper detach/console flags. |
-| `_on_system_install_finished` | 312 | Called after a system tool silent install completes. |
-| `_get_orange3_packages` | 377 | Return the right Orange3 packages based on Python version. |
-| `_launch_script` | 398 | Let user pick a .py file and run it with the selected framework. |
-| `_launch_app` | 476 | Launch an app from the selected environment. |
-| `_on_app_install_finished` | 817 | After installing an app package, refresh and launch. |
-| `_uninstall_app` | 965 | Uninstall an app from the selected environment with confirmation. |
-| `_on_system_uninstall_finished` | 1105 | After removing a conda system app: clear caches and refresh. |
-| `_get_app_icon_path` | 1151 | Return the absolute path to the app's .ico (Windows) or .png (Linux/macOS) icon. |
+| `_log_launch_command` | 244 | Box the command used to start an app, so the log teaches it. |
+| `_launch_exe` | 264 | Launch an executable with proper detach/console flags. |
+| `_on_system_install_finished` | 333 | Called after a system tool silent install completes. |
+| `_get_orange3_packages` | 398 | Return the right Orange3 packages based on Python version. |
+| `_launch_script` | 419 | Let user pick a .py file and run it with the selected framework. |
+| `_launch_app` | 497 | Launch an app from the selected environment. |
+| `_on_app_install_finished` | 860 | After installing an app package, refresh and launch. |
+| `_uninstall_app` | 1008 | Uninstall an app from the selected environment with confirmation. |
+| `_on_system_uninstall_finished` | 1167 | After removing a conda system app: clear caches and refresh. |
+| `_get_app_icon_path` | 1213 | Return the absolute path to the app's .ico (Windows) or .png (Linux/macOS) icon. |
 
 ### `src/gui/launcher_shortcuts.py`
 
@@ -810,20 +811,20 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `eventFilter` | 591 | Detect keyboard arrow navigation on env_table for panel hiding. |
 | `show_command` ⚠ | 600 | Surface the terminal command behind a UI action. |
 | `_update_cmd_panel` | 640 | Update the persistent educational command panel on the env page. |
-| `_switch_page` | 842 | - |
-| `_on_learn_install` | 911 | Called when Learn page requests package install — show LearnInstallDialog. |
-| `_refresh_bookmarks` | 993 | Update Quick Launch bookmark buttons. |
-| `_open_bookmark` | 1030 | Switch to Learn page and navigate to the topic. |
-| `_bookmark_context_menu` | 1036 | Right-click context menu on a bookmark button. |
-| `_open_package_manager` | 1050 | - |
-| `_open_terminal` | 1059 | - |
-| `_open_env_folder` | 1075 | Open the selected environment's folder in the system file manager. |
-| `_open_settings` | 1094 | Navigate to the settings page. |
-| `_on_settings_saved` | 1098 | Handle settings saved - refresh env list with potentially new base dir. |
-| `_show_about` | 1108 | - |
-| `_check_for_updates` | 1131 | Manually check for updates from Help menu. |
-| `closeEvent` | 1174 | - |
-| `showEvent` | 1277 | Re-connect screenChanged after window handle becomes available. |
+| `_switch_page` | 853 | - |
+| `_on_learn_install` | 922 | Called when Learn page requests package install — show LearnInstallDialog. |
+| `_refresh_bookmarks` | 1004 | Update Quick Launch bookmark buttons. |
+| `_open_bookmark` | 1041 | Switch to Learn page and navigate to the topic. |
+| `_bookmark_context_menu` | 1047 | Right-click context menu on a bookmark button. |
+| `_open_package_manager` | 1061 | - |
+| `_open_terminal` | 1070 | - |
+| `_open_env_folder` | 1086 | Open the selected environment's folder in the system file manager. |
+| `_open_settings` | 1105 | Navigate to the settings page. |
+| `_on_settings_saved` | 1109 | Handle settings saved - refresh env list with potentially new base dir. |
+| `_show_about` | 1119 | - |
+| `_check_for_updates` | 1142 | Manually check for updates from Help menu. |
+| `closeEvent` | 1185 | - |
+| `showEvent` | 1288 | Re-connect screenChanged after window handle becomes available. |
 
 ### `src/gui/package_export.py`
 
@@ -852,21 +853,21 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `_copy_to_clipboard` | 285 | Copy text to clipboard. |
 | `_open_pypi` | 291 | Open package page on PyPI. |
 | `_filter_installed` | 296 | - |
-| `_show_command_hint` | 305 | Show command hint in output log instead of blocking dialog. |
-| `_on_progress` | 311 | - |
-| `_on_install_finished` | 320 | - |
-| `_cancel_operation` | 375 | - |
-| `_abandon_worker` | 396 | Detach a worker that ignored cancel() instead of killing it. |
-| `_check_outdated` | 430 | Check for outdated packages and show update option. |
-| `_on_outdated_result` | 450 | - |
-| `_copy_preset_command` | 495 | Copy install command to clipboard (env-type-aware). |
-| `_copy_launcher_commands` | 512 | Copy both install and run commands to clipboard. |
-| `_uninstall_preset` | 519 | Uninstall all packages in a preset with confirmation. |
-| `_filter_catalog` | 555 | Filter catalog rows by search text. |
-| `_set_busy` | 566 | - |
-| `_skip_conda_mirror` | 577 | Abandon the current conda mirror and move to the next one. |
-| `_on_tab_changed` | 591 | Build tab content lazily on first visit. |
-| `_ensure_tab_built` | 595 | Build tab widget at index if not yet built. |
+| `_show_command_hint` | 305 | Show the terminal command behind an action. |
+| `_on_progress` | 332 | - |
+| `_on_install_finished` | 341 | - |
+| `_cancel_operation` | 396 | - |
+| `_abandon_worker` | 417 | Detach a worker that ignored cancel() instead of killing it. |
+| `_check_outdated` | 451 | Check for outdated packages and show update option. |
+| `_on_outdated_result` | 471 | - |
+| `_copy_preset_command` | 516 | Copy install command to clipboard (env-type-aware). |
+| `_copy_launcher_commands` | 533 | Copy both install and run commands to clipboard. |
+| `_uninstall_preset` | 540 | Uninstall all packages in a preset with confirmation. |
+| `_filter_catalog` | 609 | Filter catalog rows by search text. |
+| `_set_busy` | 620 | - |
+| `_skip_conda_mirror` | 631 | Abandon the current conda mirror and move to the next one. |
+| `_on_tab_changed` | 645 | Build tab content lazily on first visit. |
+| `_ensure_tab_built` | 649 | Build tab widget at index if not yet built. |
 
 ### `src/gui/package_ops.py`
 
@@ -1483,4 +1484,4 @@ Names used nowhere beyond their own definition, across `src/`, `main.py`, `tools
 
 ---
 
-79 files, 81 classes, 750 functions/methods, 28 flagged.
+79 files, 81 classes, 751 functions/methods, 28 flagged.

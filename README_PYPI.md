@@ -60,7 +60,7 @@ Or download the standalone binary — **no Python required:**
 
 ### 🚀 Quick Launch
 - Sidebar shows installed apps for the active environment
-- **13+ one-click launchers** — see full list below
+- **22 one-click launchers** — see full list below
 - **System tools** — R, RStudio, Ollama, DBeaver, jamovi, JASP via Conda
 - **Jupyter Working Directory** — configurable (Home / Env Folder / Custom Path)
 - **Create Desktop Shortcut** for any app
@@ -76,6 +76,8 @@ Or download the standalone binary — **no Python required:**
 - 🌙 13 themes (8 dark + 5 light, Catppuccin-based)
 - 3-level font system (Headings / UI & Menus / Details)
 - 🌍 11 languages: EN, TR, DE, ES, RU, JA, AR, FR, PT, ZH, KO
+- **Conda mirrors** — reorderable list with automatic failover; a `Skip Mirror` button jumps to the next one mid-install instead of waiting out a slow server
+- **pipx interpreter** — pin which Python your CLI apps get installed with, useful when the newest release is ahead of the tools you need
 - Custom venv base directory
 - Custom terminal, catalog categories, and packages
 - CLI/TUI Tools: **Starship** (preset preview, inline config editor, test terminal), **Oh My Posh**, **Nerd Fonts**
@@ -104,6 +106,8 @@ Or download the standalone binary — **no Python required:**
 | ![Spyder](https://img.shields.io/badge/-838485?style=flat-square&logo=spyderide&logoColor=white) | **Spyder IDE** | Scientific Python development environment | 🔬 IDE | [spyder-ide.org](https://www.spyder-ide.org/) |
 | ![Orange](https://img.shields.io/badge/-E6812C?style=flat-square) | **Orange Data Mining** | Visual programming for data analysis and ML | 🔬 Data Science | [orangedatamining.com](https://orangedatamining.com/) |
 | ![Datasette](https://img.shields.io/badge/-4A8B6E?style=flat-square) | **Datasette** | Explore and publish data with instant JSON API | 🗄️ Data | [datasette.io](https://datasette.io/) |
+| ![Marimo](https://img.shields.io/badge/-8B5CF6?style=flat-square) | **Marimo** | Reactive notebook — no hidden state, runs as an app | 📓 Notebooks | [marimo.io](https://marimo.io/) |
+| ![Quarto](https://img.shields.io/badge/-75AADB?style=flat-square&logo=quarto&logoColor=white) | **Quarto** | Publish documents, reports and dashboards | 📄 Publishing | [quarto.org](https://quarto.org/) |
 | ![IPython](https://img.shields.io/badge/-3776AB?style=flat-square&logo=python&logoColor=white) | **IPython** | Enhanced interactive Python shell | 🐍 Shell | [ipython.org](https://ipython.org/) |
 
 ### 🛠️ System Tools (Conda / Portable)
@@ -113,7 +117,7 @@ Or download the standalone binary — **no Python required:**
 | Tool | Description | Install Method |
 |:-----|:-----------|:--------------|
 | **R** | Statistical computing language | Conda (`r-base`) or system installer |
-| **RStudio** | IDE for R | Conda (`rstudio`) or portable download |
+| **RStudio** | IDE for R | Conda (`rstudio-desktop`) or portable download |
 | **Ollama** | Run large language models locally | Portable binary |
 | **DBeaver** | Universal database tool | Conda or portable ZIP |
 | **jamovi** | Statistical spreadsheet | Conda or AppImage (Linux) |
@@ -172,10 +176,24 @@ sudo zypper install libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
 
 ### CLI
 
+VenvStudio is a GUI first, but the core actions work headless too — handy over SSH,
+in scripts, or when you just want one quick thing done:
+
 ```bash
-venvstudio          # Launch GUI
-venvstudio -V       # Show version
-venvstudio -h       # Help
+venvstudio                      # Launch the GUI
+venvstudio-gui                  # Same, without a console window (Windows)
+
+venvstudio list                 # List every detected environment
+venvstudio create NAME          # Create a venv environment
+venvstudio delete NAME          # Delete an environment (asks first)
+venvstudio delete NAME -y       # Delete without the confirmation prompt
+
+venvstudio packages ENV         # List packages installed in ENV
+venvstudio install ENV PKG...   # Install one or more packages into ENV
+venvstudio uninstall ENV PKG... # Uninstall packages from ENV
+
+venvstudio version              # Show version (also: -V)
+venvstudio -h                   # Show help
 ```
 
 ---

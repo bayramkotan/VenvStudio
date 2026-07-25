@@ -520,6 +520,12 @@ def main():
             if "QWindowsWindow::setGeometry" in message:
                 qt_log.debug(f"Qt geometry: {message}")
                 return
+            # QFileSystemModel emits one of these per file every time a
+            # non-native QFileDialog closes — 18 warnings for a single Export.
+            # Nothing is wrong; the model is just tearing down its watcher
+            # nodes. Keep them at debug so the log stays readable.
+            if "No node found for item that was just removed" in message:
+                return
 
             if mode == QtMsgType.QtDebugMsg:
                 qt_log.debug(f"Qt: {message}")

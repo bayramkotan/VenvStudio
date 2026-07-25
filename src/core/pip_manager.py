@@ -417,7 +417,22 @@ class PipManager:
             return False, f"Error: {str(e)}"
 
     def freeze(self) -> str:
-        """Get pip freeze output (requirements.txt format)."""
+        """Get pip freeze output (requirements.txt format).
+
+        A pipx home has no site-packages of its own -- every app lives in a
+        separate environment under venvs/ -- so `pip freeze` there returns
+        nothing and export reported "No packages to export" for an
+        environment that plainly listed several apps. Build the same
+        name==version lines from what pipx itself reports.
+        """
+        if self._is_pipx_home():
+            _apps = self._list_pipx_packages()
+            if not _apps:
+                return ""
+            return "\n".join(
+                f"{p.name}=={p.version}" if p.version else p.name
+                for p in _apps
+            ) + "\n"
         try:
             result = self._run_pip(["freeze"])
             if result.returncode == 0:

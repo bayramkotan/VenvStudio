@@ -272,9 +272,9 @@ görebilsin. VenvStudio otomatikleştiriyor ama öğretmesi de gerekiyor.
       çift tıkla kopyala, Clear. `command_history.py` (yeni dosya)
 
 ### ⬜ Adım 3 — kalan noktalar
+- [x] **Export** ✅ v1.6.22 — her iki export yolu da (Packages + Environments)
+- [x] **Import** ✅ (zaten vardı, `package_export.py`)
 - [ ] **Open Terminal** — hangi aktivasyon komutu çalıştırıldı
-- [ ] **Export** — `pip freeze > requirements.txt` karşılığı
-- [ ] **Import** — `pip install -r requirements.txt`
 - [ ] **Env create** — `python -m venv` / `uv venv` / `micromamba create`
 - [ ] **Toolchain işlemleri** — pip/uv/poetry kurulumu
 - [ ] **Conda mirror rotasyonu** — hangi mirror'la denendiği
@@ -285,7 +285,44 @@ sayfasındaki sarı panel) ve `_show_command_hint` (paket panelinin output log'u
 
 ---
 
-## ✅ v1.6.21'de ÇÖZÜLEN (COMMIT BEKLİYOR)
+## ✅ v1.6.22'de ÇÖZÜLEN (COMMIT BEKLİYOR)
+
+### 📤 Export/Import komutları görünmüyordu — iki ayrı export yolu
+`package_export.py` (Packages) kısmen gösteriyordu, `env_export.py`
+(Environments → Export ▾) **hiç** göstermiyordu. İkisi de tamamlandı.
+
+### 🔴 B205 — Environments sayfası env türünü dikkate almıyordu
+`_get_env_pip_manager()` her env için düz `PipManager(venv_path)` kuruyordu →
+uv env'inde bile `pip freeze`. Ayrıca yol `base_dir/name` idi; poetry ve pipx
+env'leri başka yerde yaşadığı için yanlış dizine bakıyordu.
+**Çözüm:** marker'dan tür okuma + `backend="uv"` + `_get_env_path()`.
+
+### 🔴 B206 — pipx'te "No packages to export" (4 uygulama varken)
+`list_packages` v1.6.17'de düzeltilmişti ama `freeze()` düzeltilmemişti; export
+`freeze()` kullanıyor. Artık pipx home'da `pipx list --json`'dan
+`name==version` üretiyor.
+
+### 🔤 B207 — İpucu çalışmayan komut öğretiyordu
+`pipx list --short > requirements.txt` geçersiz dosya üretir (`--short` çıktısı
+`cowsay 6.1`, `==` yok). Doğrulanıp düzeltildi:
+`pipx list --short | sed 's/ /==/' > requirements.txt`
+
+### 🧹 Qt dosya diyaloğu gürültüsü
+`No node found for item that was just removed` — dosya diyaloğu başına 18 satır,
+tanı değeri yok. `QFont::setPointSize` gibi tamamen susturuldu.
+
+---
+
+## 🆕 AÇIK — export tarafında kalan asimetriler
+
+| Env | Sorun |
+|---|---|
+| **conda** | Export `pip freeze` kullanıyor → conda ile kurulan paketleri kaçırır. `micromamba list --export` olmalı |
+| **poetry** | Export `pip freeze`, uninstall `pip uninstall` — `poetry export` / `poetry remove` değil, `pyproject.toml` güncellenmiyor |
+
+---
+
+## ✅ v1.6.21'de ÇÖZÜLEN (PUSH EDİLDİ)
 
 ### 🎓 Komut şeridi + Command History penceresi
 Komutlar artık sadece logda değil ekranda: başlık çubuğunda canlı şerit

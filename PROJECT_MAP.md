@@ -20,7 +20,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `src/core/config_manager.py` | 118 | VenvStudio - Configuration Manager |
 | `src/core/editor_integration.py` | 562 | editor_integration.py — Register VenvStudio's venv directory as the default |
 | `src/core/micromamba_installer.py` | 837 | micromamba installer + MicromambaEnv manager |
-| `src/core/pip_manager.py` | 488 | VenvStudio - Pip Manager |
+| `src/core/pip_manager.py` | 503 | VenvStudio - Pip Manager |
 | `src/core/python_downloader.py` | 671 | VenvStudio - Python Downloader |
 | `src/core/recent_envs.py` | 101 | RecentEnvsManager — tracks recently opened/selected environments. |
 | `src/core/system_tools_installer.py` | 939 | VenvStudio - System Tools Installer |
@@ -38,7 +38,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `src/gui/env_dialog_create.py` | 617 | VenvStudio - Env Create Dialog: Create Mixin |
 | `src/gui/env_dialog_tools.py` | 328 | VenvStudio - Env Create Dialog: Tools Mixin |
 | `src/gui/env_dialog_ui.py` | 532 | VenvStudio - Env Create Dialog: UI Mixin |
-| `src/gui/env_export.py` | 328 | VenvStudio - MainWindow: Environment Export Mixin |
+| `src/gui/env_export.py` | 393 | VenvStudio - MainWindow: Environment Export Mixin |
 | `src/gui/env_list.py` | 635 | VenvStudio - MainWindow: Environment List Mixin |
 | `src/gui/env_operations.py` | 914 | VenvStudio - MainWindow: Environment Operations Mixin |
 | `src/gui/env_state.py` | 848 | VenvStudio - Package Panel: Environment State Mixin |
@@ -51,7 +51,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `src/gui/linux_fixes.py` | 200 | VenvStudio - MainWindow: Linux-specific Fixes Mixin |
 | `src/gui/log_viewer.py` | 333 | VenvStudio - Log Viewer Dialog |
 | `src/gui/main_window.py` | 1300 | VenvStudio - Main Application Window |
-| `src/gui/package_export.py` | 297 | VenvStudio - Package Panel: Export Mixin |
+| `src/gui/package_export.py` | 320 | VenvStudio - Package Panel: Export Mixin |
 | `src/gui/package_misc.py` | 787 | VenvStudio - Package Panel: Misc Mixin |
 | `src/gui/package_ops.py` | 966 | VenvStudio - Package Panel: Package Operations Mixin |
 | `src/gui/package_panel.py` | 699 | VenvStudio - Package Management Panel |
@@ -262,10 +262,10 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `install_packages` | 313 | Install one or more packages. |
 | `uninstall_packages` | 379 | Uninstall one or more packages. |
 | `freeze` | 419 | Get pip freeze output (requirements.txt format). |
-| `export_requirements` | 429 | Export installed packages to a requirements.txt file. |
-| `import_requirements` | 442 | Install packages from a requirements.txt file. |
-| `search_pypi` ⚠ | 467 | Search PyPI for packages (pip search is deprecated, so we provide |
-| `get_package_info` ⚠ | 474 | Get detailed info about an installed package. |
+| `export_requirements` | 444 | Export installed packages to a requirements.txt file. |
+| `import_requirements` | 457 | Install packages from a requirements.txt file. |
+| `search_pypi` ⚠ | 482 | Search PyPI for packages (pip search is deprecated, so we provide |
+| `get_package_info` ⚠ | 489 | Get detailed info about an installed package. |
 
 ### `src/core/python_downloader.py`
 
@@ -613,16 +613,19 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Method | Line | Doc |
 |---|---|---|
-| `_get_env_pip_manager` | 15 | Get PipManager for the selected environment. |
-| `_get_env_freeze_and_version` | 25 | Helper: get freeze content and python version for selected env. |
-| `_export_requirements` | 50 | - |
-| `_export_dockerfile` | 65 | - |
-| `_export_docker_compose` | 99 | - |
-| `_export_pyproject` | 144 | - |
-| `_export_conda_yml` | 169 | - |
-| `_export_clipboard` | 194 | - |
-| `_export_frozen` | 203 | Export requirements with SHA-256 hashes (--require-hashes compatible). |
-| `_export_json` | 295 | Export environment info as JSON. |
+| `_get_env_type` | 15 | Read the environment type from its .venvstudio_env marker. |
+| `_get_env_pip_manager` | 27 | Get PipManager for the selected environment. |
+| `_freeze_command_for_env` | 44 | The command this page actually runs to list packages. |
+| `_get_env_freeze_and_version` | 61 | Helper: get freeze content and python version for selected env. |
+| `_export_cmd` | 86 | Show the command behind an export. |
+| `_export_requirements` | 102 | - |
+| `_export_dockerfile` | 119 | - |
+| `_export_docker_compose` | 155 | - |
+| `_export_pyproject` | 202 | - |
+| `_export_conda_yml` | 228 | - |
+| `_export_clipboard` | 254 | - |
+| `_export_frozen` | 264 | Export requirements with SHA-256 hashes (--require-hashes compatible). |
+| `_export_json` | 359 | Export environment info as JSON. |
 
 ### `src/gui/env_list.py`
 
@@ -829,7 +832,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `_hide_cmd_panel` | 563 | Hide the persistent educational command panel. |
 | `_on_env_user_interaction` | 570 | Called on manual user interaction (mouse click / key press) with env table. |
 | `eventFilter` | 591 | Detect keyboard arrow navigation on env_table for panel hiding. |
-| `show_command` ⚠ | 600 | Surface the terminal command behind a UI action. |
+| `show_command` | 600 | Surface the terminal command behind a UI action. |
 | `_update_cmd_panel` | 640 | Update the persistent educational command panel on the env page. |
 | `_switch_page` | 853 | - |
 | `_on_learn_install` | 930 | Called when Learn page requests package install — show LearnInstallDialog. |
@@ -853,13 +856,14 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | Method | Line | Doc |
 |---|---|---|
 | `_export_requirements` | 21 | - |
-| `_get_freeze_and_version` | 40 | Helper: get freeze content and python version for export. |
-| `_export_dockerfile` | 64 | Export as Dockerfile. |
-| `_export_docker_compose` | 112 | Export as docker-compose.yml + Dockerfile. |
-| `_export_pyproject` | 170 | Export as pyproject.toml. |
-| `_export_conda_yml` | 217 | Export as Conda environment.yml. |
-| `_export_clipboard` | 258 | Copy freeze output to clipboard. |
-| `_import_requirements` | 275 | - |
+| `_freeze_cmd_hint` | 40 | Show the command that produced the package list for an export. |
+| `_get_freeze_and_version` | 58 | Helper: get freeze content and python version for export. |
+| `_export_dockerfile` | 82 | Export as Dockerfile. |
+| `_export_docker_compose` | 131 | Export as docker-compose.yml + Dockerfile. |
+| `_export_pyproject` | 190 | Export as pyproject.toml. |
+| `_export_conda_yml` | 238 | Export as Conda environment.yml. |
+| `_export_clipboard` | 280 | Copy freeze output to clipboard. |
+| `_import_requirements` | 298 | - |
 
 ### `src/gui/package_misc.py`
 
@@ -1480,8 +1484,8 @@ Names used nowhere beyond their own definition, across `src/`, `main.py`, `tools
 |---|---|---|
 | `src/core/micromamba_installer.py` | `is_conda_env` | 807 |
 | `src/core/pip_manager.py` | `PipManager._check_ssl` | 115 |
-| `src/core/pip_manager.py` | `PipManager.search_pypi` | 467 |
-| `src/core/pip_manager.py` | `PipManager.get_package_info` | 474 |
+| `src/core/pip_manager.py` | `PipManager.search_pypi` | 482 |
+| `src/core/pip_manager.py` | `PipManager.get_package_info` | 489 |
 | `src/core/tool_registry.py` | `ToolRegistry.get_version` | 125 |
 | `src/core/tool_registry.py` | `ToolRegistry.get_info` | 130 |
 | `src/core/tool_registry.py` | `ToolRegistry.list_all` | 134 |
@@ -1492,7 +1496,6 @@ Names used nowhere beyond their own definition, across `src/`, `main.py`, `tools
 | `src/gui/env_list.py` | `EnvListMixin._update_info_label` | 403 |
 | `src/gui/env_operations.py` | `EnvOperationsMixin._rename_env` | 148 |
 | `src/gui/learn_page.py` | `LearnPage.refresh_theme` | 763 |
-| `src/gui/main_window.py` | `MainWindow.show_command` | 600 |
 | `src/gui/package_misc.py` | `PackageMiscMixin._skip_conda_mirror` | 676 |
 | `src/gui/package_ops.py` | `PackageOpsMixin._get_catalog_lookup` | 120 |
 | `src/gui/package_ops.py` | `PackageOpsMixin._refresh_packages_sync_legacy` | 237 |
@@ -1510,4 +1513,4 @@ Names used nowhere beyond their own definition, across `src/`, `main.py`, `tools
 
 ---
 
-80 files, 82 classes, 768 functions/methods, 29 flagged.
+80 files, 82 classes, 772 functions/methods, 28 flagged.

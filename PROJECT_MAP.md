@@ -17,7 +17,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `src/cli.py` | 197 | VenvStudio - Command Line Interface |
 | `src/core/__init__.py` | 2 | - |
 | `src/core/cli_tools_manager.py` | 997 | VenvStudio — CLI/TUI Tools Manager |
-| `src/core/config_manager.py` | 115 | VenvStudio - Configuration Manager |
+| `src/core/config_manager.py` | 118 | VenvStudio - Configuration Manager |
 | `src/core/editor_integration.py` | 562 | editor_integration.py — Register VenvStudio's venv directory as the default |
 | `src/core/micromamba_installer.py` | 837 | micromamba installer + MicromambaEnv manager |
 | `src/core/pip_manager.py` | 488 | VenvStudio - Pip Manager |
@@ -38,18 +38,18 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `src/gui/env_dialog_tools.py` | 328 | VenvStudio - Env Create Dialog: Tools Mixin |
 | `src/gui/env_dialog_ui.py` | 532 | VenvStudio - Env Create Dialog: UI Mixin |
 | `src/gui/env_export.py` | 328 | VenvStudio - MainWindow: Environment Export Mixin |
-| `src/gui/env_list.py` | 602 | VenvStudio - MainWindow: Environment List Mixin |
+| `src/gui/env_list.py` | 635 | VenvStudio - MainWindow: Environment List Mixin |
 | `src/gui/env_operations.py` | 914 | VenvStudio - MainWindow: Environment Operations Mixin |
 | `src/gui/env_state.py` | 839 | VenvStudio - Package Panel: Environment State Mixin |
-| `src/gui/launcher_run.py` | 1115 | VenvStudio - Package Panel: Launcher Run Mixin |
+| `src/gui/launcher_run.py` | 1160 | VenvStudio - Package Panel: Launcher Run Mixin |
 | `src/gui/launcher_shortcuts.py` | 230 | VenvStudio - Package Panel: Launcher Shortcuts Mixin |
-| `src/gui/launcher_ui.py` | 969 | VenvStudio - Package Panel: Launcher UI Mixin |
+| `src/gui/launcher_ui.py` | 970 | VenvStudio - Package Panel: Launcher UI Mixin |
 | `src/gui/learn_content.py` | 2825 | learn_page content data — VenvStudio Learn categories/topics. |
 | `src/gui/learn_install_dialog.py` | 447 | learn_install_dialog.py — LearnInstallDialog |
 | `src/gui/learn_page.py` | 766 | learn_page.py — VenvStudio Learn Panel |
 | `src/gui/linux_fixes.py` | 200 | VenvStudio - MainWindow: Linux-specific Fixes Mixin |
 | `src/gui/log_viewer.py` | 333 | VenvStudio - Log Viewer Dialog |
-| `src/gui/main_window.py` | 1241 | VenvStudio - Main Application Window |
+| `src/gui/main_window.py` | 1281 | VenvStudio - Main Application Window |
 | `src/gui/package_export.py` | 297 | VenvStudio - Package Panel: Export Mixin |
 | `src/gui/package_misc.py` | 684 | VenvStudio - Package Panel: Misc Mixin |
 | `src/gui/package_ops.py` | 896 | VenvStudio - Package Panel: Package Operations Mixin |
@@ -57,13 +57,13 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `src/gui/package_panel_common.py` | 164 | VenvStudio - Package Panel: Common/Shared Classes |
 | `src/gui/platform_utils.py` | 456 | VenvStudio - Platform-specific utilities |
 | `src/gui/quicklaunch.py` | 212 | VenvStudio - MainWindow: Quick Launch Mixin |
-| `src/gui/settings_advanced.py` | 780 | VenvStudio - Settings: AdvancedMixin |
+| `src/gui/settings_advanced.py` | 782 | VenvStudio - Settings: AdvancedMixin |
 | `src/gui/settings_appearance.py` | 1080 | VenvStudio - Settings: AppearanceMixin |
 | `src/gui/settings_catalog.py` | 660 | VenvStudio - Settings: CatalogMixin |
 | `src/gui/settings_common.py` | 48 | VenvStudio - Settings Common |
 | `src/gui/settings_editors.py` | 316 | VenvStudio - Settings: EditorsMixin |
-| `src/gui/settings_page.py` | 2098 | VenvStudio - Settings Page |
-| `src/gui/settings_python.py` | 823 | VenvStudio - Settings: PythonMixin |
+| `src/gui/settings_page.py` | 2108 | VenvStudio - Settings Page |
+| `src/gui/settings_python.py` | 824 | VenvStudio - Settings: PythonMixin |
 | `src/gui/settings_python_download.py` | 715 | VenvStudio - Settings: Python Download Dialog & Workers |
 | `src/gui/settings_toolchain.py` | 1734 | VenvStudio - Settings: ToolchainMixin |
 | `src/gui/styles.py` | 774 | VenvStudio - Qt Stylesheets |
@@ -90,7 +90,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `src/utils/i18n_data/ru.py` | 131 | VenvStudio i18n — ru translations (auto-split from i18n.py). |
 | `src/utils/i18n_data/tr.py` | 131 | VenvStudio i18n — tr translations (auto-split from i18n.py). |
 | `src/utils/i18n_data/zh.py` | 131 | VenvStudio i18n — zh translations (auto-split from i18n.py). |
-| `src/utils/logger.py` | 1013 | VenvStudio - Comprehensive Logging & Crash Protection System |
+| `src/utils/logger.py` | 1038 | VenvStudio - Comprehensive Logging & Crash Protection System |
 | `src/utils/platform_utils.py` | 963 | VenvStudio - Platform-specific utilities |
 
 ## Definitions
@@ -160,20 +160,20 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 ### `src/core/config_manager.py`
 
-**class ConfigManager** (line 25)
+**class ConfigManager** (line 28)
 
 | Method | Line | Doc |
 |---|---|---|
-| `load` | 36 | Load settings from file, creating defaults if needed. |
-| `save` | 62 | Save current settings to file. Re-creates dir/file if deleted (e.g. after Remove All Data). |
-| `get` | 71 | Get a setting value. |
-| `set` | 75 | Set a setting value. Saves immediately unless in batch mode. |
-| `begin_batch` | 83 | Start batch mode — set() calls won't trigger disk writes. |
-| `end_batch` | 88 | End batch mode — writes to disk once if any changes were made. |
-| `get_venv_base_dir` | 95 | Get the base directory for virtual environments. |
-| `set_venv_base_dir` | 99 | Set the base directory for virtual environments. |
-| `add_recent_env` | 103 | Add an environment to recent list. |
-| `config_file_path` | 113 | - |
+| `load` | 39 | Load settings from file, creating defaults if needed. |
+| `save` | 65 | Save current settings to file. Re-creates dir/file if deleted (e.g. after Remove All Data). |
+| `get` | 74 | Get a setting value. |
+| `set` | 78 | Set a setting value. Saves immediately unless in batch mode. |
+| `begin_batch` | 86 | Start batch mode — set() calls won't trigger disk writes. |
+| `end_batch` | 91 | End batch mode — writes to disk once if any changes were made. |
+| `get_venv_base_dir` | 98 | Get the base directory for virtual environments. |
+| `set_venv_base_dir` | 102 | Set the base directory for virtual environments. |
+| `add_recent_env` | 106 | Add an environment to recent list. |
+| `config_file_path` | 116 | - |
 
 ### `src/core/editor_integration.py`
 
@@ -612,17 +612,17 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 |---|---|---|
 | `_update_env_summary` | 20 | Recompute just the header summary line (counts + GB) from the |
 | `_refresh_env_list` | 69 | Phase 1: Load from cache instantly. Phase 2: fetch missing in background. |
-| `_on_env_detail_ready` | 340 | Update a single row with detailed info from background thread. |
-| `_on_all_details_done` | 356 | - |
-| `_update_info_label_fast` ⚠ | 366 | - |
-| `_update_info_label` ⚠ | 370 | - |
-| `_on_env_selected` | 375 | - |
-| `_open_default_env` | 441 | On startup, open default env in Packages if set. |
-| `_show_env_context_menu` | 459 | Show right-click context menu on environment table. |
-| `_make_default_env` | 556 | - |
-| `_on_env_double_click` | 574 | - |
-| `_get_env_path` | 577 | Return actual path for env — handles pipx, poetry etc. |
-| `_get_selected_env_name` | 596 | - |
+| `_on_env_detail_ready` | 373 | Update a single row with detailed info from background thread. |
+| `_on_all_details_done` | 389 | - |
+| `_update_info_label_fast` ⚠ | 399 | - |
+| `_update_info_label` ⚠ | 403 | - |
+| `_on_env_selected` | 408 | - |
+| `_open_default_env` | 474 | On startup, open default env in Packages if set. |
+| `_show_env_context_menu` | 492 | Show right-click context menu on environment table. |
+| `_make_default_env` | 589 | - |
+| `_on_env_double_click` | 607 | - |
+| `_get_env_path` | 610 | Return actual path for env — handles pipx, poetry etc. |
+| `_get_selected_env_name` | 629 | - |
 
 ### `src/gui/env_operations.py`
 
@@ -678,8 +678,8 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `_launch_app` | 476 | Launch an app from the selected environment. |
 | `_on_app_install_finished` | 817 | After installing an app package, refresh and launch. |
 | `_uninstall_app` | 965 | Uninstall an app from the selected environment with confirmation. |
-| `_on_system_uninstall_finished` | 1049 | After removing a conda system app: clear caches and refresh. |
-| `_get_app_icon_path` | 1095 | Return the absolute path to the app's .ico (Windows) or .png (Linux/macOS) icon. |
+| `_on_system_uninstall_finished` | 1094 | After removing a conda system app: clear caches and refresh. |
+| `_get_app_icon_path` | 1140 | Return the absolute path to the app's .ico (Windows) or .png (Linux/macOS) icon. |
 
 ### `src/gui/launcher_shortcuts.py`
 
@@ -700,9 +700,9 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | Method | Line | Doc |
 |---|---|---|
 | `_create_launcher_tab` | 27 | App Launcher tab — launch Orange, JupyterLab, Notebook from the env. |
-| `_create_app_card` | 380 | Create a single app launcher card. |
-| `_update_launcher_status` | 641 | Update launcher cards to show installed/not-installed status. |
-| `_update_quick_sidebar` | 866 | Update sidebar buttons — show only installed apps. |
+| `_create_app_card` | 381 | Create a single app launcher card. |
+| `_update_launcher_status` | 642 | Update launcher cards to show installed/not-installed status. |
+| `_update_quick_sidebar` | 867 | Update sidebar buttons — show only installed apps. |
 
 ### `src/gui/learn_install_dialog.py`
 
@@ -808,21 +808,22 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `_hide_cmd_panel` | 563 | Hide the persistent educational command panel. |
 | `_on_env_user_interaction` | 570 | Called on manual user interaction (mouse click / key press) with env table. |
 | `eventFilter` | 591 | Detect keyboard arrow navigation on env_table for panel hiding. |
-| `_update_cmd_panel` | 600 | Update the persistent educational command panel on the env page. |
-| `_switch_page` | 802 | - |
-| `_on_learn_install` | 871 | Called when Learn page requests package install — show LearnInstallDialog. |
-| `_refresh_bookmarks` | 953 | Update Quick Launch bookmark buttons. |
-| `_open_bookmark` | 990 | Switch to Learn page and navigate to the topic. |
-| `_bookmark_context_menu` | 996 | Right-click context menu on a bookmark button. |
-| `_open_package_manager` | 1010 | - |
-| `_open_terminal` | 1019 | - |
-| `_open_env_folder` | 1035 | Open the selected environment's folder in the system file manager. |
-| `_open_settings` | 1054 | Navigate to the settings page. |
-| `_on_settings_saved` | 1058 | Handle settings saved - refresh env list with potentially new base dir. |
-| `_show_about` | 1068 | - |
-| `_check_for_updates` | 1091 | Manually check for updates from Help menu. |
-| `closeEvent` | 1134 | - |
-| `showEvent` | 1237 | Re-connect screenChanged after window handle becomes available. |
+| `show_command` ⚠ | 600 | Surface the terminal command behind a UI action. |
+| `_update_cmd_panel` | 640 | Update the persistent educational command panel on the env page. |
+| `_switch_page` | 842 | - |
+| `_on_learn_install` | 911 | Called when Learn page requests package install — show LearnInstallDialog. |
+| `_refresh_bookmarks` | 993 | Update Quick Launch bookmark buttons. |
+| `_open_bookmark` | 1030 | Switch to Learn page and navigate to the topic. |
+| `_bookmark_context_menu` | 1036 | Right-click context menu on a bookmark button. |
+| `_open_package_manager` | 1050 | - |
+| `_open_terminal` | 1059 | - |
+| `_open_env_folder` | 1075 | Open the selected environment's folder in the system file manager. |
+| `_open_settings` | 1094 | Navigate to the settings page. |
+| `_on_settings_saved` | 1098 | Handle settings saved - refresh env list with potentially new base dir. |
+| `_show_about` | 1108 | - |
+| `_check_for_updates` | 1131 | Manually check for updates from Help menu. |
+| `closeEvent` | 1174 | - |
+| `showEvent` | 1277 | Re-connect screenChanged after window handle becomes available. |
 
 ### `src/gui/package_export.py`
 
@@ -982,18 +983,18 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `_export_env_conda_yml` | 323 | - |
 | `_export_env_clipboard` | 344 | - |
 | `_save_settings` | 353 | Save all settings. |
-| `_reset_all` | 481 | Reset all settings to defaults. |
-| `_reset_appearance` | 497 | Reset Appearance section to defaults. |
-| `_reset_language` | 508 | Reset Language section to defaults. |
-| `_reset_general` | 516 | Reset General section to defaults. |
-| `_on_term_selector_toggled` | 531 | - |
-| `_make_terminal_card` | 543 | Build a card widget for a terminal emulator. |
-| `_install_noto_emoji` | 654 | Install Noto Color Emoji font via distro package manager. |
-| `_on_shared_cache_toggled` | 726 | Enable/disable cache path controls based on toggle. |
-| `_browse_cache_dir` | 732 | Browse for shared cache directory. |
-| `_reset_cache_dir` | 742 | Reset cache dir to default. |
-| `_clear_cache_dir` | 747 | Delete all files in the shared cache directory. |
-| `_load_cache_settings` | 768 | Load shared cache settings into UI widgets. |
+| `_reset_all` | 482 | Reset all settings to defaults. |
+| `_reset_appearance` | 498 | Reset Appearance section to defaults. |
+| `_reset_language` | 509 | Reset Language section to defaults. |
+| `_reset_general` | 517 | Reset General section to defaults. |
+| `_on_term_selector_toggled` | 533 | - |
+| `_make_terminal_card` | 545 | Build a card widget for a terminal emulator. |
+| `_install_noto_emoji` | 656 | Install Noto Color Emoji font via distro package manager. |
+| `_on_shared_cache_toggled` | 728 | Enable/disable cache path controls based on toggle. |
+| `_browse_cache_dir` | 734 | Browse for shared cache directory. |
+| `_reset_cache_dir` | 744 | Reset cache dir to default. |
+| `_clear_cache_dir` | 749 | Delete all files in the shared cache directory. |
+| `_load_cache_settings` | 770 | Load shared cache settings into UI widgets. |
 
 ### `src/gui/settings_appearance.py`
 
@@ -1128,16 +1129,16 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `_setup_toolchain_ui_section` | 1059 | - |
 | `_setup_cliops_section` | 1066 | - |
 | `_setup_general_section` | 1375 | - |
-| `_setup_vscode_ui_section` | 1420 | - |
-| `_get_editor_venv_dir` | 1511 | Best-effort resolution of the current default venv directory. |
-| `_refresh_editor_list` | 1536 | Detect installed editors and fill the table. |
-| `_register_editor` | 1597 | Register with one editor. |
-| `_unregister_editor` | 1637 | Unregister from one editor, with confirmation. |
-| `_register_all_editors` | 1668 | Bulk register with every installed editor. |
-| `_setup_catalog_ui_section` | 1712 | - |
-| `_setup_diagnostics_section` | 1904 | - |
-| `_create_desktop_shortcut_from_settings` | 1972 | Delegate to MainWindow._create_desktop_shortcut. |
-| `_setup_launch_section` | 1995 | - |
+| `_setup_vscode_ui_section` | 1430 | - |
+| `_get_editor_venv_dir` | 1521 | Best-effort resolution of the current default venv directory. |
+| `_refresh_editor_list` | 1546 | Detect installed editors and fill the table. |
+| `_register_editor` | 1607 | Register with one editor. |
+| `_unregister_editor` | 1647 | Unregister from one editor, with confirmation. |
+| `_register_all_editors` | 1678 | Bulk register with every installed editor. |
+| `_setup_catalog_ui_section` | 1722 | - |
+| `_setup_diagnostics_section` | 1914 | - |
+| `_create_desktop_shortcut_from_settings` | 1982 | Delegate to MainWindow._create_desktop_shortcut. |
+| `_setup_launch_section` | 2005 | - |
 
 ### `src/gui/settings_python.py`
 
@@ -1146,15 +1147,15 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | Method | Line | Doc |
 |---|---|---|
 | `_load_current_settings` | 22 | Load current settings into UI widgets. |
-| `_on_jupyter_workdir_changed` | 140 | Enable/disable custom path button based on selection. |
-| `_pick_jupyter_workdir` | 147 | Open folder picker for custom Jupyter working directory. |
-| `_scan_pythons` | 156 | Scan system for Python installations. |
-| `_add_custom_python` | 390 | Add a custom Python executable path. |
-| `_remove_custom_python` | 474 | Remove a custom or downloaded Python path. |
-| `_set_python_default` | 539 | Set selected Python as default. |
-| `_download_python` | 804 | Open dialog to download a standalone Python version. |
-| `_browse_venv_dir` | 810 | Browse for environment base directory. |
-| `_reset_venv_dir` | 819 | Reset venv directory to default. |
+| `_on_jupyter_workdir_changed` | 141 | Enable/disable custom path button based on selection. |
+| `_pick_jupyter_workdir` | 148 | Open folder picker for custom Jupyter working directory. |
+| `_scan_pythons` | 157 | Scan system for Python installations. |
+| `_add_custom_python` | 391 | Add a custom Python executable path. |
+| `_remove_custom_python` | 475 | Remove a custom or downloaded Python path. |
+| `_set_python_default` | 540 | Set selected Python as default. |
+| `_download_python` | 805 | Open dialog to download a standalone Python version. |
+| `_browse_venv_dir` | 811 | Browse for environment base directory. |
+| `_reset_venv_dir` | 820 | Reset venv directory to default. |
 
 ### `src/gui/settings_python_download.py`
 
@@ -1383,11 +1384,11 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 |---|---|---|
 | `format` | 211 | - |
 
-**class SafeWorkerMixin** (line 924)
+**class SafeWorkerMixin** (line 949)
 
 | Method | Line | Doc |
 |---|---|---|
-| `safe_run` | 942 | Context manager that wraps QThread.run() with crash protection. |
+| `safe_run` | 967 | Context manager that wraps QThread.run() with crash protection. |
 
 **module-level functions**
 
@@ -1402,23 +1403,24 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `_visual_width` | 262 | Approximate terminal cell width of `s`. |
 | `_banner_to_file` | 298 | Record a banner into the log FILE only (never the console handler). |
 | `banner` | 318 | Print a visually distinct banner for major events. |
-| `banner_start` | 406 | Convenience: start banner for beginning of an operation. |
-| `banner_success` | 412 | Convenience: success banner for completed operation. |
-| `banner_error` | 418 | Convenience: error banner for failed operation. |
-| `banner_warning` | 424 | Convenience: warning banner. |
-| `setup_logging` | 435 | Initialize the VenvStudio logging system. |
-| `_safe_format_exception` | 555 | Format an exception without triggering Python 3.13 + PySide6 6.10.2 |
-| `_install_sys_excepthook` | 590 | Replace sys.excepthook to catch all unhandled exceptions in the main thread. |
-| `_install_threading_excepthook` | 609 | Catch unhandled exceptions in background threads (Python 3.8+). |
-| `_write_crash_report` | 634 | Write a dedicated crash report file with full system context. |
-| `_cleanup_old_crash_logs` | 680 | Delete crash_*.log files older than max_age_days. |
-| `get_logger` | 699 | Get a child logger. |
-| `safe_slot` | 715 | Decorator for Qt slots that catches exceptions and logs them |
-| `safe_call` | 773 | Call a function with exception protection. |
-| `logged_subprocess` | 795 | Run a subprocess with logging, timeout protection, and error handling. |
-| `log_perf` | 894 | Context manager to log execution time of a block. |
-| `open_log_directory` ⚠ | 978 | Open the log directory in the system file manager. |
-| `get_recent_crash_logs` ⚠ | 992 | Return recent crash log summaries for display in Settings/About. |
+| `banner_start` | 410 | Convenience: start banner for beginning of an operation. |
+| `banner_success` | 416 | Convenience: success banner for completed operation. |
+| `banner_error` | 422 | Convenience: error banner for failed operation. |
+| `banner_warning` | 428 | Convenience: warning banner. |
+| `banner_command` | 434 | Show the terminal command behind a UI action. |
+| `setup_logging` | 460 | Initialize the VenvStudio logging system. |
+| `_safe_format_exception` | 580 | Format an exception without triggering Python 3.13 + PySide6 6.10.2 |
+| `_install_sys_excepthook` | 615 | Replace sys.excepthook to catch all unhandled exceptions in the main thread. |
+| `_install_threading_excepthook` | 634 | Catch unhandled exceptions in background threads (Python 3.8+). |
+| `_write_crash_report` | 659 | Write a dedicated crash report file with full system context. |
+| `_cleanup_old_crash_logs` | 705 | Delete crash_*.log files older than max_age_days. |
+| `get_logger` | 724 | Get a child logger. |
+| `safe_slot` | 740 | Decorator for Qt slots that catches exceptions and logs them |
+| `safe_call` | 798 | Call a function with exception protection. |
+| `logged_subprocess` | 820 | Run a subprocess with logging, timeout protection, and error handling. |
+| `log_perf` | 919 | Context manager to log execution time of a block. |
+| `open_log_directory` ⚠ | 1003 | Open the log directory in the system file manager. |
+| `get_recent_crash_logs` ⚠ | 1017 | Return recent crash log summaries for display in Settings/About. |
 
 ### `src/utils/platform_utils.py`
 
@@ -1459,10 +1461,11 @@ Names used nowhere beyond their own definition, across `src/`, `main.py`, `tools
 | `src/core/tool_registry.py` | `ToolRegistry.update_version` | 144 |
 | `src/core/venv_manager.py` | `VenvInfo.to_dict` | 66 |
 | `src/core/venv_manager.py` | `VenvManager.invalidate_cache_by_name` | 585 |
-| `src/gui/env_list.py` | `EnvListMixin._update_info_label_fast` | 366 |
-| `src/gui/env_list.py` | `EnvListMixin._update_info_label` | 370 |
+| `src/gui/env_list.py` | `EnvListMixin._update_info_label_fast` | 399 |
+| `src/gui/env_list.py` | `EnvListMixin._update_info_label` | 403 |
 | `src/gui/env_operations.py` | `EnvOperationsMixin._rename_env` | 148 |
 | `src/gui/learn_page.py` | `LearnPage.refresh_theme` | 763 |
+| `src/gui/main_window.py` | `MainWindow.show_command` | 600 |
 | `src/gui/package_ops.py` | `PackageOpsMixin._get_catalog_lookup` | 120 |
 | `src/gui/package_ops.py` | `PackageOpsMixin._refresh_packages_sync_legacy` | 237 |
 | `src/gui/quicklaunch.py` | `QuickLaunchMixin._ql_load_env_packages` | 36 |
@@ -1474,9 +1477,9 @@ Names used nowhere beyond their own definition, across `src/`, `main.py`, `tools
 | `src/gui/settings_toolchain.py` | `ToolchainMixin._tc_do_default` | 1353 |
 | `src/gui/styles.py` | `invalidate_style_cache` | 768 |
 | `src/gui/syntax_highlighter.py` | `PythonHighlighter.highlightBlock` | 109 |
-| `src/utils/logger.py` | `open_log_directory` | 978 |
-| `src/utils/logger.py` | `get_recent_crash_logs` | 992 |
+| `src/utils/logger.py` | `open_log_directory` | 1003 |
+| `src/utils/logger.py` | `get_recent_crash_logs` | 1017 |
 
 ---
 
-79 files, 81 classes, 747 functions/methods, 27 flagged.
+79 files, 81 classes, 749 functions/methods, 28 flagged.

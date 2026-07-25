@@ -339,6 +339,7 @@ def banner(title: str, style: str = "info", details: Optional[List[str]] = None,
         "warning": {"color": "br_yellow",  "icon": "⚠️ ", "rich_style": "bold yellow"},
         "error":   {"color": "br_red",     "icon": "❌", "rich_style": "bold red"},
         "info":    {"color": "br_cyan",    "icon": "ℹ️ ", "rich_style": "cyan"},
+        "command": {"color": "br_magenta", "icon": "💻", "rich_style": "bold magenta"},
     }
     cfg = style_config.get(style, style_config["info"])
 
@@ -354,8 +355,9 @@ def banner(title: str, style: str = "info", details: Optional[List[str]] = None,
 
             content_lines = [Text(f"{cfg['icon']}  {title}", style=cfg["rich_style"])]
             if details:
+                _prefix = "   " if style == "command" else "   • "
                 for d in details:
-                    content_lines.append(Text(f"   • {d}", style="dim"))
+                    content_lines.append(Text(f"{_prefix}{d}", style="dim"))
 
             # Combine into a single renderable
             combined = Text()
@@ -386,7 +388,9 @@ def banner(title: str, style: str = "info", details: Optional[List[str]] = None,
     # Compute box width (at least title + 8, cap at 78)
     lines = [f"{cfg['icon']}  {title}"]
     if details:
-        lines.extend(f"   • {d}" for d in details)
+        # A command line must stay copy-pasteable, so no bullet in front of it.
+        _prefix = "   " if style == "command" else "   • "
+        lines.extend(f"{_prefix}{d}" for d in details)
     inner_width = min(max(max(_visual_width(line) for line in lines) + 4, 40), 78)
 
     top = f"{color}{bold}╭{'─' * (inner_width - 2)}╮{reset}"
@@ -425,6 +429,27 @@ def banner_warning(title: str, details: Optional[List[str]] = None,
                    logger: Optional[logging.Logger] = None) -> None:
     """Convenience: warning banner."""
     banner(title, "warning", details, logger)
+
+
+def banner_command(command, context: str = "",
+                   logger: Optional[logging.Logger] = None) -> None:
+    """Show the terminal command behind a UI action.
+
+    VenvStudio is meant to teach as much as it automates: whatever the user
+    clicks, they should be able to see what they would have typed. This puts
+    the command in a box of its own so it stands out from the surrounding log
+    chatter, and keeps it on one unbroken line so it can be copied and run.
+
+    `command` may be a string or an argv list. `context` is a short label -
+    what the command is for, and in which environment.
+    """
+    if isinstance(command, (list, tuple)):
+        command = " ".join(str(part) for part in command)
+    command = str(command).strip()
+    if not command:
+        return
+    title = f"COMMAND — {context}" if context else "COMMAND"
+    banner(title, "command", [command], logger)
 
 
 # =====================================================================

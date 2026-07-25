@@ -71,6 +71,23 @@ class EnvListMixin:
         If force=True (manual Refresh button), invalidates all caches first.
         """
         self._log.debug(f"_refresh_env_list called (force={force})")
+
+        # Remember the selected environment across the rebuild. Clearing the
+        # table drops the selection, and Qt then selects the first row, so a
+        # refresh triggered while an install finished silently moved the user
+        # to another environment. The next click -- "install it then" -- went
+        # to the wrong env. The Quick Launch dropdown below already restores
+        # its own selection this way.
+        _keep_selected = ""
+        try:
+            _sel_row = self.env_table.currentRow()
+            if _sel_row >= 0:
+                _sel_item = self.env_table.item(_sel_row, 0)
+                if _sel_item:
+                    _keep_selected = _sel_item.text().strip()
+        except Exception:
+            pass
+
         self.env_table.setRowCount(0)
 
         # Manual refresh: invalidate all caches, show overlay, disable button
@@ -264,6 +281,22 @@ class EnvListMixin:
             default_item.setTextAlignment(Qt.AlignCenter)
             default_item.setFlags(default_item.flags() & ~Qt.ItemIsEditable)
             self.env_table.setItem(i, 7, default_item)
+
+        # Restore the selection captured before the rebuild. Signals stay
+        # blocked so this does not look like a user click and re-trigger a
+        # package reload for an env that is already loaded.
+        if _keep_selected:
+            for _row in range(self.env_table.rowCount()):
+                _item = self.env_table.item(_row, 0)
+                if _item and _item.text().strip() == _keep_selected:
+                    self.env_table.blockSignals(True)
+                    self.env_table.selectRow(_row)
+                    self.env_table.blockSignals(False)
+                    break
+            else:
+                self._log.debug(
+                    f"_refresh_env_list: previously selected "
+                    f"{_keep_selected!r} is gone, leaving default selection")
 
         # Group envs by location
         _base_dir = str(self.venv_manager.base_dir)

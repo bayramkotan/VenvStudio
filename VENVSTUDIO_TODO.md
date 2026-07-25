@@ -162,7 +162,96 @@ tensorflow + Python 3.13 örneği: conda-forge'da win-64 için sadece TF 1.x var
 
 ---
 
-## ✅ v1.6.17'de ÇÖZÜLEN (COMMIT BEKLİYOR)
+## 🧪 TEST MATRİSİ — env türü × işlem
+
+**Neden bu liste var:** 5 env türü × ~20 kart × 3 işlem = 300 test. Hepsini yapmak
+mantıksız. Ama kod yolları **karta göre değil, env türü + app türüne göre** ayrışıyor
+— yani her hücre için bir temsilci yeterli. Bu oturumda aynı asimetri üç kez
+bulundu (list, install, uninstall), yani boşluklar gerçek.
+
+Sırayla işaretle. Her satır bağımsız test edilebilir.
+
+### A. Paket kartları (pip ile kurulan — örn. Voilà, Streamlit)
+
+| # | Env | İşlem | Beklenen | Durum |
+|---|---|---|---|---|
+| A1 | venv (ml) | Install | `pip install` | ⬜ |
+| A2 | venv (ml) | Launch | uygulama açılır | ⬜ |
+| A3 | venv (ml) | Uninstall | kart "Not installed"a döner | ⬜ |
+| A4 | uv (viz) | Install | `uv pip install` | ⬜ |
+| A5 | uv (viz) | Launch | | ⬜ |
+| A6 | uv (viz) | Uninstall | `uv pip uninstall` (`-y` YOK) | ⬜ |
+| A7 | conda (conda1) | Install | `micromamba install` | ✅ FastAPI |
+| A8 | conda (conda1) | Launch | | ✅ FastAPI |
+| A9 | **conda (conda1)** | **Uninstall** | ⚠ **şüpheli** — `pip uninstall` çalışıyor olabilir | ⬜ |
+| A10 | pipx | Install | `pipx install --python` | ✅ Voilà |
+| A11 | pipx | Launch | | ✅ Voilà |
+| A12 | pipx | Uninstall | `pipx uninstall` | ✅ Voilà |
+| A13 | poetry (p1) | Install | | ⬜ |
+| A14 | poetry (p1) | Launch | | ⬜ |
+| A15 | **poetry (p1)** | **Uninstall** | ⚠ **şüpheli** | ⬜ |
+
+### B. System app kartları (conda paketi olarak kurulan — örn. R Console)
+
+| # | Env | İşlem | Beklenen | Durum |
+|---|---|---|---|---|
+| B1 | conda | Install | `micromamba install r-base` | ✅ R Console |
+| B2 | conda | Launch (VS içinden) | PATH kurulur, açılır | ✅ |
+| B3 | conda | **Uninstall** | `micromamba remove` | ⬜ |
+| B4 | conda | Desktop Shortcut | `.bat`/`.sh` sarmalayıcı, DLL hatası yok | ✅ |
+| B5 | conda | Quick Launch'ta görünür | kurulumdan hemen sonra | ✅ |
+
+### C. Env işlemleri
+
+| # | Env | İşlem | Durum |
+|---|---|---|---|
+| C1 | her tür | Create | ⬜ |
+| C2 | her tür | Delete | ⬜ |
+| C3 | pipx | Delete → Python sorma dialogu | ✅ |
+| C4 | her tür | Clone | ⬜ |
+| C5 | her tür | Rename | ⬜ |
+| C6 | her tür | Export / Import | ⬜ |
+| C7 | her tür | Open Terminal | ⬜ |
+
+### D. Regresyon testleri (bir kez kırıldı, tekrar kırılabilir)
+
+| # | Senaryo | Durum |
+|---|---|---|
+| D1 | Uzun kurulum sırasında seçim kaymıyor (pipx → conda1) | ✅ v1.6.18 |
+| D2 | Uzun conda kurulumunu Cancel → çökme yok, Qt FATAL yok | ⬜ |
+| D3 | Kurulum sürerken VS'yi kapat → temiz çıkış | ⬜ |
+| D4 | Skip Mirror butonu → sıradaki mirror'a geçiyor | ⬜ |
+| D5 | Settings'te tekerlekle gezerken combo değeri değişmiyor | ⬜ |
+
+> **Test ederken log al:** `python3 main.py > ~/Downloads/test.txt 2>&1`
+> Sessiz başarısızlık bu mimaride normaldir (exit 0 + hiçbir şey yapmama),
+> o yüzden "bir şey olmadı" yeterli bilgi değil — hangi komutun çalıştığı lazım.
+
+---
+
+## ✅ v1.6.18'de ÇÖZÜLEN (COMMIT BEKLİYOR)
+
+### 🔴 B196 — Refresh sırasında seçim kayması → paket yanlış env'e kuruluyordu
+`_refresh_env_list` tabloyu boşaltırken seçili env'i saklamıyordu; Qt ilk satırı
+seçiyordu. Uzun bir kurulum bitince tetiklenen refresh kullanıcıyı sessizce başka
+env'e taşıyordu. Quick Launch dropdown'u aynı fonksiyonda zaten koruma yapıyordu.
+**Çözüm:** seçili env adı saklanıp `blockSignals` ile geri yükleniyor.
+
+### 🗑️ B197 — pipx uninstall hiçbir şey yapmıyordu
+`_uninstall_app`'te pipx dalı yoktu, `pip uninstall` çalışıyordu. pipx home'da
+site-packages olmadığı için sessizce başarılı dönüyordu.
+**Çözüm:** `pipx uninstall <ad>`. Sınır: pipx app adı ≠ paket adı olan kartlarda
+çözüm gerekebilir.
+
+### 🐛 B198 — FastAPI kartı uvicorn kurmuyordu
+`install_packages: ["fastapi", "uvicorn"]` eklendi. FastAPI ASGI sunucusu getirmez.
+
+### 🎓 F208 Adım 1 — altyapı (görünür değişiklik yok)
+`banner_command()`, `show_command()`, Settings anahtarı. Adım 2-3 kaldı.
+
+---
+
+## ✅ v1.6.17'de ÇÖZÜLEN (PUSH EDİLDİ)
 
 ### 🔴 B195 — pipx'e kurulan uygulama "kurulu değil" görünüyordu
 pipx her uygulamayı `venvs/<ad>/` altında ayrı env'e kuruyor; `pip_manager`

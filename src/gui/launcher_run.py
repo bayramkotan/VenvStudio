@@ -984,6 +984,12 @@ class LauncherRunMixin:
         if _is_conda_app:
             pkgs_to_remove = list(app_def["conda_packages"])
 
+        # pipx keeps every app in its own environment under venvs/<app>/, so
+        # "pip uninstall" against the pipx home removes nothing and returns
+        # success -- the progress bar flashed and the app stayed installed.
+        # pipx has its own uninstall verb.
+        _is_pipx_env = getattr(self, "_current_env_type", "venv") == "pipx"
+
         reply = QMessageBox.question(
             self, f"Uninstall {app_def['name']}",
             f"Are you sure you want to uninstall {app_def['name']}?\n\n"
@@ -1016,6 +1022,45 @@ class LauncherRunMixin:
 
         self._set_busy(True)
         self.status_label.setText(f"Uninstalling {app_def['name']}...")
+
+        if _is_pipx_env:
+            import subprocess as _sp_px
+            from src.utils.platform_utils import (
+                get_pipx_cmd as _gpc, subprocess_args as _sa_px,
+            )
+            _rm_pkgs_px = list(pkgs_to_remove)
+            _app_label_px = app_def["name"]
+
+            def _do_pipx_remove(callback=None):
+                _cmd_base = _gpc()
+                if not _cmd_base:
+                    return (False, "pipx executable not found")
+                _failed = []
+                for _pkg in _rm_pkgs_px:
+                    if callback:
+                        callback(f"pipx uninstall {_pkg}...")
+                    _r = _sp_px.run(
+                        list(_cmd_base) + ["uninstall", _pkg],
+                        **_sa_px(capture_output=True, text=True, timeout=120)
+                    )
+                    _out = (_r.stdout or "") + (_r.stderr or "")
+                    # pipx exits non-zero when the app was never installed;
+                    # that is the desired end state, so do not call it a
+                    # failure.
+                    if _r.returncode != 0 and "not installed" not in _out.lower():
+                        _failed.append(_pkg)
+                        if callback:
+                            callback(f"pipx uninstall failed: {_out.strip()[:200]}")
+                if _failed:
+                    return (False,
+                            f"pipx uninstall failed for: {', '.join(_failed)}")
+                return (True, f"{_app_label_px} removed")
+
+            self.current_worker = WorkerThread(_do_pipx_remove)
+            self.current_worker.progress.connect(self._on_progress)
+            self.current_worker.finished.connect(self._on_install_finished)
+            self.current_worker.start()
+            return
 
         if _is_conda_app:
             from src.core.micromamba_installer import remove_conda_packages

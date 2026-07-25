@@ -419,6 +419,7 @@ class AdvancedMixin:
         self.config.set("auto_upgrade_pip", self.auto_pip_cb.isChecked())
         self.config.set("confirm_delete", self.confirm_delete_cb.isChecked())
         self.config.set("show_hidden_packages", self.show_hidden_cb.isChecked())
+        self.config.set("show_commands", self.show_commands_cb.isChecked())
         self.config.set("check_updates", self.check_updates_cb.isChecked())
         self.config.set("save_window_geometry", self.save_window_cb.isChecked())
 
@@ -519,6 +520,7 @@ class AdvancedMixin:
         general_keys = [
             "auto_upgrade_pip", "confirm_delete", "show_hidden_packages",
             "check_updates", "remember_window", "default_terminal",
+            "show_commands",
         ]
         for key in general_keys:
             if key in DEFAULT_SETTINGS:

@@ -15,6 +15,9 @@ DEFAULT_SETTINGS = {
     "theme": "dark",
     "auto_upgrade_pip": True,
     "show_hidden_packages": False,
+    # Educational side of VenvStudio: show the terminal command behind each
+    # action. On by default; power users can quiet the log.
+    "show_commands": True,
     "default_python": "",  # empty = system default
     "window_width": 1100,
     "window_height": 750,

@@ -79,6 +79,7 @@ class PythonMixin:
         self.auto_pip_cb.setChecked(self.config.get("auto_upgrade_pip", True))
         self.confirm_delete_cb.setChecked(self.config.get("confirm_delete", True))
         self.show_hidden_cb.setChecked(self.config.get("show_hidden_packages", False))
+        self.show_commands_cb.setChecked(self.config.get("show_commands", True))
         self.check_updates_cb.setChecked(self.config.get("check_updates", False))
         self.save_window_cb.setChecked(self.config.get("save_window_geometry", True))
 

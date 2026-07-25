@@ -1380,6 +1380,7 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
             "• Auto-upgrade pip: Runs pip install --upgrade pip after each env is created\n"
             "• Confirm delete: Shows a dialog before permanently removing an environment\n"
             "• Show hidden packages: Includes pip/setuptools/wheel in the package list\n"
+            "• Show equivalent commands: Displays the terminal command behind each action\n"
             "• Check updates: Polls PyPI for a new VenvStudio release on startup\n"
             "• Remember window: Saves and restores window size/position between sessions\n"
             "• Default terminal: Terminal app used by Open Terminal buttons",
@@ -1397,6 +1398,15 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
 
         self.show_hidden_cb = QCheckBox(tr("show_hidden_packages"))
         general_layout.addRow(self.show_hidden_cb)
+
+        self.show_commands_cb = QCheckBox("Show equivalent commands")
+        self.show_commands_cb.setToolTip(
+            "Show the terminal command behind each action, in the command "
+            "panel and the log.\n"
+            "Turn off if you already know the commands and want a quieter "
+            "log."
+        )
+        general_layout.addRow(self.show_commands_cb)
 
         self.check_updates_cb = QCheckBox(tr("check_updates"))
         general_layout.addRow(self.check_updates_cb)

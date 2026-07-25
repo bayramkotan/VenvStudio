@@ -597,6 +597,46 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
                 self._on_env_user_interaction()
         return super().eventFilter(obj, event)
 
+    def show_command(self, command, context: str = "",
+                     panel: bool = True) -> None:
+        """Surface the terminal command behind a UI action.
+
+        Single entry point for the educational side of VenvStudio: whatever
+        the user clicks, they should be able to see what they would have
+        typed. Callers do not need to know whether the command panel exists
+        or where the log goes.
+
+        command: string or argv list.
+        context: short label, e.g. "Install packages (env: ml)".
+        panel:   also update the on-screen command panel, not just the log.
+
+        Does nothing when the user has turned equivalent commands off in
+        Settings.
+        """
+        try:
+            if not self.config.get("show_commands", True):
+                return
+        except Exception:
+            pass
+        if isinstance(command, (list, tuple)):
+            command = " ".join(str(part) for part in command)
+        command = str(command or "").strip()
+        if not command:
+            return
+        try:
+            from src.utils.logger import banner_command
+            banner_command(command, context=context)
+        except Exception:
+            pass
+        if panel and hasattr(self, "_cmd_panel_live"):
+            try:
+                if hasattr(self, "_cmd_panel_widget"):
+                    self._cmd_panel_widget.setVisible(True)
+                self._cmd_panel_sticky = True
+                self._cmd_panel_live.setText(f"▶ {command}")
+            except Exception:
+                pass
+
     def _update_cmd_panel(self, action, env_type, name, env_path=""):
         """Update the persistent educational command panel on the env page."""
         if not hasattr(self, "_cmd_panel_live"):

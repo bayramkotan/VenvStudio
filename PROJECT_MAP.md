@@ -41,7 +41,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `src/gui/env_list.py` | 635 | VenvStudio - MainWindow: Environment List Mixin |
 | `src/gui/env_operations.py` | 914 | VenvStudio - MainWindow: Environment Operations Mixin |
 | `src/gui/env_state.py` | 839 | VenvStudio - Package Panel: Environment State Mixin |
-| `src/gui/launcher_run.py` | 1160 | VenvStudio - Package Panel: Launcher Run Mixin |
+| `src/gui/launcher_run.py` | 1171 | VenvStudio - Package Panel: Launcher Run Mixin |
 | `src/gui/launcher_shortcuts.py` | 230 | VenvStudio - Package Panel: Launcher Shortcuts Mixin |
 | `src/gui/launcher_ui.py` | 970 | VenvStudio - Package Panel: Launcher UI Mixin |
 | `src/gui/learn_content.py` | 2825 | learn_page content data — VenvStudio Learn categories/topics. |
@@ -52,7 +52,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `src/gui/main_window.py` | 1281 | VenvStudio - Main Application Window |
 | `src/gui/package_export.py` | 297 | VenvStudio - Package Panel: Export Mixin |
 | `src/gui/package_misc.py` | 684 | VenvStudio - Package Panel: Misc Mixin |
-| `src/gui/package_ops.py` | 896 | VenvStudio - Package Panel: Package Operations Mixin |
+| `src/gui/package_ops.py` | 966 | VenvStudio - Package Panel: Package Operations Mixin |
 | `src/gui/package_panel.py` | 663 | VenvStudio - Package Management Panel |
 | `src/gui/package_panel_common.py` | 164 | VenvStudio - Package Panel: Common/Shared Classes |
 | `src/gui/platform_utils.py` | 456 | VenvStudio - Platform-specific utilities |
@@ -678,8 +678,8 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `_launch_app` | 476 | Launch an app from the selected environment. |
 | `_on_app_install_finished` | 817 | After installing an app package, refresh and launch. |
 | `_uninstall_app` | 965 | Uninstall an app from the selected environment with confirmation. |
-| `_on_system_uninstall_finished` | 1094 | After removing a conda system app: clear caches and refresh. |
-| `_get_app_icon_path` | 1140 | Return the absolute path to the app's .ico (Windows) or .png (Linux/macOS) icon. |
+| `_on_system_uninstall_finished` | 1105 | After removing a conda system app: clear caches and refresh. |
+| `_get_app_icon_path` | 1151 | Return the absolute path to the app's .ico (Windows) or .png (Linux/macOS) icon. |
 
 ### `src/gui/launcher_shortcuts.py`
 
@@ -888,7 +888,8 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `_do_install` | 589 | Actually start install worker (no confirm dialog). |
 | `_copy_install_command` | 710 | Copy the install command for entered packages (env-type aware). |
 | `_install_manual` | 756 | - |
-| `_uninstall_selected` | 842 | - |
+| `_make_uninstall_worker` | 842 | Build the uninstall worker that matches the environment type. |
+| `_uninstall_selected` | 911 | - |
 
 ### `src/gui/package_panel.py`
 
@@ -1482,4 +1483,4 @@ Names used nowhere beyond their own definition, across `src/`, `main.py`, `tools
 
 ---
 
-79 files, 81 classes, 749 functions/methods, 28 flagged.
+79 files, 81 classes, 750 functions/methods, 28 flagged.

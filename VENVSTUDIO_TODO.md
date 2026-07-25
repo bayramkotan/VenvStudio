@@ -175,21 +175,21 @@ Sırayla işaretle. Her satır bağımsız test edilebilir.
 
 | # | Env | İşlem | Beklenen | Durum |
 |---|---|---|---|---|
-| A1 | venv (ml) | Install | `pip install` | ⬜ |
-| A2 | venv (ml) | Launch | uygulama açılır | ⬜ |
-| A3 | venv (ml) | Uninstall | kart "Not installed"a döner | ⬜ |
-| A4 | uv (viz) | Install | `uv pip install` | ⬜ |
-| A5 | uv (viz) | Launch | | ⬜ |
-| A6 | uv (viz) | Uninstall | `uv pip uninstall` (`-y` YOK) | ⬜ |
+| A1 | venv (ml) | Install | `pip install` | ✅ |
+| A2 | venv (ml) | Launch | uygulama açılır | ✅ |
+| A3 | venv (ml) | Uninstall | kart "Not installed"a döner | ✅ 171→169 |
+| A4 | uv (viz) | Install | `uv pip install` | ✅ |
+| A5 | uv (viz) | Launch | | ✅ |
+| A6 | uv (viz) | Uninstall | `uv pip uninstall` (`-y` YOK) | ✅ 49→47 |
 | A7 | conda (conda1) | Install | `micromamba install` | ✅ FastAPI |
 | A8 | conda (conda1) | Launch | | ✅ FastAPI |
-| A9 | **conda (conda1)** | **Uninstall** | ⚠ **şüpheli** — `pip uninstall` çalışıyor olabilir | ⬜ |
+| A9 | conda (conda1) | Uninstall | launcher kartı pip ile kurulduğu için pip ile kalkıyor | ✅ 35→33 |
 | A10 | pipx | Install | `pipx install --python` | ✅ Voilà |
 | A11 | pipx | Launch | | ✅ Voilà |
 | A12 | pipx | Uninstall | `pipx uninstall` | ✅ Voilà |
 | A13 | poetry (p1) | Install | | ⬜ |
 | A14 | poetry (p1) | Launch | | ⬜ |
-| A15 | **poetry (p1)** | **Uninstall** | ⚠ **şüpheli** | ⬜ |
+| A15 | **poetry (p1)** | **Uninstall** | ⚠ `poetry remove` değil `pip uninstall` çalışıyor | ⬜ |
 
 ### B. System app kartları (conda paketi olarak kurulan — örn. R Console)
 
@@ -200,6 +200,18 @@ Sırayla işaretle. Her satır bağımsız test edilebilir.
 | B3 | conda | **Uninstall** | `micromamba remove` | ⬜ |
 | B4 | conda | Desktop Shortcut | `.bat`/`.sh` sarmalayıcı, DLL hatası yok | ✅ |
 | B5 | conda | Quick Launch'ta görünür | kurulumdan hemen sonra | ✅ |
+
+### B2. Installed sekmesi (paket paneli — launcher'dan AYRI kod yolu)
+
+⚠ `package_ops.py` v1.6.19'da değişti, **hiç test edilmedi**.
+
+| # | Env | İşlem | Beklenen | Durum |
+|---|---|---|---|---|
+| E1 | conda | Manual Install `numpy` | logda `🚀 micromamba:` | ⬜ |
+| E2 | conda | Installed → Uninstall | `micromamba remove` | ⬜ |
+| E3 | pipx | Installed → Uninstall | `pipx uninstall` | ⬜ |
+| E4 | venv/uv | Installed → Uninstall | `pip` / `uv pip uninstall` | ⬜ |
+| E5 | her tür | Apply Changes (kaldır+kur) | aynı yollar | ⬜ |
 
 ### C. Env işlemleri
 
@@ -229,7 +241,31 @@ Sırayla işaretle. Her satır bağımsız test edilebilir.
 
 ---
 
-## ✅ v1.6.18'de ÇÖZÜLEN (COMMIT BEKLİYOR)
+## ✅ v1.6.19'da ÇÖZÜLEN (COMMIT BEKLİYOR)
+
+### 🔴 B199 — Installed sekmesinde conda/pipx kaldırma çalışmıyordu
+`package_ops.py`'de kurulum env türüne göre dallanıyor ama kaldırma hep
+`pip uninstall` çalıştırıyordu. Manual Install/Preset ile conda env'ine
+micromamba'yla kurulan paketler kaldırılamıyordu. Kod kullanıcıya `conda remove`
+ipucunu gösterip `pip uninstall` çalıştırıyordu.
+**Çözüm:** `_make_uninstall_worker()` ortak yardımcısı — iki kaldırma yolu
+(Uninstall + Apply Changes) buradan geçiyor.
+
+### 🔴 B200 — pipx "zaten silinmiş" durumu hata sayılıyordu
+`"not installed"` aranıyordu, pipx gerçekte `"Nothing to uninstall for X"` diyor
+(exit 1). İkinci kaldırma denemesi hata veriyordu.
+
+### 🔴 B201 — pipx inject asimetrisi
+Kurulum `pipx install <ana>` + `pipx inject <ana> <ekstra>` yapıyor; kaldırma her
+paketi ayrı app sanıyordu. Artık sadece ana paket kaldırılıyor.
+
+### 📄 README + CLI
+CLI 3→9 komut (`vs` kısa formuyla), RStudio `rstudio-desktop` düzeltmesi,
+Marimo + Quarto eklendi, "13+"→22, conda mirror + pipx Python bölümleri.
+
+---
+
+## ✅ v1.6.18'de ÇÖZÜLEN (PUSH EDİLDİ)
 
 ### 🔴 B196 — Refresh sırasında seçim kayması → paket yanlış env'e kuruluyordu
 `_refresh_env_list` tabloyu boşaltırken seçili env'i saklamıyordu; Qt ilk satırı

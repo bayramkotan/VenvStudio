@@ -1028,7 +1028,14 @@ class LauncherRunMixin:
             from src.utils.platform_utils import (
                 get_pipx_cmd as _gpc, subprocess_args as _sa_px,
             )
-            _rm_pkgs_px = list(pkgs_to_remove)
+            # Mirror the install path: pipx installs ONE app and injects the
+            # rest into that app's venv. So only the main package is a pipx
+            # app -- "pipx uninstall uvicorn" just answers "Nothing to
+            # uninstall", because uvicorn lives inside the fastapi venv.
+            # Removing the app removes everything injected into it.
+            _main_px = app_def.get("package") or (pkgs_to_remove[0]
+                                                  if pkgs_to_remove else "")
+            _rm_pkgs_px = [_main_px] if _main_px else list(pkgs_to_remove)
             _app_label_px = app_def["name"]
 
             def _do_pipx_remove(callback=None):
@@ -1044,10 +1051,14 @@ class LauncherRunMixin:
                         **_sa_px(capture_output=True, text=True, timeout=120)
                     )
                     _out = (_r.stdout or "") + (_r.stderr or "")
-                    # pipx exits non-zero when the app was never installed;
-                    # that is the desired end state, so do not call it a
-                    # failure.
-                    if _r.returncode != 0 and "not installed" not in _out.lower():
+                    # pipx exits 1 with "Nothing to uninstall for X" when the
+                    # app is not there. That is the desired end state, not a
+                    # failure -- and the exact wording matters: an earlier
+                    # guess of "not installed" never matched, so removing an
+                    # already-removed package was reported as an error.
+                    _gone = ("nothing to uninstall" in _out.lower()
+                             or "not installed" in _out.lower())
+                    if _r.returncode != 0 and not _gone:
                         _failed.append(_pkg)
                         if callback:
                             callback(f"pipx uninstall failed: {_out.strip()[:200]}")

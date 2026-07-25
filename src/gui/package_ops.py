@@ -481,7 +481,7 @@ class PackageOpsMixin:
         self.output_log.clear()
 
         if to_uninstall:
-            self.current_worker = WorkerThread(self.pip_manager.uninstall_packages, to_uninstall)
+            self.current_worker = self._make_uninstall_worker(to_uninstall)
             self.current_worker.progress.connect(self._on_progress)
             if to_install:
                 self.current_worker.finished.connect(
@@ -839,6 +839,75 @@ class PackageOpsMixin:
 
         self._install_packages(cleaned)
 
+    def _make_uninstall_worker(self, packages):
+        """Build the uninstall worker that matches the environment type.
+
+        conda and pipx do not install through pip, so they cannot uninstall
+        through it either. Running pip uninstall against them removed nothing
+        and still reported success -- while the command hint shown to the user
+        moments earlier correctly said "conda remove" or "pipx uninstall".
+        Both uninstall paths in this file go through here so the two cannot
+        drift apart again.
+        """
+        _env_type = getattr(self, "_current_env_type", "venv")
+        _pkgs_rm = list(packages)
+
+        if _env_type == "conda" and getattr(self.pip_manager, "venv_path", None):
+            _env_path_rm = self.pip_manager.venv_path
+
+            def _do_conda_uninstall(callback=None, _n=len(_pkgs_rm)):
+                from src.core.micromamba_installer import remove_conda_packages
+                if callback:
+                    callback(f"\u26a1 Removing {_n} package(s) via micromamba...")
+                ok = remove_conda_packages(_env_path_rm, _pkgs_rm,
+                                           progress_cb=callback)
+                return (ok,
+                        f"Removed: {', '.join(_pkgs_rm)}" if ok
+                        else f"conda remove failed for: {', '.join(_pkgs_rm)}")
+
+            return WorkerThread(_do_conda_uninstall)
+
+        if _env_type == "pipx":
+
+            def _do_pipx_uninstall(callback=None):
+                import subprocess as _sp_rm
+                from src.utils.platform_utils import (
+                    get_pipx_cmd as _gpc_rm, subprocess_args as _sa_rm,
+                )
+                _base = _gpc_rm()
+                if not _base:
+                    return (False, "pipx executable not found")
+                _failed_rm = []
+                for _pkg_rm in _pkgs_rm:
+                    if callback:
+                        callback(f"pipx uninstall {_pkg_rm}...")
+                    _r_rm = _sp_rm.run(
+                        list(_base) + ["uninstall", _pkg_rm],
+                        **_sa_rm(capture_output=True, text=True, timeout=120)
+                    )
+                    _out_rm = (_r_rm.stdout or "") + (_r_rm.stderr or "")
+                    # pipx exits 1 with "Nothing to uninstall for X" when the
+                    # app is not there. That is the desired end state, not a
+                    # failure -- and the exact wording matters: an earlier
+                    # guess of "not installed" never matched, so removing an
+                    # already-removed package was reported as an error.
+                    _gone_rm = ("nothing to uninstall" in _out_rm.lower()
+                                or "not installed" in _out_rm.lower())
+                    if _r_rm.returncode != 0 and not _gone_rm:
+                        _failed_rm.append(_pkg_rm)
+                        if callback:
+                            callback(f"pipx uninstall failed: "
+                                     f"{_out_rm.strip()[:200]}")
+                if _failed_rm:
+                    return (False,
+                            f"pipx uninstall failed for: "
+                            f"{', '.join(_failed_rm)}")
+                return (True, f"Removed: {', '.join(_pkgs_rm)}")
+
+            return WorkerThread(_do_pipx_uninstall)
+
+        return WorkerThread(self.pip_manager.uninstall_packages, _pkgs_rm)
+
     def _uninstall_selected(self):
         if not self.pip_manager:
             return
@@ -888,7 +957,8 @@ class PackageOpsMixin:
         self._show_command_hint("Uninstall Packages", cmd)
 
         self._set_busy(True)
-        self.current_worker = WorkerThread(self.pip_manager.uninstall_packages, packages)
+
+        self.current_worker = self._make_uninstall_worker(packages)
         self.current_worker.progress.connect(self._on_progress)
         self.current_worker.finished.connect(self._on_install_finished)
         self.current_worker.start()

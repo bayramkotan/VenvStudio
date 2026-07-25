@@ -319,25 +319,29 @@ sudo zypper install libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
 VenvStudio is a GUI first, but the core actions work headless too — handy over SSH,
 in scripts, or when you just want one quick thing done.
 
-Installing with pip gives you **`vs`** as a short alias, so nothing needs typing out:
+Installing with pip gives you two names for the same tool: **`vs`** to type and
+**`venvstudio`** to read. Use whichever you like.
+
+| Short | Full | What it does |
+|:------|:-----|:-------------|
+| `vs` | `venvstudio` | Launch the GUI |
+| `vs list` | `venvstudio list` | List every detected environment |
+| `vs create NAME` | `venvstudio create NAME` | Create a venv environment |
+| `vs delete NAME` | `venvstudio delete NAME` | Delete an environment (asks first) |
+| `vs delete NAME -y` | `venvstudio delete NAME -y` | Delete without the confirmation prompt |
+| `vs packages ENV` | `venvstudio packages ENV` | List packages installed in ENV |
+| `vs install ENV PKG...` | `venvstudio install ENV PKG...` | Install one or more packages into ENV |
+| `vs uninstall ENV PKG...` | `venvstudio uninstall ENV PKG...` | Uninstall packages from ENV |
+| `vs -V` | `venvstudio -V` | Show version (also: `version`) |
+| `vs -h` | `venvstudio -h` | Show help |
 
 ```bash
-vs                      # Launch the GUI
-vs list                 # List every detected environment
-vs create NAME          # Create a venv environment
-vs delete NAME          # Delete an environment (asks first)
-vs delete NAME -y       # Delete without the confirmation prompt
-
-vs packages ENV         # List packages installed in ENV
-vs install ENV PKG...   # Install one or more packages into ENV
-vs uninstall ENV PKG... # Uninstall packages from ENV
-
-vs -V                   # Show version (also: vs version)
-vs -h                   # Show help
+vs                        # short and sweet
+venvstudio list           # or spell it out
+vs install myenv requests httpx
 ```
 
-`venvstudio` works exactly the same if you prefer the full name, and
-`venvstudio-gui` launches without a console window on Windows.
+On Windows, `venvstudio-gui` starts the GUI without a console window.
 
 ---
 

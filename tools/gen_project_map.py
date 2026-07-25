@@ -109,20 +109,39 @@ def iter_reference_files():
 
 
 def build_reference_index():
-    """Map every identifier to the files that mention it.
+    """Count how often each identifier is used, per file.
 
     A plain text scan on purpose: it catches self.foo(), names used inside
     Qt signal strings, and connect(self.foo) alike, which an ast-only pass
     would miss and would then report as dead code.
+
+    Counts rather than a set of files, because most methods here live in
+    mixins and are called from the very file that defines them. Ignoring
+    same-file usage flagged working code (_ask_pipx_python, _readd_empty_
+    pipx_row) as dead; counting lets us subtract the one occurrence that is
+    the definition itself and keep the rest.
     """
-    refs = defaultdict(set)
+    refs = defaultdict(lambda: defaultdict(int))
     word = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
     for path in iter_reference_files():
         text = path.read_text(encoding="utf-8", errors="replace")
         rel = path.relative_to(REPO_ROOT).as_posix()
-        for name in set(word.findall(text)):
-            refs[name].add(rel)
+        for name in word.findall(text):
+            refs[name][rel] += 1
     return refs
+
+
+def is_referenced(refs, name, own_file) -> bool:
+    """True if `name` is used anywhere beyond its own definition line."""
+    per_file = refs.get(name)
+    if not per_file:
+        return False
+    for rel, count in per_file.items():
+        if rel != own_file and count > 0:
+            return True          # used by another file
+        if rel == own_file and count > 1:
+            return True          # used again in its own file
+    return False
 
 
 def module_summary(path: Path) -> str:
@@ -192,9 +211,9 @@ def render() -> str:
                 add("|---|---|---|")
                 for mname, mline, mdoc in methods:
                     total_funcs += 1
-                    hits = refs.get(mname, set()) - {rel}
-                    flag = "" if hits else " ⚠"
-                    if not hits:
+                    used = is_referenced(refs, mname, rel)
+                    flag = "" if used else " ⚠"
+                    if not used:
                         unused.append((rel, f"{name}.{mname}", mline))
                     add(f"| `{mname}`{flag} | {mline} | {mdoc or '-'} |")
                 add("")
@@ -205,9 +224,9 @@ def render() -> str:
             add("|---|---|---|")
             for fname, fline, fdoc in functions:
                 total_funcs += 1
-                hits = refs.get(fname, set()) - {rel}
-                flag = "" if hits else " ⚠"
-                if not hits:
+                used = is_referenced(refs, fname, rel)
+                flag = "" if used else " ⚠"
+                if not used:
                     unused.append((rel, fname, fline))
                 add(f"| `{fname}`{flag} | {fline} | {fdoc or '-'} |")
             add("")
@@ -215,11 +234,11 @@ def render() -> str:
     # ---- possibly-dead list ---------------------------------------------
     add("## Referenced nowhere else (⚠)")
     add("")
-    add("Names that appear in no other scanned file (`src/`, `main.py`, "
-        "`tools/`, `tests/`). Some are genuinely unused - this is how "
-        "`_update_quick_sidebar` was found to be dead code. Others are "
-        "reached through Qt signal strings or `getattr`. "
-        "**Check before deleting.**")
+    add("Names used nowhere beyond their own definition, across `src/`, "
+        "`main.py`, `tools/` and `tests/`. Some are genuinely unused - this "
+        "is how `_update_quick_sidebar` turned out to be dead code. Others "
+        "are reached through Qt signal strings, `getattr`, or an entry point "
+        "outside these folders. **Check before deleting.**")
     add("")
     if unused:
         add("| File | Name | Line |")

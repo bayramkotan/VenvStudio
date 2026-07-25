@@ -760,8 +760,25 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
 
         # ── pipx default Python ──────────────────────────────────────
         _pipx_py_layout = QHBoxLayout()
+
+        # Guard checkbox, same pattern as "Default Python for new
+        # environments": scrolling through Settings with the wheel could
+        # otherwise land on a combo and silently change its value. The combo
+        # stays disabled until the checkbox is ticked.
+        self.pipx_py_cb = QCheckBox()
+        self.pipx_py_cb.setChecked(False)
+        self.pipx_py_cb.setToolTip(
+            "Tick to change the pipx interpreter.\n"
+            "Locked by default so scrolling cannot alter it by accident."
+        )
+        self.pipx_py_cb.toggled.connect(
+            lambda on: self.pipx_python_combo.setEnabled(on))
+        _pipx_py_layout.addWidget(self.pipx_py_cb)
+        _pipx_py_layout.addWidget(QLabel("pipx Python:"))
+
         self.pipx_python_combo = _RefreshOnOpenComboBox(
             lambda: self._load_pipx_python_choices())
+        self.pipx_python_combo.setEnabled(False)
         self.pipx_python_combo.addItem("System default", "")
         self.pipx_python_combo.setToolTip(
             "Python used when pipx installs an app "
@@ -774,7 +791,10 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         self.pipx_python_combo.currentIndexChanged.connect(
             self._on_pipx_python_changed)
         _pipx_py_layout.addWidget(self.pipx_python_combo, 1)
-        paths_layout.addRow("pipx Python:", _pipx_py_layout)
+        # Single-argument addRow so the guard checkbox sits in the far
+        # left column, lining up with "Enable shared package cache" and the
+        # Nerd Fonts / CLI-TUI rows rather than floating mid-row.
+        paths_layout.addRow(_pipx_py_layout)
 
         _pipx_py_note = QLabel(
             "Applies to apps installed into the pipx environment from now "
@@ -870,6 +890,20 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
                     f"Python {_ver_item.text().strip()}  —  {_path}", _path)
         except Exception:
             pass
+        if not _seen:
+            # The table is filled asynchronously and can still be empty on
+            # first paint, which made a perfectly valid saved interpreter
+            # show up as "(not detected)". Scan directly in that case.
+            try:
+                for _ver, _path in (find_system_pythons() or []):
+                    if not _path or _path in _seen:
+                        continue
+                    _seen.add(_path)
+                    _combo.addItem(
+                        f"Python {_ver}  —  {_path}" if _ver else _path,
+                        _path)
+            except Exception:
+                pass
         if _saved:
             _idx = _combo.findData(_saved)
             if _idx >= 0:

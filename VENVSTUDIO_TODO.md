@@ -162,6 +162,46 @@ tensorflow + Python 3.13 örneği: conda-forge'da win-64 için sadece TF 1.x var
 
 ---
 
+## ✅ v1.6.17'de ÇÖZÜLEN (COMMIT BEKLİYOR)
+
+### 🔴 B195 — pipx'e kurulan uygulama "kurulu değil" görünüyordu
+pipx her uygulamayı `venvs/<ad>/` altında ayrı env'e kuruyor; `pip_manager`
+pipx home'un kendisinde `pip list` çalıştırdığı için `count=0` dönüyordu. Kart
+"kurulu değil" diyor, kullanıcı tekrar basıyor, o sırada başka env seçiliyse
+(conda1) oraya kuruluyordu. Kurulum aslında başarılıydı — `pipx list` doğru
+gösteriyordu.
+**Çözüm:** `pip_manager.list_packages` pipx home için `pipx list --json`
+kullanıyor (`_is_pipx_home()` + `_list_pipx_packages()`).
+
+### 🎛️ Settings combo koruması + hizalama
+- pipx Python combo'suna koruma checkbox'ı eklendi (`default_python_combo`
+  deseni): kutu işaretsizken combo kilitli, Settings'te tekerlekle gezerken
+  değer yanlışlıkla değişmiyor
+- Hizalama: checkbox etiketin soluna alındı, "Enable shared package cache" /
+  Nerd Fonts / CLI-TUI satırlarıyla aynı sütunda
+- `(not detected)` düzeltildi: Python tablosu asenkron dolduğu için combo
+  yüklenirken boş olabiliyordu; artık boşsa `find_system_pythons()` ile
+  doğrudan taranıyor
+
+### 🗺️ Proje haritası ⚠ yanlış pozitif düzeltmesi
+`gen_project_map.py` aynı dosya içindeki kullanımları saymıyordu, bu yüzden
+mixin metodları (`_ask_pipx_python`, `_readd_empty_pipx_row`) yanlışlıkla ölü
+görünüyordu. Artık tanım satırı dışındaki kullanımlar sayılıyor.
+
+---
+
+## 🟡 AÇIK — küçük UI tutarsızlıkları
+
+### Settings combo korumaları eksik
+`theme`, `lang`, `terminal`, `jupyter_workdir` combo'ları `NoScrollComboBox`
+ama koruma checkbox'ı yok — tekerlekle değer değişebilir. pipx Python ve
+default_python'daki checkbox deseni bunlara da uygulanmalı.
+
+### Jupyter Working Dir hizalaması
+Checkbox satırın ortasında (azınlık desen), en sola alınmalı.
+
+---
+
 ## ✅ v1.6.16'da ÇÖZÜLEN
 
 ### 🚀 Conda launcher paritesi

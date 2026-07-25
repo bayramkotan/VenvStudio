@@ -20,7 +20,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `src/core/config_manager.py` | 115 | VenvStudio - Configuration Manager |
 | `src/core/editor_integration.py` | 562 | editor_integration.py — Register VenvStudio's venv directory as the default |
 | `src/core/micromamba_installer.py` | 837 | micromamba installer + MicromambaEnv manager |
-| `src/core/pip_manager.py` | 439 | VenvStudio - Pip Manager |
+| `src/core/pip_manager.py` | 488 | VenvStudio - Pip Manager |
 | `src/core/python_downloader.py` | 671 | VenvStudio - Python Downloader |
 | `src/core/recent_envs.py` | 101 | RecentEnvsManager — tracks recently opened/selected environments. |
 | `src/core/system_tools_installer.py` | 939 | VenvStudio - System Tools Installer |
@@ -62,7 +62,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `src/gui/settings_catalog.py` | 660 | VenvStudio - Settings: CatalogMixin |
 | `src/gui/settings_common.py` | 48 | VenvStudio - Settings Common |
 | `src/gui/settings_editors.py` | 316 | VenvStudio - Settings: EditorsMixin |
-| `src/gui/settings_page.py` | 2064 | VenvStudio - Settings Page |
+| `src/gui/settings_page.py` | 2098 | VenvStudio - Settings Page |
 | `src/gui/settings_python.py` | 823 | VenvStudio - Settings: PythonMixin |
 | `src/gui/settings_python_download.py` | 715 | VenvStudio - Settings: Python Download Dialog & Workers |
 | `src/gui/settings_toolchain.py` | 1734 | VenvStudio - Settings: ToolchainMixin |
@@ -102,17 +102,17 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | Function | Line | Doc |
 |---|---|---|
 | `is_cli_invocation` | 24 | True if argv asks for CLI mode (subcommand present). |
-| `_managers` ⚠ | 29 | Build core managers exactly like the GUI does (shared config). |
-| `_find_env` ⚠ | 37 | Resolve an environment by name; returns VenvInfo or None. |
+| `_managers` | 29 | Build core managers exactly like the GUI does (shared config). |
+| `_find_env` | 37 | Resolve an environment by name; returns VenvInfo or None. |
 | `_cmd_list` | 45 | - |
-| `_cmd_create` ⚠ | 61 | - |
-| `_cmd_delete` ⚠ | 76 | - |
-| `_pip_manager_for` ⚠ | 96 | - |
-| `_cmd_packages` ⚠ | 104 | - |
-| `_cmd_install` ⚠ | 122 | - |
-| `_cmd_uninstall` ⚠ | 126 | - |
-| `_pkg_op` ⚠ | 130 | - |
-| `_cmd_version` ⚠ | 147 | - |
+| `_cmd_create` | 61 | - |
+| `_cmd_delete` | 76 | - |
+| `_pip_manager_for` | 96 | - |
+| `_cmd_packages` | 104 | - |
+| `_cmd_install` | 122 | - |
+| `_cmd_uninstall` | 126 | - |
+| `_pkg_op` | 130 | - |
+| `_cmd_version` | 147 | - |
 | `run_cli` | 153 | Parse arguments and run the requested subcommand. Returns exit code. |
 
 ### `src/core/cli_tools_manager.py`
@@ -122,18 +122,18 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | Method | Line | Doc |
 |---|---|---|
 | `run` | 627 | - |
-| `_install` ⚠ | 642 | - |
-| `_pip_install` ⚠ | 653 | - |
-| `_install_binary_starship` ⚠ | 665 | - |
-| `_install_binary_omp` ⚠ | 675 | - |
-| `_download_omp_binary` ⚠ | 701 | Download the oh-my-posh executable into ~/.posh/. |
-| `_download_omp_themes` ⚠ | 728 | Download and extract the official oh-my-posh themes pack into |
-| `_download_and_extract` ⚠ | 765 | - |
-| `_ensure_path` ⚠ | 826 | Ensure bin_dir is in PATH in shell configs. |
-| `_uninstall` ⚠ | 855 | - |
-| `_configure` ⚠ | 910 | - |
-| `_install_font` ⚠ | 926 | - |
-| `_do_install_fonts` ⚠ | 965 | - |
+| `_install` | 642 | - |
+| `_pip_install` | 653 | - |
+| `_install_binary_starship` | 665 | - |
+| `_install_binary_omp` | 675 | - |
+| `_download_omp_binary` | 701 | Download the oh-my-posh executable into ~/.posh/. |
+| `_download_omp_themes` | 728 | Download and extract the official oh-my-posh themes pack into |
+| `_download_and_extract` | 765 | - |
+| `_ensure_path` | 826 | Ensure bin_dir is in PATH in shell configs. |
+| `_uninstall` | 855 | - |
+| `_configure` | 910 | - |
+| `_install_font` | 926 | - |
+| `_do_install_fonts` | 965 | - |
 
 **module-level functions**
 
@@ -145,18 +145,18 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `get_terminal_version` | 233 | Return installed version of a terminal emulator, or None. |
 | `install_terminal` | 279 | Install a terminal emulator. Returns (success, message). |
 | `uninstall_terminal` | 327 | Uninstall a terminal emulator. Returns (success, message). |
-| `_get_bin_dir` ⚠ | 380 | Return user-level bin directory for CLI tool binaries. |
-| `_get_config_dir` ⚠ | 387 | Return config directory for CLI tools. |
-| `_get_omp_dir` ⚠ | 394 | Return the user-level oh-my-posh installation directory. |
-| `_get_omp_themes_dir` ⚠ | 414 | - |
+| `_get_bin_dir` | 380 | Return user-level bin directory for CLI tool binaries. |
+| `_get_config_dir` | 387 | Return config directory for CLI tools. |
+| `_get_omp_dir` | 394 | Return the user-level oh-my-posh installation directory. |
+| `_get_omp_themes_dir` | 414 | - |
 | `get_tool_version` | 420 | Return installed version string or None. |
 | `is_tool_installed` | 475 | - |
-| `_get_shell_configs` ⚠ | 481 | Return list of shell config files that exist. |
-| `_inject_shell_config` ⚠ | 506 | Add snippet to shell config. If a block with the same marker already |
-| `_remove_shell_config` ⚠ | 518 | Remove snippet from shell config. |
-| `configure_starship` ⚠ | 538 | Write starship init to shell configs. Returns list of configured files. |
-| `configure_omp` ⚠ | 569 | Write oh-my-posh init to shell configs. |
-| `remove_shell_config` ⚠ | 608 | Remove tool's shell config from all shell files. |
+| `_get_shell_configs` | 481 | Return list of shell config files that exist. |
+| `_inject_shell_config` | 506 | Add snippet to shell config. If a block with the same marker already |
+| `_remove_shell_config` | 518 | Remove snippet from shell config. |
+| `configure_starship` | 538 | Write starship init to shell configs. Returns list of configured files. |
+| `configure_omp` | 569 | Write oh-my-posh init to shell configs. |
+| `remove_shell_config` | 608 | Remove tool's shell config from all shell files. |
 
 ### `src/core/config_manager.py`
 
@@ -188,21 +188,21 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `_home` | 68 | - |
 | `_appdata` | 72 | Windows %APPDATA% or Linux/mac equivalent. |
 | `_which` | 174 | - |
-| `_resolve_platform_key` ⚠ | 178 | - |
+| `_resolve_platform_key` | 178 | - |
 | `detect_editors` | 186 | Walk the registry, mark which editors are installed on this machine. |
-| `_load_jsonc` ⚠ | 225 | Read a JSONC file (JSON with // and /* */ comments, trailing commas). |
-| `_backup` ⚠ | 246 | Create a .vs-backup alongside the file if it exists. |
-| `_write_json` ⚠ | 258 | Pretty-print JSON (2-space indent) with a trailing newline. |
-| `_is_vscode_family` ⚠ | 268 | - |
+| `_load_jsonc` | 225 | Read a JSONC file (JSON with // and /* */ comments, trailing commas). |
+| `_backup` | 246 | Create a .vs-backup alongside the file if it exists. |
+| `_write_json` | 258 | Pretty-print JSON (2-space indent) with a trailing newline. |
+| `_is_vscode_family` | 268 | - |
 | `register` | 272 | Add VenvStudio's venv directory to the editor's settings. |
 | `unregister` | 309 | Remove VenvStudio's added key — don't touch anything else. |
-| `_register_vscode_like` ⚠ | 335 | - |
-| `_unregister_vscode_like` ⚠ | 369 | - |
-| `_register_zed` ⚠ | 407 | - |
-| `_unregister_zed` ⚠ | 435 | - |
-| `_pycharm_reminder_path` ⚠ | 467 | Where we store the PyCharm reminder so the user can find it. |
-| `_register_pycharm` ⚠ | 472 | - |
-| `_unregister_pycharm` ⚠ | 499 | - |
+| `_register_vscode_like` | 335 | - |
+| `_unregister_vscode_like` | 369 | - |
+| `_register_zed` | 407 | - |
+| `_unregister_zed` | 435 | - |
+| `_pycharm_reminder_path` | 467 | Where we store the PyCharm reminder so the user can find it. |
+| `_register_pycharm` | 472 | - |
+| `_unregister_pycharm` | 499 | - |
 | `register_all` | 520 | Register VenvStudio with every installed editor (or a subset). |
 | `current_registered_path` | 533 | Return whatever path is currently set in the editor's config (or None). |
 
@@ -212,27 +212,27 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Function | Line | Doc |
 |---|---|---|
-| `_get_micromamba_dir` ⚠ | 20 | - |
+| `_get_micromamba_dir` | 20 | - |
 | `get_micromamba_exe` | 34 | Return path to micromamba binary if available (bundled or system). |
 | `download_micromamba` | 47 | Download micromamba single binary into VenvStudio's data dir. |
 | `kill_active_micromamba` | 154 | Kill every running micromamba child process. |
-| `_clean_micromamba_line` ⚠ | 176 | Strip micromamba spinner/progress glyphs from a status line. |
-| `_run_micromamba` ⚠ | 189 | Run micromamba with given args, streaming output to progress_cb. |
+| `_clean_micromamba_line` | 176 | Strip micromamba spinner/progress glyphs from a status line. |
+| `_run_micromamba` | 189 | Run micromamba with given args, streaming output to progress_cb. |
 | `get_conda_mirrors` | 274 | Mirror list from settings, falling back to the defaults. |
 | `request_mirror_skip` | 292 | Abandon the running micromamba call and advance to the next mirror. |
-| `_clear_mirror_skip` ⚠ | 298 | - |
-| `_skip_was_requested` ⚠ | 302 | - |
-| `_mirror_flag_path` ⚠ | 306 | Marker file for the mirror preference. |
-| `_mirror_preferred` ⚠ | 324 | - |
-| `_remember_mirror_works` ⚠ | 331 | - |
-| `_is_mirror_data_error` ⚠ | 344 | Mirror served unusable metadata (not a network problem). |
-| `_is_network_error` ⚠ | 357 | - |
-| `_mirror_channels` ⚠ | 365 | Swap conda-forge for its prefix.dev mirror (IDENTICAL content). |
-| `_channels_for_mirror` ⚠ | 375 | Point the conda-forge channel at a specific mirror URL. |
-| `_to_conda_names` ⚠ | 400 | Map known PyPI names to their conda-forge equivalents. |
-| `_missing_packages` ⚠ | 414 | Extract package names micromamba reported as non-existent. |
-| `_underscore_variants` ⚠ | 426 | conda-forge often uses "_" where PyPI uses "-" (factory-boy -> |
-| `_friendly_conda_error` ⚠ | 441 | Turn known micromamba failures into actionable messages. |
+| `_clear_mirror_skip` | 298 | - |
+| `_skip_was_requested` | 302 | - |
+| `_mirror_flag_path` | 306 | Marker file for the mirror preference. |
+| `_mirror_preferred` | 324 | - |
+| `_remember_mirror_works` | 331 | - |
+| `_is_mirror_data_error` | 344 | Mirror served unusable metadata (not a network problem). |
+| `_is_network_error` | 357 | - |
+| `_mirror_channels` | 365 | Swap conda-forge for its prefix.dev mirror (IDENTICAL content). |
+| `_channels_for_mirror` | 375 | Point the conda-forge channel at a specific mirror URL. |
+| `_to_conda_names` | 400 | Map known PyPI names to their conda-forge equivalents. |
+| `_missing_packages` | 414 | Extract package names micromamba reported as non-existent. |
+| `_underscore_variants` | 426 | conda-forge often uses "_" where PyPI uses "-" (factory-boy -> |
+| `_friendly_conda_error` | 441 | Turn known micromamba failures into actionable messages. |
 | `create_conda_env` | 471 | Create a conda environment at env_path using micromamba. |
 | `remove_conda_packages` | 593 | Remove packages from a conda environment with micromamba. |
 | `install_conda_packages` | 634 | Install packages into an existing conda environment. |
@@ -248,21 +248,23 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Method | Line | Doc |
 |---|---|---|
-| `_find_uv` ⚠ | 37 | Find uv executable — check venv, system Scripts, then PATH. |
-| `_ensure_uv` ⚠ | 87 | Ensure uv is available, install globally if not. |
+| `_find_uv` | 37 | Find uv executable — check venv, system Scripts, then PATH. |
+| `_ensure_uv` | 87 | Ensure uv is available, install globally if not. |
 | `backend` | 108 | - |
 | `backend` | 112 | - |
 | `_check_ssl` ⚠ | 115 | Check if SSL is available in this environment's Python. |
-| `_run_pip` ⚠ | 149 | Run a pip/uv command and return the result. |
-| `list_packages` | 231 | List all installed packages. |
-| `list_outdated` | 245 | List outdated packages. |
-| `install_packages` | 264 | Install one or more packages. |
-| `uninstall_packages` | 330 | Uninstall one or more packages. |
-| `freeze` | 370 | Get pip freeze output (requirements.txt format). |
-| `export_requirements` | 380 | Export installed packages to a requirements.txt file. |
-| `import_requirements` | 393 | Install packages from a requirements.txt file. |
-| `search_pypi` ⚠ | 418 | Search PyPI for packages (pip search is deprecated, so we provide |
-| `get_package_info` ⚠ | 425 | Get detailed info about an installed package. |
+| `_run_pip` | 149 | Run a pip/uv command and return the result. |
+| `_is_pipx_home` | 231 | True when venv_path is the pipx home rather than a real venv. |
+| `_list_pipx_packages` | 246 | List apps installed with pipx. |
+| `list_packages` | 278 | List all installed packages. |
+| `list_outdated` | 294 | List outdated packages. |
+| `install_packages` | 313 | Install one or more packages. |
+| `uninstall_packages` | 379 | Uninstall one or more packages. |
+| `freeze` | 419 | Get pip freeze output (requirements.txt format). |
+| `export_requirements` | 429 | Export installed packages to a requirements.txt file. |
+| `import_requirements` | 442 | Install packages from a requirements.txt file. |
+| `search_pypi` ⚠ | 467 | Search PyPI for packages (pip search is deprecated, so we provide |
+| `get_package_info` ⚠ | 474 | Get detailed info about an installed package. |
 
 ### `src/core/python_downloader.py`
 
@@ -270,13 +272,13 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Method | Line | Doc |
 |---|---|---|
-| `list_versions` ⚠ | 99 | Return a list of available version dicts. |
+| `list_versions` | 99 | Return a list of available version dicts. |
 
 **class AstralBackend** (line 115)
 
 | Method | Line | Doc |
 |---|---|---|
-| `list_versions` ⚠ | 126 | - |
+| `list_versions` | 126 | - |
 
 **class GitHubBackend** (line 185)
 
@@ -284,28 +286,28 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Method | Line | Doc |
 |---|---|---|
-| `list_versions` ⚠ | 208 | - |
+| `list_versions` | 208 | - |
 
 **class SourceForgeBackend** (line 265)
 
 | Method | Line | Doc |
 |---|---|---|
-| `list_versions` ⚠ | 276 | - |
+| `list_versions` | 276 | - |
 
 **class CustomUrlBackend** (line 287)
 
 | Method | Line | Doc |
 |---|---|---|
-| `list_versions` ⚠ | 300 | - |
+| `list_versions` | 300 | - |
 
 **module-level functions**
 
 | Function | Line | Doc |
 |---|---|---|
 | `get_pythons_dir` | 58 | Return the directory where standalone Pythons are stored. |
-| `get_target_triple` ⚠ | 64 | Return the target triple for the current platform. |
+| `get_target_triple` | 64 | Return the target triple for the current platform. |
 | `get_all_mirror_infos` | 336 | Return metadata for all mirrors — for Settings dropdowns. |
-| `_get_backend` ⚠ | 344 | Instantiate a backend by id. |
+| `_get_backend` | 344 | Instantiate a backend by id. |
 | `get_available_versions` | 356 | Fetch available Python versions from the selected mirror. |
 | `get_installed_pythons` | 397 | List locally installed standalone Pythons. |
 | `download_python` | 437 | Download and extract a standalone Python build. |
@@ -322,14 +324,14 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `touch` | 49 | Add or update an entry (move to top), save. |
 | `remove` | 70 | Remove entry by path. |
 | `clear` | 78 | Remove all recent env entries. |
-| `_read` ⚠ | 84 | - |
-| `_write` ⚠ | 95 | - |
+| `_read` | 84 | - |
+| `_write` | 95 | - |
 
 **module-level functions**
 
 | Function | Line | Doc |
 |---|---|---|
-| `_get_recent_envs_path` ⚠ | 15 | Return platform-appropriate path for recent_envs.json. |
+| `_get_recent_envs_path` | 15 | Return platform-appropriate path for recent_envs.json. |
 
 ### `src/core/system_tools_installer.py`
 
@@ -337,14 +339,14 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Method | Line | Doc |
 |---|---|---|
-| `is_installed_system` ⚠ | 154 | - |
-| `is_installed_portable` ⚠ | 157 | - |
+| `is_installed_system` | 154 | - |
+| `is_installed_portable` | 157 | - |
 | `is_installed` | 160 | - |
 | `get_system_exe` | 165 | - |
 | `get_portable_exe` | 168 | - |
-| `get_latest_info` ⚠ | 185 | - |
-| `install_portable` ⚠ | 188 | - |
-| `install_system` ⚠ | 191 | - |
+| `get_latest_info` | 185 | - |
+| `install_portable` | 188 | - |
+| `install_system` | 191 | - |
 | `install` | 194 | - |
 
 **class RInstaller** (line 208)
@@ -352,59 +354,59 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | Method | Line | Doc |
 |---|---|---|
 | `get_system_exe` | 212 | - |
-| `get_latest_info` ⚠ | 229 | - |
-| `install_portable` ⚠ | 267 | - |
-| `_install_linux` ⚠ | 306 | - |
+| `get_latest_info` | 229 | - |
+| `install_portable` | 267 | - |
+| `_install_linux` | 306 | - |
 
 **class RStudioInstaller** (line 349)
 
 | Method | Line | Doc |
 |---|---|---|
 | `get_system_exe` | 353 | - |
-| `get_latest_info` ⚠ | 385 | - |
-| `install_portable` ⚠ | 421 | - |
+| `get_latest_info` | 385 | - |
+| `install_portable` | 421 | - |
 
 **class OllamaInstaller** (line 481)
 
 | Method | Line | Doc |
 |---|---|---|
-| `get_latest_info` ⚠ | 486 | - |
-| `install_portable` ⚠ | 507 | - |
+| `get_latest_info` | 486 | - |
+| `install_portable` | 507 | - |
 
 **class DBeaverInstaller** (line 566)
 
 | Method | Line | Doc |
 |---|---|---|
 | `get_system_exe` | 571 | - |
-| `get_latest_info` ⚠ | 585 | - |
-| `install_portable` ⚠ | 637 | - |
+| `get_latest_info` | 585 | - |
+| `install_portable` | 637 | - |
 
 **class JamoviInstaller** (line 703)
 
 | Method | Line | Doc |
 |---|---|---|
 | `get_system_exe` | 708 | - |
-| `get_latest_info` ⚠ | 728 | - |
-| `install_portable` ⚠ | 748 | - |
+| `get_latest_info` | 728 | - |
+| `install_portable` | 748 | - |
 
 **class JASPInstaller** (line 817)
 
 | Method | Line | Doc |
 |---|---|---|
 | `get_system_exe` | 822 | - |
-| `get_latest_info` ⚠ | 839 | - |
-| `install_portable` ⚠ | 859 | - |
+| `get_latest_info` | 839 | - |
+| `install_portable` | 859 | - |
 
 **module-level functions**
 
 | Function | Line | Doc |
 |---|---|---|
-| `_fetch_json` ⚠ | 40 | - |
-| `_download` ⚠ | 46 | - |
-| `_extract` ⚠ | 71 | Extract zip / tar.gz / tar.bz2 / tar.xz / AppImage into dest. |
-| `_apps_dir` ⚠ | 91 | - |
-| `_strip_single_root` ⚠ | 97 | If extraction produced a single top-level dir, return it. |
-| `write_activation_scripts` ⚠ | 107 | (Re)generate activate.bat and activate.sh for a system-tools env. |
+| `_fetch_json` | 40 | - |
+| `_download` | 46 | - |
+| `_extract` | 71 | Extract zip / tar.gz / tar.bz2 / tar.xz / AppImage into dest. |
+| `_apps_dir` | 91 | - |
+| `_strip_single_root` | 97 | If extraction produced a single top-level dir, return it. |
+| `write_activation_scripts` | 107 | (Re)generate activate.bat and activate.sh for a system-tools env. |
 | `get_installer` | 937 | - |
 
 ### `src/core/terminal_profile_setup.py`
@@ -416,15 +418,15 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `detect_terminal` | 64 | Best-guess the user's terminal emulator. |
 | `supported_terminals` | 107 | Terminals this module knows how to write a profile for. |
 | `create_nerd_font_profile` | 115 | Create a new terminal profile with the given Nerd Font. |
-| `_setup_gnome_terminal` ⚠ | 149 | - |
-| `_setup_mate_terminal` ⚠ | 188 | - |
-| `_setup_konsole` ⚠ | 223 | - |
-| `_setup_alacritty` ⚠ | 270 | - |
-| `_setup_kitty` ⚠ | 305 | - |
-| `_setup_wezterm` ⚠ | 339 | - |
-| `_dconf_read` ⚠ | 361 | - |
-| `_dconf_write` ⚠ | 371 | - |
-| `_append_to_dconf_list` ⚠ | 380 | Append item to a dconf list literal like ['a', 'b'] → ['a', 'b', 'item']. |
+| `_setup_gnome_terminal` | 149 | - |
+| `_setup_mate_terminal` | 188 | - |
+| `_setup_konsole` | 223 | - |
+| `_setup_alacritty` | 270 | - |
+| `_setup_kitty` | 305 | - |
+| `_setup_wezterm` | 339 | - |
+| `_dconf_read` | 361 | - |
+| `_dconf_write` | 371 | - |
+| `_append_to_dconf_list` | 380 | Append item to a dconf list literal like ['a', 'b'] → ['a', 'b', 'item']. |
 
 ### `src/core/tool_registry.py`
 
@@ -436,7 +438,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `_save` | 48 | - |
 | `register` | 55 | Register a tool with its path, version, and install source. |
 | `find` | 66 | Find tool executable — registry first, then shutil.which fallback. |
-| `_common_paths` ⚠ | 94 | Return common installation paths for a tool. |
+| `_common_paths` | 94 | Return common installation paths for a tool. |
 | `get_path` | 120 | Get registered path for a tool (no search). |
 | `get_version` ⚠ | 125 | Get registered version for a tool. |
 | `get_info` ⚠ | 130 | Get full info dict for a tool. |
@@ -448,7 +450,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Function | Line | Doc |
 |---|---|---|
-| `_get_registry_path` ⚠ | 16 | Return platform-appropriate registry file path. |
+| `_get_registry_path` | 16 | Return platform-appropriate registry file path. |
 
 ### `src/core/updater.py`
 
@@ -456,10 +458,10 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Function | Line | Doc |
 |---|---|---|
-| `_parse_version` ⚠ | 16 | - |
-| `_https_get` ⚠ | 23 | Minimal HTTPS GET using raw socket + ssl — no http.client, no urllib. |
-| `_https_get_urllib` ⚠ | 49 | Fallback: fetch via urllib (works better in frozen EXE environments). |
-| `_make_ssl_ctx` ⚠ | 62 | Create SSL context, optionally skipping verification (AppImage/EXE fallback). |
+| `_parse_version` | 16 | - |
+| `_https_get` | 23 | Minimal HTTPS GET using raw socket + ssl — no http.client, no urllib. |
+| `_https_get_urllib` | 49 | Fallback: fetch via urllib (works better in frozen EXE environments). |
+| `_make_ssl_ctx` | 62 | Create SSL context, optionally skipping verification (AppImage/EXE fallback). |
 | `check_for_update` | 85 | - |
 
 ### `src/core/venv_manager.py`
@@ -477,8 +479,8 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `set_base_dir` | 95 | Change the base directory. |
 | `ensure_pipx_env` | 100 | Auto-create a pipx marker env in pipx home dir if pipx is installed. |
 | `create_venv` | 168 | Create a new virtual environment. |
-| `_detect_distro_family` ⚠ | 423 | - |
-| `_try_install_venv_package` ⚠ | 450 | - |
+| `_detect_distro_family` | 423 | - |
+| `_try_install_venv_package` | 450 | - |
 | `delete_venv` | 499 | Delete a virtual environment. |
 | `invalidate_cache_by_name` ⚠ | 585 | - |
 | `invalidate_all_caches` | 588 | - |
@@ -493,7 +495,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Method | Line | Doc |
 |---|---|---|
-| `_get_cache_file` ⚠ | 24 | - |
+| `_get_cache_file` | 24 | - |
 | `_load_all_cache` | 36 | Load cache from memory if available, otherwise from disk once. |
 | `_save_all_cache` | 50 | - |
 | `_cache_key` | 60 | Consistent cache key — always forward slashes, no leading slash on Windows. |
@@ -527,9 +529,9 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | Method | Line | Doc |
 |---|---|---|
 | `rename_venv` | 22 | - |
-| `_relocate_venv_paths` ⚠ | 111 | Rewrite absolute paths inside a moved venv so it keeps working. |
+| `_relocate_venv_paths` | 111 | Rewrite absolute paths inside a moved venv so it keeps working. |
 | `rename_full_venv` | 163 | Full rename: clone old env to new name, then delete old. |
-| `set_poetry_display_name` ⚠ | 220 | Set a display name override for a Poetry env (VenvStudio-only, doesn't touch Poetry itself). |
+| `set_poetry_display_name` | 220 | Set a display name override for a Poetry env (VenvStudio-only, doesn't touch Poetry itself). |
 
 ### `src/gui/env_dialog.py`
 
@@ -537,7 +539,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Method | Line | Doc |
 |---|---|---|
-| `_load_pythons_async` ⚠ | 57 | Populate python combo in background after dialog is shown. |
+| `_load_pythons_async` | 57 | Populate python combo in background after dialog is shown. |
 | `_populate_python_combo` | 63 | Fill python combo with found Python installations. |
 | `_setup_ui` | 123 | - |
 | `_on_env_type_changed` | 393 | Show/hide rows based on env type. |
@@ -550,7 +552,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `_on_progress` | 1469 | - |
 | `_on_finished` | 1472 | - |
 | `_on_cancel` | 1490 | - |
-| `_reset_ui` ⚠ | 1507 | - |
+| `_reset_ui` | 1507 | - |
 | `closeEvent` | 1516 | - |
 
 ### `src/gui/env_dialog_create.py`
@@ -560,9 +562,9 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | Method | Line | Doc |
 |---|---|---|
 | `_create` | 33 | - |
-| `_create_conda` ⚠ | 64 | - |
-| `_create_alt_env` ⚠ | 153 | - |
-| `_create_venv` ⚠ | 559 | - |
+| `_create_conda` | 64 | - |
+| `_create_alt_env` | 153 | - |
+| `_create_venv` | 559 | - |
 
 ### `src/gui/env_dialog_tools.py`
 
@@ -591,8 +593,8 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Method | Line | Doc |
 |---|---|---|
-| `_get_env_pip_manager` ⚠ | 15 | Get PipManager for the selected environment. |
-| `_get_env_freeze_and_version` ⚠ | 25 | Helper: get freeze content and python version for selected env. |
+| `_get_env_pip_manager` | 15 | Get PipManager for the selected environment. |
+| `_get_env_freeze_and_version` | 25 | Helper: get freeze content and python version for selected env. |
 | `_export_requirements` | 50 | - |
 | `_export_dockerfile` | 65 | - |
 | `_export_docker_compose` | 99 | - |
@@ -610,8 +612,8 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 |---|---|---|
 | `_update_env_summary` | 20 | Recompute just the header summary line (counts + GB) from the |
 | `_refresh_env_list` | 69 | Phase 1: Load from cache instantly. Phase 2: fetch missing in background. |
-| `_on_env_detail_ready` ⚠ | 340 | Update a single row with detailed info from background thread. |
-| `_on_all_details_done` ⚠ | 356 | - |
+| `_on_env_detail_ready` | 340 | Update a single row with detailed info from background thread. |
+| `_on_all_details_done` | 356 | - |
 | `_update_info_label_fast` ⚠ | 366 | - |
 | `_update_info_label` ⚠ | 370 | - |
 | `_on_env_selected` | 375 | - |
@@ -629,20 +631,20 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | Method | Line | Doc |
 |---|---|---|
 | `_create_env` | 19 | - |
-| `_get_new_name_for_rename` ⚠ | 42 | Yeni isim giriş dialog'u — ortak kullanım. |
+| `_get_new_name_for_rename` | 42 | Yeni isim giriş dialog'u — ortak kullanım. |
 | `_rename_env_only` | 58 | Rename (Name Only) — sadece klasör rename, hızlı. |
 | `_rename_env_full` | 98 | Rename (Full) — clone + delete, tüm paketler yeniden kurulur. |
 | `_rename_env` ⚠ | 148 | - |
-| `_on_rename_finished` ⚠ | 151 | - |
+| `_on_rename_finished` | 151 | - |
 | `_delete_env` | 166 | - |
-| `_on_delete_finished` ⚠ | 251 | - |
+| `_on_delete_finished` | 251 | - |
 | `_refresh_current_env_row` | 334 | Update only the active env's row after a package / launch app / |
-| `_remove_env_row_inplace` ⚠ | 494 | B182: surgically drop a single row from the env table without |
-| `_ask_pipx_python` ⚠ | 567 | Ask which Python the re-created pipx environment should use. |
-| `_readd_empty_pipx_row` ⚠ | 667 | B182: re-create the pipx tracker marker and insert a fresh row |
+| `_remove_env_row_inplace` | 494 | B182: surgically drop a single row from the env table without |
+| `_ask_pipx_python` | 567 | Ask which Python the re-created pipx environment should use. |
+| `_readd_empty_pipx_row` | 667 | B182: re-create the pipx tracker marker and insert a fresh row |
 | `_clone_env` | 841 | - |
-| `_on_clone_finished` ⚠ | 891 | - |
-| `_on_clone_cancel` ⚠ | 908 | - |
+| `_on_clone_finished` | 891 | - |
+| `_on_clone_cancel` | 908 | - |
 
 ### `src/gui/env_state.py`
 
@@ -653,13 +655,13 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `set_venv` | 24 | - |
 | `_update_tabs_for_env_type` | 130 | Show/hide tabs based on current env type using removeTab/insertTab. |
 | `populate_env_list` | 320 | Populate the environment dropdown from main window. |
-| `_safe_clear_env_state` ⚠ | 354 | Safely clear all env-related state when no env is selected or env was deleted. |
+| `_safe_clear_env_state` | 354 | Safely clear all env-related state when no env is selected or env was deleted. |
 | `_on_env_selector_changed` | 375 | Handle env dropdown change. |
 | `_update_env_info_bar` | 457 | Update all info labels for the selected environment — uses cache. |
-| `_hide_env_info_bar` ⚠ | 610 | Hide all info bar labels when no env is selected. |
-| `_start_size_calc_async` ⚠ | 616 | - |
-| `_retire_pkg_loader` ⚠ | 658 | Detach the running package loader instead of killing it. |
-| `_on_pkg_loader_finished` ⚠ | 703 | Drop references to loaders that have finished on their own. |
+| `_hide_env_info_bar` | 610 | Hide all info bar labels when no env is selected. |
+| `_start_size_calc_async` | 616 | - |
+| `_retire_pkg_loader` | 658 | Detach the running package loader instead of killing it. |
+| `_on_pkg_loader_finished` | 703 | Drop references to loaders that have finished on their own. |
 | `_async_refresh_packages` | 709 | Load packages — from cache if available, otherwise background subprocess. |
 
 ### `src/gui/launcher_run.py`
@@ -668,15 +670,15 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Method | Line | Doc |
 |---|---|---|
-| `_launch_system_app` ⚠ | 25 | Detect and launch a system-level application. |
+| `_launch_system_app` | 25 | Detect and launch a system-level application. |
 | `_launch_exe` | 244 | Launch an executable with proper detach/console flags. |
-| `_on_system_install_finished` ⚠ | 312 | Called after a system tool silent install completes. |
-| `_get_orange3_packages` ⚠ | 377 | Return the right Orange3 packages based on Python version. |
+| `_on_system_install_finished` | 312 | Called after a system tool silent install completes. |
+| `_get_orange3_packages` | 377 | Return the right Orange3 packages based on Python version. |
 | `_launch_script` | 398 | Let user pick a .py file and run it with the selected framework. |
 | `_launch_app` | 476 | Launch an app from the selected environment. |
-| `_on_app_install_finished` ⚠ | 817 | After installing an app package, refresh and launch. |
+| `_on_app_install_finished` | 817 | After installing an app package, refresh and launch. |
 | `_uninstall_app` | 965 | Uninstall an app from the selected environment with confirmation. |
-| `_on_system_uninstall_finished` ⚠ | 1049 | After removing a conda system app: clear caches and refresh. |
+| `_on_system_uninstall_finished` | 1049 | After removing a conda system app: clear caches and refresh. |
 | `_get_app_icon_path` | 1095 | Return the absolute path to the app's .ico (Windows) or .png (Linux/macOS) icon. |
 
 ### `src/gui/launcher_shortcuts.py`
@@ -686,10 +688,10 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | Method | Line | Doc |
 |---|---|---|
 | `_create_desktop_shortcut` | 19 | Create a desktop shortcut for the app — .lnk (Windows), .desktop (Linux), .command (macOS). |
-| `_write_conda_launch_wrapper` ⚠ | 116 | Write a small script that puts the conda env on PATH, then runs exe. |
-| `_create_windows_shortcut` ⚠ | 160 | Create Windows .lnk shortcut via PowerShell (no COM dependency). |
-| `_create_linux_shortcut` ⚠ | 203 | Create Linux .desktop file with icon. |
-| `_create_macos_shortcut` ⚠ | 222 | Create macOS .command script. |
+| `_write_conda_launch_wrapper` | 116 | Write a small script that puts the conda env on PATH, then runs exe. |
+| `_create_windows_shortcut` | 160 | Create Windows .lnk shortcut via PowerShell (no COM dependency). |
+| `_create_linux_shortcut` | 203 | Create Linux .desktop file with icon. |
+| `_create_macos_shortcut` | 222 | Create macOS .command script. |
 
 ### `src/gui/launcher_ui.py`
 
@@ -698,7 +700,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | Method | Line | Doc |
 |---|---|---|
 | `_create_launcher_tab` | 27 | App Launcher tab — launch Orange, JupyterLab, Notebook from the env. |
-| `_create_app_card` ⚠ | 380 | Create a single app launcher card. |
+| `_create_app_card` | 380 | Create a single app launcher card. |
 | `_update_launcher_status` | 641 | Update launcher cards to show installed/not-installed status. |
 | `_update_quick_sidebar` | 866 | Update sidebar buttons — show only installed apps. |
 
@@ -710,14 +712,14 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Method | Line | Doc |
 |---|---|---|
-| `_default_colors` ⚠ | 81 | - |
+| `_default_colors` | 81 | - |
 | `_setup_ui` | 91 | - |
-| `_radio_style` ⚠ | 288 | - |
-| `_on_dropdown_changed` ⚠ | 296 | - |
-| `_build_install_command` ⚠ | 302 | Build the shell install command based on current selection. |
-| `_on_copy_command` ⚠ | 348 | Copy the generated install command to clipboard + status feedback. |
-| `_on_install_clicked` ⚠ | 368 | - |
-| `_build_decision` ⚠ | 375 | - |
+| `_radio_style` | 288 | - |
+| `_on_dropdown_changed` | 296 | - |
+| `_build_install_command` | 302 | Build the shell install command based on current selection. |
+| `_on_copy_command` | 348 | Copy the generated install command to clipboard + status feedback. |
+| `_on_install_clicked` | 368 | - |
+| `_build_decision` | 375 | - |
 
 ### `src/gui/learn_page.py`
 
@@ -725,10 +727,10 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Method | Line | Doc |
 |---|---|---|
-| `_setup` ⚠ | 98 | - |
-| `_copy_snippet` ⚠ | 436 | - |
-| `_open_url` ⚠ | 440 | - |
-| `_toggle_bookmark` ⚠ | 444 | - |
+| `_setup` | 98 | - |
+| `_copy_snippet` | 436 | - |
+| `_open_url` | 440 | - |
+| `_toggle_bookmark` | 444 | - |
 | `mousePressEvent` | 450 | - |
 | `_toggle` | 454 | - |
 
@@ -736,28 +738,28 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Method | Line | Doc |
 |---|---|---|
-| `_setup` ⚠ | 473 | - |
+| `_setup` | 473 | - |
 
 **class LearnPage** (line 533)
 
 | Method | Line | Doc |
 |---|---|---|
 | `apply_theme` | 555 | Re-apply theme across the Learn page. |
-| `_on_bookmark_toggled` ⚠ | 609 | - |
+| `_on_bookmark_toggled` | 609 | - |
 | `_jump_to_topic` | 619 | Switch to the category containing this topic and expand the card. |
-| `_expand_topic_card` ⚠ | 630 | Find the TopicCard with the given title and expand it. |
-| `_scroll_to_card` ⚠ | 646 | Scroll the scroll area to make the card visible. |
+| `_expand_topic_card` | 630 | Find the TopicCard with the given title and expand it. |
+| `_scroll_to_card` | 646 | Scroll the scroll area to make the card visible. |
 | `remove_bookmark` | 661 | Remove a bookmark externally (called from main_window sidebar). |
 | `_c` | 669 | - |
-| `_setup` ⚠ | 672 | - |
-| `_switch_cat` ⚠ | 758 | - |
+| `_setup` | 672 | - |
+| `_switch_cat` | 758 | - |
 | `refresh_theme` ⚠ | 763 | Re-apply theme colors. |
 
 **module-level functions**
 
 | Function | Line | Doc |
 |---|---|---|
-| `_md_to_html` ⚠ | 21 | Lightweight Markdown-ish formatter for Learn body / info / table cells. |
+| `_md_to_html` | 21 | Lightweight Markdown-ish formatter for Learn body / info / table cells. |
 
 ### `src/gui/linux_fixes.py`
 
@@ -775,21 +777,21 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Method | Line | Doc |
 |---|---|---|
-| `_is_windows` ⚠ | 143 | - |
+| `_is_windows` | 143 | - |
 | `_load` | 147 | (Re)read the tail of the log file and apply the current filter. |
-| `_apply_filter` ⚠ | 167 | - |
-| `_copy_all` ⚠ | 194 | - |
-| `_open_folder` ⚠ | 197 | - |
-| `_apply_text_font` ⚠ | 208 | - |
-| `_change_font` ⚠ | 215 | - |
-| `_toggle_live` ⚠ | 219 | - |
+| `_apply_filter` | 167 | - |
+| `_copy_all` | 194 | - |
+| `_open_folder` | 197 | - |
+| `_apply_text_font` | 208 | - |
+| `_change_font` | 215 | - |
+| `_toggle_live` | 219 | - |
 | `closeEvent` | 225 | - |
-| `_file_handler` ⚠ | 231 | Find the app's RotatingFileHandler so we can pause it safely. |
-| `_rewrite_log` ⚠ | 239 | Rewrite venvstudio.log keeping only lines where keep_line(ts) is True. |
-| `_delete_old` ⚠ | 282 | - |
-| `_delete_before_date` ⚠ | 292 | - |
-| `_delete_all` ⚠ | 311 | - |
-| `_delete_backups` ⚠ | 324 | Remove rotated venvstudio.log.1 .. .N files. |
+| `_file_handler` | 231 | Find the app's RotatingFileHandler so we can pause it safely. |
+| `_rewrite_log` | 239 | Rewrite venvstudio.log keeping only lines where keep_line(ts) is True. |
+| `_delete_old` | 282 | - |
+| `_delete_before_date` | 292 | - |
+| `_delete_all` | 311 | - |
+| `_delete_backups` | 324 | Remove rotated venvstudio.log.1 .. .N files. |
 
 ### `src/gui/main_window.py`
 
@@ -797,30 +799,30 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Method | Line | Doc |
 |---|---|---|
-| `_auto_check_update` ⚠ | 107 | Silently check for updates on startup — runs in background thread. |
-| `_on_update_found` ⚠ | 129 | Called on main thread when an update is available. |
+| `_auto_check_update` | 107 | Silently check for updates on startup — runs in background thread. |
+| `_on_update_found` | 129 | Called on main thread when an update is available. |
 | `_c` | 143 | Return current theme color palette with font hierarchy. |
-| `_setup_window` ⚠ | 153 | - |
+| `_setup_window` | 153 | - |
 | `_setup_ui` | 191 | - |
-| `_create_env_page` ⚠ | 361 | - |
-| `_hide_cmd_panel` ⚠ | 563 | Hide the persistent educational command panel. |
-| `_on_env_user_interaction` ⚠ | 570 | Called on manual user interaction (mouse click / key press) with env table. |
-| `eventFilter` ⚠ | 591 | Detect keyboard arrow navigation on env_table for panel hiding. |
+| `_create_env_page` | 361 | - |
+| `_hide_cmd_panel` | 563 | Hide the persistent educational command panel. |
+| `_on_env_user_interaction` | 570 | Called on manual user interaction (mouse click / key press) with env table. |
+| `eventFilter` | 591 | Detect keyboard arrow navigation on env_table for panel hiding. |
 | `_update_cmd_panel` | 600 | Update the persistent educational command panel on the env page. |
 | `_switch_page` | 802 | - |
-| `_on_learn_install` ⚠ | 871 | Called when Learn page requests package install — show LearnInstallDialog. |
-| `_refresh_bookmarks` ⚠ | 953 | Update Quick Launch bookmark buttons. |
-| `_open_bookmark` ⚠ | 990 | Switch to Learn page and navigate to the topic. |
-| `_bookmark_context_menu` ⚠ | 996 | Right-click context menu on a bookmark button. |
+| `_on_learn_install` | 871 | Called when Learn page requests package install — show LearnInstallDialog. |
+| `_refresh_bookmarks` | 953 | Update Quick Launch bookmark buttons. |
+| `_open_bookmark` | 990 | Switch to Learn page and navigate to the topic. |
+| `_bookmark_context_menu` | 996 | Right-click context menu on a bookmark button. |
 | `_open_package_manager` | 1010 | - |
 | `_open_terminal` | 1019 | - |
 | `_open_env_folder` | 1035 | Open the selected environment's folder in the system file manager. |
 | `_open_settings` | 1054 | Navigate to the settings page. |
-| `_on_settings_saved` ⚠ | 1058 | Handle settings saved - refresh env list with potentially new base dir. |
+| `_on_settings_saved` | 1058 | Handle settings saved - refresh env list with potentially new base dir. |
 | `_show_about` | 1068 | - |
 | `_check_for_updates` | 1091 | Manually check for updates from Help menu. |
 | `closeEvent` | 1134 | - |
-| `showEvent` ⚠ | 1237 | Re-connect screenChanged after window handle becomes available. |
+| `showEvent` | 1237 | Re-connect screenChanged after window handle becomes available. |
 
 ### `src/gui/package_export.py`
 
@@ -829,7 +831,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | Method | Line | Doc |
 |---|---|---|
 | `_export_requirements` | 21 | - |
-| `_get_freeze_and_version` ⚠ | 40 | Helper: get freeze content and python version for export. |
+| `_get_freeze_and_version` | 40 | Helper: get freeze content and python version for export. |
 | `_export_dockerfile` | 64 | Export as Dockerfile. |
 | `_export_docker_compose` | 112 | Export as docker-compose.yml + Dockerfile. |
 | `_export_pyproject` | 170 | Export as pyproject.toml. |
@@ -845,17 +847,17 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 |---|---|---|
 | `_pkg_table_context_menu` | 25 | Right-click context menu for packages table. |
 | `_catalog_table_context_menu` | 68 | Right-click context menu for catalog table — same style as Installed. |
-| `_show_pip_info` ⚠ | 101 | Show package info — pip show if installed, PyPI API if not. |
-| `_copy_to_clipboard` ⚠ | 285 | Copy text to clipboard. |
+| `_show_pip_info` | 101 | Show package info — pip show if installed, PyPI API if not. |
+| `_copy_to_clipboard` | 285 | Copy text to clipboard. |
 | `_open_pypi` | 291 | Open package page on PyPI. |
 | `_filter_installed` | 296 | - |
 | `_show_command_hint` | 305 | Show command hint in output log instead of blocking dialog. |
 | `_on_progress` | 311 | - |
 | `_on_install_finished` | 320 | - |
 | `_cancel_operation` | 375 | - |
-| `_abandon_worker` ⚠ | 396 | Detach a worker that ignored cancel() instead of killing it. |
+| `_abandon_worker` | 396 | Detach a worker that ignored cancel() instead of killing it. |
 | `_check_outdated` | 430 | Check for outdated packages and show update option. |
-| `_on_outdated_result` ⚠ | 450 | - |
+| `_on_outdated_result` | 450 | - |
 | `_copy_preset_command` | 495 | Copy install command to clipboard (env-type-aware). |
 | `_copy_launcher_commands` | 512 | Copy both install and run commands to clipboard. |
 | `_uninstall_preset` | 519 | Uninstall all packages in a preset with confirmation. |
@@ -876,11 +878,11 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `refresh_packages` | 231 | Refresh installed packages list - invalidates cache and async reloads. |
 | `_refresh_packages_sync_legacy` ⚠ | 237 | Legacy sync refresh - kept for internal use only. |
 | `_populate_catalog` | 282 | - |
-| `_on_catalog_checkbox_changed` ⚠ | 390 | - |
-| `_update_apply_button` ⚠ | 393 | Enable Apply button only if there are actual changes. |
-| `_get_catalog_changes` ⚠ | 409 | - |
+| `_on_catalog_checkbox_changed` | 390 | - |
+| `_update_apply_button` | 393 | Enable Apply button only if there are actual changes. |
+| `_get_catalog_changes` | 409 | - |
 | `_apply_catalog_changes` | 435 | - |
-| `_chain_install` ⚠ | 496 | - |
+| `_chain_install` | 496 | - |
 | `_install_packages` | 504 | - |
 | `_do_install` | 589 | Actually start install worker (no confirm dialog). |
 | `_copy_install_command` | 710 | Copy the install command for entered packages (env-type aware). |
@@ -895,7 +897,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 |---|---|---|
 | `_get_config` | 112 | Get a config value from cache, loading from ConfigManager once. |
 | `_get_venv_manager` | 125 | Return cached VenvManager, creating it only if base_dir changed. |
-| `_get_config_base_dir` ⚠ | 140 | Return venv base dir from config (cached). |
+| `_get_config_base_dir` | 140 | Return venv base dir from config (cached). |
 | `_invalidate_cache` | 151 | Call after install/uninstall/env-switch to force fresh data. |
 | `apply_theme` | 186 | Update hardcoded colors when theme changes. |
 | `_setup_ui` | 270 | - |
@@ -965,14 +967,14 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Method | Line | Doc |
 |---|---|---|
-| `_cli_target` ⚠ | 25 | (shim_path, launch_target) for the current install kind. |
+| `_cli_target` | 25 | (shim_path, launch_target) for the current install kind. |
 | `_refresh_cli_status` | 39 | - |
 | `_install_cli_command` | 50 | Create a global 'venvstudio' command (VS Code's 'install code command' style). |
 | `_check_for_updates` | 100 | Check PyPI for new version. |
-| `_on_update_check_done` ⚠ | 110 | Handle update check result. |
+| `_on_update_check_done` | 110 | Handle update check result. |
 | `_export_settings` | 141 | Export settings to a JSON file. |
 | `_import_settings` | 161 | Import settings from a JSON file. |
-| `_pick_env_and_freeze` ⚠ | 192 | Let user pick an environment, return (freeze_text, python_version) or (None, None). |
+| `_pick_env_and_freeze` | 192 | Let user pick an environment, return (freeze_text, python_version) or (None, None). |
 | `_export_env_requirements` | 233 | - |
 | `_export_env_dockerfile` | 248 | - |
 | `_export_env_docker_compose` | 271 | - |
@@ -1002,21 +1004,21 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `_reset_fonts` | 21 | Reset all font settings to system defaults. |
 | `_on_theme_cb_toggled` | 41 | Enable/disable theme combo and apply theme live. |
 | `_on_theme_live_preview` | 58 | Apply theme instantly when dropdown changes — no Save needed. |
-| `_cli_log_append` ⚠ | 68 | - |
+| `_cli_log_append` | 68 | - |
 | `_make_cli_card` | 102 | Create a card widget for binary CLI tools (starship, oh-my-posh). |
 | `_make_pip_card` | 227 | Create a card widget for pip-based tools (rich, textual, prompt_toolkit). |
-| `_cli_install` ⚠ | 269 | - |
-| `_cli_uninstall` ⚠ | 286 | - |
-| `_cli_configure` ⚠ | 299 | - |
-| `_open_starship_editor` ⚠ | 310 | Open inline editor for starship.toml. |
-| `_test_starship_in_terminal` ⚠ | 377 | Open a terminal so user can see their Starship prompt in action. |
-| `_cli_done` ⚠ | 407 | - |
+| `_cli_install` | 269 | - |
+| `_cli_uninstall` | 286 | - |
+| `_cli_configure` | 299 | - |
+| `_open_starship_editor` | 310 | Open inline editor for starship.toml. |
+| `_test_starship_in_terminal` | 377 | Open a terminal so user can see their Starship prompt in action. |
+| `_cli_done` | 407 | - |
 | `_install_nerd_font` | 444 | - |
-| `_after_nerd_font_install` ⚠ | 472 | Called when Nerd Font installation finishes. On success, prompts |
-| `_guess_nerd_font_family` ⚠ | 528 | Convert a download/UI label like 'FiraCode' into the actual |
+| `_after_nerd_font_install` | 472 | Called when Nerd Font installation finishes. On success, prompts |
+| `_guess_nerd_font_family` | 528 | Convert a download/UI label like 'FiraCode' into the actual |
 | `_verify_pip_venv` | 540 | Check pip and venv for selected Python, offer to fix if missing. |
-| `_fix_venv` ⚠ | 661 | Attempt to install python3-venv on Linux. |
-| `_fix_pip` ⚠ | 679 | Reinstall pip for the given Python executable. |
+| `_fix_venv` | 661 | Attempt to install python3-venv on Linux. |
+| `_fix_pip` | 679 | Reinstall pip for the given Python executable. |
 | `_set_python_default_unix` | 707 | Set default Python on Linux/macOS using update-alternatives or symlinks. |
 | `_load_custom_terminals` | 842 | Load custom terminals from config into table. |
 | `_save_custom_terminals` | 860 | Save custom terminals from table to config. |
@@ -1033,7 +1035,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | Method | Line | Doc |
 |---|---|---|
 | `_set_vscode_interpreter` ⚠ | 21 | Set VS Code python interpreter path for the selected env. |
-| `_get_all_categories` ⚠ | 63 | Get built-in + custom category names. |
+| `_get_all_categories` | 63 | Get built-in + custom category names. |
 | `_toggle_builtin_presets` | 80 | - |
 | `_load_custom_presets` | 83 | Load custom presets from config into table. |
 | `_save_custom_presets` | 93 | Save custom presets from table to config. |
@@ -1044,7 +1046,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `_save_custom_categories` | 195 | Save custom categories to config. |
 | `_add_custom_category` | 208 | Add a new custom category. |
 | `_remove_custom_category` | 216 | Remove selected custom category. |
-| `_make_category_combo` ⚠ | 225 | Create a category dropdown for catalog table. |
+| `_make_category_combo` | 225 | Create a category dropdown for catalog table. |
 | `_load_custom_catalog` | 244 | Load custom catalog packages from config into the table. |
 | `_add_custom_catalog_pkg` | 256 | Add a new custom catalog package row. |
 | `_remove_custom_catalog_pkg` | 266 | Remove selected custom catalog package. |
@@ -1087,7 +1089,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | Method | Line | Doc |
 |---|---|---|
 | `wheelEvent` | 67 | - |
-| `showPopup` ⚠ | 70 | - |
+| `showPopup` | 70 | - |
 
 **class NoScrollComboBox** (line 78)
 
@@ -1103,39 +1105,39 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 |---|---|---|
 | `_c` | 133 | Return current theme color palette with font hierarchy. |
 | `_table_style` | 143 | - |
-| `_log_style` ⚠ | 157 | - |
+| `_log_style` | 157 | - |
 | `_frame_style` | 165 | - |
 | `_refresh_styles` | 172 | Re-apply theme-dependent inline styles on every child widget. |
-| `_make_info_btn` ⚠ | 285 | Return a small ℹ️ QToolButton that shows a tooltip on hover/click. |
-| `_make_section_reset_btn` ⚠ | 306 | Return a small 'Reset' QPushButton for a settings section. |
+| `_make_info_btn` | 285 | Return a small ℹ️ QToolButton that shows a tooltip on hover/click. |
+| `_make_section_reset_btn` | 306 | Return a small 'Reset' QPushButton for a settings section. |
 | `_make_group_title_row` | 314 | Returns (outer_widget, inner_layout) — a QWidget with a horizontal |
 | `_setup_ui` | 346 | - |
-| `_setup_appearance_section` ⚠ | 413 | - |
-| `_setup_language_section` ⚠ | 529 | - |
-| `_setup_python_ui_section` ⚠ | 565 | - |
-| `_load_pipx_python_choices` ⚠ | 845 | Fill the pipx interpreter combo from the detected Python list. |
-| `_on_pipx_python_changed` ⚠ | 885 | Persist the pipx interpreter choice. |
-| `_write_pipx_marker_python` ⚠ | 902 | Update python_path inside the existing pipx marker file. |
-| `_load_conda_mirrors` ⚠ | 937 | Fill the list widget from settings (or the built-in defaults). |
-| `_save_conda_mirrors` ⚠ | 948 | Persist the current list order to settings. |
-| `_add_conda_mirror` ⚠ | 959 | - |
-| `_move_conda_mirror_up` ⚠ | 985 | - |
-| `_move_conda_mirror_down` ⚠ | 994 | - |
-| `_remove_conda_mirror` ⚠ | 1003 | - |
-| `_reset_conda_mirrors` ⚠ | 1014 | - |
-| `_setup_toolchain_ui_section` | 1025 | - |
-| `_setup_cliops_section` | 1032 | - |
-| `_setup_general_section` ⚠ | 1341 | - |
-| `_setup_vscode_ui_section` | 1386 | - |
-| `_get_editor_venv_dir` | 1477 | Best-effort resolution of the current default venv directory. |
-| `_refresh_editor_list` | 1502 | Detect installed editors and fill the table. |
-| `_register_editor` | 1563 | Register with one editor. |
-| `_unregister_editor` | 1603 | Unregister from one editor, with confirmation. |
-| `_register_all_editors` | 1634 | Bulk register with every installed editor. |
-| `_setup_catalog_ui_section` ⚠ | 1678 | - |
-| `_setup_diagnostics_section` ⚠ | 1870 | - |
-| `_create_desktop_shortcut_from_settings` ⚠ | 1938 | Delegate to MainWindow._create_desktop_shortcut. |
-| `_setup_launch_section` ⚠ | 1961 | - |
+| `_setup_appearance_section` | 413 | - |
+| `_setup_language_section` | 529 | - |
+| `_setup_python_ui_section` | 565 | - |
+| `_load_pipx_python_choices` | 865 | Fill the pipx interpreter combo from the detected Python list. |
+| `_on_pipx_python_changed` | 919 | Persist the pipx interpreter choice. |
+| `_write_pipx_marker_python` | 936 | Update python_path inside the existing pipx marker file. |
+| `_load_conda_mirrors` | 971 | Fill the list widget from settings (or the built-in defaults). |
+| `_save_conda_mirrors` | 982 | Persist the current list order to settings. |
+| `_add_conda_mirror` | 993 | - |
+| `_move_conda_mirror_up` | 1019 | - |
+| `_move_conda_mirror_down` | 1028 | - |
+| `_remove_conda_mirror` | 1037 | - |
+| `_reset_conda_mirrors` | 1048 | - |
+| `_setup_toolchain_ui_section` | 1059 | - |
+| `_setup_cliops_section` | 1066 | - |
+| `_setup_general_section` | 1375 | - |
+| `_setup_vscode_ui_section` | 1420 | - |
+| `_get_editor_venv_dir` | 1511 | Best-effort resolution of the current default venv directory. |
+| `_refresh_editor_list` | 1536 | Detect installed editors and fill the table. |
+| `_register_editor` | 1597 | Register with one editor. |
+| `_unregister_editor` | 1637 | Unregister from one editor, with confirmation. |
+| `_register_all_editors` | 1668 | Bulk register with every installed editor. |
+| `_setup_catalog_ui_section` | 1712 | - |
+| `_setup_diagnostics_section` | 1904 | - |
+| `_create_desktop_shortcut_from_settings` | 1972 | Delegate to MainWindow._create_desktop_shortcut. |
+| `_setup_launch_section` | 1995 | - |
 
 ### `src/gui/settings_python.py`
 
@@ -1180,22 +1182,22 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 |---|---|---|
 | `_c` | 76 | Return current theme color palette. |
 | `_setup_ui` | 92 | - |
-| `_get_current_mirror` ⚠ | 240 | Return the currently selected mirror id. |
-| `_get_current_custom_url` ⚠ | 245 | - |
-| `_update_mirror_desc` ⚠ | 248 | - |
-| `_on_mirror_changed` ⚠ | 253 | User picked a different mirror. |
-| `_on_custom_url_changed` ⚠ | 274 | Save custom URL and re-fetch. |
-| `_fetch_versions` ⚠ | 285 | Fetch available versions in background using the selected mirror. |
-| `_on_versions_fetched` ⚠ | 304 | - |
-| `_on_selection_changed` ⚠ | 337 | - |
+| `_get_current_mirror` | 240 | Return the currently selected mirror id. |
+| `_get_current_custom_url` | 245 | - |
+| `_update_mirror_desc` | 248 | - |
+| `_on_mirror_changed` | 253 | User picked a different mirror. |
+| `_on_custom_url_changed` | 274 | Save custom URL and re-fetch. |
+| `_fetch_versions` | 285 | Fetch available versions in background using the selected mirror. |
+| `_on_versions_fetched` | 304 | - |
+| `_on_selection_changed` | 337 | - |
 | `_on_progress` | 352 | - |
-| `_start_download` ⚠ | 364 | - |
-| `_on_download_finished` ⚠ | 408 | - |
-| `_move_to_system` ⚠ | 426 | Move downloaded Python to system directory (admin/sudo required). |
-| `_system_install_windows` ⚠ | 478 | Windows system install via PowerShell admin elevation. |
-| `_system_install_unix` ⚠ | 537 | Linux/macOS system install via sudo. |
-| `_show_system_install_success` ⚠ | 608 | Show success message after system install. |
-| `_remove_selected` ⚠ | 620 | - |
+| `_start_download` | 364 | - |
+| `_on_download_finished` | 408 | - |
+| `_move_to_system` | 426 | Move downloaded Python to system directory (admin/sudo required). |
+| `_system_install_windows` | 478 | Windows system install via PowerShell admin elevation. |
+| `_system_install_unix` | 537 | Linux/macOS system install via sudo. |
+| `_show_system_install_success` | 608 | Show success message after system install. |
+| `_remove_selected` | 620 | - |
 
 ### `src/gui/settings_toolchain.py`
 
@@ -1205,23 +1207,23 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 |---|---|---|
 | `_make_pm_tool_row` ⚠ | 27 | - |
 | `_make_pm_conda_row` ⚠ | 59 | - |
-| `_pm_check_tool` ⚠ | 78 | - |
-| `_pm_check_conda` ⚠ | 117 | - |
-| `_pm_install_tool` ⚠ | 131 | - |
-| `_pm_uninstall_tool` ⚠ | 267 | - |
-| `_pm_download_micromamba` ⚠ | 342 | - |
+| `_pm_check_tool` | 78 | - |
+| `_pm_check_conda` | 117 | - |
+| `_pm_install_tool` | 131 | - |
+| `_pm_uninstall_tool` | 267 | - |
+| `_pm_download_micromamba` | 342 | - |
 | `_build_toolchain_ui` | 386 | - |
-| `_tc_row_btns` ⚠ | 496 | - |
-| `_tc_update_row_btns` ⚠ | 585 | Update button visibility based on install status. |
-| `_tc_scan_pythons` ⚠ | 607 | Populate combo from existing Python Versions table (no re-scan). |
-| `_tc_find_tool` ⚠ | 665 | Find tool exe for given Python. Returns path or ''. |
-| `_tc_load_table` ⚠ | 702 | Reload table rows for the selected Python. |
-| `_tc_check_python_update` ⚠ | 902 | Check whether a newer standalone Python build is available than |
-| `_tc_do_install` ⚠ | 990 | - |
-| `_tc_do_remove` ⚠ | 1131 | - |
+| `_tc_row_btns` | 496 | - |
+| `_tc_update_row_btns` | 585 | Update button visibility based on install status. |
+| `_tc_scan_pythons` | 607 | Populate combo from existing Python Versions table (no re-scan). |
+| `_tc_find_tool` | 665 | Find tool exe for given Python. Returns path or ''. |
+| `_tc_load_table` | 702 | Reload table rows for the selected Python. |
+| `_tc_check_python_update` | 902 | Check whether a newer standalone Python build is available than |
+| `_tc_do_install` | 990 | - |
+| `_tc_do_remove` | 1131 | - |
 | `_tc_do_verify` ⚠ | 1308 | - |
 | `_tc_do_default` ⚠ | 1353 | - |
-| `_tc_download_mamba` ⚠ | 1388 | - |
+| `_tc_download_mamba` | 1388 | - |
 | `_setup_toolchain_ui_section` | 1418 | - |
 | `_setup_cliops_section` | 1425 | - |
 
@@ -1231,11 +1233,11 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Function | Line | Doc |
 |---|---|---|
-| `_build_theme` ⚠ | 16 | Build a complete QSS stylesheet from a color palette dict. |
+| `_build_theme` | 16 | Build a complete QSS stylesheet from a color palette dict. |
 | `get_theme` | 698 | Return stylesheet for the given theme name with 3-level font settings. |
-| `_get_theme_cached` ⚠ | 713 | - |
+| `_get_theme_cached` | 713 | - |
 | `get_colors` | 722 | Return the color palette dict for the given theme name. |
-| `_get_colors_cached` ⚠ | 740 | Internal cache returning a tuple of (key, value) pairs (immutable, hashable). |
+| `_get_colors_cached` | 740 | Internal cache returning a tuple of (key, value) pairs (immutable, hashable). |
 | `invalidate_style_cache` ⚠ | 768 | Clear the QSS / palette cache. Call this when settings (theme, font |
 
 ### `src/gui/syntax_highlighter.py`
@@ -1244,10 +1246,10 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Method | Line | Doc |
 |---|---|---|
-| `_fmt` ⚠ | 61 | - |
-| `_build_rules` ⚠ | 70 | - |
+| `_fmt` | 61 | - |
+| `_build_rules` | 70 | - |
 | `highlightBlock` ⚠ | 109 | - |
-| `_handle_triple_strings` ⚠ | 126 | Support triple-quoted strings that span multiple lines. |
+| `_handle_triple_strings` | 126 | Support triple-quoted strings that span multiple lines. |
 
 ### `src/gui/tab_builders.py`
 
@@ -1268,7 +1270,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Method | Line | Doc |
 |---|---|---|
-| `initStyleOption` ⚠ | 20 | - |
+| `initStyleOption` | 20 | - |
 
 **class SidebarButton** (line 36)
 
@@ -1279,15 +1281,15 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | Method | Line | Doc |
 |---|---|---|
 | `_setup_menubar` | 18 | - |
-| `_show_log_viewer` ⚠ | 96 | Open the log viewer dialog (frozen builds have no terminal). |
-| `_open_logs_folder` ⚠ | 102 | Open the logs directory in the system file manager. |
+| `_show_log_viewer` | 96 | Open the log viewer dialog (frozen builds have no terminal). |
+| `_open_logs_folder` | 102 | Open the logs directory in the system file manager. |
 | `_create_desktop_shortcut` | 110 | Create a desktop shortcut that runs 'venvstudio' command (pip-installed). |
-| `_create_shortcut_windows` ⚠ | 205 | Create a .lnk on Windows Desktop using PowerShell. |
-| `_create_shortcut_linux` ⚠ | 231 | Create a .desktop file on Linux — Terminal=false. |
-| `_create_shortcut_macos` ⚠ | 292 | Create a .command launcher on macOS Desktop. |
-| `_populate_recent_menu` ⚠ | 301 | Rebuild the Recent Environments submenu from recent_envs.json. |
-| `_open_recent_env` ⚠ | 341 | Select env in table by path; show Packages panel. |
-| `_clear_recent_envs` ⚠ | 376 | Clear the recent environments list. |
+| `_create_shortcut_windows` | 205 | Create a .lnk on Windows Desktop using PowerShell. |
+| `_create_shortcut_linux` | 231 | Create a .desktop file on Linux — Terminal=false. |
+| `_create_shortcut_macos` | 292 | Create a .command launcher on macOS Desktop. |
+| `_populate_recent_menu` | 301 | Rebuild the Recent Environments submenu from recent_envs.json. |
+| `_open_recent_env` | 341 | Select env in table by path; show Packages panel. |
+| `_clear_recent_envs` | 376 | Clear the recent environments list. |
 | `_track_recent` | 385 | Write recent env entry and refresh menu (called deferred). |
 
 ### `src/gui/window_theme.py`
@@ -1298,9 +1300,9 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 |---|---|---|
 | `_set_theme` | 17 | - |
 | `_apply_theme` | 44 | Apply current theme. Guarded against re-entrant calls and |
-| `_refresh_sidebar_styles` ⚠ | 112 | Re-apply inline styles on sidebar widgets that don't inherit QSS. |
+| `_refresh_sidebar_styles` | 112 | Re-apply inline styles on sidebar widgets that don't inherit QSS. |
 | `_connect_screen_changed` | 142 | Connect to windowHandle().screenChanged so theme is re-applied |
-| `_on_screen_changed` ⚠ | 153 | Re-apply theme after a short delay so Qt finishes its internal |
+| `_on_screen_changed` | 153 | Re-apply theme after a short delay so Qt finishes its internal |
 | `_on_theme_changed` | 160 | Handle theme change from settings page. |
 | `_on_font_changed` | 164 | Handle font change from settings page — rebuild stylesheet with new font. |
 
@@ -1318,7 +1320,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Method | Line | Doc |
 |---|---|---|
-| `_fetch_one` ⚠ | 62 | - |
+| `_fetch_one` | 62 | - |
 | `run` | 77 | - |
 
 **class DeleteWorker** (line 90)
@@ -1370,7 +1372,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | Function | Line | Doc |
 |---|---|---|
 | `set_language` | 25 | - |
-| `get_language` ⚠ | 30 | - |
+| `get_language` | 30 | - |
 | `tr` | 49 | Translate a key to the current language. Falls back to English. |
 
 ### `src/utils/logger.py`
@@ -1385,36 +1387,36 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 | Method | Line | Doc |
 |---|---|---|
-| `safe_run` ⚠ | 942 | Context manager that wraps QThread.run() with crash protection. |
+| `safe_run` | 942 | Context manager that wraps QThread.run() with crash protection. |
 
 **module-level functions**
 
 | Function | Line | Doc |
 |---|---|---|
-| `_get_log_dir` ⚠ | 49 | - |
+| `_get_log_dir` | 49 | - |
 | `get_log_dir` | 61 | Public accessor for log directory path. |
-| `_collect_session_context` ⚠ | 73 | Gather system info for crash reports and session header. |
-| `_ansi_supported` ⚠ | 160 | Detect if the current stdout supports ANSI color codes. |
-| `_build_ansi_console_handler` ⚠ | 241 | Build a stream handler with the ANSI colored formatter. |
-| `_has_rich` ⚠ | 253 | Check if Rich is importable. |
-| `_visual_width` ⚠ | 262 | Approximate terminal cell width of `s`. |
-| `_banner_to_file` ⚠ | 298 | Record a banner into the log FILE only (never the console handler). |
+| `_collect_session_context` | 73 | Gather system info for crash reports and session header. |
+| `_ansi_supported` | 160 | Detect if the current stdout supports ANSI color codes. |
+| `_build_ansi_console_handler` | 241 | Build a stream handler with the ANSI colored formatter. |
+| `_has_rich` | 253 | Check if Rich is importable. |
+| `_visual_width` | 262 | Approximate terminal cell width of `s`. |
+| `_banner_to_file` | 298 | Record a banner into the log FILE only (never the console handler). |
 | `banner` | 318 | Print a visually distinct banner for major events. |
 | `banner_start` | 406 | Convenience: start banner for beginning of an operation. |
 | `banner_success` | 412 | Convenience: success banner for completed operation. |
 | `banner_error` | 418 | Convenience: error banner for failed operation. |
 | `banner_warning` | 424 | Convenience: warning banner. |
 | `setup_logging` | 435 | Initialize the VenvStudio logging system. |
-| `_safe_format_exception` ⚠ | 555 | Format an exception without triggering Python 3.13 + PySide6 6.10.2 |
-| `_install_sys_excepthook` ⚠ | 590 | Replace sys.excepthook to catch all unhandled exceptions in the main thread. |
-| `_install_threading_excepthook` ⚠ | 609 | Catch unhandled exceptions in background threads (Python 3.8+). |
+| `_safe_format_exception` | 555 | Format an exception without triggering Python 3.13 + PySide6 6.10.2 |
+| `_install_sys_excepthook` | 590 | Replace sys.excepthook to catch all unhandled exceptions in the main thread. |
+| `_install_threading_excepthook` | 609 | Catch unhandled exceptions in background threads (Python 3.8+). |
 | `_write_crash_report` | 634 | Write a dedicated crash report file with full system context. |
-| `_cleanup_old_crash_logs` ⚠ | 680 | Delete crash_*.log files older than max_age_days. |
+| `_cleanup_old_crash_logs` | 680 | Delete crash_*.log files older than max_age_days. |
 | `get_logger` | 699 | Get a child logger. |
-| `safe_slot` ⚠ | 715 | Decorator for Qt slots that catches exceptions and logs them |
-| `safe_call` ⚠ | 773 | Call a function with exception protection. |
-| `logged_subprocess` ⚠ | 795 | Run a subprocess with logging, timeout protection, and error handling. |
-| `log_perf` ⚠ | 894 | Context manager to log execution time of a block. |
+| `safe_slot` | 715 | Decorator for Qt slots that catches exceptions and logs them |
+| `safe_call` | 773 | Call a function with exception protection. |
+| `logged_subprocess` | 795 | Run a subprocess with logging, timeout protection, and error handling. |
+| `log_perf` | 894 | Context manager to log execution time of a block. |
 | `open_log_directory` ⚠ | 978 | Open the log directory in the system file manager. |
 | `get_recent_crash_logs` ⚠ | 992 | Return recent crash log summaries for display in Settings/About. |
 
@@ -1443,343 +1445,38 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 
 ## Referenced nowhere else (⚠)
 
-Names that appear in no other scanned file (`src/`, `main.py`, `tools/`, `tests/`). Some are genuinely unused - this is how `_update_quick_sidebar` was found to be dead code. Others are reached through Qt signal strings or `getattr`. **Check before deleting.**
+Names used nowhere beyond their own definition, across `src/`, `main.py`, `tools/` and `tests/`. Some are genuinely unused - this is how `_update_quick_sidebar` turned out to be dead code. Others are reached through Qt signal strings, `getattr`, or an entry point outside these folders. **Check before deleting.**
 
 | File | Name | Line |
 |---|---|---|
-| `src/cli.py` | `_managers` | 29 |
-| `src/cli.py` | `_find_env` | 37 |
-| `src/cli.py` | `_cmd_create` | 61 |
-| `src/cli.py` | `_cmd_delete` | 76 |
-| `src/cli.py` | `_pip_manager_for` | 96 |
-| `src/cli.py` | `_cmd_packages` | 104 |
-| `src/cli.py` | `_cmd_install` | 122 |
-| `src/cli.py` | `_cmd_uninstall` | 126 |
-| `src/cli.py` | `_pkg_op` | 130 |
-| `src/cli.py` | `_cmd_version` | 147 |
-| `src/core/cli_tools_manager.py` | `CliToolWorker._install` | 642 |
-| `src/core/cli_tools_manager.py` | `CliToolWorker._pip_install` | 653 |
-| `src/core/cli_tools_manager.py` | `CliToolWorker._install_binary_starship` | 665 |
-| `src/core/cli_tools_manager.py` | `CliToolWorker._install_binary_omp` | 675 |
-| `src/core/cli_tools_manager.py` | `CliToolWorker._download_omp_binary` | 701 |
-| `src/core/cli_tools_manager.py` | `CliToolWorker._download_omp_themes` | 728 |
-| `src/core/cli_tools_manager.py` | `CliToolWorker._download_and_extract` | 765 |
-| `src/core/cli_tools_manager.py` | `CliToolWorker._ensure_path` | 826 |
-| `src/core/cli_tools_manager.py` | `CliToolWorker._uninstall` | 855 |
-| `src/core/cli_tools_manager.py` | `CliToolWorker._configure` | 910 |
-| `src/core/cli_tools_manager.py` | `CliToolWorker._install_font` | 926 |
-| `src/core/cli_tools_manager.py` | `CliToolWorker._do_install_fonts` | 965 |
-| `src/core/cli_tools_manager.py` | `_get_bin_dir` | 380 |
-| `src/core/cli_tools_manager.py` | `_get_config_dir` | 387 |
-| `src/core/cli_tools_manager.py` | `_get_omp_dir` | 394 |
-| `src/core/cli_tools_manager.py` | `_get_omp_themes_dir` | 414 |
-| `src/core/cli_tools_manager.py` | `_get_shell_configs` | 481 |
-| `src/core/cli_tools_manager.py` | `_inject_shell_config` | 506 |
-| `src/core/cli_tools_manager.py` | `_remove_shell_config` | 518 |
-| `src/core/cli_tools_manager.py` | `configure_starship` | 538 |
-| `src/core/cli_tools_manager.py` | `configure_omp` | 569 |
-| `src/core/cli_tools_manager.py` | `remove_shell_config` | 608 |
-| `src/core/editor_integration.py` | `_resolve_platform_key` | 178 |
-| `src/core/editor_integration.py` | `_load_jsonc` | 225 |
-| `src/core/editor_integration.py` | `_backup` | 246 |
-| `src/core/editor_integration.py` | `_write_json` | 258 |
-| `src/core/editor_integration.py` | `_is_vscode_family` | 268 |
-| `src/core/editor_integration.py` | `_register_vscode_like` | 335 |
-| `src/core/editor_integration.py` | `_unregister_vscode_like` | 369 |
-| `src/core/editor_integration.py` | `_register_zed` | 407 |
-| `src/core/editor_integration.py` | `_unregister_zed` | 435 |
-| `src/core/editor_integration.py` | `_pycharm_reminder_path` | 467 |
-| `src/core/editor_integration.py` | `_register_pycharm` | 472 |
-| `src/core/editor_integration.py` | `_unregister_pycharm` | 499 |
-| `src/core/micromamba_installer.py` | `_get_micromamba_dir` | 20 |
-| `src/core/micromamba_installer.py` | `_clean_micromamba_line` | 176 |
-| `src/core/micromamba_installer.py` | `_run_micromamba` | 189 |
-| `src/core/micromamba_installer.py` | `_clear_mirror_skip` | 298 |
-| `src/core/micromamba_installer.py` | `_skip_was_requested` | 302 |
-| `src/core/micromamba_installer.py` | `_mirror_flag_path` | 306 |
-| `src/core/micromamba_installer.py` | `_mirror_preferred` | 324 |
-| `src/core/micromamba_installer.py` | `_remember_mirror_works` | 331 |
-| `src/core/micromamba_installer.py` | `_is_mirror_data_error` | 344 |
-| `src/core/micromamba_installer.py` | `_is_network_error` | 357 |
-| `src/core/micromamba_installer.py` | `_mirror_channels` | 365 |
-| `src/core/micromamba_installer.py` | `_channels_for_mirror` | 375 |
-| `src/core/micromamba_installer.py` | `_to_conda_names` | 400 |
-| `src/core/micromamba_installer.py` | `_missing_packages` | 414 |
-| `src/core/micromamba_installer.py` | `_underscore_variants` | 426 |
-| `src/core/micromamba_installer.py` | `_friendly_conda_error` | 441 |
 | `src/core/micromamba_installer.py` | `is_conda_env` | 807 |
-| `src/core/pip_manager.py` | `PipManager._find_uv` | 37 |
-| `src/core/pip_manager.py` | `PipManager._ensure_uv` | 87 |
 | `src/core/pip_manager.py` | `PipManager._check_ssl` | 115 |
-| `src/core/pip_manager.py` | `PipManager._run_pip` | 149 |
-| `src/core/pip_manager.py` | `PipManager.search_pypi` | 418 |
-| `src/core/pip_manager.py` | `PipManager.get_package_info` | 425 |
-| `src/core/python_downloader.py` | `MirrorBackend.list_versions` | 99 |
-| `src/core/python_downloader.py` | `AstralBackend.list_versions` | 126 |
-| `src/core/python_downloader.py` | `PythonOrgBackend.list_versions` | 208 |
-| `src/core/python_downloader.py` | `SourceForgeBackend.list_versions` | 276 |
-| `src/core/python_downloader.py` | `CustomUrlBackend.list_versions` | 300 |
-| `src/core/python_downloader.py` | `get_target_triple` | 64 |
-| `src/core/python_downloader.py` | `_get_backend` | 344 |
-| `src/core/recent_envs.py` | `RecentEnvsManager._read` | 84 |
-| `src/core/recent_envs.py` | `RecentEnvsManager._write` | 95 |
-| `src/core/recent_envs.py` | `_get_recent_envs_path` | 15 |
-| `src/core/system_tools_installer.py` | `BaseInstaller.is_installed_system` | 154 |
-| `src/core/system_tools_installer.py` | `BaseInstaller.is_installed_portable` | 157 |
-| `src/core/system_tools_installer.py` | `BaseInstaller.get_latest_info` | 185 |
-| `src/core/system_tools_installer.py` | `BaseInstaller.install_portable` | 188 |
-| `src/core/system_tools_installer.py` | `BaseInstaller.install_system` | 191 |
-| `src/core/system_tools_installer.py` | `RInstaller.get_latest_info` | 229 |
-| `src/core/system_tools_installer.py` | `RInstaller.install_portable` | 267 |
-| `src/core/system_tools_installer.py` | `RInstaller._install_linux` | 306 |
-| `src/core/system_tools_installer.py` | `RStudioInstaller.get_latest_info` | 385 |
-| `src/core/system_tools_installer.py` | `RStudioInstaller.install_portable` | 421 |
-| `src/core/system_tools_installer.py` | `OllamaInstaller.get_latest_info` | 486 |
-| `src/core/system_tools_installer.py` | `OllamaInstaller.install_portable` | 507 |
-| `src/core/system_tools_installer.py` | `DBeaverInstaller.get_latest_info` | 585 |
-| `src/core/system_tools_installer.py` | `DBeaverInstaller.install_portable` | 637 |
-| `src/core/system_tools_installer.py` | `JamoviInstaller.get_latest_info` | 728 |
-| `src/core/system_tools_installer.py` | `JamoviInstaller.install_portable` | 748 |
-| `src/core/system_tools_installer.py` | `JASPInstaller.get_latest_info` | 839 |
-| `src/core/system_tools_installer.py` | `JASPInstaller.install_portable` | 859 |
-| `src/core/system_tools_installer.py` | `_fetch_json` | 40 |
-| `src/core/system_tools_installer.py` | `_download` | 46 |
-| `src/core/system_tools_installer.py` | `_extract` | 71 |
-| `src/core/system_tools_installer.py` | `_apps_dir` | 91 |
-| `src/core/system_tools_installer.py` | `_strip_single_root` | 97 |
-| `src/core/system_tools_installer.py` | `write_activation_scripts` | 107 |
-| `src/core/terminal_profile_setup.py` | `_setup_gnome_terminal` | 149 |
-| `src/core/terminal_profile_setup.py` | `_setup_mate_terminal` | 188 |
-| `src/core/terminal_profile_setup.py` | `_setup_konsole` | 223 |
-| `src/core/terminal_profile_setup.py` | `_setup_alacritty` | 270 |
-| `src/core/terminal_profile_setup.py` | `_setup_kitty` | 305 |
-| `src/core/terminal_profile_setup.py` | `_setup_wezterm` | 339 |
-| `src/core/terminal_profile_setup.py` | `_dconf_read` | 361 |
-| `src/core/terminal_profile_setup.py` | `_dconf_write` | 371 |
-| `src/core/terminal_profile_setup.py` | `_append_to_dconf_list` | 380 |
-| `src/core/tool_registry.py` | `ToolRegistry._common_paths` | 94 |
+| `src/core/pip_manager.py` | `PipManager.search_pypi` | 467 |
+| `src/core/pip_manager.py` | `PipManager.get_package_info` | 474 |
 | `src/core/tool_registry.py` | `ToolRegistry.get_version` | 125 |
 | `src/core/tool_registry.py` | `ToolRegistry.get_info` | 130 |
 | `src/core/tool_registry.py` | `ToolRegistry.list_all` | 134 |
 | `src/core/tool_registry.py` | `ToolRegistry.update_version` | 144 |
-| `src/core/tool_registry.py` | `_get_registry_path` | 16 |
-| `src/core/updater.py` | `_parse_version` | 16 |
-| `src/core/updater.py` | `_https_get` | 23 |
-| `src/core/updater.py` | `_https_get_urllib` | 49 |
-| `src/core/updater.py` | `_make_ssl_ctx` | 62 |
 | `src/core/venv_manager.py` | `VenvInfo.to_dict` | 66 |
-| `src/core/venv_manager.py` | `VenvManager._detect_distro_family` | 423 |
-| `src/core/venv_manager.py` | `VenvManager._try_install_venv_package` | 450 |
 | `src/core/venv_manager.py` | `VenvManager.invalidate_cache_by_name` | 585 |
-| `src/core/venv_manager_cache.py` | `_CacheMixin._get_cache_file` | 24 |
-| `src/core/venv_manager_rename.py` | `_RenameMixin._relocate_venv_paths` | 111 |
-| `src/core/venv_manager_rename.py` | `_RenameMixin.set_poetry_display_name` | 220 |
-| `src/gui/env_dialog.py` | `EnvCreateDialog._load_pythons_async` | 57 |
-| `src/gui/env_dialog.py` | `EnvCreateDialog._reset_ui` | 1507 |
-| `src/gui/env_dialog_create.py` | `EnvCreateMixin._create_conda` | 64 |
-| `src/gui/env_dialog_create.py` | `EnvCreateMixin._create_alt_env` | 153 |
-| `src/gui/env_dialog_create.py` | `EnvCreateMixin._create_venv` | 559 |
-| `src/gui/env_export.py` | `EnvExportMixin._get_env_pip_manager` | 15 |
-| `src/gui/env_export.py` | `EnvExportMixin._get_env_freeze_and_version` | 25 |
-| `src/gui/env_list.py` | `EnvListMixin._on_env_detail_ready` | 340 |
-| `src/gui/env_list.py` | `EnvListMixin._on_all_details_done` | 356 |
 | `src/gui/env_list.py` | `EnvListMixin._update_info_label_fast` | 366 |
 | `src/gui/env_list.py` | `EnvListMixin._update_info_label` | 370 |
-| `src/gui/env_operations.py` | `EnvOperationsMixin._get_new_name_for_rename` | 42 |
 | `src/gui/env_operations.py` | `EnvOperationsMixin._rename_env` | 148 |
-| `src/gui/env_operations.py` | `EnvOperationsMixin._on_rename_finished` | 151 |
-| `src/gui/env_operations.py` | `EnvOperationsMixin._on_delete_finished` | 251 |
-| `src/gui/env_operations.py` | `EnvOperationsMixin._remove_env_row_inplace` | 494 |
-| `src/gui/env_operations.py` | `EnvOperationsMixin._ask_pipx_python` | 567 |
-| `src/gui/env_operations.py` | `EnvOperationsMixin._readd_empty_pipx_row` | 667 |
-| `src/gui/env_operations.py` | `EnvOperationsMixin._on_clone_finished` | 891 |
-| `src/gui/env_operations.py` | `EnvOperationsMixin._on_clone_cancel` | 908 |
-| `src/gui/env_state.py` | `EnvStateMixin._safe_clear_env_state` | 354 |
-| `src/gui/env_state.py` | `EnvStateMixin._hide_env_info_bar` | 610 |
-| `src/gui/env_state.py` | `EnvStateMixin._start_size_calc_async` | 616 |
-| `src/gui/env_state.py` | `EnvStateMixin._retire_pkg_loader` | 658 |
-| `src/gui/env_state.py` | `EnvStateMixin._on_pkg_loader_finished` | 703 |
-| `src/gui/launcher_run.py` | `LauncherRunMixin._launch_system_app` | 25 |
-| `src/gui/launcher_run.py` | `LauncherRunMixin._on_system_install_finished` | 312 |
-| `src/gui/launcher_run.py` | `LauncherRunMixin._get_orange3_packages` | 377 |
-| `src/gui/launcher_run.py` | `LauncherRunMixin._on_app_install_finished` | 817 |
-| `src/gui/launcher_run.py` | `LauncherRunMixin._on_system_uninstall_finished` | 1049 |
-| `src/gui/launcher_shortcuts.py` | `LauncherShortcutsMixin._write_conda_launch_wrapper` | 116 |
-| `src/gui/launcher_shortcuts.py` | `LauncherShortcutsMixin._create_windows_shortcut` | 160 |
-| `src/gui/launcher_shortcuts.py` | `LauncherShortcutsMixin._create_linux_shortcut` | 203 |
-| `src/gui/launcher_shortcuts.py` | `LauncherShortcutsMixin._create_macos_shortcut` | 222 |
-| `src/gui/launcher_ui.py` | `LauncherUIMixin._create_app_card` | 380 |
-| `src/gui/learn_install_dialog.py` | `LearnInstallDialog._default_colors` | 81 |
-| `src/gui/learn_install_dialog.py` | `LearnInstallDialog._radio_style` | 288 |
-| `src/gui/learn_install_dialog.py` | `LearnInstallDialog._on_dropdown_changed` | 296 |
-| `src/gui/learn_install_dialog.py` | `LearnInstallDialog._build_install_command` | 302 |
-| `src/gui/learn_install_dialog.py` | `LearnInstallDialog._on_copy_command` | 348 |
-| `src/gui/learn_install_dialog.py` | `LearnInstallDialog._on_install_clicked` | 368 |
-| `src/gui/learn_install_dialog.py` | `LearnInstallDialog._build_decision` | 375 |
-| `src/gui/learn_page.py` | `TopicCard._setup` | 98 |
-| `src/gui/learn_page.py` | `TopicCard._copy_snippet` | 436 |
-| `src/gui/learn_page.py` | `TopicCard._open_url` | 440 |
-| `src/gui/learn_page.py` | `TopicCard._toggle_bookmark` | 444 |
-| `src/gui/learn_page.py` | `CategoryPanel._setup` | 473 |
-| `src/gui/learn_page.py` | `LearnPage._on_bookmark_toggled` | 609 |
-| `src/gui/learn_page.py` | `LearnPage._expand_topic_card` | 630 |
-| `src/gui/learn_page.py` | `LearnPage._scroll_to_card` | 646 |
-| `src/gui/learn_page.py` | `LearnPage._setup` | 672 |
-| `src/gui/learn_page.py` | `LearnPage._switch_cat` | 758 |
 | `src/gui/learn_page.py` | `LearnPage.refresh_theme` | 763 |
-| `src/gui/learn_page.py` | `_md_to_html` | 21 |
-| `src/gui/log_viewer.py` | `LogViewerDialog._is_windows` | 143 |
-| `src/gui/log_viewer.py` | `LogViewerDialog._apply_filter` | 167 |
-| `src/gui/log_viewer.py` | `LogViewerDialog._copy_all` | 194 |
-| `src/gui/log_viewer.py` | `LogViewerDialog._open_folder` | 197 |
-| `src/gui/log_viewer.py` | `LogViewerDialog._apply_text_font` | 208 |
-| `src/gui/log_viewer.py` | `LogViewerDialog._change_font` | 215 |
-| `src/gui/log_viewer.py` | `LogViewerDialog._toggle_live` | 219 |
-| `src/gui/log_viewer.py` | `LogViewerDialog._file_handler` | 231 |
-| `src/gui/log_viewer.py` | `LogViewerDialog._rewrite_log` | 239 |
-| `src/gui/log_viewer.py` | `LogViewerDialog._delete_old` | 282 |
-| `src/gui/log_viewer.py` | `LogViewerDialog._delete_before_date` | 292 |
-| `src/gui/log_viewer.py` | `LogViewerDialog._delete_all` | 311 |
-| `src/gui/log_viewer.py` | `LogViewerDialog._delete_backups` | 324 |
-| `src/gui/main_window.py` | `MainWindow._auto_check_update` | 107 |
-| `src/gui/main_window.py` | `MainWindow._on_update_found` | 129 |
-| `src/gui/main_window.py` | `MainWindow._setup_window` | 153 |
-| `src/gui/main_window.py` | `MainWindow._create_env_page` | 361 |
-| `src/gui/main_window.py` | `MainWindow._hide_cmd_panel` | 563 |
-| `src/gui/main_window.py` | `MainWindow._on_env_user_interaction` | 570 |
-| `src/gui/main_window.py` | `MainWindow.eventFilter` | 591 |
-| `src/gui/main_window.py` | `MainWindow._on_learn_install` | 871 |
-| `src/gui/main_window.py` | `MainWindow._refresh_bookmarks` | 953 |
-| `src/gui/main_window.py` | `MainWindow._open_bookmark` | 990 |
-| `src/gui/main_window.py` | `MainWindow._bookmark_context_menu` | 996 |
-| `src/gui/main_window.py` | `MainWindow._on_settings_saved` | 1058 |
-| `src/gui/main_window.py` | `MainWindow.showEvent` | 1237 |
-| `src/gui/package_export.py` | `PackageExportMixin._get_freeze_and_version` | 40 |
-| `src/gui/package_misc.py` | `PackageMiscMixin._show_pip_info` | 101 |
-| `src/gui/package_misc.py` | `PackageMiscMixin._copy_to_clipboard` | 285 |
-| `src/gui/package_misc.py` | `PackageMiscMixin._abandon_worker` | 396 |
-| `src/gui/package_misc.py` | `PackageMiscMixin._on_outdated_result` | 450 |
 | `src/gui/package_ops.py` | `PackageOpsMixin._get_catalog_lookup` | 120 |
 | `src/gui/package_ops.py` | `PackageOpsMixin._refresh_packages_sync_legacy` | 237 |
-| `src/gui/package_ops.py` | `PackageOpsMixin._on_catalog_checkbox_changed` | 390 |
-| `src/gui/package_ops.py` | `PackageOpsMixin._update_apply_button` | 393 |
-| `src/gui/package_ops.py` | `PackageOpsMixin._get_catalog_changes` | 409 |
-| `src/gui/package_ops.py` | `PackageOpsMixin._chain_install` | 496 |
-| `src/gui/package_panel.py` | `PackagePanel._get_config_base_dir` | 140 |
 | `src/gui/quicklaunch.py` | `QuickLaunchMixin._ql_load_env_packages` | 36 |
 | `src/gui/quicklaunch.py` | `QuickLaunchMixin._get_installed_from_cache` | 89 |
-| `src/gui/settings_advanced.py` | `AdvancedMixin._cli_target` | 25 |
-| `src/gui/settings_advanced.py` | `AdvancedMixin._on_update_check_done` | 110 |
-| `src/gui/settings_advanced.py` | `AdvancedMixin._pick_env_and_freeze` | 192 |
-| `src/gui/settings_appearance.py` | `AppearanceMixin._cli_log_append` | 68 |
-| `src/gui/settings_appearance.py` | `AppearanceMixin._cli_install` | 269 |
-| `src/gui/settings_appearance.py` | `AppearanceMixin._cli_uninstall` | 286 |
-| `src/gui/settings_appearance.py` | `AppearanceMixin._cli_configure` | 299 |
-| `src/gui/settings_appearance.py` | `AppearanceMixin._open_starship_editor` | 310 |
-| `src/gui/settings_appearance.py` | `AppearanceMixin._test_starship_in_terminal` | 377 |
-| `src/gui/settings_appearance.py` | `AppearanceMixin._cli_done` | 407 |
-| `src/gui/settings_appearance.py` | `AppearanceMixin._after_nerd_font_install` | 472 |
-| `src/gui/settings_appearance.py` | `AppearanceMixin._guess_nerd_font_family` | 528 |
-| `src/gui/settings_appearance.py` | `AppearanceMixin._fix_venv` | 661 |
-| `src/gui/settings_appearance.py` | `AppearanceMixin._fix_pip` | 679 |
 | `src/gui/settings_catalog.py` | `CatalogMixin._set_vscode_interpreter` | 21 |
-| `src/gui/settings_catalog.py` | `CatalogMixin._get_all_categories` | 63 |
-| `src/gui/settings_catalog.py` | `CatalogMixin._make_category_combo` | 225 |
-| `src/gui/settings_page.py` | `_RefreshOnOpenComboBox.showPopup` | 70 |
-| `src/gui/settings_page.py` | `SettingsPage._log_style` | 157 |
-| `src/gui/settings_page.py` | `SettingsPage._make_info_btn` | 285 |
-| `src/gui/settings_page.py` | `SettingsPage._make_section_reset_btn` | 306 |
-| `src/gui/settings_page.py` | `SettingsPage._setup_appearance_section` | 413 |
-| `src/gui/settings_page.py` | `SettingsPage._setup_language_section` | 529 |
-| `src/gui/settings_page.py` | `SettingsPage._setup_python_ui_section` | 565 |
-| `src/gui/settings_page.py` | `SettingsPage._load_pipx_python_choices` | 845 |
-| `src/gui/settings_page.py` | `SettingsPage._on_pipx_python_changed` | 885 |
-| `src/gui/settings_page.py` | `SettingsPage._write_pipx_marker_python` | 902 |
-| `src/gui/settings_page.py` | `SettingsPage._load_conda_mirrors` | 937 |
-| `src/gui/settings_page.py` | `SettingsPage._save_conda_mirrors` | 948 |
-| `src/gui/settings_page.py` | `SettingsPage._add_conda_mirror` | 959 |
-| `src/gui/settings_page.py` | `SettingsPage._move_conda_mirror_up` | 985 |
-| `src/gui/settings_page.py` | `SettingsPage._move_conda_mirror_down` | 994 |
-| `src/gui/settings_page.py` | `SettingsPage._remove_conda_mirror` | 1003 |
-| `src/gui/settings_page.py` | `SettingsPage._reset_conda_mirrors` | 1014 |
-| `src/gui/settings_page.py` | `SettingsPage._setup_general_section` | 1341 |
-| `src/gui/settings_page.py` | `SettingsPage._setup_catalog_ui_section` | 1678 |
-| `src/gui/settings_page.py` | `SettingsPage._setup_diagnostics_section` | 1870 |
-| `src/gui/settings_page.py` | `SettingsPage._create_desktop_shortcut_from_settings` | 1938 |
-| `src/gui/settings_page.py` | `SettingsPage._setup_launch_section` | 1961 |
-| `src/gui/settings_python_download.py` | `PythonDownloadDialog._get_current_mirror` | 240 |
-| `src/gui/settings_python_download.py` | `PythonDownloadDialog._get_current_custom_url` | 245 |
-| `src/gui/settings_python_download.py` | `PythonDownloadDialog._update_mirror_desc` | 248 |
-| `src/gui/settings_python_download.py` | `PythonDownloadDialog._on_mirror_changed` | 253 |
-| `src/gui/settings_python_download.py` | `PythonDownloadDialog._on_custom_url_changed` | 274 |
-| `src/gui/settings_python_download.py` | `PythonDownloadDialog._fetch_versions` | 285 |
-| `src/gui/settings_python_download.py` | `PythonDownloadDialog._on_versions_fetched` | 304 |
-| `src/gui/settings_python_download.py` | `PythonDownloadDialog._on_selection_changed` | 337 |
-| `src/gui/settings_python_download.py` | `PythonDownloadDialog._start_download` | 364 |
-| `src/gui/settings_python_download.py` | `PythonDownloadDialog._on_download_finished` | 408 |
-| `src/gui/settings_python_download.py` | `PythonDownloadDialog._move_to_system` | 426 |
-| `src/gui/settings_python_download.py` | `PythonDownloadDialog._system_install_windows` | 478 |
-| `src/gui/settings_python_download.py` | `PythonDownloadDialog._system_install_unix` | 537 |
-| `src/gui/settings_python_download.py` | `PythonDownloadDialog._show_system_install_success` | 608 |
-| `src/gui/settings_python_download.py` | `PythonDownloadDialog._remove_selected` | 620 |
 | `src/gui/settings_toolchain.py` | `ToolchainMixin._make_pm_tool_row` | 27 |
 | `src/gui/settings_toolchain.py` | `ToolchainMixin._make_pm_conda_row` | 59 |
-| `src/gui/settings_toolchain.py` | `ToolchainMixin._pm_check_tool` | 78 |
-| `src/gui/settings_toolchain.py` | `ToolchainMixin._pm_check_conda` | 117 |
-| `src/gui/settings_toolchain.py` | `ToolchainMixin._pm_install_tool` | 131 |
-| `src/gui/settings_toolchain.py` | `ToolchainMixin._pm_uninstall_tool` | 267 |
-| `src/gui/settings_toolchain.py` | `ToolchainMixin._pm_download_micromamba` | 342 |
-| `src/gui/settings_toolchain.py` | `ToolchainMixin._tc_row_btns` | 496 |
-| `src/gui/settings_toolchain.py` | `ToolchainMixin._tc_update_row_btns` | 585 |
-| `src/gui/settings_toolchain.py` | `ToolchainMixin._tc_scan_pythons` | 607 |
-| `src/gui/settings_toolchain.py` | `ToolchainMixin._tc_find_tool` | 665 |
-| `src/gui/settings_toolchain.py` | `ToolchainMixin._tc_load_table` | 702 |
-| `src/gui/settings_toolchain.py` | `ToolchainMixin._tc_check_python_update` | 902 |
-| `src/gui/settings_toolchain.py` | `ToolchainMixin._tc_do_install` | 990 |
-| `src/gui/settings_toolchain.py` | `ToolchainMixin._tc_do_remove` | 1131 |
 | `src/gui/settings_toolchain.py` | `ToolchainMixin._tc_do_verify` | 1308 |
 | `src/gui/settings_toolchain.py` | `ToolchainMixin._tc_do_default` | 1353 |
-| `src/gui/settings_toolchain.py` | `ToolchainMixin._tc_download_mamba` | 1388 |
-| `src/gui/styles.py` | `_build_theme` | 16 |
-| `src/gui/styles.py` | `_get_theme_cached` | 713 |
-| `src/gui/styles.py` | `_get_colors_cached` | 740 |
 | `src/gui/styles.py` | `invalidate_style_cache` | 768 |
-| `src/gui/syntax_highlighter.py` | `PythonHighlighter._fmt` | 61 |
-| `src/gui/syntax_highlighter.py` | `PythonHighlighter._build_rules` | 70 |
 | `src/gui/syntax_highlighter.py` | `PythonHighlighter.highlightBlock` | 109 |
-| `src/gui/syntax_highlighter.py` | `PythonHighlighter._handle_triple_strings` | 126 |
-| `src/gui/widgets.py` | `PathElideMiddleDelegate.initStyleOption` | 20 |
-| `src/gui/window_menu.py` | `WindowMenuMixin._show_log_viewer` | 96 |
-| `src/gui/window_menu.py` | `WindowMenuMixin._open_logs_folder` | 102 |
-| `src/gui/window_menu.py` | `WindowMenuMixin._create_shortcut_windows` | 205 |
-| `src/gui/window_menu.py` | `WindowMenuMixin._create_shortcut_linux` | 231 |
-| `src/gui/window_menu.py` | `WindowMenuMixin._create_shortcut_macos` | 292 |
-| `src/gui/window_menu.py` | `WindowMenuMixin._populate_recent_menu` | 301 |
-| `src/gui/window_menu.py` | `WindowMenuMixin._open_recent_env` | 341 |
-| `src/gui/window_menu.py` | `WindowMenuMixin._clear_recent_envs` | 376 |
-| `src/gui/window_theme.py` | `WindowThemeMixin._refresh_sidebar_styles` | 112 |
-| `src/gui/window_theme.py` | `WindowThemeMixin._on_screen_changed` | 153 |
-| `src/gui/workers.py` | `EnvDetailWorker._fetch_one` | 62 |
-| `src/utils/i18n.py` | `get_language` | 30 |
-| `src/utils/logger.py` | `SafeWorkerMixin.safe_run` | 942 |
-| `src/utils/logger.py` | `_get_log_dir` | 49 |
-| `src/utils/logger.py` | `_collect_session_context` | 73 |
-| `src/utils/logger.py` | `_ansi_supported` | 160 |
-| `src/utils/logger.py` | `_build_ansi_console_handler` | 241 |
-| `src/utils/logger.py` | `_has_rich` | 253 |
-| `src/utils/logger.py` | `_visual_width` | 262 |
-| `src/utils/logger.py` | `_banner_to_file` | 298 |
-| `src/utils/logger.py` | `_safe_format_exception` | 555 |
-| `src/utils/logger.py` | `_install_sys_excepthook` | 590 |
-| `src/utils/logger.py` | `_install_threading_excepthook` | 609 |
-| `src/utils/logger.py` | `_cleanup_old_crash_logs` | 680 |
-| `src/utils/logger.py` | `safe_slot` | 715 |
-| `src/utils/logger.py` | `safe_call` | 773 |
-| `src/utils/logger.py` | `logged_subprocess` | 795 |
-| `src/utils/logger.py` | `log_perf` | 894 |
 | `src/utils/logger.py` | `open_log_directory` | 978 |
 | `src/utils/logger.py` | `get_recent_crash_logs` | 992 |
 
 ---
 
-79 files, 81 classes, 745 functions/methods, 332 flagged.
+79 files, 81 classes, 747 functions/methods, 27 flagged.

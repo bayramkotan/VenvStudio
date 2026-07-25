@@ -228,8 +228,57 @@ class PipManager:
 
         return subprocess.run(cmd, **sp_kwargs)
 
+    def _is_pipx_home(self) -> bool:
+        """True when venv_path is the pipx home rather than a real venv.
+
+        pipx home has no site-packages of its own: every app lives in its own
+        environment under <home>/venvs/<app>/.
+        """
+        try:
+            from src.utils.platform_utils import get_pipx_home
+            _home = get_pipx_home()
+            if not _home:
+                return False
+            return Path(_home).resolve() == Path(self.venv_path).resolve()
+        except Exception:
+            return False
+
+    def _list_pipx_packages(self) -> List[PackageInfo]:
+        """List apps installed with pipx.
+
+        Running pip list against the pipx home returns nothing, because the
+        apps are installed into separate environments under venvs/. That
+        emptiness made the launcher believe nothing was installed and offer
+        to install an app that was already there.
+        """
+        from src.utils.platform_utils import get_pipx_cmd, subprocess_args
+        try:
+            _cmd = get_pipx_cmd()
+            if not _cmd:
+                return []
+            result = subprocess.run(
+                list(_cmd) + ["list", "--json"],
+                **subprocess_args(capture_output=True, text=True, timeout=60)
+            )
+            if result.returncode != 0:
+                return []
+            _data = json.loads(result.stdout)
+            _out = []
+            for _name, _entry in (_data.get("venvs") or {}).items():
+                _meta = (_entry or {}).get("metadata", {})
+                _main = _meta.get("main_package", {})
+                _out.append(PackageInfo(
+                    name=_main.get("package") or _name,
+                    version=_main.get("package_version", ""),
+                ))
+            return _out
+        except (json.JSONDecodeError, subprocess.TimeoutExpired, Exception):
+            return []
+
     def list_packages(self) -> List[PackageInfo]:
         """List all installed packages."""
+        if self._is_pipx_home():
+            return self._list_pipx_packages()
         try:
             result = self._run_pip(["list", "--format=json"])
             if result.returncode == 0:

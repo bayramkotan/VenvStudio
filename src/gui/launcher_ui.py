@@ -187,6 +187,7 @@ class LauncherUIMixin:
                 "icon": "⚡",
                 "icon_key": "fastapi",
                 "package": "fastapi",
+                "install_packages": ["fastapi", "uvicorn"],
                 "command": ["-c", "import uvicorn; from fastapi import FastAPI; app=FastAPI(); uvicorn.run(app, host='127.0.0.1', port=8000)"],
                 "desc": "Modern fast web API framework — launches demo",
                 "needs_console": True,

@@ -177,24 +177,27 @@ sudo zypper install libxcb-cursor0 libxcb-icccm4 libxcb-image0 \
 ### CLI
 
 VenvStudio is a GUI first, but the core actions work headless too — handy over SSH,
-in scripts, or when you just want one quick thing done:
+in scripts, or when you just want one quick thing done.
+
+Installing with pip gives you **`vs`** as a short alias, so nothing needs typing out:
 
 ```bash
-venvstudio                      # Launch the GUI
-venvstudio-gui                  # Same, without a console window (Windows)
+vs                      # Launch the GUI
+vs list                 # List every detected environment
+vs create NAME          # Create a venv environment
+vs delete NAME          # Delete an environment (asks first)
+vs delete NAME -y       # Delete without the confirmation prompt
 
-venvstudio list                 # List every detected environment
-venvstudio create NAME          # Create a venv environment
-venvstudio delete NAME          # Delete an environment (asks first)
-venvstudio delete NAME -y       # Delete without the confirmation prompt
+vs packages ENV         # List packages installed in ENV
+vs install ENV PKG...   # Install one or more packages into ENV
+vs uninstall ENV PKG... # Uninstall packages from ENV
 
-venvstudio packages ENV         # List packages installed in ENV
-venvstudio install ENV PKG...   # Install one or more packages into ENV
-venvstudio uninstall ENV PKG... # Uninstall packages from ENV
-
-venvstudio version              # Show version (also: -V)
-venvstudio -h                   # Show help
+vs -V                   # Show version (also: vs version)
+vs -h                   # Show help
 ```
+
+`venvstudio` works exactly the same if you prefer the full name, and
+`venvstudio-gui` launches without a console window on Windows.
 
 ---
 

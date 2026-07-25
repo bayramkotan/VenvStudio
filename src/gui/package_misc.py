@@ -328,6 +328,51 @@ class PackageMiscMixin:
             banner_command(command, context=_ctx)
         except Exception:
             pass
+        self._set_env_cmd_strip(command)
+
+    def _set_env_cmd_strip(self, command: str):
+        """Put the command in the header strip, next to the env details.
+
+        The log is thorough but nobody watches it while clicking. Showing the
+        last command in the header answers "what did that just run?" without
+        leaving the page, and the button beside it copies the text verbatim.
+        """
+        _lbl = getattr(self, "env_cmd_label", None)
+        _btn = getattr(self, "env_cmd_copy_btn", None)
+        if _lbl is None:
+            return
+        command = str(command or "").strip()
+        if not command:
+            _lbl.setVisible(False)
+            if _btn is not None:
+                _btn.setVisible(False)
+            return
+        self._env_cmd_full = command
+        # Elide in the middle: the tool name at the front and the package
+        # names at the end are the informative parts; a long env path in the
+        # middle is not.
+        _shown = command
+        if len(_shown) > 88:
+            _shown = _shown[:48] + " … " + _shown[-37:]
+        _lbl.setText(f"\U0001f4bb  {_shown}")
+        _lbl.setToolTip(command)
+        _lbl.setVisible(True)
+        if _btn is not None:
+            _btn.setVisible(True)
+
+    def _copy_env_cmd(self):
+        """Copy the command shown in the header strip."""
+        _cmd = getattr(self, "_env_cmd_full", "")
+        if not _cmd:
+            return
+        from PySide6.QtWidgets import QApplication
+        QApplication.clipboard().setText(_cmd)
+        _btn = getattr(self, "env_cmd_copy_btn", None)
+        if _btn is not None:
+            _btn.setText("\u2705")
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(
+                1200, lambda: _btn.setText("\U0001f4cb"))
 
     def _on_progress(self, message: str):
         self.status_label.setText(message)
@@ -644,6 +689,10 @@ class PackageMiscMixin:
         request_mirror_skip()
     def _on_tab_changed(self, index: int):
         """Build tab content lazily on first visit."""
+        # The command strip reports what just happened; moving to another tab
+        # means the user has moved on, so it stops being the answer to
+        # "what did that do?" and turns into clutter.
+        self._set_env_cmd_strip("")
         self._ensure_tab_built(index)
 
     def _ensure_tab_built(self, index: int):

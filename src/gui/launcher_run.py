@@ -257,7 +257,9 @@ class LauncherRunMixin:
                 _env = self.pip_manager.venv_path.name
             _name = app_def.get("name", "app")
             _ctx = f"Launch {_name} (env: {_env})" if _env else f"Launch {_name}"
-            banner_command([str(c) for c in cmd if c], context=_ctx)
+            _cmd_str = " ".join(str(c) for c in cmd if c)
+            banner_command(_cmd_str, context=_ctx)
+            self._set_env_cmd_strip(_cmd_str)
         except Exception:
             pass
 

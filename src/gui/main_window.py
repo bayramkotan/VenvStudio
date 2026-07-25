@@ -854,6 +854,14 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         page_names = {0: "Packages", 1: "Environments", 2: "Settings", 3: "Learn"}
         self._log.debug(f"_switch_page → {page_names.get(index, index)} (index={index})")
 
+        # Leaving the page means the user has moved on from whatever the
+        # command strip was reporting; the log keeps the full history.
+        if self.package_panel is not None:
+            try:
+                self.package_panel._set_env_cmd_strip("")
+            except Exception:
+                pass
+
         # Lazy-build PackagePanel on first visit
         if index == 0 and self.package_panel is None:
             from src.gui.package_panel import PackagePanel

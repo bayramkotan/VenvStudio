@@ -431,6 +431,27 @@ def banner_warning(title: str, details: Optional[List[str]] = None,
     banner(title, "warning", details, logger)
 
 
+# Commands run this session, newest last. Kept in memory only: the rotating
+# file log already holds the permanent record, and this list exists so the
+# Command History window can show them as discrete, copyable rows rather than
+# text the user has to hunt for. Capped so a long session cannot grow it
+# without bound.
+_COMMAND_HISTORY: List[dict] = []
+_COMMAND_HISTORY_MAX = 500
+
+
+def get_command_history() -> List[dict]:
+    """Commands recorded this session: {time, context, command}."""
+    return list(_COMMAND_HISTORY)
+
+
+def clear_command_history() -> int:
+    """Forget the recorded commands. Returns how many were dropped."""
+    n = len(_COMMAND_HISTORY)
+    _COMMAND_HISTORY.clear()
+    return n
+
+
 def banner_command(command, context: str = "",
                    logger: Optional[logging.Logger] = None) -> None:
     """Show the terminal command behind a UI action.
@@ -448,6 +469,15 @@ def banner_command(command, context: str = "",
     command = str(command).strip()
     if not command:
         return
+    import datetime as _dt_cmd
+    _COMMAND_HISTORY.append({
+        "time": _dt_cmd.datetime.now().strftime("%H:%M:%S"),
+        "context": context or "",
+        "command": command,
+    })
+    if len(_COMMAND_HISTORY) > _COMMAND_HISTORY_MAX:
+        del _COMMAND_HISTORY[:-_COMMAND_HISTORY_MAX]
+
     title = f"COMMAND — {context}" if context else "COMMAND"
     banner(title, "command", [command], logger)
 

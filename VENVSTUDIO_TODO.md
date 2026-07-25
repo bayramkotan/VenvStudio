@@ -243,7 +243,7 @@ Sırayla işaretle. Her satır bağımsız test edilebilir.
 
 ---
 
-## 🟡 F208 — Her Yerde Eğitici Komut Gösterimi — **ADIM 1+2 TAMAM**
+## 🟡 F208 — Her Yerde Eğitici Komut Gösterimi — **ADIM 1+2 TAMAM + UI**
 
 **Amaç:** Kullanıcı ne tıklarsa tıklasın, arkada çalışan terminal komutunu
 görebilsin. VenvStudio otomatikleştiriyor ama öğretmesi de gerekiyor.
@@ -265,6 +265,12 @@ görebilsin. VenvStudio otomatikleştiriyor ama öğretmesi de gerekiyor.
 - [x] Launcher uninstall
 - [x] Preset install + uninstall
 
+### ✅ Ekranda gösterim (v1.6.21)
+- [x] **Başlık çubuğunda canlı komut şeridi** — paket sayısının sağında,
+      Copy butonuyla. Env/sekme/sayfa değişiminde temizleniyor
+- [x] **Tools → 💻 View Commands** — satır satır komut geçmişi, filtre,
+      çift tıkla kopyala, Clear. `command_history.py` (yeni dosya)
+
 ### ⬜ Adım 3 — kalan noktalar
 - [ ] **Open Terminal** — hangi aktivasyon komutu çalıştırıldı
 - [ ] **Export** — `pip freeze > requirements.txt` karşılığı
@@ -279,7 +285,28 @@ sayfasındaki sarı panel) ve `_show_command_hint` (paket panelinin output log'u
 
 ---
 
-## ✅ v1.6.20'de ÇÖZÜLEN (COMMIT BEKLİYOR)
+## ✅ v1.6.21'de ÇÖZÜLEN (COMMIT BEKLİYOR)
+
+### 🎓 Komut şeridi + Command History penceresi
+Komutlar artık sadece logda değil ekranda: başlık çubuğunda canlı şerit
+(Copy butonlu, env/sekme/sayfa değişiminde temizlenir) ve **Tools → View
+Commands** penceresi (satır satır, filtreli, çift tıkla kopyala, Clear).
+Depolama `logger.py::_COMMAND_HISTORY`, oturum-içi, 500 kayıt sınırı.
+
+### 🐛 B203 — Başlık çubuğu şerit gizliyken geriliyordu
+Şerit eklenirken `row1.addStretch()` **silinmişti**. Stretch fazla alanı
+emen şeydi; kalkınca Qt boşluğu env combo'su, Python sürümü ve Open Terminal
+arasında paylaştırdı.
+**Ders:** layout'a widget eklerken `addStretch()`'i değiştirme, yanına ekle.
+
+### 🐛 B204 — Copy butonunda emoji boş kutu çıktı
+📋 yerine düz "Copy". Bu ders handoff'ta zaten yazılıydı (Skip Mirror,
+Move Up/Down) ama tekrarlandı.
+**Kural: `QPushButton` metninde emoji YOK.**
+
+---
+
+## ✅ v1.6.20'de ÇÖZÜLEN (PUSH EDİLDİ)
 
 ### 🎓 F208 Adım 2 — komutlar logda kutu içinde
 Yukarıdaki listeye bak. Log çıktısı:

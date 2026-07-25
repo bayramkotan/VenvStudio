@@ -60,6 +60,13 @@ class WindowMenuMixin:
         tools_menu.addAction(shortcut_action)
 
         tools_menu.addSeparator()
+        commands_action = QAction("💻 View Commands", self)
+        commands_action.setToolTip(
+            "Every terminal command VenvStudio ran this session, "
+            "one per row, ready to copy")
+        commands_action.triggered.connect(self._show_command_history)
+        tools_menu.addAction(commands_action)
+
         logs_action = QAction("🪵 View Logs", self)
         logs_action.triggered.connect(self._show_log_viewer)
         tools_menu.addAction(logs_action)
@@ -92,6 +99,17 @@ class WindowMenuMixin:
         help_menu.addAction(issues_action)
 
 
+
+    def _show_command_history(self):
+        """Open the command history window.
+
+        Companion to the log viewer: the log has everything, this has only
+        the commands, which is what you want when the question is "what did
+        VenvStudio actually run?"
+        """
+        from src.gui.command_history import CommandHistoryDialog
+        dlg = CommandHistoryDialog(self)
+        dlg.exec()
 
     def _show_log_viewer(self):
         """Open the log viewer dialog (frozen builds have no terminal)."""

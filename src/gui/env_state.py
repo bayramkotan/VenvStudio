@@ -30,6 +30,15 @@ class EnvStateMixin:
         except Exception:
             pass
 
+        # Past the early return above, so this only runs on a real env switch,
+        # not on the refreshes that follow an install. The strip shows the last
+        # command run against an environment; carrying it into a different one
+        # would be misleading.
+        try:
+            self._set_env_cmd_strip("")
+        except Exception:
+            pass
+
         backend = "pip"
         try:
             from src.core.config_manager import ConfigManager

@@ -212,6 +212,15 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
             self.env_pkg_count.setStyleSheet(
                 f"color: {c['muted']}; font-size: {self._c()['fs_small']}px; font-weight: bold;"
             )
+        if hasattr(self, "env_cmd_label"):
+            self.env_cmd_label.setStyleSheet(
+                "color: #f9e2af; "
+                f"font-family: Consolas, 'JetBrains Mono', monospace; "
+                f"font-size: {self._c()['fs_small']}px; font-weight: bold; "
+                f"background: {self._c()['sidebar']}; "
+                f"border: 1px solid {self._c()['border']}; border-radius: 6px; "
+                f"padding: 6px 10px;"
+            )
         info_style = f"color: {c['info']}; font-size: {self._c()['fs_tiny']}px;"
         sep_style  = f"color: {c['sep']}; font-size: {self._c()['fs_tiny']}px;"
         for attr in ("env_path_label", "env_disk_label", "env_backend_label", "env_last_used_label"):
@@ -349,6 +358,47 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
         self.env_pkg_count.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px; font-weight: bold; padding-left: 12px;")
         row1.addWidget(self.env_pkg_count)
 
+        # ── Live command strip ──────────────────────────────────────────────
+        # The log already boxes every command VenvStudio runs, but the log is
+        # not where people look. This puts the last one in the header, next to
+        # the env details, so the answer to "what did that button just do?" is
+        # always on screen and one click from the clipboard.
+        row1.addSpacing(16)
+
+        self.env_cmd_label = QLabel("")
+        self.env_cmd_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.env_cmd_label.setStyleSheet(
+            "color: #f9e2af; "
+            f"font-family: Consolas, 'JetBrains Mono', monospace; "
+            f"font-size: {self._c()['fs_small']}px; font-weight: bold; "
+            f"background: {self._c()['sidebar']}; "
+            f"border: 1px solid {self._c()['border']}; border-radius: 6px; "
+            f"padding: 6px 10px;"
+        )
+        # Ceiling so a long command cannot squeeze the env controls on a
+        # narrow window; the text is elided before this bites, and the full
+        # command is in the tooltip and on the clipboard either way.
+        self.env_cmd_label.setMaximumWidth(720)
+        self.env_cmd_label.setVisible(False)
+        # No stretch factor: the label sizes to its (already elided) text, so
+        # hiding it gives the row back to the addStretch() below instead of
+        # redistributing space among the env widgets and spreading them out.
+        row1.addWidget(self.env_cmd_label)
+
+        # Plain word, not a clipboard emoji: the UI font has no glyph for it
+        # and it rendered as an empty box (same trap as the Skip Mirror and
+        # Move Up/Down buttons).
+        self.env_cmd_copy_btn = QPushButton("Copy")
+        self.env_cmd_copy_btn.setObjectName("secondary")
+        self.env_cmd_copy_btn.setFixedWidth(70)
+        self.env_cmd_copy_btn.setToolTip("Copy this command")
+        self.env_cmd_copy_btn.setVisible(False)
+        self.env_cmd_copy_btn.clicked.connect(self._copy_env_cmd)
+        row1.addWidget(self.env_cmd_copy_btn)
+
+        # Keeps the row's spare width in one place. Without it the env combo,
+        # Python version and Open Terminal button stretched to fill the row
+        # whenever no command was showing.
         row1.addStretch()
 
         env_bar_outer.addLayout(row1)
@@ -446,20 +496,6 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
         self.status_label = QLabel("Select an environment to manage packages")
         self.status_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px;")
         status_layout.addWidget(self.status_label, 1)
-
-        # Conda installs can sit on a slow mirror for minutes. This jumps
-        # to the next mirror in the Settings list instead of waiting it out.
-        # Only meaningful for conda, so _set_busy hides it for other types.
-        self.skip_mirror_btn = QPushButton("Skip Mirror")
-        self.skip_mirror_btn.setObjectName("secondary")
-        self.skip_mirror_btn.setFixedWidth(140)
-        self.skip_mirror_btn.setVisible(False)
-        self.skip_mirror_btn.setToolTip(
-            "Stop downloading from the current conda mirror and try the "
-            "next one.\nMirror order is configurable in Settings > Paths."
-        )
-        self.skip_mirror_btn.clicked.connect(self._skip_conda_mirror)
-        status_layout.addWidget(self.skip_mirror_btn)
 
         self.cancel_btn = QPushButton("⛔ Cancel")
         self.cancel_btn.setObjectName("danger")

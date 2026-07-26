@@ -766,9 +766,22 @@ class LauncherRunMixin:
             if _app_cmd and _app_cmd[0] == "-c" and _pipx_py:
                 cmd = [_pipx_py] + _app_cmd
             elif _exe_path:
-                # keep extra args from '-m <mod> <args...>' (e.g. jupyter lab)
+                # keep extra args from '-m <mod> <args...>' (e.g. mlflow ui)
                 if len(_app_cmd) >= 2 and _app_cmd[0] == "-m":
-                    cmd = [_exe_path] + list(_app_cmd[2:])
+                    _extra = list(_app_cmd[2:])
+                    # Some pipx entry points already encode the subcommand:
+                    # jupyterlab exposes "jupyter-lab", not "jupyter". Passing
+                    # the subcommand again turned `jupyter lab` into
+                    # `jupyter-lab lab`, and the server read "lab" as the
+                    # directory to serve -- "No such file or directory:
+                    # ~/lab". Drop the token the executable already carries.
+                    if _extra and not _extra[0].startswith("-"):
+                        _exe_base = _os.path.basename(_exe_path)
+                        if _exe_suffix and _exe_base.endswith(_exe_suffix):
+                            _exe_base = _exe_base[:-len(_exe_suffix)]
+                        if _exe_base.endswith("-" + _extra[0]):
+                            _extra = _extra[1:]
+                    cmd = [_exe_path] + _extra
                 else:
                     cmd = [_exe_path]
             elif _pipx_py:

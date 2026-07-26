@@ -285,7 +285,99 @@ sayfasındaki sarı panel) ve `_show_command_hint` (paket panelinin output log'u
 
 ---
 
+## 📝 KULLANICI NOTLARI (2026-07-25) — F209..F213
+
+Bayram'ın topladığı maddeler. B208 çözüldü, kalan beşi özellik.
+
+---
+
+### 🟡 F209 — Settings sayfasını yeniden düzenle
+
+**Şikayet:** "Terminallerle ilgili ayarlar farklı yerde." Ayarlar dağınık,
+başlıklar küçük, gruplama mantıksız.
+
+**Yapılacak:**
+- İlgili ayarları tek başlık altında topla — terminal ayarları şu an
+  `settings_page.py` ve `settings_advanced.py` arasında bölünmüş
+- Bölüm başlıkları daha büyük punto
+- Mantıklı gruplar: Görünüm / Python / Ortamlar / Terminal & CLI / Paketler /
+  Bakım
+
+**Not:** `settings_page.py` 95 KB — bölmek de düşünülebilir, ama önce
+gruplamayı kararlaştır.
+
+---
+
+### 🟡 F210 — Portable sürümler için `vs` alias kurulumu
+
+pip ile kurunca `vs` ve `venvstudio` komutları geliyor (entry point). Ama
+**exe / AppImage / macOS binary** kullananlarda hiçbiri yok.
+
+**Yapılacak:** Settings'e "Install `vs` command" düğmesi:
+- **Windows:** `vs.bat` üret + PATH'e ekle (ya da `%LOCALAPPDATA%\Microsoft\WindowsApps`)
+- **Linux:** `~/.local/bin/vs` sembolik bağ (AppImage yolunu gösterir)
+- **macOS:** `/usr/local/bin/vs` sembolik bağ
+
+Kaldırma seçeneği de olmalı. Repo'da zaten `vs.bat` ve `vs.py` var — onlardan
+yararlanılabilir.
+
+---
+
+### 🟡 F211 — Log dosyası bakım ayarı
+
+**Şikayet:** Log dosyaları büyüyor.
+
+**Yapılacak:** Settings → Bakım altında otomatik temizleme:
+- Yaşa göre: 90 günden eski (varsayılan) / 30 / 14 gün
+- Boyuta göre: 1-2 GB'ı aşınca en eskiler silinsin
+- "Son 14 gün hariç hepsini sil" tek tıkla
+
+**Not:** Silme mantığı **zaten var** — `log_viewer.py::_rewrite_log()`,
+`_delete_old(days)`, `_delete_backups()`. Eksik olan **otomatik** çalıştırma
+ve ayar. Açılışta bir kez kontrol yeterli.
+
+---
+
+### 🟡 F212 — Spyder'ı kurulduğu env'e bağla
+
+**Şikayet:** Bir env'e Spyder kurunca Tools → Preferences → Python Interpreter
+boş geliyor; kullanıcı elle seçmek zorunda.
+
+**Yapılacak:**
+1. Spyder kurulumundan sonra config'e env'in interpreter'ını yaz
+2. Spyder'ın config dizini kurulduğu env'in içinde olsun (env'ler birbirinin
+   ayarını ezmesin)
+
+**Nasıl:** Spyder `SPYDERPATH` / `--conf-dir` ve `spyder.ini` içindeki
+`[main_interpreter] executable` ayarını kullanır. Launcher Spyder'ı başlatırken
+`--conf-dir <env>/.spyder` verip o dizindeki `spyder.ini`'ye interpreter yolunu
+yazabilir.
+
+⚠️ Spyder sürümleri arasında config formatı değişebilir — yazmadan önce
+gerçek bir kurulumda doğrula (bkz. teşhis oyun kitabı, adım 3).
+
+---
+
+### 🟡 F213 — pipx'te Jupyter çalışma dizini
+
+B208 düzeltildi ama ilgili bir soru açık: pipx'te Jupyter başlatılırken
+`jupyter_workdir` ayarı uygulanıyor mu? venv yolunda uygulanıyor
+(`launcher_run.py`, `is_jupyter` kontrolü). pipx yolunda test edilmedi.
+
+---
+
 ## ✅ v1.6.22'de ÇÖZÜLEN (COMMIT BEKLİYOR)
+
+### 🔴 B208 — pipx'te JupyterLab açılmıyordu: `No such file or directory: ~/lab`
+`_pipx_exe_map` bazı paketler için **alt komutu zaten içeren** bir exe
+veriyor (`jupyterlab` → `jupyter-lab`). Kod sonra `-m jupyter lab`
+komutundan kalan `lab`ı da ekliyordu → `jupyter-lab lab` → sunucu "lab"ı
+sunulacak dizin sanıyordu.
+**Çözüm:** exe adı `-<arg>` ile bitiyorsa o argüman düşürülüyor.
+Etkilenen: JupyterLab, Jupyter Notebook. `streamlit hello`, `mlflow ui`,
+`marimo edit`, `panel serve` gibi genel exe'ler dokunulmadan geçiyor
+(9 vaka test edildi).
+
 
 ### 📤 Export/Import komutları görünmüyordu — iki ayrı export yolu
 `package_export.py` (Packages) kısmen gösteriyordu, `env_export.py`

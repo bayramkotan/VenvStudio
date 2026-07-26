@@ -338,7 +338,7 @@ ve ayar. Açılışta bir kez kontrol yeterli.
 
 ---
 
-### 🟡 F212 — Spyder'ı kurulduğu env'e bağla
+### ✅ F212 — Spyder'ı kurulduğu env'e bağla — **YAPILDI (v1.6.23)**
 
 **Şikayet:** Bir env'e Spyder kurunca Tools → Preferences → Python Interpreter
 boş geliyor; kullanıcı elle seçmek zorunda.
@@ -348,17 +348,23 @@ boş geliyor; kullanıcı elle seçmek zorunda.
 2. Spyder'ın config dizini kurulduğu env'in içinde olsun (env'ler birbirinin
    ayarını ezmesin)
 
-**Nasıl:** Spyder `SPYDERPATH` / `--conf-dir` ve `spyder.ini` içindeki
-`[main_interpreter] executable` ayarını kullanır. Launcher Spyder'ı başlatırken
-`--conf-dir <env>/.spyder` verip o dizindeki `spyder.ini`'ye interpreter yolunu
-yazabilir.
+**Yapıldı.** Spyder 6.1.5'te doğrulanan format — ayar **iki dosyada**:
 
-⚠️ Spyder sürümleri arasında config formatı değişebilir — yazmadan önce
-gerçek bir kurulumda doğrula (bkz. teşhis oyun kitabı, adım 3).
+| Dosya | Anahtar |
+|---|---|
+| `<conf-dir>/config/spyder.ini` | `[main_interpreter] default=False, custom=True` |
+| `<conf-dir>/config/transient.ini` | `[main_interpreter] custom_interpreter`, `custom_interpreters_list` |
+
+Sadece birini yazmak yetmiyor. `--conf-dir DIR` verilince dosyalar `DIR/config/`
+**alt klasörüne** yazılıyor. Detaylar handoff'ta.
+
+Uygulama: `launcher_run.py::_prepare_spyder_conf()` → `<env>/.spyder`.
+Mevcut ayarları birleştiriyor (tema/kısayol korunuyor), her env kendi config'ini
+alıyor, hata olursa Spyder varsayılanla açılıyor.
 
 ---
 
-### 🟡 F213 — pipx'te Jupyter çalışma dizini
+### ✅ F213 — pipx'te Jupyter çalışma dizini — **ÇÖZÜLDÜ**
 
 B208 düzeltildi ama ilgili bir soru açık: pipx'te Jupyter başlatılırken
 `jupyter_workdir` ayarı uygulanıyor mu? venv yolunda uygulanıyor
@@ -366,7 +372,20 @@ B208 düzeltildi ama ilgili bir soru açık: pipx'te Jupyter başlatılırken
 
 ---
 
-## ✅ v1.6.22'de ÇÖZÜLEN (COMMIT BEKLİYOR)
+## ✅ v1.6.23'te ÇÖZÜLEN (COMMIT BEKLİYOR)
+
+### 🕷️ F212 — Spyder her env'de kendi yorumlayıcısıyla açılıyor
+Tools → Preferences → Python Interpreter artık dolu geliyor; config env'in
+içinde (`<env>/.spyder`) olduğu için env'ler birbirinin ayarını ezmiyor.
+Format Spyder 6.1.5'te gerçek kurulumda doğrulandı (iki ayrı ini dosyası).
+
+---
+
+## ✅ v1.6.22'de ÇÖZÜLEN (PUSH EDİLDİ — ama tag eski commit'te)
+
+⚠️ **B208 (JupyterLab/pipx) düzeltmesi `main`'de var, yayınlanan 1.6.22'de YOK.**
+Tag zaten mevcut olduğu için `git tag` başarısız oldu, düzeltme v1.6.23 ile gidecek.
+
 
 ### 🔴 B208 — pipx'te JupyterLab açılmıyordu: `No such file or directory: ~/lab`
 `_pipx_exe_map` bazı paketler için **alt komutu zaten içeren** bir exe

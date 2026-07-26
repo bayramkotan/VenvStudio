@@ -42,7 +42,7 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | `src/gui/env_list.py` | 635 | VenvStudio - MainWindow: Environment List Mixin |
 | `src/gui/env_operations.py` | 914 | VenvStudio - MainWindow: Environment Operations Mixin |
 | `src/gui/env_state.py` | 848 | VenvStudio - Package Panel: Environment State Mixin |
-| `src/gui/launcher_run.py` | 1248 | VenvStudio - Package Panel: Launcher Run Mixin |
+| `src/gui/launcher_run.py` | 1329 | VenvStudio - Package Panel: Launcher Run Mixin |
 | `src/gui/launcher_shortcuts.py` | 230 | VenvStudio - Package Panel: Launcher Shortcuts Mixin |
 | `src/gui/launcher_ui.py` | 970 | VenvStudio - Package Panel: Launcher UI Mixin |
 | `src/gui/learn_content.py` | 2825 | learn_page content data — VenvStudio Learn categories/topics. |
@@ -694,16 +694,18 @@ Line numbers drift as files change; treat them as a starting point, not an addre
 | Method | Line | Doc |
 |---|---|---|
 | `_launch_system_app` | 25 | Detect and launch a system-level application. |
-| `_log_launch_command` | 244 | Box the command used to start an app, so the log teaches it. |
-| `_launch_exe` | 266 | Launch an executable with proper detach/console flags. |
-| `_on_system_install_finished` | 335 | Called after a system tool silent install completes. |
-| `_get_orange3_packages` | 400 | Return the right Orange3 packages based on Python version. |
-| `_launch_script` | 421 | Let user pick a .py file and run it with the selected framework. |
-| `_launch_app` | 499 | Launch an app from the selected environment. |
-| `_on_app_install_finished` | 875 | After installing an app package, refresh and launch. |
-| `_uninstall_app` | 1023 | Uninstall an app from the selected environment with confirmation. |
-| `_on_system_uninstall_finished` | 1182 | After removing a conda system app: clear caches and refresh. |
-| `_get_app_icon_path` | 1228 | Return the absolute path to the app's .ico (Windows) or .png (Linux/macOS) icon. |
+| `_is_spyder_app` | 245 | True for the Spyder card, whichever way it is launched. |
+| `_prepare_spyder_conf` | 252 | Write a Spyder config dir inside the env, pinned to its Python. |
+| `_log_launch_command` | 315 | Box the command used to start an app, so the log teaches it. |
+| `_launch_exe` | 337 | Launch an executable with proper detach/console flags. |
+| `_on_system_install_finished` | 406 | Called after a system tool silent install completes. |
+| `_get_orange3_packages` | 471 | Return the right Orange3 packages based on Python version. |
+| `_launch_script` | 492 | Let user pick a .py file and run it with the selected framework. |
+| `_launch_app` | 570 | Launch an app from the selected environment. |
+| `_on_app_install_finished` | 956 | After installing an app package, refresh and launch. |
+| `_uninstall_app` | 1104 | Uninstall an app from the selected environment with confirmation. |
+| `_on_system_uninstall_finished` | 1263 | After removing a conda system app: clear caches and refresh. |
+| `_get_app_icon_path` | 1309 | Return the absolute path to the app's .ico (Windows) or .png (Linux/macOS) icon. |
 
 ### `src/gui/launcher_shortcuts.py`
 
@@ -1513,4 +1515,4 @@ Names used nowhere beyond their own definition, across `src/`, `main.py`, `tools
 
 ---
 
-80 files, 82 classes, 772 functions/methods, 28 flagged.
+80 files, 82 classes, 774 functions/methods, 28 flagged.

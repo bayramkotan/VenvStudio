@@ -241,6 +241,77 @@ class LauncherRunMixin:
         # 5. Found — launch
         self._launch_exe(exe_path, app_def)
 
+    @staticmethod
+    def _is_spyder_app(app_def) -> bool:
+        """True for the Spyder card, whichever way it is launched."""
+        if (app_def.get("package") or "").lower() == "spyder":
+            return True
+        return any("spyder" in str(c).lower()
+                   for c in app_def.get("command", []) or [])
+
+    def _prepare_spyder_conf(self, venv_path):
+        """Write a Spyder config dir inside the env, pinned to its Python.
+
+        Verified against Spyder 6.1.5: the setting lives in two files under
+        <conf-dir>/config/ --
+
+            spyder.ini      [main_interpreter] default=False, custom=True
+            transient.ini   [main_interpreter] custom_interpreter=<path>,
+                                               custom_interpreters_list=[...]
+
+        Both are needed: transient.ini holds the path, spyder.ini is the
+        switch that makes Spyder use it. Writing only one leaves the box
+        empty, which is the bug this fixes.
+
+        Returns the conf dir, or None if anything went wrong -- Spyder then
+        starts with its own defaults rather than not starting at all.
+        """
+        import configparser
+        from pathlib import Path as _P
+        try:
+            from src.utils.platform_utils import get_python_executable
+            _env = _P(venv_path)
+            _py = str(get_python_executable(_env))
+            if not os.path.isfile(_py):
+                return None
+            _conf = _env / ".spyder"
+            _cfg = _conf / "config"
+            _cfg.mkdir(parents=True, exist_ok=True)
+
+            # spyder.ini — the switch. Merge, never overwrite: the user's
+            # theme, shortcuts and layout live in this file too.
+            _main = _cfg / "spyder.ini"
+            _c1 = configparser.ConfigParser()
+            _c1.optionxform = str
+            if _main.exists():
+                _c1.read(_main, encoding="utf-8")
+            if not _c1.has_section("main_interpreter"):
+                _c1.add_section("main_interpreter")
+            _c1["main_interpreter"]["default"] = "False"
+            _c1["main_interpreter"]["custom"] = "True"
+            with open(_main, "w", encoding="utf-8") as _f:
+                _c1.write(_f)
+
+            # transient.ini — the path itself.
+            _tr = _cfg / "transient.ini"
+            _c2 = configparser.ConfigParser()
+            _c2.optionxform = str
+            if _tr.exists():
+                _c2.read(_tr, encoding="utf-8")
+            if not _c2.has_section("main_interpreter"):
+                _c2.add_section("main_interpreter")
+            _c2["main_interpreter"]["custom_interpreter"] = _py
+            _c2["main_interpreter"]["custom_interpreters_list"] = f"['{_py}']"
+            with open(_tr, "w", encoding="utf-8") as _f:
+                _c2.write(_f)
+
+            _log.info(f"🕷️ [Spyder] config at {_fmt_path(_conf)} "
+                      f"-> interpreter {_fmt_path(_py)}")
+            return _conf
+        except Exception as _e:
+            _log.warning(f"[Spyder] could not prepare config: {_e}")
+            return None
+
     def _log_launch_command(self, cmd, app_def):
         """Box the command used to start an app, so the log teaches it.
 
@@ -791,6 +862,16 @@ class LauncherRunMixin:
                 cmd = [str(python_exe)] + _app_cmd
         else:
             cmd = [str(python_exe)] + app_def["command"]
+
+        # Spyder: point it at a per-environment config directory whose
+        # interpreter is already set to this environment. Otherwise every
+        # environment shares ~/.config/spyder-py3 and the interpreter box
+        # comes up empty, leaving the user to browse for a path VenvStudio
+        # already knows.
+        if self._is_spyder_app(app_def):
+            _conf = self._prepare_spyder_conf(venv_path)
+            if _conf and "--conf-dir" not in cmd:
+                cmd = list(cmd) + ["--conf-dir", str(_conf)]
 
         _log.debug(f"🚀 [Launcher] command: {' '.join(_fmt_path(c) for c in cmd)}")
         self._log_launch_command(cmd, app_def)

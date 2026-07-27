@@ -60,6 +60,8 @@ class EnvOperationsMixin:
         name = self._get_selected_env_name()
         if not name:
             return
+        if self._env_op_busy("rename", f"rename '{name}'"):
+            return
         new_name = self._get_new_name_for_rename(name)
         if not new_name:
             return
@@ -88,7 +90,9 @@ class EnvOperationsMixin:
         self.rename_progress.setWindowModality(Qt.WindowModal)
         self.rename_progress.show()
 
-        self._rename_worker = RenameOnlyWorker(self.venv_manager, name, new_name)
+        self._renaming_env_name = name
+        self._rename_worker = RenameOnlyWorker(
+            self.venv_manager, name, new_name, parent=self)
         self._rename_worker.progress.connect(
             lambda msg: self.rename_progress.setLabelText(f"⏳ {msg}")
         )
@@ -99,6 +103,8 @@ class EnvOperationsMixin:
         """Rename (Full) — clone + delete, tüm paketler yeniden kurulur."""
         name = self._get_selected_env_name()
         if not name:
+            return
+        if self._env_op_busy("rename", f"rename '{name}'"):
             return
         new_name = self._get_new_name_for_rename(name)
         if not new_name:
@@ -137,7 +143,9 @@ class EnvOperationsMixin:
         self.rename_progress.setWindowModality(Qt.WindowModal)
         self.rename_progress.show()
 
-        self._rename_worker = RenameFullWorker(self.venv_manager, name, new_name)
+        self._renaming_env_name = name
+        self._rename_worker = RenameFullWorker(
+            self.venv_manager, name, new_name, parent=self)
         self._rename_worker.progress.connect(
             lambda msg: self.rename_progress.setLabelText(f"⏳ {msg}")
         )
@@ -163,10 +171,51 @@ class EnvOperationsMixin:
             if hasattr(self, "_cmd_panel_live"):
                 self._cmd_panel_live.setText(f"❌ {first_line}")
 
+    def _env_op_busy(self, kind: str, what: str) -> bool:
+        """True if an environment operation is already running.
+
+        Each of these handlers stores its worker on self, so starting a second
+        one reassigns the attribute and drops the only reference to the first.
+        Python then collects a QThread whose OS thread is still copying or
+        deleting files, and Qt aborts: "QThread: Destroyed while thread is
+        still running". Deleting two environments in a row crashed VenvStudio
+        for exactly this reason.
+
+        Refusing the second operation is also the honest answer -- these are
+        filesystem operations on the same directory tree, and running two at
+        once has no sensible outcome even without the crash.
+        """
+        _workers = {
+            "delete": ("_delete_worker", "_deleting_env_name", "Delete"),
+            "rename": ("_rename_worker", "_renaming_env_name", "Rename"),
+            "clone":  ("clone_worker", "_cloning_env_name", "Clone"),
+        }
+        for _key, (_attr, _name_attr, _label) in _workers.items():
+            _w = getattr(self, _attr, None)
+            if _w is None:
+                continue
+            try:
+                if not _w.isRunning():
+                    continue
+            except RuntimeError:
+                continue  # already destroyed by Qt
+            _busy = getattr(self, _name_attr, "") or "another environment"
+            QMessageBox.information(
+                self, f"{_label} in Progress",
+                f"'{_busy}' is still being processed.\n\n"
+                f"Wait for it to finish, then {what}."
+            )
+            return True
+        return False
+
     def _delete_env(self):
         name = self._get_selected_env_name()
         if not name:
             return
+
+        if self._env_op_busy("delete", f"delete '{name}'"):
+            return
+
         # B182 fix: figure out env type BEFORE the confirm dialog, so pipx
         # users see a meaningful warning. The previous wording suggested
         # the "environment" would be deleted along with all its packages
@@ -240,7 +289,11 @@ class EnvOperationsMixin:
             # Update the educational command panel at the bottom of the env page
             self._update_cmd_panel(action="delete", env_type=_env_type, name=name, env_path=_display_path)
 
-            self._delete_worker = DeleteWorker(self.venv_manager, name, env_path=_env_path, env_type=_env_type)
+            # parent=self keeps the thread in the QObject hierarchy, so
+            # MainWindow.closeEvent can find and wait for it (B186).
+            self._delete_worker = DeleteWorker(
+                self.venv_manager, name,
+                env_path=_env_path, env_type=_env_type, parent=self)
             def _on_del_progress(msg):
                 if hasattr(self, "_cmd_panel_live"):
                     self._cmd_panel_live.setText(f"▶ {msg}")
@@ -842,6 +895,8 @@ class EnvOperationsMixin:
         source = self._get_selected_env_name()
         if not source:
             return
+        if self._env_op_busy("clone", f"clone '{source}'"):
+            return
         new_name, ok = QInputDialog.getText(
             self, "Clone Environment",
             f"Enter name for the clone of '{source}':",
@@ -878,7 +933,9 @@ class EnvOperationsMixin:
         self.clone_progress.show()
 
         # Worker
-        self.clone_worker = CloneWorker(self.venv_manager, source, new_name)
+        self._cloning_env_name = source
+        self.clone_worker = CloneWorker(
+            self.venv_manager, source, new_name, parent=self)
         def _on_clone_progress(msg):
             self.clone_progress.setLabelText(f"⏳ {msg}")
             if hasattr(self, "_cmd_panel_live"):

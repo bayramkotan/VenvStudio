@@ -285,6 +285,112 @@ sayfasındaki sarı panel) ve `_show_command_hint` (paket panelinin output log'u
 
 ---
 
+## 📝 KULLANICI NOTLARI (2026-07-26) — F214..F227
+
+İkinci not turu. Çoğu F208'in (eğitici komut gösterimi) devamı.
+
+---
+
+### 🔴 F214 — Katalog kategorilerine paket ekleme/çıkarma yok
+Settings'te kategori **isimlerini** düzenleyebiliyorsun ama içindeki paketleri
+değil. Kategoriye paket ekle/çıkar arayüzü gerekiyor.
+**Dosya:** `settings_catalog.py`
+**Test:** liste ekle/çıkar → Catalog sekmesinde görünüyor mu?
+
+### 🔴 F215 — `vs` kısa komutu diğer bilgisayarlarda çalışmıyor
+pip kurulumunda entry point geliyor ama her makinede değil. Muhtemelen
+`~/.local/bin` PATH'te değil (Linux) veya Scripts dizini eklenmemiş (Windows).
+**Yapılacak:** kurulum sonrası kontrol + Settings'te "Install `vs` command"
+(F210 ile birleşiyor — portable sürümler için de aynı düğme).
+
+### 🔴 F216 — pipx yeniden oluşturulurken komut gösterilmiyor
+Silme komutları görünüyor ama `_readd_empty_pipx_row` / `ensure_pipx_env`
+yolunda `show_command` çağrısı yok.
+**Dosya:** `env_operations.py`, `venv_manager.py::ensure_pipx_env`
+
+### 🔴 F217 — Poetry hep aynı Python sürümüyle env oluşturuyor
+Python seçimi yok sayılıyor; `poetry env use <python>` gerekiyor.
+⚠️ Poetry'nin diğer asimetrileriyle birlikte ele alınmalı (export `pip freeze`,
+uninstall `pip uninstall` kullanıyor — `pyproject.toml` güncellenmiyor).
+
+### 🟡 F218 — Komut kutularında zaman damgası yok
+`banner_command` kutusu logda diğer satırlar gibi `[tarih saat]` ile
+başlamıyor, hizalama bozuluyor.
+**Dosya:** `logger.py::banner()` / `_banner_to_file()`
+
+### 🔴 F219 — Env tablosundaki boyut kolonu güncellenmiyor
+Kurulum/kaldırma sonrası paket sayısı güncelleniyor ama **boyut** eski kalıyor.
+`refresh_current_row` boyutu yeniden hesaplamıyor.
+**Dosya:** `env_operations.py::refresh_current_row`
+
+### 🔴 F220 — Check Update / Catalog / Presets komutları görünmüyor
+F208 Adım 3'ün devamı. Launch sekmesinde çalışıyor, bunlarda yok:
+- Installed → Check Update (`pip list --outdated`)
+- Catalog kurulumları
+- Presets kurulumları
+
+### 🟡 F221 — Quick Launch listesinde kaydırma çubuğu yok
+Uygulamalar sığmayınca taşıyor.
+**Dosya:** `quicklaunch.py::_rebuild_ql_buttons` — `QScrollArea` gerekiyor
+
+### 🔴 F222 — Python indirme/kaldırma komutları görünmüyor
+Yeni Python sürümü kurulurken/kaldırılırken ne logda ne şeritte komut var.
+**Dosya:** `settings_python_download.py`, `python_downloader.py`
+
+### 🔴 F223 — TUI/CLI kurulum komutları görünmüyor
+Starship, Oh My Posh, Nerd Fonts, Rich/Textual kurulumları sessiz.
+**Dosya:** `settings_toolchain.py`, `settings_advanced.py`
+
+### 🟡 F224 — Kopyalanan komut geri bildirimi form üzerinde olsun
+Command History'de Copy'ye basınca sağ üstte görünsün — "her şeyi görelim".
+
+### 🔴 F225 — pipx'te Gradio çalışmıyor
+```
+/home/bayram/.local/share/pipx/venvs/gradio/bin/python -c import gradio as gr; ...
+```
+⚠️ **Komut doğru kurulmuş** (`-c` dalı `_pipx_py` ile çalışıyor). Hata
+Gradio'dan geliyor olabilir — VS'siz doğrudan çalıştırıp doğrula
+(teşhis rehberi adım 3). Tam hata metni gerekiyor.
+
+### 🔴 F226 — Quarto çalışmıyor
+Kart `-m quarto_cli.quarto preview` kullanıyor. Modül yolu doğru mu, paket
+Python modülü mü yoksa sadece ikili mi kuruyor — doğrulanmalı.
+
+### ✅ B209 — Art arda env silmek VS'yi çökertiyordu — ÇÖZÜLDÜ
+
+İki-üç env'i art arda silmeye kalkınca çöküyordu.
+
+**Kök neden:** `_delete_env` her seferinde `self._delete_worker`'ı yeniden
+atıyordu. İkinci silme başlayınca birinci worker'ın **tek referansı** kayboluyor,
+Python nesnesi çöpe gidiyor ama OS thread'i hâlâ dosya siliyor →
+`QThread: Destroyed while thread is still running` → Windows'ta ölümcül.
+Handoff'taki B186'nın aynısı; `env_state.py`'de düzeltilmişti, burada değil.
+
+**Aynı hata rename ve clone'da da vardı** — `self._rename_worker` ve
+`self.clone_worker` de üzerine yazılıyordu. Kullanıcı denk gelmemiş ama aynı
+çökme oradan da gelirdi.
+
+**Çözüm:**
+- `workers.py` — altı worker'ın **hiçbiri** `parent` almıyordu
+  (`super().__init__()` boş). Hepsine opsiyonel `parent` eklendi; parent
+  olmadan thread QObject hiyerarşisine girmiyor ve `closeEvent` onu bulup
+  bekleyemiyor
+- `env_operations.py` — ortak `_env_op_busy()` yardımcısı. delete /
+  rename-only / rename-full / clone girişlerinde çağrılıyor, ikinci işlem
+  reddedilirken hangi env'in meşgul olduğu söyleniyor
+
+> 💡 Reddetmek zaten doğru davranış: bunlar aynı dizin ağacında dosya sistemi
+> işlemleri, eşzamanlı çalışmalarının çökme dışında da anlamlı sonucu yok.
+
+**Test:** İki env sil art arda → çökme yerine "hâlâ siliniyor" uyarısı.
+Clone sürerken rename dene.
+
+### 🟡 F227 — Liste ekle/çıkar testleri
+Katalog, presetler, kategoriler için ekle/çıkar akışlarının testi (F214 ile
+birlikte).
+
+---
+
 ## 📝 KULLANICI NOTLARI (2026-07-25) — F209..F213
 
 Bayram'ın topladığı maddeler. B208 çözüldü, kalan beşi özellik.

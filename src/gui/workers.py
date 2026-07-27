@@ -19,8 +19,12 @@ class CloneWorker(QThread):
     progress = Signal(str)
     finished = Signal(bool, str)
 
-    def __init__(self, venv_manager, source, target):
-        super().__init__()
+    def __init__(self, venv_manager, source, target, parent=None):
+        # parent keeps the thread in the QObject hierarchy so closeEvent can
+        # find and wait for it. Without it, a caller that reassigns its only
+        # reference (starting a second operation) leaves a running QThread
+        # with no owner -- fatal on Windows (B186).
+        super().__init__(parent)
         self.venv_manager = venv_manager
         self.source = source
         self.target = target
@@ -54,8 +58,8 @@ class EnvDetailWorker(QThread):
     env_detail_ready = Signal(int, str, int, str)  # row, python_ver, pkg_count, size
     all_done = Signal()
 
-    def __init__(self, venv_manager, env_names):
-        super().__init__()
+    def __init__(self, venv_manager, env_names, parent=None):
+        super().__init__(parent)
         self.venv_manager = venv_manager
         self.env_names = env_names
 
@@ -92,8 +96,9 @@ class DeleteWorker(QThread):
     progress = Signal(str)
     finished = Signal(bool, str)
 
-    def __init__(self, venv_manager, name, env_path=None, env_type="venv"):
-        super().__init__()
+    def __init__(self, venv_manager, name, env_path=None, env_type="venv",
+                 parent=None):
+        super().__init__(parent)
         self.venv_manager = venv_manager
         self.name = name
         self.env_path = env_path
@@ -112,8 +117,8 @@ class RenameOnlyWorker(QThread):
     progress = Signal(str)
     finished = Signal(bool, str)
 
-    def __init__(self, venv_manager, old_name, new_name):
-        super().__init__()
+    def __init__(self, venv_manager, old_name, new_name, parent=None):
+        super().__init__(parent)
         self.venv_manager = venv_manager
         self.old_name = old_name
         self.new_name = new_name
@@ -129,8 +134,8 @@ class RenameFullWorker(QThread):
     progress = Signal(str)
     finished = Signal(bool, str)
 
-    def __init__(self, venv_manager, old_name, new_name):
-        super().__init__()
+    def __init__(self, venv_manager, old_name, new_name, parent=None):
+        super().__init__(parent)
         self.venv_manager = venv_manager
         self.old_name = old_name
         self.new_name = new_name
@@ -147,8 +152,9 @@ class CreateWorker(QThread):
     progress = Signal(str)
     finished = Signal(bool, str)
 
-    def __init__(self, venv_manager, name, python_path, with_pip, system_site_packages):
-        super().__init__()
+    def __init__(self, venv_manager, name, python_path, with_pip,
+                 system_site_packages, parent=None):
+        super().__init__(parent)
         self.venv_manager = venv_manager
         self.name = name
         self.python_path = python_path

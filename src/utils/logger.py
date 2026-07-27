@@ -58,6 +58,35 @@ def _get_log_dir() -> Path:
     return log_dir
 
 
+# How much log history to keep, as (bytes per file, number of backups).
+# Total = size * (backups + 1), because the live file counts too.
+#
+# The default keeps roughly six weeks of ordinary use: a heavy session writes
+# about 200 KB, so 2 MB is around a week per file. Anyone chasing a bug across
+# several sessions can raise it; the log viewer tails the file, so a larger
+# history does not make it slower to open.
+LOG_HISTORY_PROFILES = {
+    12:  (2 * 1024 * 1024, 5),
+    50:  (10 * 1024 * 1024, 4),
+    200: (25 * 1024 * 1024, 7),
+    500: (50 * 1024 * 1024, 9),
+}
+LOG_HISTORY_DEFAULT_MB = 12
+
+
+def get_log_rotation() -> tuple:
+    """Return (maxBytes, backupCount) for the configured history size."""
+    _mb = LOG_HISTORY_DEFAULT_MB
+    try:
+        from src.core.config_manager import ConfigManager
+        _mb = int(ConfigManager().get("log_history_mb",
+                                      LOG_HISTORY_DEFAULT_MB))
+    except Exception:
+        pass
+    return LOG_HISTORY_PROFILES.get(
+        _mb, LOG_HISTORY_PROFILES[LOG_HISTORY_DEFAULT_MB])
+
+
 def get_log_dir() -> Path:
     """Public accessor for log directory path."""
     global _log_dir
@@ -522,10 +551,11 @@ def setup_logging() -> logging.Logger:
     )
 
     # ── Rotating file handler ──
+    _max_bytes, _backups = get_log_rotation()
     fh = RotatingFileHandler(
         log_dir / "venvstudio.log",
-        maxBytes=2 * 1024 * 1024,  # 2 MB
-        backupCount=5,
+        maxBytes=_max_bytes,
+        backupCount=_backups,
         encoding="utf-8",
     )
     fh.setLevel(logging.DEBUG)

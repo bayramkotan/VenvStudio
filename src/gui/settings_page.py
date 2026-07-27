@@ -1399,6 +1399,51 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         self.show_hidden_cb = QCheckBox(tr("show_hidden_packages"))
         general_layout.addRow(self.show_hidden_cb)
 
+        # ── Log history size ────────────────────────────────────────────
+        _log_row = QHBoxLayout()
+
+        # Guard checkbox, same pattern as the other combos on this page:
+        # scrolling through Settings must not change a value by accident.
+        self.log_history_cb = QCheckBox()
+        self.log_history_cb.setChecked(False)
+        self.log_history_cb.setToolTip(
+            "Tick to change how much log history is kept.")
+        self.log_history_cb.toggled.connect(
+            lambda on: self.log_history_combo.setEnabled(on))
+        _log_row.addWidget(self.log_history_cb)
+        _log_row.addWidget(QLabel("Log history:"))
+
+        self.log_history_combo = NoScrollComboBox()
+        self.log_history_combo.setEnabled(False)
+        for _mb, _label in (
+            (12, "12 MB  \u2014  about six weeks (default)"),
+            (50, "50 MB  \u2014  a few months"),
+            (200, "200 MB  \u2014  long-running debugging"),
+            (500, "500 MB  \u2014  keep almost everything"),
+        ):
+            self.log_history_combo.addItem(_label, _mb)
+        self.log_history_combo.setToolTip(
+            "Total size of venvstudio.log and its rotated backups.\n"
+            "Older entries are dropped automatically once the limit is "
+            "reached.\n"
+            "Takes effect on the next start."
+        )
+        _log_row.addWidget(self.log_history_combo, 1)
+        general_layout.addRow(_log_row)
+
+        _log_note = QLabel(
+            "Logs rotate automatically and never exceed this total. A busy "
+            "session writes roughly 200 KB, so the default holds about six "
+            "weeks. Applies after restarting VenvStudio; "
+            "Tools \u203a View Logs can delete entries at any time."
+        )
+        _log_note.setStyleSheet(
+            f"color: {self._c()['fg_muted']}; "
+            f"font-size: {self._c()['fs_tiny']}px;"
+        )
+        _log_note.setWordWrap(True)
+        general_layout.addRow("", _log_note)
+
         self.show_commands_cb = QCheckBox("Show equivalent commands")
         self.show_commands_cb.setToolTip(
             "Show the terminal command behind each action, in the command "

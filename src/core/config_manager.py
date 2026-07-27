@@ -18,6 +18,9 @@ DEFAULT_SETTINGS = {
     # Educational side of VenvStudio: show the terminal command behind each
     # action. On by default; power users can quiet the log.
     "show_commands": True,
+    # Total size of venvstudio.log plus its rotated backups, in MB.
+    # 12 MB holds roughly six weeks of ordinary use.
+    "log_history_mb": 12,
     "default_python": "",  # empty = system default
     "window_width": 1100,
     "window_height": 750,

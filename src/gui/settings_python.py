@@ -80,6 +80,9 @@ class PythonMixin:
         self.confirm_delete_cb.setChecked(self.config.get("confirm_delete", True))
         self.show_hidden_cb.setChecked(self.config.get("show_hidden_packages", False))
         self.show_commands_cb.setChecked(self.config.get("show_commands", True))
+        _log_mb = self.config.get("log_history_mb", 12)
+        _log_idx = self.log_history_combo.findData(_log_mb)
+        self.log_history_combo.setCurrentIndex(_log_idx if _log_idx >= 0 else 0)
         self.check_updates_cb.setChecked(self.config.get("check_updates", False))
         self.save_window_cb.setChecked(self.config.get("save_window_geometry", True))
 

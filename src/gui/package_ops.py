@@ -700,6 +700,42 @@ class PackageOpsMixin:
                 return (True, f"pipx installed: {', '.join(installed)}")
 
             self.current_worker = WorkerThread(_do_pipx_install)
+        elif _env_type == "poetry":
+            # Poetry must install through `poetry add`, run in the project
+            # directory (where pyproject.toml lives), so the dependency is
+            # recorded in pyproject.toml + poetry.lock. Plain `pip install`
+            # would land packages in the venv but leave the project files
+            # untouched -- the env-type asymmetry this file keeps hitting.
+            _pkgs_add = list(packages)
+            _proj_dir_add = self._poetry_project_dir()
+
+            def _do_poetry_install(callback=None, _proj=_proj_dir_add,
+                                   _pkgs=_pkgs_add):
+                import subprocess, shutil
+                from src.utils.platform_utils import subprocess_args
+                if not _proj:
+                    # No project dir known (legacy marker) -> fall back to
+                    # pip so the operation still does something visible.
+                    if callback:
+                        callback("\u26a0 Poetry project dir unknown; "
+                                 "falling back to pip install")
+                    return self.pip_manager.install_packages(_pkgs, callback)
+                _poetry = shutil.which("poetry")
+                if not _poetry:
+                    return (False, "poetry executable not found")
+                if callback:
+                    callback(f"poetry add {' '.join(_pkgs)}...")
+                r = subprocess.run(
+                    [_poetry, "add"] + _pkgs,
+                    capture_output=True, text=True, timeout=600,
+                    cwd=str(_proj), **subprocess_args()
+                )
+                if r.returncode != 0:
+                    _err = (r.stderr or r.stdout or "").strip()
+                    return (False, f"poetry add failed: {_err[:400]}")
+                return (True, f"Installed: {', '.join(_pkgs)}")
+
+            self.current_worker = WorkerThread(_do_poetry_install)
         else:
             self.current_worker = WorkerThread(self.pip_manager.install_packages, packages)
 
@@ -839,6 +875,66 @@ class PackageOpsMixin:
 
         self._install_packages(cleaned)
 
+    def _poetry_project_dir(self):
+        """Return the poetry project directory (where pyproject.toml lives).
+
+        For poetry envs the real venv (pip_manager.venv_path) lives under
+        the pypoetry cache, NOT next to pyproject.toml. `poetry add/remove`
+        must run in the project dir, so we read it from the marker written
+        at create time (poetry_project_dir). Older markers predate that
+        field; for them we try `poetry env info` in reverse is not possible,
+        so we fall back to the marker's own folder if it holds a
+        pyproject.toml, else None (caller falls back to pip).
+        """
+        from pathlib import Path as _P
+        _vp = getattr(self.pip_manager, "venv_path", None)
+        if not _vp:
+            return None
+        _marker = _P(_vp) / ".venvstudio_env"
+        if _marker.exists():
+            try:
+                import json as _json
+                with open(_marker) as _mf:
+                    _md = _json.load(_mf)
+                _pd = _md.get("poetry_project_dir", "")
+                if _pd and (_P(_pd) / "pyproject.toml").exists():
+                    return _pd
+            except Exception:
+                pass
+        # Legacy fallback 1: marker dir itself might be the project dir
+        if (_P(_vp) / "pyproject.toml").exists():
+            return str(_vp)
+        # Legacy fallback 2: envs created before the project-dir marker
+        # existed have no pointer. Ask poetry itself: run `poetry env list
+        # --full-path` is project-scoped and won't help, but the venv's
+        # pyvenv.cfg records no project either. As a last resort, scan the
+        # manager's base_dir for a project whose .venvstudio_env points at
+        # this venv -- that marker lives in the project dir.
+        try:
+            import json as _json
+            _base = getattr(self.pip_manager, "base_dir", None)
+            if _base is None:
+                _vm = getattr(self, "venv_manager", None)
+                _base = getattr(_vm, "base_dir", None) if _vm else None
+            if _base:
+                for _sub in _P(_base).iterdir():
+                    _mk = _sub / ".venvstudio_env"
+                    if not _mk.exists():
+                        continue
+                    try:
+                        with open(_mk) as _f:
+                            _d = _json.load(_f)
+                        if _d.get("type") != "poetry":
+                            continue
+                        if _d.get("poetry_venv_path", "") == str(_vp) and \
+                                (_sub / "pyproject.toml").exists():
+                            return str(_sub)
+                    except Exception:
+                        continue
+        except Exception:
+            pass
+        return None
+
     def _make_uninstall_worker(self, packages):
         """Build the uninstall worker that matches the environment type.
 
@@ -905,6 +1001,43 @@ class PackageOpsMixin:
                 return (True, f"Removed: {', '.join(_pkgs_rm)}")
 
             return WorkerThread(_do_pipx_uninstall)
+
+        if _env_type == "poetry":
+            _proj_dir_rm = self._poetry_project_dir()
+
+            def _do_poetry_uninstall(callback=None, _proj=_proj_dir_rm,
+                                     _pkgs=_pkgs_rm):
+                import subprocess, shutil
+                from src.utils.platform_utils import subprocess_args
+                if not _proj:
+                    if callback:
+                        callback("\u26a0 Poetry project dir unknown; "
+                                 "falling back to pip uninstall")
+                    return self.pip_manager.uninstall_packages(_pkgs, callback)
+                _poetry = shutil.which("poetry")
+                if not _poetry:
+                    return (False, "poetry executable not found")
+                if callback:
+                    callback(f"poetry remove {' '.join(_pkgs)}...")
+                # `poetry remove` updates pyproject.toml + poetry.lock, which
+                # `pip uninstall` never did -- the project files drifted out
+                # of sync with the venv. Run in the project directory.
+                r = subprocess.run(
+                    [_poetry, "remove"] + _pkgs,
+                    capture_output=True, text=True, timeout=300,
+                    cwd=str(_proj), **subprocess_args()
+                )
+                _out = ((r.stdout or "") + (r.stderr or "")).lower()
+                # Treat 'not found in pyproject' as already-gone, not error
+                # (mirrors the pipx 'nothing to uninstall' handling above).
+                _gone = ("does not contain" in _out
+                         or "not found" in _out)
+                if r.returncode != 0 and not _gone:
+                    _err = (r.stderr or r.stdout or "").strip()
+                    return (False, f"poetry remove failed: {_err[:400]}")
+                return (True, f"Removed: {', '.join(_pkgs)}")
+
+            return WorkerThread(_do_poetry_uninstall)
 
         return WorkerThread(self.pip_manager.uninstall_packages, _pkgs_rm)
 

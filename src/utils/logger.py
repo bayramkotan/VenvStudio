@@ -344,6 +344,38 @@ def _banner_to_file(style: str, title: str, details: Optional[List[str]] = None)
         pass
 
 
+def _safe_print(text: str) -> None:
+    """print() that never raises on Windows code pages.
+
+    When stdout is redirected on Windows (Tee-Object, a pipe, a file) its
+    encoding drops to cp1252, which cannot encode the box-drawing glyphs
+    or emoji used in banners. A bare print() then raises UnicodeEncodeError
+    *inside the worker thread*, killing the operation (e.g. env delete).
+    A log banner must never do that. We degrade the output instead of the
+    program: re-encode with errors='replace' against stdout's own codec,
+    and if even that fails, drop to a plain ASCII line.
+    """
+    try:
+        print(text)
+        return
+    except UnicodeEncodeError:
+        pass
+    except Exception:
+        return
+    try:
+        enc = (getattr(sys.stdout, 'encoding', None) or 'utf-8')
+        sys.stdout.write(text.encode(enc, errors='replace').decode(enc,
+                                                                    'replace'))
+        sys.stdout.write('\n')
+        return
+    except Exception:
+        pass
+    try:
+        print(text.encode('ascii', errors='replace').decode('ascii'))
+    except Exception:
+        pass
+
+
 def banner(title: str, style: str = "info", details: Optional[List[str]] = None,
            logger: Optional[logging.Logger] = None) -> None:
     """
@@ -424,16 +456,16 @@ def banner(title: str, style: str = "info", details: Optional[List[str]] = None,
 
     top = f"{color}{bold}╭{'─' * (inner_width - 2)}╮{reset}"
     bot = f"{color}{bold}╰{'─' * (inner_width - 2)}╯{reset}"
-    print(top)
+    _safe_print(top)
     for i, line in enumerate(lines):
         pad = inner_width - 2 - _visual_width(line) - 2  # - 2 for leading/trailing space
         if pad < 0:
             pad = 0
         if i == 0:
-            print(f"{color}{bold}│{reset} {color}{bold}{line}{reset}{' ' * pad} {color}{bold}│{reset}")
+            _safe_print(f"{color}{bold}│{reset} {color}{bold}{line}{reset}{' ' * pad} {color}{bold}│{reset}")
         else:
-            print(f"{color}│{reset} {dim}{line}{reset}{' ' * pad} {color}│{reset}")
-    print(bot)
+            _safe_print(f"{color}│{reset} {dim}{line}{reset}{' ' * pad} {color}│{reset}")
+    _safe_print(bot)
 
 
 def banner_start(title: str, details: Optional[List[str]] = None,

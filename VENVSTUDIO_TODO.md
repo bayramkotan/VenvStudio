@@ -187,9 +187,9 @@ Sırayla işaretle. Her satır bağımsız test edilebilir.
 | A10 | pipx | Install | `pipx install --python` | ✅ Voilà |
 | A11 | pipx | Launch | | ✅ Voilà |
 | A12 | pipx | Uninstall | `pipx uninstall` | ✅ Voilà |
-| A13 | poetry (p1) | Install | | ⬜ |
+| A13 | poetry (p1) | Install | ✅ `poetry add` (proje dizininde), pyproject güncelleniyor | ✅ |
 | A14 | poetry (p1) | Launch | | ⬜ |
-| A15 | **poetry (p1)** | **Uninstall** | ⚠ `poetry remove` değil `pip uninstall` çalışıyor | ⬜ |
+| A15 | poetry (p1) | Uninstall | ✅ `poetry remove` (proje dizininde), pyproject+lock güncelleniyor | ✅ |
 
 ### B. System app kartları (conda paketi olarak kurulan — örn. R Console)
 
@@ -308,10 +308,13 @@ Silme komutları görünüyor ama `_readd_empty_pipx_row` / `ensure_pipx_env`
 yolunda `show_command` çağrısı yok.
 **Dosya:** `env_operations.py`, `venv_manager.py::ensure_pipx_env`
 
-### 🔴 F217 — Poetry hep aynı Python sürümüyle env oluşturuyor
-Python seçimi yok sayılıyor; `poetry env use <python>` gerekiyor.
-⚠️ Poetry'nin diğer asimetrileriyle birlikte ele alınmalı (export `pip freeze`,
-uninstall `pip uninstall` kullanıyor — `pyproject.toml` güncellenmiyor).
+### ✅ F217 — Poetry hep aynı Python sürümüyle env oluşturuyor (ÇÖZÜLDÜ v1.6.24)
+`env_dialog.py` `_do_alt_create`: `poetry new` sonrası seçilen Python'ın
+sürümü tespit edilip pyproject `requires-python` gevşetiliyor, sonra
+`poetry env use` (returncode kontrollü), yine reddedilirse constraint
+kaldırılıp retry. **Not:** düzeltilecek dosya `env_dialog.py` idi,
+bölünmüş `env_dialog_create.py` değil (import bağlı değil, ölü kod).
+install/uninstall artık `poetry add`/`poetry remove` (A13/A15). export kaldı.
 
 ### 🟡 F218 — Komut kutularında zaman damgası yok
 `banner_command` kutusu logda diğer satırlar gibi `[tarih saat]` ile
@@ -355,6 +358,35 @@ Gradio'dan geliyor olabilir — VS'siz doğrudan çalıştırıp doğrula
 ### 🔴 F226 — Quarto çalışmıyor
 Kart `-m quarto_cli.quarto preview` kullanıyor. Modül yolu doğru mu, paket
 Python modülü mü yoksa sadece ikili mi kuruyor — doğrulanmalı.
+
+### 🔴 B210 — Conda env oluştururken seçilen Python sürümü yok sayılıyor
+
+Ekran görüntüsüyle doğrulandı: "Create New Environment" içinde **Python 3.9**
+seçili, ama sağdaki komut önizlemesi **`micromamba create -n c1 python=3.12`**
+diyor. Seçim ya combo'dan okunmuyor ya da önizleme sabit bir değer kullanıyor.
+
+⚠️ Önce hangisi olduğunu ayır: gerçekten 3.12 mi kuruluyor, yoksa sadece
+**önizleme mi** yanlış? Kurulum sonrası `<env>/bin/python --version` ile bak.
+- Kurulum yanlışsa → gerçek bug, `env_dialog_create.py` conda dalı
+- Sadece önizleme yanlışsa → daha az kritik ama yine yanıltıcı
+
+**İlgili:** F217 (poetry hep aynı Python ile oluşturuyor) — aynı sınıf sorun,
+env türüne göre Python seçiminin yok sayılması.
+
+### 🟡 B211 — Spyder'da conda executable alanı boş kalıyor
+
+F212 interpreter'ı doğru dolduruyor ama Spyder'ın **"Use a custom
+Conda/Mamba/Micromamba executable"** kutusu işaretsiz ve yol boş. Conda
+env'lerinde VenvStudio'nun kendi micromamba'sı yazılmalı — Spyder o zaman
+conda ortamlarını tanır.
+
+**Nerede:** `spyder.ini` → `[main_interpreter]` → `conda_path` (mevcut
+config'de bu anahtar zaten var, boş duruyor).
+**Nasıl:** `_prepare_spyder_conf()` conda env'i tespit edip
+`conda_path = <micromamba yolu>` yazsın.
+⚠️ İlgili bir anahtar daha var: `custom_conda` (şu an `False`) — ikisinin
+birlikte mi gerektiği Spyder'da denenmeli (bkz. F212: interpreter için de iki
+dosya birden gerekmişti).
 
 ### ✅ B209 — Art arda env silmek VS'yi çökertiyordu — ÇÖZÜLDÜ
 
@@ -535,7 +567,7 @@ tanı değeri yok. `QFont::setPointSize` gibi tamamen susturuldu.
 | Env | Sorun |
 |---|---|
 | **conda** | Export `pip freeze` kullanıyor → conda ile kurulan paketleri kaçırır. `micromamba list --export` olmalı |
-| **poetry** | Export `pip freeze`, uninstall `pip uninstall` — `poetry export` / `poetry remove` değil, `pyproject.toml` güncellenmiyor |
+| **poetry** | ✅ install `poetry add`, uninstall `poetry remove`, Python seçimi çalışıyor (v1.6.24). Kalan: export hâlâ `pip freeze` → `poetry export` olmalı |
 
 ---
 
@@ -3964,8 +3996,8 @@ Olması gereken fark:
   - Açılışta yine Packages → Launch tab aktif olsun (primary/default env için)
   - Kullanıcı ilk bakışta env listesini görsün ama çalışma alanı Launch olarak açılsın
 
-- **F88** — Poetry/Rye Create'te Seçilen Python Kullanımı
-  - Poetry create flow'unda seçilen `_python`'ı `poetry env use <python_path>` ile geçir
+- **F88** ✅ Poetry Create'te Seçilen Python Kullanımı (ÇÖZÜLDÜ v1.6.24, F217 ile aynı)
+  - requires-python relax + `poetry env use` returncode kontrollü + constraint-strip retry. Rye için açık kalabilir.
   - Rye create flow'unda `rye pin <python_version>` veya `--python` flag kullan
   - Şu an Python combo görünüyor ama seçilen Python sadece marker'a yazılıyor, create'te kullanılmıyor
 

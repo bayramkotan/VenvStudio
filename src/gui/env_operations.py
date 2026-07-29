@@ -456,6 +456,16 @@ class EnvOperationsMixin:
                 return
 
             # 3) Re-read the env's metadata and update the row's cells in-place
+            # invalidate_cache() above only marks the DISK cache stale; it does
+            # NOT drop the in-memory env cache, and list_venvs_fast(skip_calc=
+            # False) returns that memory cache verbatim when it's still valid.
+            # That served the OLD size (pkg count survived only because it's
+            # passed in explicitly). Force the memory cache invalid so the size
+            # is recomputed from disk.
+            try:
+                self.venv_manager.invalidate_all_caches()
+            except Exception as _e:
+                self._log.debug(f"refresh_current_row: invalidate_all_caches: {_e}")
             env_info = None
             try:
                 # list_venvs_fast returns all envs; pick the one with a matching path

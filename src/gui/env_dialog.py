@@ -1352,7 +1352,23 @@ class EnvCreateDialog(QDialog):
                         _sel_xy = _detect_pyver(_python)
                         _cb(f"Selected Python resolves to version: "
                             f"{_sel_xy or 'UNKNOWN'} (from {_python})")
-                        _new_req = f'>={_sel_xy}' if _sel_xy else '>=3.0'
+                        # Cap at the next minor so the range matches the ONE
+                        # Python the env is built with. An unbounded '>=3.13'
+                        # makes Poetry's resolver reject packages carrying
+                        # version exclusions (e.g. torchvision '!=3.14.1'):
+                        # the open upper bound spans 3.14+, collides with the
+                        # exclusion, and resolution fails. '>=3.13,<3.14' both
+                        # honours the pick and lets exclusion-carrying deps
+                        # resolve.
+                        if _sel_xy:
+                            try:
+                                _maj, _min = _sel_xy.split(".")
+                                _next = f"{_maj}.{int(_min) + 1}"
+                                _new_req = f'>={_sel_xy},<{_next}'
+                            except Exception:
+                                _new_req = f'>={_sel_xy}'
+                        else:
+                            _new_req = '>=3.0'
                         if _pyproject.exists():
                             try:
                                 _txt = _pyproject.read_text(encoding="utf-8")

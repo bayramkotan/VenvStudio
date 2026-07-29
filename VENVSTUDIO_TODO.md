@@ -28,6 +28,24 @@
 
 ---
 
+## ✅ FIX YAPILDI (v1.6.27) — Tablo boyut kolonu işlem sonrası güncellenmiyordu
+Paket/preset/launcher kur/kaldır sonrası boyut kolonu eski kalıyordu (paket
+sayısı doğruydu). Kök neden: `env_operations.py` `_refresh_current_env_row`
+boyutu `list_venvs_fast(skip_calc=False)`'tan alıyor, o da geçerli in-memory
+env cache'i döndürüyor; `invalidate_cache` sadece disk cache'ini işaretliyor,
+memory'yi değil. Fix: re-read öncesi `invalidate_all_caches()` → boyut diskten
+yeniden hesaplanıyor. (Paket sayısı `pkg_count` param'ıyla zaten bypass'lıydı.)
+
+## ✅ FIX YAPILDI (v1.6.27) — Poetry requires-python üst sınırsızdı → preset resolver hatası
+Poetry env'e preset (Computer Vision) kurarken `torchvision requires Python
+!=3.14.1` hatası. Kök neden: v1.6.24 create relax'i `requires-python = ">=3.13"`
+(üst sınırsız) yazıyordu; `>=3.13` 3.14.1'i içerdiği için torchvision'ın
+`!=3.14.1` istisnasıyla çakışıp resolver'ı kilitliyordu (`packaging` ile
+doğrulandı). Fix: relax artık minor+1 üst sınırı koyuyor → `>=3.13,<3.14`.
+Sürümden bağımsız (3.16→`>=3.16,<3.17` vb.). `env_dialog.py`.
+**Kalan:** eski env'lerin pyproject'i hâlâ üst sınırsız — elle sed ile
+düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebilir.
+
 ## ✅ FIX YAPILDI — Toolchain Manager: `venv` satırında Install/Upgrade crash
 
 **Nerede:** `settings_toolchain.py` → `_tc_do_install` (Toolchain Manager sekmesi).

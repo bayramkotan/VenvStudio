@@ -304,11 +304,16 @@ değil. Kategoriye paket ekle/çıkar arayüzü gerekiyor.
 **Dosya:** `settings_catalog.py`
 **Test:** liste ekle/çıkar → Catalog sekmesinde görünüyor mu?
 
-### 🔴 F215 — `vs` kısa komutu diğer bilgisayarlarda çalışmıyor
-pip kurulumunda entry point geliyor ama her makinede değil. Muhtemelen
-`~/.local/bin` PATH'te değil (Linux) veya Scripts dizini eklenmemiş (Windows).
-**Yapılacak:** kurulum sonrası kontrol + Settings'te "Install `vs` command"
-(F210 ile birleşiyor — portable sürümler için de aynı düğme).
+### ✅ F215 — `vs` kısa komutu çalışmıyordu (ÇÖZÜLDÜ v1.6.26)
+**Gerçek kök neden:** entry point hiç yoktu — `pyproject.toml`
+`[project.scripts]`'te SADECE `venvstudio` vardı, `vs` yoktu. Handoff yanlış
+hatırlıyordu ("pip kurulumunda geliyor"). Eklendi: `vs` + `vs-gui`.
+**İkincil:** pip `vs.exe`'yi PATH'te olmayan user Scripts'ine yazdı
+(`%APPDATA%\Roaming\...\Scripts`), + kökteki eski `vs.bat`/`vs.py`
+`where.exe`'de gölgeliyordu. Scripts PATH'e eklendi, eski dosyalar silindi,
+terminal yeniden başlatıldı → çalıştı.
+**Kalan (F210):** Settings'te tek tıkla "Install `vs` command" düğmesi +
+otomatik PATH kontrolü — portable/PyPI kullanıcıları için (hâlâ açık).
 
 ### 🔴 F216 — pipx yeniden oluşturulurken komut gösterilmiyor
 Silme komutları görünüyor ama `_readd_empty_pipx_row` / `ensure_pipx_env`

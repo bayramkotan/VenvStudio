@@ -416,6 +416,114 @@ class PipManager:
         except Exception as e:
             return False, f"Error: {str(e)}"
 
+    def _detect_backend_kind(self) -> str:
+        """Best-effort env kind for export: 'conda' | 'poetry' | 'pipx' | 'plain'.
+
+        PipManager only knows venv_path + backend ('pip'/'uv'), not whether the
+        env is conda or poetry. Export must diverge by kind: a conda env's real
+        packages come from the conda metadata (pip freeze misses them), and a
+        poetry project should export from its lock (pip freeze lists whatever is
+        installed, not the declared deps). Detect from on-disk signals.
+        """
+        try:
+            if self._is_pipx_home():
+                return "pipx"
+        except Exception:
+            pass
+        try:
+            _vp = Path(self.venv_path)
+            # conda/micromamba envs carry a conda-meta/ directory
+            if (_vp / "conda-meta").is_dir():
+                return "conda"
+            # poetry: our marker records type, and the real venv lives under a
+            # pypoetry cache path
+            _marker = _vp / ".venvstudio_env"
+            if _marker.exists():
+                try:
+                    with open(_marker) as _mf:
+                        if json.load(_mf).get("type") == "poetry":
+                            return "poetry"
+                except Exception:
+                    pass
+            if "pypoetry" in str(_vp).lower():
+                return "poetry"
+        except Exception:
+            pass
+        return "plain"
+
+    def _freeze_conda(self) -> str:
+        """`micromamba list --export` — captures conda-installed packages that
+        `pip freeze` never sees. Falls back to pip freeze if micromamba is
+        unavailable, so export still produces something."""
+        try:
+            from src.core.micromamba_installer import get_micromamba_exe
+            from src.utils.platform_utils import subprocess_args
+            _mm = get_micromamba_exe()
+            if _mm:
+                _r = subprocess.run(
+                    [str(_mm), "list", "--export", "-p", str(self.venv_path)],
+                    **subprocess_args(capture_output=True, text=True, timeout=60)
+                )
+                if _r.returncode == 0 and _r.stdout.strip():
+                    # micromamba prefixes a human header line
+                    # ('List of packages in environment: "..."') and may emit
+                    # '#'-comment lines. Neither is a valid requirements entry
+                    # -- `micromamba create --file` chokes on them -- so strip
+                    # anything that isn't a real 'name=version=build' spec.
+                    _lines = [
+                        _ln for _ln in _r.stdout.splitlines()
+                        if _ln.strip() and not _ln.lstrip().startswith("#")
+                        and "=" in _ln
+                    ]
+                    if _lines:
+                        return "\n".join(_lines) + "\n"
+        except Exception:
+            pass
+        # Fallback: pip freeze (misses conda-only packages, but better than empty)
+        try:
+            _r = self._run_pip(["freeze"])
+            if _r.returncode == 0:
+                return _r.stdout
+        except Exception:
+            pass
+        return ""
+
+    def _freeze_poetry(self) -> str:
+        """`poetry export` from the project's lock — the declared/locked deps,
+        not just whatever happens to be installed. Needs poetry-plugin-export
+        (bundled in older Poetry, separate in 2.x); falls back to pip freeze."""
+        try:
+            import shutil as _sh
+            from src.utils.platform_utils import subprocess_args
+            _poetry = _sh.which("poetry")
+            _proj = None
+            _marker = Path(self.venv_path) / ".venvstudio_env"
+            if _marker.exists():
+                try:
+                    with open(_marker) as _mf:
+                        _proj = json.load(_mf).get("poetry_project_dir") or None
+                except Exception:
+                    _proj = None
+            if _poetry and _proj:
+                _r = subprocess.run(
+                    [_poetry, "export", "-f", "requirements.txt",
+                     "--without-hashes", "--output", "-"],
+                    cwd=str(_proj),
+                    **subprocess_args(capture_output=True, text=True, timeout=120)
+                )
+                if _r.returncode == 0 and _r.stdout.strip():
+                    return _r.stdout
+        except Exception:
+            pass
+        # Fallback: pip freeze from the real venv
+        try:
+            _r = self._run_pip(["freeze"])
+            if _r.returncode == 0:
+                return _r.stdout
+        except Exception:
+            pass
+        return ""
+
     def freeze(self) -> str:
         """Get pip freeze output (requirements.txt format).
 
@@ -425,7 +533,8 @@ class PipManager:
         environment that plainly listed several apps. Build the same
         name==version lines from what pipx itself reports.
         """
-        if self._is_pipx_home():
+        _kind = self._detect_backend_kind()
+        if _kind == "pipx":
             _apps = self._list_pipx_packages()
             if not _apps:
                 return ""
@@ -433,6 +542,10 @@ class PipManager:
                 f"{p.name}=={p.version}" if p.version else p.name
                 for p in _apps
             ) + "\n"
+        if _kind == "conda":
+            return self._freeze_conda()
+        if _kind == "poetry":
+            return self._freeze_poetry()
         try:
             result = self._run_pip(["freeze"])
             if result.returncode == 0:

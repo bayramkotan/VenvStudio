@@ -29,8 +29,8 @@ class PackageExportMixin:
             self._show_command_hint("Export Requirements", {
                 "venv": "pip freeze > requirements.txt",
                 "uv": "uv pip freeze > requirements.txt",
-                "poetry": "poetry export -f requirements.txt",
-                "conda": "conda list --export > requirements.txt",
+                "poetry": "poetry export -f requirements.txt --without-hashes",
+                "conda": "micromamba list --export > requirements.txt",
             }.get(getattr(self, "_current_env_type", "venv"), COMMAND_HINTS["freeze"]))
             if success:
                 QMessageBox.information(self, "Success", msg)
@@ -48,8 +48,8 @@ class PackageExportMixin:
         _cmds = {
             "venv":   "pip freeze",
             "uv":     "uv pip freeze",
-            "poetry": "poetry export -f requirements.txt",
-            "conda":  "conda list --export",
+            "poetry": "poetry export -f requirements.txt --without-hashes",
+            "conda":  "micromamba list --export",
             "pipx":   "pipx list",
         }
         _et = getattr(self, "_current_env_type", "venv")

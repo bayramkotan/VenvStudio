@@ -55,6 +55,15 @@ class EnvExportMixin:
             if suffix:
                 return "pipx list --short | sed 's/ /==/'" + suffix
             return "pipx list --short"
+        if _et == "conda":
+            # conda-installed packages are invisible to pip freeze; the real
+            # list comes from micromamba (VenvStudio manages conda via it).
+            return "micromamba list --export" + suffix
+        if _et == "poetry":
+            # poetry exports from its lock, not from whatever is installed.
+            if suffix:
+                return "poetry export -f requirements.txt --without-hashes" + suffix
+            return "poetry export -f requirements.txt --without-hashes"
         _base = "uv pip freeze" if _et == "uv" else "pip freeze"
         return f"{_base}{suffix}"
 

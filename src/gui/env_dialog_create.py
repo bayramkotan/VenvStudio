@@ -246,12 +246,36 @@ class EnvCreateMixin:
             _etype   = env_type
 
             def _do_alt_create(callback=None):
-                import subprocess, shutil, sys, json, datetime
+                import subprocess, shutil, sys, json, datetime, re
                 from src.utils.platform_utils import get_platform, subprocess_args
                 plat = get_platform()
 
+                # Route progress to BOTH the UI label (via callback) and the
+                # terminal log. Without the log copy, poetry create steps
+                # (version detection, requires-python relax, env use output)
+                # were invisible when diagnosing why a picked Python was
+                # ignored -- the whole point of adding them.
+                try:
+                    from src.utils.logger import get_logger as _gl_cr
+                    _crlog = _gl_cr("venvstudio.create")
+                except Exception:
+                    _crlog = None
+
                 def _cb(msg):
-                    if callback: callback(msg)
+                    if callback:
+                        callback(msg)
+                    if _crlog is not None:
+                        try:
+                            _crlog.info(f"[{_etype}] {msg}")
+                        except Exception:
+                            pass
+                    # Direct stdout so the step is visible even when the
+                    # logger's console handler doesn't pick up worker-thread
+                    # records. This is the line that makes create diagnosable.
+                    try:
+                        print(f"[CREATE:{_etype}] {msg}", flush=True)
+                    except Exception:
+                        pass
 
                 # Registry for tracking tool paths
                 from src.core.tool_registry import ToolRegistry
@@ -374,13 +398,118 @@ class EnvCreateMixin:
                         if r2.returncode != 0:
                             return False, r.stderr[:400] or "poetry new failed"
 
-                    # Use selected Python if specified
+                    # ── Honour the selected Python ───────────────────────
+                    # `poetry new` writes a pyproject.toml whose
+                    # requires-python is pinned to whatever Python ran poetry
+                    # (the default). `poetry env use <picked>` is then REFUSED
+                    # when the picked version is outside that range -- and
+                    # Poetry returns exit 0 while doing nothing (verified: it
+                    # prints "not supported by the project (>=3.x)" and rc=0).
+                    # `poetry install` then builds the venv with the default.
+                    # Fix: relax requires-python to admit the picked version
+                    # BEFORE env use. This step is mandatory; if we cannot
+                    # detect the picked version we relax to >=3.0 so nothing
+                    # is refused.
+                    _pyproject = _env_path / "pyproject.toml"
+
+                    def _detect_pyver(py_path):
+                        """Return 'X.Y' for a python executable, or ''.
+
+                        Tries running it; if that fails (odd Windows launcher,
+                        quoting, etc.) falls back to parsing the path, e.g.
+                        'Python310\\python.exe' -> '3.10'.
+                        """
+                        import re as _re2
+                        try:
+                            _vr = subprocess.run(
+                                [str(py_path), "-c",
+                                 "import sys;print('%d.%d'%sys.version_info[:2])"],
+                                capture_output=True, text=True, timeout=8,
+                                **subprocess_args()
+                            )
+                            _o = (_vr.stdout or "").strip() or (_vr.stderr or "").strip()
+                            _m = _re2.search(r"(\d+)\.(\d+)", _o)
+                            if _m:
+                                return f"{_m.group(1)}.{_m.group(2)}"
+                        except Exception:
+                            pass
+                        # Fallback: parse version out of the path itself
+                        _m2 = _re2.search(r"[Pp]ython[\\/]?(\d)\.?(\d{1,2})",
+                                          str(py_path))
+                        if _m2:
+                            return f"{_m2.group(1)}.{_m2.group(2)}"
+                        return ""
+
                     if _python:
-                        _cb(f"Setting Python: poetry env use {_python}")
-                        _env_cmd = [poetry_exe, "env", "use", _python]
-                        subprocess.run(_env_cmd, capture_output=True, text=True,
-                                       timeout=60, cwd=str(_env_path),
-                                       **subprocess_args())
+                        _sel_xy = _detect_pyver(_python)
+                        _cb(f"Selected Python resolves to version: "
+                            f"{_sel_xy or 'UNKNOWN'} (from {_python})")
+                        # Relax to the detected minor, or to >=3.0 if unknown,
+                        # so `poetry env use` is never refused on constraint.
+                        _new_req = f'>={_sel_xy}' if _sel_xy else '>=3.0'
+                        if _pyproject.exists():
+                            try:
+                                _txt = _pyproject.read_text(encoding="utf-8")
+                                # PEP 621: [project] requires-python = ">=3.x"
+                                _txt2 = re.sub(
+                                    r'(?m)^(\s*requires-python\s*=\s*)"[^"]*"',
+                                    lambda m: m.group(1) + f'"{_new_req}"',
+                                    _txt,
+                                )
+                                # Legacy [tool.poetry.dependencies] python="^3.x"
+                                _txt2 = re.sub(
+                                    r'(?m)^(\s*python\s*=\s*)"[^"]*"',
+                                    lambda m: m.group(1) + f'"{_new_req}"',
+                                    _txt2,
+                                )
+                                if _txt2 != _txt:
+                                    _pyproject.write_text(_txt2, encoding="utf-8")
+                                    _cb(f"Adjusted requires-python to {_new_req}")
+                                else:
+                                    _cb("⚠ requires-python line not found in "
+                                        "pyproject.toml — env use may be refused")
+                            except Exception as _e_req:
+                                _cb(f"(Could not adjust requires-python: {_e_req})")
+
+                        def _run_env_use():
+                            _c = [poetry_exe, "env", "use", _python]
+                            _cb(f"$ {' '.join(_c)}")
+                            return subprocess.run(_c, capture_output=True,
+                                                  text=True, timeout=60,
+                                                  cwd=str(_env_path),
+                                                  **subprocess_args())
+
+                        _euse = _run_env_use()
+                        _uout = ((_euse.stdout or "") + (_euse.stderr or "")).strip()
+                        if _uout:
+                            _cb(f"env use output: {_uout[:300]}")
+                        # Poetry returns rc=0 even when it REFUSES (prints "not
+                        # supported by the project"). Detect that text and, as a
+                        # last resort, strip the constraint entirely and retry.
+                        _refused = ("not supported by the project" in _uout.lower()
+                                    or "loosen the python constraint" in _uout.lower())
+                        if _refused and _pyproject.exists():
+                            _cb("env use refused on constraint — removing "
+                                "requires-python entirely and retrying")
+                            try:
+                                _txt = _pyproject.read_text(encoding="utf-8")
+                                _txt = re.sub(
+                                    r'(?m)^\s*requires-python\s*=\s*"[^"]*"\s*\r?\n',
+                                    '', _txt)
+                                _txt = re.sub(
+                                    r'(?m)^\s*python\s*=\s*"[^"]*"',
+                                    'python = ">=3.0"', _txt)
+                                _pyproject.write_text(_txt, encoding="utf-8")
+                            except Exception as _e2:
+                                _cb(f"(constraint strip failed: {_e2})")
+                            _euse = _run_env_use()
+                            _uout2 = ((_euse.stdout or "") +
+                                      (_euse.stderr or "")).strip()
+                            if _uout2:
+                                _cb(f"env use retry output: {_uout2[:300]}")
+                        if _euse.returncode != 0:
+                            _err = (_euse.stderr or _euse.stdout or "").strip()
+                            _cb(f"⚠ poetry env use failed: {_err[:300]}")
 
                     # Run poetry install to actually create the venv
                     _cb("Running poetry install to create virtual environment...")
@@ -408,7 +537,8 @@ class EnvCreateMixin:
                     except Exception:
                         pass
 
-                    # Detect Python version from real venv
+                    # Detect Python version from real venv (the actual result,
+                    # so a failed env-use shows the true version, not a wish)
                     _po_pyver = ""
                     try:
                         if _po_venv_path:
@@ -430,12 +560,21 @@ class EnvCreateMixin:
                     except Exception:
                         pass
 
+                    # Warn if the resulting Python is not what the user picked
+                    if _python:
+                        _want = _detect_pyver(_python)
+                        if _want and _po_pyver and not _po_pyver.startswith(_want):
+                            _cb(f"⚠ Requested Python {_want} but env uses "
+                                f"{_po_pyver} — check requires-python in "
+                                f"pyproject.toml")
+
                     with open(_env_path / ".venvstudio_env", "w") as f:
                         json.dump({
                             "type": "poetry",
                             "name": _name,
                             "python_version": _po_pyver,
                             "poetry_venv_path": _po_venv_path or "",
+                            "poetry_project_dir": str(_env_path),
                             "created": datetime.datetime.now().isoformat()
                         }, f, indent=2)
                     _cb(f"✅ Poetry environment '{_name}' created!")

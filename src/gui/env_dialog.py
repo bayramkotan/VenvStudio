@@ -224,6 +224,12 @@ class EnvCreateDialog(QDialog):
         for pyver in ("3.13", "3.12", "3.11", "3.10", "3.9"):
             self.conda_python_combo.addItem(f"Python {pyver}", pyver)
         self.conda_python_combo.setCurrentIndex(1)  # default 3.13
+        # Redraw the educational panel when the conda Python changes, so the
+        # 'micromamba create ... python=X' hint matches the real selection.
+        self.conda_python_combo.currentIndexChanged.connect(
+            lambda _i: self._on_env_type_changed(
+                self.env_type_combo.currentIndex())
+            if hasattr(self, "env_type_combo") else None)
         _conda_py_row.addWidget(self.conda_python_combo, 1)
         _conda_layout.addLayout(_conda_py_row)
 
@@ -460,6 +466,23 @@ class EnvCreateDialog(QDialog):
         _name = "myproject"
         if hasattr(self, "name_input"):
             _name = self.name_input.text().strip() or "myproject"
+        # Educational panel should echo the ACTUAL Python the user picked,
+        # not a hard-coded example -- otherwise the hint contradicts the real
+        # create command shown in the command strip.
+        _sel_ver = "3.12"
+        try:
+            if env_type == "conda" and hasattr(self, "conda_python_combo"):
+                _cv = self.conda_python_combo.currentData()
+                if _cv:
+                    _sel_ver = str(_cv)
+            elif hasattr(self, "python_combo"):
+                _pv = self.python_combo.currentText()
+                import re as _re_ver
+                _mv = _re_ver.search(r"(\d+\.\d+)", _pv or "")
+                if _mv:
+                    _sel_ver = _mv.group(1)
+        except Exception:
+            pass
         def _cmd(t): return f"<span style='color:#89b4fa;font-family:Consolas,monospace;font-size:15px;'>{t}</span>"
         def _path(t): return f"<span style='color:#a6e3a1;font-family:Consolas,monospace;font-size:15px;'>{t}</span>"
         def _kw(t): return f"<span style='color:#cba6f7;font-family:Consolas,monospace;font-weight:bold;font-size:15px;'>{t}</span>"
@@ -486,7 +509,7 @@ class EnvCreateDialog(QDialog):
                 _note("10-100x faster than pip. Rust-powered.") +
                 _line(_cmd("uv") + " venv " + _path(_name)) +
                 _note("With specific Python version:") +
-                _line(_cmd("uv") + " venv --python " + _ver("3.12") + " " + _path(_name)) +
+                _line(_cmd("uv") + " venv --python " + _ver(_sel_ver) + " " + _path(_name)) +
                 _note("Install packages:") +
                 _line(_cmd("uv") + " pip install " + _kw("numpy") + " " + _kw("pandas")) +
                 _note("Run without activating:") +
@@ -519,7 +542,7 @@ class EnvCreateDialog(QDialog):
             "conda": (
                 _title("🦎", "Conda (micromamba)", "#89dceb") +
                 _note("conda-forge — 25,000+ packages incl. R, RStudio") +
-                _line(_cmd("micromamba") + " create -n " + _path(_name) + " python=" + _ver("3.12")) +
+                _line(_cmd("micromamba") + " create -n " + _path(_name) + " python=" + _ver(_sel_ver)) +
                 _note("Activate:") +
                 _line(_cmd("micromamba") + " activate " + _path(_name)) +
                 _note("Install packages:") +
@@ -539,6 +562,13 @@ class EnvCreateDialog(QDialog):
         else:
             py = shutil.which("python") or shutil.which("python3") or sys.executable
             self.python_path_label.setText(f"📍 {py}")
+        # Redraw the educational panel so its version echo (uv --python X)
+        # tracks the picked interpreter, not just the path label.
+        try:
+            if hasattr(self, "env_type_combo"):
+                self._on_env_type_changed(self.env_type_combo.currentIndex())
+        except Exception:
+            pass
 
     def _refresh_tool_path_ui(self, env_type: str):
         """Check if tool is available and update status note."""
@@ -658,6 +688,24 @@ class EnvCreateDialog(QDialog):
 
         def _do_install(callback=None):
             import subprocess, shutil, os, site
+
+            # F208: show the headline install command for this toolchain so
+            # it reaches the command strip + history (the branches below try
+            # several strategies; this names the canonical one).
+            try:
+                from src.utils.logger import banner_command as _bc_t
+                _scope_flag = "--user" if scope == "user" else ""
+                _tc = {
+                    "uv": [python_path, "-m", "pip", "install", "uv"],
+                    "poetry": [python_path, "-m", "pip", "install", "poetry"],
+                    "pipx": [python_path, "-m", "pip", "install", "--user", "pipx"],
+                }.get(env_type)
+                if _tc:
+                    if _scope_flag and _scope_flag not in _tc:
+                        _tc = _tc + [_scope_flag]
+                    _bc_t(_tc, context=f"Install {env_type} toolchain")
+            except Exception:
+                pass
 
             # ── Platform-aware install strategy ──────────────────────────
             # On Linux with PEP 668 (Debian/Ubuntu/Pardus), pip install is
@@ -993,6 +1041,16 @@ class EnvCreateDialog(QDialog):
                     self.status_label.setText(f"❌ {message}")
                     self.cancel_btn.setText("Close")
 
+            try:
+                from src.utils.logger import banner_command as _bc_c
+                _cc = ["micromamba", "create", "-p", str(env_path),
+                       "-c", "conda-forge"]
+                if python_version:
+                    _cc.append(f"python={python_version}")
+                _bc_c(_cc, context=f"Create conda (env: {name})")
+            except Exception:
+                pass
+
             from src.gui.package_panel import WorkerThread
             self.worker = WorkerThread(_do_conda_create)
             self.worker.progress.connect(
@@ -1148,6 +1206,22 @@ class EnvCreateDialog(QDialog):
                 # _find_tool available for all env types
                 def _find_tool(name_):
                     return _find_tool_registered(name_)
+
+                # F208: surface the headline command for this env type so it
+                # lands in the command strip + View Commands history, same as
+                # package ops. The per-step detail still goes through _cb.
+                try:
+                    from src.utils.logger import banner_command as _bc_a
+                    _py_a = _python or "python"
+                    _head = {
+                        "uv": ["uv", "venv", str(_env_path), "--python", _py_a],
+                        "poetry": ["poetry", "new", str(_env_path)],
+                        "pipx": ["pipx", "install", "<app>"],
+                    }.get(_etype)
+                    if _head:
+                        _bc_a(_head, context=f"Create {_etype} (env: {_name})")
+                except Exception:
+                    pass
 
                 if _etype == "uv":
                     # ── uv ───────────────────────────────────────────────
@@ -1569,6 +1643,14 @@ class EnvCreateDialog(QDialog):
             _ln(_c("deactivate"))
         )
         self.cmd_label.setHtml(html)
+
+        try:
+            from src.utils.logger import banner_command as _bc_v
+            _py_v = python_path or "python"
+            _bc_v([_py_v, "-m", "venv", venv_path],
+                  context=f"Create venv (env: {name})")
+        except Exception:
+            pass
 
         self.worker = CreateWorker(
             self.venv_manager, name, python_path,

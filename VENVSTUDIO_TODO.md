@@ -243,7 +243,7 @@ Sırayla işaretle. Her satır bağımsız test edilebilir.
 
 ---
 
-## 🟡 F208 — Her Yerde Eğitici Komut Gösterimi — **ADIM 1+2 TAMAM + UI**
+## 🟡 F208 — Her Yerde Eğitici Komut Gösterimi — **ADIM 1+2 TAMAM + UI + create/toolchain (v1.6.25)**
 
 **Amaç:** Kullanıcı ne tıklarsa tıklasın, arkada çalışan terminal komutunu
 görebilsin. VenvStudio otomatikleştiriyor ama öğretmesi de gerekiyor.
@@ -275,9 +275,16 @@ görebilsin. VenvStudio otomatikleştiriyor ama öğretmesi de gerekiyor.
 - [x] **Export** ✅ v1.6.22 — her iki export yolu da (Packages + Environments)
 - [x] **Import** ✅ (zaten vardı, `package_export.py`)
 - [ ] **Open Terminal** — hangi aktivasyon komutu çalıştırıldı
-- [ ] **Env create** — `python -m venv` / `uv venv` / `micromamba create`
-- [ ] **Toolchain işlemleri** — pip/uv/poetry kurulumu
+- [x] **Env create** ✅ v1.6.25 — venv/uv/poetry/pipx/conda hepsinde
+      `banner_command` (worker öncesi tek headline komut). `env_dialog.py`
+- [x] **Toolchain işlemleri** ✅ v1.6.25 — `_do_install` başında
+      `pip install uv|poetry|pipx`
 - [ ] **Conda mirror rotasyonu** — hangi mirror'la denendiği
+
+**v1.6.25 ek:** Eğitici panel (sağdaki HTML) artık seçilen Python sürümünü
+yansıtıyor — conda/uv için hardcoded `3.12` yerine gerçek seçim. Ayrıca
+`conda_python_combo` sinyale bağlandı + `_on_python_changed` paneli yeniden
+çiziyor (combo değişince panel takip ediyor).
 
 **Mimari not:** İki gösterim mekanizması var — `_cmd_panel_live` (Environments
 sayfasındaki sarı panel) ve `_show_command_hint` (paket panelinin output log'u).

@@ -61,9 +61,11 @@ Documentation = "https://github.com/bayramkotan/VenvStudio#readme"
 
 [project.scripts]
 venvstudio = "src.main:main"
+vs = "src.main:main"
 
 [project.gui-scripts]
 venvstudio-gui = "src.main:main"
+vs-gui = "src.main:main"
 
 [tool.setuptools]
 packages = ["src", "src.core", "src.gui", "src.utils"]

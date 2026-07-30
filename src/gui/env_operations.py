@@ -92,7 +92,8 @@ class EnvOperationsMixin:
 
         self._renaming_env_name = name
         self._rename_worker = RenameOnlyWorker(
-            self.venv_manager, name, new_name, parent=self)
+            self.venv_manager, name, new_name, parent=self,
+            env_type=_env_type, old_path=_env_path)
         self._rename_worker.progress.connect(
             lambda msg: self.rename_progress.setLabelText(f"⏳ {msg}")
         )
@@ -145,7 +146,8 @@ class EnvOperationsMixin:
 
         self._renaming_env_name = name
         self._rename_worker = RenameFullWorker(
-            self.venv_manager, name, new_name, parent=self)
+            self.venv_manager, name, new_name, parent=self,
+            env_type=_env_type, old_path=_env_path)
         self._rename_worker.progress.connect(
             lambda msg: self.rename_progress.setLabelText(f"⏳ {msg}")
         )
@@ -945,7 +947,8 @@ class EnvOperationsMixin:
         # Worker
         self._cloning_env_name = source
         self.clone_worker = CloneWorker(
-            self.venv_manager, source, new_name, parent=self)
+            self.venv_manager, source, new_name, parent=self,
+            source_type=_src_env_type, source_path=_env_path)
         def _on_clone_progress(msg):
             self.clone_progress.setLabelText(f"⏳ {msg}")
             if hasattr(self, "_cmd_panel_live"):

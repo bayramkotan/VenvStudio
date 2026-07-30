@@ -19,7 +19,8 @@ class CloneWorker(QThread):
     progress = Signal(str)
     finished = Signal(bool, str)
 
-    def __init__(self, venv_manager, source, target, parent=None):
+    def __init__(self, venv_manager, source, target, parent=None,
+                 source_type="venv", source_path=None):
         # parent keeps the thread in the QObject hierarchy so closeEvent can
         # find and wait for it. Without it, a caller that reassigns its only
         # reference (starting a second operation) leaves a running QThread
@@ -28,11 +29,17 @@ class CloneWorker(QThread):
         self.venv_manager = venv_manager
         self.source = source
         self.target = target
+        # Without source_type, clone_venv defaulted to 'venv' and cloned a
+        # poetry/conda/pipx env as a plain venv (N1). Carry the real type +
+        # path so clone_venv dispatches to the right branch.
+        self.source_type = source_type
+        self.source_path = source_path
         self._cancelled = False
 
     def run(self):
         success, msg = self.venv_manager.clone_venv(
-            self.source, self.target, callback=self._on_progress
+            self.source, self.target, callback=self._on_progress,
+            source_path=self.source_path, source_type=self.source_type
         )
         if self._cancelled:
             import shutil
@@ -117,15 +124,22 @@ class RenameOnlyWorker(QThread):
     progress = Signal(str)
     finished = Signal(bool, str)
 
-    def __init__(self, venv_manager, old_name, new_name, parent=None):
+    def __init__(self, venv_manager, old_name, new_name, parent=None,
+                 env_type="venv", old_path=None):
         super().__init__(parent)
         self.venv_manager = venv_manager
         self.old_name = old_name
         self.new_name = new_name
+        # Type-aware so rename_venv's poetry/conda/pipx guards fire instead
+        # of folder-renaming a non-venv env (N1/N5).
+        self.env_type = env_type
+        self.old_path = old_path
 
     def run(self):
         self.progress.emit(f"Renaming '{self.old_name}' → '{self.new_name}'...")
-        success, msg = self.venv_manager.rename_venv(self.old_name, self.new_name)
+        success, msg = self.venv_manager.rename_venv(
+            self.old_name, self.new_name,
+            old_path=self.old_path, env_type=self.env_type)
         self.finished.emit(success, msg)
 
 
@@ -134,15 +148,21 @@ class RenameFullWorker(QThread):
     progress = Signal(str)
     finished = Signal(bool, str)
 
-    def __init__(self, venv_manager, old_name, new_name, parent=None):
+    def __init__(self, venv_manager, old_name, new_name, parent=None,
+                 env_type="venv", old_path=None):
         super().__init__(parent)
         self.venv_manager = venv_manager
         self.old_name = old_name
         self.new_name = new_name
+        # Type-aware so rename_full_venv -> clone_venv keeps the env type
+        # (N1: poetry full-rename was producing a venv).
+        self.env_type = env_type
+        self.old_path = old_path
 
     def run(self):
         success, msg = self.venv_manager.rename_full_venv(
-            self.old_name, self.new_name, callback=self.progress.emit
+            self.old_name, self.new_name, callback=self.progress.emit,
+            old_path=self.old_path, env_type=self.env_type
         )
         self.finished.emit(success, msg)
 

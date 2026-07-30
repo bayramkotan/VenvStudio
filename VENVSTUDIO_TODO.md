@@ -46,6 +46,48 @@ Sürümden bağımsız (3.16→`>=3.16,<3.17` vb.). `env_dialog.py`.
 **Kalan:** eski env'lerin pyproject'i hâlâ üst sınırsız — elle sed ile
 düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebilir.
 
+## 📋 KULLANICI NOTLARI (2026-07-29) — sıradaki iş kuyruğu
+
+### 🔴 Bug'lar (önce bunlar)
+- **N1 ✅ ÇÖZÜLDÜ (v1.6.28) — Poetry clone venv oluyordu.** Kök neden: 3 worker
+  (`CloneWorker`/`RenameOnlyWorker`/`RenameFullWorker`) env tipini taşımıyordu,
+  `clone_venv`/`rename_venv` hep default `"venv"` alıyordu. workers.py +
+  env_operations.py: tip+path artık worker'a geçiriliyor. Poetry/conda tipleri
+  korunuyor. **Canlı test kaldı:** poetry clone→poetry tipi, source_path'in
+  gerçek venv (pypoetry cache) vs proje dizini ayrımı (`pyvenv.cfg` bulunuyor mu).
+- **N2 — Bazı env'lerde 1 paket varken bile "paket yok" deyip export
+  etmiyor** (requirements.txt). freeze()/export boş dönüyor. pip'se pip.
+  Muhtemelen freeze() env-tespiti bazı env'lerde yanlış kind döndürüp boş
+  sonuç veriyor, ya da `if not freeze` fazla erken kesiyor.
+- **N3 — Tools→View Commands'ta env SİLME var ama env OLUŞTURMA yok.**
+  v1.6.25'te create'e banner_command ekledik ama geçmişte görünmüyor. Ya
+  worker-thread'den emit edilen banner_command history'ye düşmüyor, ya create
+  banner'ı yanlış yere gidiyor. → create komut noktasının history'ye
+  gerçekten yazdığını doğrula (delete neden çalışıyor, create neden değil?).
+
+### 🟡 Kapsamlı kontroller
+- **N4 — Tüm launcher'ları kontrol et** (kısayolları/shortcut'ları dahil):
+  her env tipi için launcher düzgün çalışıyor mu, kısayol doğru komutu mu
+  üretiyor.
+- **N5 ✅ ÇÖZÜLDÜ (v1.6.28, N1 ile) — clone/rename tip koruma.** Üç worker da
+  artık tip taşıyor. rename_venv poetry/conda/pipx guard'ları artık gerçekten
+  tetikleniyor (eskiden default venv olduğu için atlanıyordu).
+
+### 🟢 Özellikler
+- **N6 — Kütüphane kataloğunu kat kat artır** + yeni presetler ekle + daha
+  fazla launcher eklenebilir mi?
+- **N7 — Yeni env tipleri:** Hatch, PDM, Pipenv, Rye, Pixi (uv/poetry/pipx
+  paritesiyle: create/list/install/uninstall/freeze/clone).
+- **N8 — Terminal komutlarını geliştir:** env tipini de ekle; env yönetimi
+  (create/delete/clone/rename) + preset yükle/kaldır terminalden rahat
+  yapılabilsin.
+- **N9 — Kütüphane ↔ env-tipi/Python-sürümü uyumluluk tablosu.** Bazı
+  kütüphaneler bazı env/Python sürümlerine kurulmuyor. Tools (ya da File)
+  menüsü altında bir tablo: hangi kütüphane hangi Python/env tipini ister.
+  (Tasarım henüz belirsiz.)
+- **N10 — Log başlangıç ekranını güzelleştir.** VS başlarken giriş bazen
+  dağılıyor — daha temiz/tutarlı bir açılış banner'ı.
+
 ## ✅ FIX YAPILDI — Toolchain Manager: `venv` satırında Install/Upgrade crash
 
 **Nerede:** `settings_toolchain.py` → `_tc_do_install` (Toolchain Manager sekmesi).

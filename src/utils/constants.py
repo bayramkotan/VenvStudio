@@ -3,7 +3,7 @@ VenvStudio - Constants and Popular Package Catalog
 """
 
 APP_NAME = "VenvStudio"
-APP_VERSION = "1.6.28"
+APP_VERSION = "1.6.29"
 
 # ─── Shared Package Cache ─────────────────────────────────────────────────────
 # Default path for pip/uv shared download cache.
@@ -109,6 +109,84 @@ PRESET_DESCRIPTIONS = {
         "Transformers + PEFT for parameter-efficient fine-tuning, "
         "bitsandbytes for quantization (reduce memory usage), "
         "Accelerate for distributed training."
+    ),
+    "🕸️ Web Scraping": (
+        "Crawl and extract data from websites. Scrapy for large crawls, Playwright for JavaScript-heavy pages, BeautifulSoup and lxml for parsing."
+    ),
+    "⚡ Async Backend": (
+        "High-throughput async API stack. FastAPI with async PostgreSQL (asyncpg), SQLAlchemy, HTTPX, and Celery for background tasks."
+    ),
+    "🗣️ LLM App Starter": (
+        "Build applications on top of large language models. OpenAI and Anthropic clients, LangChain orchestration, and ChromaDB for embeddings."
+    ),
+    "🧠 Deep Learning (PyTorch)": (
+        "Train neural networks with PyTorch. Lightning for structured training loops, timm for image models, TensorBoard for monitoring."
+    ),
+    "🧠 Deep Learning (JAX)": (
+        "High-performance deep learning with JAX. Flax for neural networks and Optax for optimizers — great for research and TPUs."
+    ),
+    "🎨 Audio Processing": (
+        "Analyze and manipulate audio. Librosa for music/audio analysis, SoundFile and PyDub for I/O and editing."
+    ),
+    "🎬 Video Processing": (
+        "Edit and process video. MoviePy for editing, ImageIO and OpenCV for frame-level work."
+    ),
+    "🗺️ Geospatial Analysis": (
+        "Work with geographic data. GeoPandas and Shapely for geometry, Folium for maps, Rasterio for raster data."
+    ),
+    "🧬 Bioinformatics": (
+        "Analyze biological data. Biopython for sequences, Scanpy and AnnData for single-cell analysis."
+    ),
+    "🎮 Game Dev (Pygame)": (
+        "Build 2D games with Pygame — a mature, beginner-friendly cross-platform game library."
+    ),
+    "🎮 Game Dev (Arcade)": (
+        "Modern 2D game development with Arcade — a cleaner, Pythonic alternative to Pygame."
+    ),
+    "📄 PDF & Documents": (
+        "Generate and parse documents. pypdf and pdfplumber for PDFs, python-docx and openpyxl for Office files, WeasyPrint for HTML-to-PDF."
+    ),
+    "📚 Documentation Site": (
+        "Build project documentation. MkDocs with the Material theme for Markdown docs, Sphinx for API references."
+    ),
+    "📊 Data Engineering": (
+        "Build data pipelines. PyArrow and DuckDB for fast columnar data, Polars for DataFrames, Prefect for orchestration."
+    ),
+    "🔬 Data Science Full": (
+        "A complete data science toolkit — NumPy, Pandas, SciPy, visualization, Scikit-learn, JupyterLab, and Polars."
+    ),
+    "🛠️ Modern Dev (Ruff)": (
+        "Fast modern Python tooling. Ruff for linting/formatting, mypy for types, pytest for tests, pre-commit hooks."
+    ),
+    "🧪 Testing Full": (
+        "Comprehensive testing stack. pytest with coverage, mocking, parallel runs, async support, Hypothesis, and Faker."
+    ),
+    "🌐 Full-Stack (Reflex)": (
+        "Build full web apps in pure Python with Reflex — no JavaScript required — plus SQLModel for the database."
+    ),
+    "📈 Interactive Dashboard": (
+        "Create data dashboards fast. Streamlit for the UI, Plotly and Altair for interactive charts."
+    ),
+    "🔌 Messaging (Kafka)": (
+        "Event streaming with Apache Kafka. kafka-python client plus Pydantic for message schemas."
+    ),
+    "💬 Bot Development": (
+        "Build chat bots. python-telegram-bot and discord.py for Telegram and Discord, with async HTTP support."
+    ),
+    "🔐 Security Toolkit": (
+        "Security and cryptography tools. cryptography and bcrypt for encryption, PyJWT for tokens, nmap and scapy for networking."
+    ),
+    "☁️ AWS Cloud": (
+        "Interact with AWS services. boto3 and botocore SDKs plus the AWS CLI."
+    ),
+    "🐳 DevOps Toolkit": (
+        "Automate infrastructure. Docker SDK, Fabric and Paramiko for SSH, YAML config, Rich output."
+    ),
+    "🤖 Computer Vision (Full)": (
+        "Complete computer vision stack. OpenCV, Pillow, scikit-image, Albumentations augmentation, and PyTorch with Ultralytics YOLO."
+    ),
+    "📝 NLP (Transformers)": (
+        "Modern NLP with Hugging Face Transformers, Datasets, and Tokenizers, plus spaCy and NLTK."
     ),
 }
 
@@ -282,6 +360,18 @@ LAUNCHER_TOOLTIPS = {
         "Covers t-tests, ANOVA, regression, SEM, meta-analysis and more.\n\n"
         "💡 Perfect for: academic research, Bayesian inference\n"
         "⚠️ System install — VenvStudio will auto-install if not found"
+    ),
+    "shiny": (
+        "✨ Shiny — Reactive Web Apps in Pure Python\n\nPosit's Shiny for Python builds interactive web apps with\nreactive outputs — no HTML/JS required.\n\n💡 Perfect for: dashboards, data apps, interactive reports\n🌐 Opens in your browser at http://localhost:8000"
+    ),
+    "nicegui": (
+        "🎯 NiceGUI — Web UI with Python\n\nCreate buttons, charts, tables, 3D scenes and more with a\nfriendly Python API. Runs in the browser.\n\n💡 Perfect for: dashboards, control panels, quick UIs\n🌐 Opens in your browser at http://localhost:8080"
+    ),
+    "bokeh": (
+        "🌈 Bokeh — Interactive Visualization Server\n\nServe interactive plots and data apps that update in the\nbrowser. Great for streaming and large datasets.\n\n💡 Perfect for: interactive charts, live dashboards\n🌐 Opens in your browser at http://localhost:5006"
+    ),
+    "chainlit": (
+        "💬 Chainlit — Conversational AI UIs\n\nBuild chat interfaces for LLM apps quickly, with streaming,\nmessage history and rich elements.\n\n💡 Perfect for: chatbots, LLM demos, RAG frontends\n🌐 Opens in your browser at http://localhost:8000"
     ),
 }
 
@@ -559,6 +649,203 @@ PACKAGE_CATALOG = {
             {"name": "ipywidgets", "desc": "Interactive widgets for Jupyter"},
         ],
     },
+    "⚡ Async & Concurrency": {
+        "icon": "⚡",
+        "packages": [
+            {"name": "anyio", "desc": "Async compatibility layer over asyncio/trio"},
+            {"name": "trio", "desc": "Friendly async concurrency library"},
+            {"name": "asyncpg", "desc": "Fast async PostgreSQL driver"},
+            {"name": "aiomysql", "desc": "Async MySQL driver"},
+            {"name": "aiofiles", "desc": "Async file operations"},
+            {"name": "uvloop", "desc": "Ultra-fast asyncio event loop"},
+            {"name": "gevent", "desc": "Coroutine-based concurrency"},
+            {"name": "celery", "desc": "Distributed task queue"},
+        ],
+    },
+    "🧰 CLI & Terminal": {
+        "icon": "🧰",
+        "packages": [
+            {"name": "textual", "desc": "Modern TUI framework for the terminal"},
+            {"name": "prompt-toolkit", "desc": "Interactive command-line applications"},
+            {"name": "questionary", "desc": "Interactive user prompts"},
+            {"name": "colorama", "desc": "Cross-platform colored terminal text"},
+            {"name": "tabulate", "desc": "Pretty-print tabular data"},
+            {"name": "argcomplete", "desc": "Bash tab completion for argparse"},
+            {"name": "fire", "desc": "Auto-generate CLIs from any object"},
+            {"name": "halo", "desc": "Terminal spinners"},
+        ],
+    },
+    "🌐 HTTP & Scraping": {
+        "icon": "🌐",
+        "packages": [
+            {"name": "scrapy", "desc": "Fast high-level web crawling framework"},
+            {"name": "playwright", "desc": "Browser automation for testing/scraping"},
+            {"name": "lxml", "desc": "Fast XML/HTML processing"},
+            {"name": "parsel", "desc": "Extract data from HTML/XML with selectors"},
+            {"name": "html5lib", "desc": "Standards-compliant HTML parser"},
+            {"name": "urllib3", "desc": "HTTP client with connection pooling"},
+            {"name": "websockets", "desc": "WebSocket client/server library"},
+            {"name": "requests-html", "desc": "HTML parsing with JavaScript support"},
+        ],
+    },
+    "🔢 Scientific Computing": {
+        "icon": "🔢",
+        "packages": [
+            {"name": "numba", "desc": "JIT compiler for numerical Python"},
+            {"name": "cython", "desc": "C-extensions for Python"},
+            {"name": "networkx", "desc": "Graph and network analysis"},
+            {"name": "xarray", "desc": "N-dimensional labeled arrays"},
+            {"name": "h5py", "desc": "HDF5 binary data format"},
+            {"name": "pint", "desc": "Physical quantities and units"},
+            {"name": "uncertainties", "desc": "Calculations with uncertainties"},
+            {"name": "mpmath", "desc": "Arbitrary-precision arithmetic"},
+        ],
+    },
+    "🧠 Deep Learning": {
+        "icon": "🧠",
+        "packages": [
+            {"name": "jax", "desc": "Composable transformations of NumPy programs"},
+            {"name": "flax", "desc": "Neural network library for JAX"},
+            {"name": "lightning", "desc": "PyTorch Lightning - high-level training"},
+            {"name": "timm", "desc": "PyTorch image models"},
+            {"name": "diffusers", "desc": "Diffusion models for generation"},
+            {"name": "accelerate", "desc": "Distributed training made simple"},
+            {"name": "safetensors", "desc": "Safe tensor serialization"},
+            {"name": "onnxruntime", "desc": "Cross-platform ML inference"},
+        ],
+    },
+    "🗣️ LLM & GenAI": {
+        "icon": "🗣️",
+        "packages": [
+            {"name": "openai", "desc": "OpenAI API client"},
+            {"name": "anthropic", "desc": "Anthropic Claude API client"},
+            {"name": "langchain", "desc": "Framework for LLM applications"},
+            {"name": "llama-index", "desc": "Data framework for LLM apps"},
+            {"name": "tiktoken", "desc": "Fast BPE tokenizer for OpenAI models"},
+            {"name": "chromadb", "desc": "Embeddings/vector database"},
+            {"name": "faiss-cpu", "desc": "Efficient similarity search"},
+            {"name": "sentencepiece", "desc": "Unsupervised text tokenizer"},
+            {"name": "chainlit", "desc": "Build conversational LLM/chat UIs"},
+        ],
+    },
+    "🎨 Audio & Media": {
+        "icon": "🎨",
+        "packages": [
+            {"name": "librosa", "desc": "Audio and music analysis"},
+            {"name": "soundfile", "desc": "Read/write sound files"},
+            {"name": "pydub", "desc": "Manipulate audio with a simple API"},
+            {"name": "moviepy", "desc": "Video editing with Python"},
+            {"name": "imageio", "desc": "Read/write image, video, volumetric data"},
+            {"name": "av", "desc": "Pythonic bindings for FFmpeg"},
+            {"name": "mutagen", "desc": "Audio metadata handling"},
+        ],
+    },
+    "🗺️ Geospatial": {
+        "icon": "🗺️",
+        "packages": [
+            {"name": "geopandas", "desc": "Geographic pandas extensions"},
+            {"name": "shapely", "desc": "Manipulation of geometric objects"},
+            {"name": "folium", "desc": "Interactive leaflet maps"},
+            {"name": "rasterio", "desc": "Read/write geospatial raster data"},
+            {"name": "pyproj", "desc": "Cartographic projections and transforms"},
+            {"name": "geopy", "desc": "Geocoding library"},
+            {"name": "osmnx", "desc": "Street networks from OpenStreetMap"},
+        ],
+    },
+    "🧬 Bioinformatics": {
+        "icon": "🧬",
+        "packages": [
+            {"name": "biopython", "desc": "Tools for biological computation"},
+            {"name": "scikit-bio", "desc": "Bioinformatics data structures/algorithms"},
+            {"name": "pysam", "desc": "Read/write SAM/BAM/VCF files"},
+            {"name": "anndata", "desc": "Annotated data matrices"},
+            {"name": "scanpy", "desc": "Single-cell analysis in Python"},
+        ],
+    },
+    "🎮 Game & Graphics": {
+        "icon": "🎮",
+        "packages": [
+            {"name": "pygame", "desc": "Cross-platform game development"},
+            {"name": "arcade", "desc": "Modern 2D game framework"},
+            {"name": "moderngl", "desc": "Modern OpenGL bindings"},
+            {"name": "pyglet", "desc": "Windowing and multimedia library"},
+            {"name": "panda3d", "desc": "3D game engine"},
+            {"name": "noise", "desc": "Perlin noise generation"},
+        ],
+    },
+    "📄 Docs & Parsing": {
+        "icon": "📄",
+        "packages": [
+            {"name": "pypdf", "desc": "Pure-Python PDF library"},
+            {"name": "pdfplumber", "desc": "Extract text/tables from PDFs"},
+            {"name": "markdown", "desc": "Markdown to HTML converter"},
+            {"name": "mkdocs", "desc": "Project documentation with Markdown"},
+            {"name": "sphinx", "desc": "Documentation generator"},
+            {"name": "jinja2", "desc": "Templating engine"},
+            {"name": "tabula-py", "desc": "Extract tables from PDFs"},
+            {"name": "python-frontmatter", "desc": "Parse YAML frontmatter"},
+        ],
+    },
+    "✅ Validation & Config": {
+        "icon": "✅",
+        "packages": [
+            {"name": "pydantic-settings", "desc": "Settings management with pydantic"},
+            {"name": "marshmallow", "desc": "Object serialization/validation"},
+            {"name": "cerberus", "desc": "Lightweight data validation"},
+            {"name": "dynaconf", "desc": "Layered configuration management"},
+            {"name": "environs", "desc": "Parse environment variables"},
+            {"name": "attrs", "desc": "Classes without boilerplate"},
+            {"name": "cattrs", "desc": "Composable un/structuring of data"},
+        ],
+    },
+    "📊 Data Engineering": {
+        "icon": "📊",
+        "packages": [
+            {"name": "pyarrow", "desc": "Apache Arrow columnar format"},
+            {"name": "duckdb", "desc": "In-process analytical database"},
+            {"name": "sqlmodel", "desc": "SQL databases with Python types"},
+            {"name": "great-expectations", "desc": "Data validation and profiling"},
+            {"name": "prefect", "desc": "Modern workflow orchestration"},
+            {"name": "apache-airflow", "desc": "Programmatic workflow authoring"},
+            {"name": "dbt-core", "desc": "Data transformation tool"},
+            {"name": "fastparquet", "desc": "Parquet format for Python"},
+        ],
+    },
+    "🧪 Testing & Quality": {
+        "icon": "🧪",
+        "packages": [
+            {"name": "hypothesis", "desc": "Property-based testing"},
+            {"name": "pytest-mock", "desc": "Thin mock wrapper for pytest"},
+            {"name": "pytest-xdist", "desc": "Distributed/parallel test runs"},
+            {"name": "coverage", "desc": "Code coverage measurement"},
+            {"name": "ruff", "desc": "Extremely fast Python linter"},
+            {"name": "bandit", "desc": "Security linter for Python"},
+            {"name": "nox", "desc": "Flexible test automation"},
+            {"name": "responses", "desc": "Mock the requests library"},
+        ],
+    },
+    "📈 Dashboards & Reporting": {
+        "icon": "📈",
+        "packages": [
+            {"name": "panel", "desc": "High-level app and dashboard framework"},
+            {"name": "shiny", "desc": "Reactive web apps in pure Python"},
+            {"name": "reflex", "desc": "Build web apps in pure Python"},
+            {"name": "nicegui", "desc": "Web-based UI with Python"},
+            {"name": "great-tables", "desc": "Beautiful publication-quality tables"},
+            {"name": "weasyprint", "desc": "HTML/CSS to PDF"},
+        ],
+    },
+    "🔌 Messaging & Queues": {
+        "icon": "🔌",
+        "packages": [
+            {"name": "kafka-python", "desc": "Apache Kafka client"},
+            {"name": "pika", "desc": "RabbitMQ (AMQP) client"},
+            {"name": "kombu", "desc": "Messaging library for Python"},
+            {"name": "paho-mqtt", "desc": "MQTT client"},
+            {"name": "nats-py", "desc": "NATS messaging client"},
+            {"name": "dramatiq", "desc": "Distributed task processing"},
+        ],
+    },
 }
 
 PRESETS = {
@@ -578,6 +865,32 @@ PRESETS = {
     "📈 Time Series (Deep Learning)": ["pytorch-forecasting", "darts", "neuralforecast", "gluonts", "transformers", "torch"],
     "💰 Financial Analysis": ["yfinance", "quantlib", "zipline-reloaded", "pyfolio", "ta-lib", "pandas", "numpy"],
     "💰 Financial LLM": ["transformers", "datasets", "peft", "bitsandbytes", "accelerate", "sentencepiece", "pandas"],
+    "🕸️ Web Scraping": ["scrapy", "playwright", "beautifulsoup4", "lxml", "requests", "pandas"],
+    "⚡ Async Backend": ["fastapi", "uvicorn", "asyncpg", "sqlalchemy", "pydantic", "httpx", "celery"],
+    "🗣️ LLM App Starter": ["openai", "anthropic", "langchain", "tiktoken", "chromadb", "python-dotenv"],
+    "🧠 Deep Learning (PyTorch)": ["torch", "torchvision", "lightning", "timm", "numpy", "matplotlib", "tensorboard"],
+    "🧠 Deep Learning (JAX)": ["jax", "flax", "optax", "numpy", "matplotlib"],
+    "🎨 Audio Processing": ["librosa", "soundfile", "pydub", "numpy", "scipy", "matplotlib"],
+    "🎬 Video Processing": ["moviepy", "imageio", "opencv-python", "pillow", "numpy"],
+    "🗺️ Geospatial Analysis": ["geopandas", "shapely", "folium", "rasterio", "pyproj", "pandas"],
+    "🧬 Bioinformatics": ["biopython", "scanpy", "anndata", "numpy", "pandas", "matplotlib"],
+    "🎮 Game Dev (Pygame)": ["pygame", "numpy", "pillow"],
+    "🎮 Game Dev (Arcade)": ["arcade", "pillow", "numpy"],
+    "📄 PDF & Documents": ["pypdf", "pdfplumber", "python-docx", "openpyxl", "reportlab", "weasyprint"],
+    "📚 Documentation Site": ["mkdocs", "mkdocs-material", "sphinx", "jinja2"],
+    "📊 Data Engineering": ["pyarrow", "duckdb", "polars", "sqlalchemy", "prefect", "pandas"],
+    "🔬 Data Science Full": ["numpy", "pandas", "scipy", "matplotlib", "seaborn", "scikit-learn", "jupyterlab", "statsmodels", "polars"],
+    "🛠️ Modern Dev (Ruff)": ["ruff", "mypy", "pytest", "pytest-cov", "pre-commit", "black"],
+    "🧪 Testing Full": ["pytest", "pytest-cov", "pytest-mock", "pytest-xdist", "pytest-asyncio", "hypothesis", "faker", "responses"],
+    "🌐 Full-Stack (Reflex)": ["reflex", "sqlmodel", "httpx", "python-dotenv"],
+    "📈 Interactive Dashboard": ["streamlit", "plotly", "pandas", "numpy", "altair"],
+    "🔌 Messaging (Kafka)": ["kafka-python", "pydantic", "python-dotenv"],
+    "💬 Bot Development": ["python-telegram-bot", "discord.py", "aiohttp", "python-dotenv"],
+    "🔐 Security Toolkit": ["cryptography", "bcrypt", "pyjwt", "python-nmap", "scapy"],
+    "☁️ AWS Cloud": ["boto3", "botocore", "awscli", "python-dotenv"],
+    "🐳 DevOps Toolkit": ["docker", "fabric", "paramiko", "pyyaml", "rich"],
+    "🤖 Computer Vision (Full)": ["opencv-python", "pillow", "scikit-image", "albumentations", "torch", "torchvision", "ultralytics"],
+    "📝 NLP (Transformers)": ["transformers", "datasets", "tokenizers", "sentencepiece", "torch", "spacy", "nltk"],
 }
 
 COMMAND_HINTS = {

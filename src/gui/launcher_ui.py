@@ -362,6 +362,57 @@ class LauncherUIMixin:
                 },
                 "desc": "Bayesian & frequentist statistics — beautiful, free, open source",
                             },
+            {
+                "name": "Shiny",
+                "icon": "✨",
+                "icon_key": "shiny",
+                "env_types": ["venv"],
+                "package": "shiny",
+                # `shiny run` needs an app file; launch an inline demo app via
+                # uvicorn instead (same pattern as Gradio/Dash), so the button
+                # works with no project on disk.
+                "command": ["-c", "from shiny import App, ui; import uvicorn; app=App(ui.page_fluid(ui.h1('Shiny is running!')), lambda i,o,s: None); uvicorn.run(app, host='127.0.0.1', port=8012)"],
+                "desc": "Reactive web apps in pure Python (Posit Shiny)",
+                "needs_console": True,
+                "open_browser": "http://localhost:8012",
+                "browser_delay": 3,
+                            },
+            {
+                "name": "NiceGUI",
+                "icon": "🎯",
+                "icon_key": "nicegui",
+                "env_types": ["venv"],
+                "package": "nicegui",
+                "command": ["-c", "from nicegui import ui; ui.label('NiceGUI is running!'); ui.run(port=8080)"],
+                "desc": "Web-based UI with Python — buttons, charts, 3D & more",
+                "needs_console": True,
+                "open_browser": "http://localhost:8080",
+                "browser_delay": 3,
+                            },
+            {
+                "name": "Bokeh",
+                "icon": "🌈",
+                "icon_key": "bokeh",
+                "env_types": ["venv"],
+                "package": "bokeh",
+                "command": ["-m", "bokeh", "serve", "--show"],
+                "desc": "Interactive visualization server for modern browsers",
+                "needs_console": True,
+                "open_browser": "http://localhost:5006",
+                "browser_delay": 3,
+                            },
+            {
+                "name": "Chainlit",
+                "icon": "💬",
+                "icon_key": "chainlit",
+                "env_types": ["venv"],
+                "package": "chainlit",
+                "command": ["-m", "chainlit", "hello"],
+                "desc": "Build conversational LLM/chat UIs quickly",
+                "needs_console": True,
+                "open_browser": "http://localhost:8000",
+                "browser_delay": 4,
+                            },
         ]
 
         self.launcher_cards = {}

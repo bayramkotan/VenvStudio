@@ -2616,6 +2616,46 @@ LEARN_CATEGORIES = [
                 "snippet": '# Linux\nflatpak install org.jamovi.jamovi\nflatpak install org.jaspstats.JASP\n# Windows: installers from the official sites',
                 "links": [("🌐 Site", "https://www.jamovi.org"), ("📖 Docs", "https://www.jamovi.org/user-manual.html")],
             },
+            {
+                "title": "Shiny — How to Use",
+                "body": (
+                    "Shiny for Python (by Posit) builds reactive web apps in pure Python. You define a UI layout and a server function; when an input changes, only the outputs that depend on it recompute. No callbacks to wire by hand — Shiny tracks the dependencies for you."
+                ),
+                "diagram": "  Reactive model\n\n  ui: slider('n', 1..100)      server:\n        |                        @render.plot\n        v                        def hist():\n     input.n()  ------------->      draw(input.n())\n                                 (reruns only when n changes)\n\n  Run: shiny run app.py --reload",
+                "tip": "Shiny tips:\n  @reactive.calc     cache a derived value\n  @render.table      output a DataFrame\n  ui.sidebar(...)    collapsible side panel\n  shiny create       scaffold a starter app\n  Deploy free on shinyapps.io or Posit Connect",
+                "packages": ["shiny"],
+                "links": [("🌐 shiny.posit.co", "https://shiny.posit.co/py/"), ("📖 Docs", "https://shiny.posit.co/py/docs/overview.html")],
+            },
+            {
+                "title": "NiceGUI — How to Use",
+                "body": (
+                    "NiceGUI builds web UIs with a friendly Python API — buttons, inputs, charts, tables, even 3D scenes — running on FastAPI under the hood. Great for dashboards, control panels, and hardware/IoT front-ends. The same code runs in the browser and can be packaged as a desktop app."
+                ),
+                "diagram": "  from nicegui import ui\n\n  ui.label('Hello')\n  ui.button('Click', on_click=lambda: ui.notify('Hi'))\n  ui.slider(min=0, max=100)\n  ui.plotly(fig)\n  ui.run()          # serves at http://localhost:8080\n\n  Event -> Python handler -> UI updates live (websockets)",
+                "tip": "NiceGUI tips:\n  ui.run(native=True)   run as a desktop window\n  @ui.refreshable       redraw part of the page\n  ui.timer(1.0, fn)     periodic updates\n  ui.upload / ui.download for files\n  Binds directly to Python variables",
+                "packages": ["nicegui"],
+                "links": [("🌐 nicegui.io", "https://nicegui.io"), ("📖 Docs", "https://nicegui.io/documentation")],
+            },
+            {
+                "title": "Bokeh — How to Use",
+                "body": (
+                    "Bokeh creates interactive plots that render in the browser — pan, zoom, hover tooltips, linked selections — all without writing JavaScript. Use it for standalone HTML charts, or run `bokeh serve` for a live app whose plots update from Python callbacks and streaming data."
+                ),
+                "diagram": "  Two ways to use Bokeh\n\n  1) Standalone HTML\n     from bokeh.plotting import figure, show\n     p = figure(); p.line(x, y); show(p)  -> chart.html\n\n  2) Bokeh server (interactive)\n     bokeh serve --show app.py\n     slider.on_change -> update ColumnDataSource\n     -> plot redraws live in the browser",
+                "tip": "Bokeh tips:\n  ColumnDataSource     shared data -> linked plots\n  HoverTool(tooltips)  rich hover info\n  gridplot([[p1, p2]]) dashboards\n  figure(x_axis_type='datetime') time series\n  Powers Panel & HoloViews under the hood",
+                "packages": ["bokeh"],
+                "links": [("🌐 bokeh.org", "https://bokeh.org"), ("📖 Docs", "https://docs.bokeh.org/en/latest/")],
+            },
+            {
+                "title": "Chainlit — How to Use",
+                "body": (
+                    "Chainlit builds chat UIs for LLM apps in minutes. Decorate a function with @cl.on_message and Chainlit gives you a full chat interface with streaming responses, message history, and rich elements (images, files, buttons). It plugs into LangChain, LlamaIndex, or a raw OpenAI/Anthropic call."
+                ),
+                "diagram": "  import chainlit as cl\n\n  @cl.on_message\n  async def main(msg: cl.Message):\n      answer = await llm(msg.content)   # your LLM call\n      await cl.Message(content=answer).send()\n\n  Run: chainlit run app.py -w\n  Browser: chat window + streaming + history",
+                "tip": "Chainlit tips:\n  chainlit run app.py -w   auto-reload on save\n  cl.Message(elements=[...]) attach images/files\n  @cl.on_chat_start        greet / set up session\n  cl.user_session          per-user state\n  Built-in auth & data persistence hooks",
+                "packages": ["chainlit"],
+                "links": [("🌐 chainlit.io", "https://chainlit.io"), ("📖 Docs", "https://docs.chainlit.io")],
+            },
         ],
     },
 
@@ -2821,4 +2861,131 @@ LEARN_CATEGORIES = [
         ],
     },
 
+    {
+        "id": 'async_concurrency',
+        "icon": '⚡',
+        "title": 'Async & Concurrency',
+        "desc": 'asyncio, async HTTP, and background task queues for I/O-bound work',
+        "color": '#89dceb',
+        "topics": [
+            {
+                "title": 'async / await — The Basics',
+                "body": (
+                    'Async lets one thread juggle thousands of I/O-bound tasks (network, disk) by switching whenever something waits. `async def` defines a coroutine; `await` yields control while a slow call runs. It is concurrency without threads — no locks for the common cases.'
+                ),
+                "tip": "Rule of thumb: async shines for I/O-bound work (many network calls). For CPU-bound work use multiprocessing instead — async won't help.",
+                "snippet": 'import asyncio\n\nasync def fetch(name, delay):\n    await asyncio.sleep(delay)   # non-blocking wait\n    return f"{name} done"\n\nasync def main():\n    results = await asyncio.gather(\n        fetch("A", 2), fetch("B", 1), fetch("C", 3),\n    )\n    print(results)   # all three ran concurrently (~3s, not 6)\n\nasyncio.run(main())',
+                "packages": ['anyio', 'trio'],
+                "links": [('📖 asyncio docs', 'https://docs.python.org/3/library/asyncio.html'), ('🌐 Real Python', 'https://realpython.com/async-io-python/')],
+            },
+            {
+                "title": 'HTTPX & aiohttp — Async HTTP',
+                "body": (
+                    'Making 100 API calls one-by-one is slow because each waits for the last. Async HTTP clients fire them concurrently. HTTPX offers a requests-like API with async support; aiohttp is the battle-tested async-first client/server.'
+                ),
+                "tip": 'Reuse ONE AsyncClient for many requests — it pools connections. Creating a client per request throws away that speedup.',
+                "snippet": 'import httpx, asyncio\n\nasync def get_all(urls):\n    async with httpx.AsyncClient() as client:\n        tasks = [client.get(u) for u in urls]\n        responses = await asyncio.gather(*tasks)\n        return [r.status_code for r in responses]\n\nprint(asyncio.run(get_all(["https://example.com"]*10)))',
+                "packages": ['httpx', 'aiohttp'],
+                "links": [('🌐 HTTPX', 'https://www.python-httpx.org'), ('🌐 aiohttp', 'https://docs.aiohttp.org')],
+            },
+            {
+                "title": 'Celery — Background Task Queue',
+                "body": (
+                    "When a web request triggers slow work (send email, process video), you don't make the user wait. Celery pushes that work to a queue; worker processes pick it up in the background. A broker (Redis/RabbitMQ) carries the messages."
+                ),
+                "tip": 'Start the broker first (Redis is easiest). Use `.delay(args)` to enqueue; check results with the returned AsyncResult if you need them.',
+                "snippet": 'from celery import Celery\n\napp = Celery("tasks", broker="redis://localhost:6379/0")\n\n@app.task\ndef send_report(user_id):\n    ...   # slow work here\n    return "sent"\n\n# In your web code — returns instantly:\nsend_report.delay(42)\n\n# Run a worker:\n#   celery -A tasks worker --loglevel=info',
+                "packages": ['celery', 'redis'],
+                "links": [('🌐 Celery', 'https://docs.celeryq.dev'), ('🌐 Redis', 'https://redis.io')],
+            },
+        ],
+    },
+    {
+        "id": 'web_scraping',
+        "icon": '🕸️',
+        "title": 'Web Scraping',
+        "desc": 'Parse HTML, crawl at scale, and handle JavaScript-heavy pages',
+        "color": '#f38ba8',
+        "topics": [
+            {
+                "title": 'BeautifulSoup — Parse HTML',
+                "body": (
+                    'BeautifulSoup turns messy HTML into a navigable tree. Fetch a page with requests, then find elements by tag, class, or CSS selector. Perfect for one-off scrapes and small scripts.'
+                ),
+                "tip": "Use `select()` for CSS selectors (like the browser). Always check the site's robots.txt and terms before scraping at scale.",
+                "snippet": 'import requests\nfrom bs4 import BeautifulSoup\n\nhtml = requests.get("https://example.com").text\nsoup = BeautifulSoup(html, "html.parser")\n\ntitle = soup.find("h1").text\nlinks = [a["href"] for a in soup.select("a[href]")]\nprint(title, len(links), "links")',
+                "packages": ['beautifulsoup4', 'requests', 'lxml'],
+                "links": [('🌐 BeautifulSoup', 'https://www.crummy.com/software/BeautifulSoup/bs4/doc/'), ('🌐 Real Python', 'https://realpython.com/beautiful-soup-web-scraper-python/')],
+            },
+            {
+                "title": 'Scrapy — Production Crawling',
+                "body": (
+                    "Scrapy is a full framework for large crawls: it handles concurrency, retries, throttling, pipelines, and exporting — things you'd hand-roll with requests. You write a Spider that yields items and follows links."
+                ),
+                "tip": "Set DOWNLOAD_DELAY and respect robots.txt. Scrapy's AutoThrottle adapts to the server so you don't get banned.",
+                "snippet": 'import scrapy\n\nclass QuotesSpider(scrapy.Spider):\n    name = "quotes"\n    start_urls = ["https://quotes.toscrape.com"]\n\n    def parse(self, response):\n        for q in response.css("div.quote"):\n            yield {\n                "text": q.css("span.text::text").get(),\n                "author": q.css("small.author::text").get(),\n            }\n        nxt = response.css("li.next a::attr(href)").get()\n        if nxt:\n            yield response.follow(nxt, self.parse)\n\n# Run:  scrapy runspider quotes.py -o quotes.json',
+                "packages": ['scrapy'],
+                "links": [('🌐 Scrapy', 'https://scrapy.org'), ('📖 Docs', 'https://docs.scrapy.org')],
+            },
+            {
+                "title": 'Playwright — JavaScript-Heavy Pages',
+                "body": (
+                    'Many sites render content with JavaScript, so requests sees an empty shell. Playwright drives a real browser (Chromium/Firefox/WebKit), waits for the page to render, and lets you click, type, and scrape the final DOM.'
+                ),
+                "tip": 'Run `playwright install` once to download browsers. Use headless=False to watch it work while debugging.',
+                "snippet": 'from playwright.sync_api import sync_playwright\n\nwith sync_playwright() as p:\n    browser = p.chromium.launch()\n    page = browser.new_page()\n    page.goto("https://example.com")\n    page.wait_for_selector("h1")\n    print(page.inner_text("h1"))\n    browser.close()\n\n# First time: playwright install chromium',
+                "packages": ['playwright'],
+                "links": [('🌐 Playwright', 'https://playwright.dev/python/'), ('📖 Docs', 'https://playwright.dev/python/docs/intro')],
+            },
+        ],
+    },
+    {
+        "id": 'data_engineering',
+        "icon": '🔧',
+        "title": 'Data Engineering',
+        "desc": 'Fast DataFrames, in-process SQL, columnar storage, and pipelines',
+        "color": '#fab387',
+        "topics": [
+            {
+                "title": 'Polars — Fast DataFrames',
+                "body": (
+                    'Polars is a DataFrame library written in Rust — often 5-30x faster than pandas and able to handle datasets larger than RAM via lazy evaluation. The API is expression-based, which reads cleanly and parallelizes automatically.'
+                ),
+                "tip": 'Use scan_csv/scan_parquet + .collect() for lazy execution — Polars optimizes the whole query and streams data too big for memory.',
+                "snippet": 'import polars as pl\n\ndf = pl.read_csv("sales.csv")\n\nout = (\n    df.filter(pl.col("amount") > 100)\n      .group_by("region")\n      .agg(pl.col("amount").sum().alias("total"))\n      .sort("total", descending=True)\n)\nprint(out)',
+                "packages": ['polars'],
+                "links": [('🌐 Polars', 'https://pola.rs'), ('📖 Docs', 'https://docs.pola.rs')],
+            },
+            {
+                "title": 'DuckDB — SQL on Your Data',
+                "body": (
+                    "DuckDB is an in-process analytical database — think 'SQLite for analytics'. Query CSV, Parquet, or pandas/Polars DataFrames directly with SQL, no server to set up. Blazing fast for aggregations over millions of rows."
+                ),
+                "tip": 'DuckDB reads Parquet lazily and in parallel — you can query files bigger than RAM. It also speaks directly to pandas/Polars DataFrames by name.',
+                "snippet": 'import duckdb\n\nout = duckdb.sql("""\n    SELECT region, SUM(amount) AS total\n    FROM \'sales.parquet\'\n    WHERE amount > 100\n    GROUP BY region\n    ORDER BY total DESC\n""").df()          # -> pandas DataFrame\nprint(out)',
+                "packages": ['duckdb'],
+                "links": [('🌐 DuckDB', 'https://duckdb.org'), ('📖 Docs', 'https://duckdb.org/docs/')],
+            },
+            {
+                "title": 'Parquet & PyArrow — Columnar Storage',
+                "body": (
+                    'CSV is slow and huge; Parquet is a compressed, columnar format that reads specific columns fast and preserves types. PyArrow is the engine behind it, shared by pandas, Polars, and DuckDB.'
+                ),
+                "tip": 'Prefer Parquet over CSV for any dataset you reload often: smaller files, typed columns, and column pruning make it far faster.',
+                "snippet": 'import pandas as pd\n\ndf = pd.read_csv("big.csv")\n\n# Save as Parquet — smaller + faster to reload\ndf.to_parquet("data.parquet", compression="zstd")\n\n# Read back just two columns (columnar = fast)\nsub = pd.read_parquet("data.parquet", columns=["region", "amount"])\nprint(sub.shape)',
+                "packages": ['pyarrow', 'pandas'],
+                "links": [('🌐 Apache Arrow', 'https://arrow.apache.org'), ('📖 Parquet', 'https://parquet.apache.org')],
+            },
+            {
+                "title": 'Prefect — Workflow Orchestration',
+                "body": (
+                    'When data pipelines have many steps (extract -> clean -> load -> report), Prefect turns plain Python functions into a monitored workflow with retries, scheduling, caching, and a dashboard — without the heavy setup of older tools.'
+                ),
+                "tip": 'Add @task(retries=3, cache_key_fn=...) to make steps resilient and skip repeated work. `prefect server start` gives a local dashboard.',
+                "snippet": 'from prefect import flow, task\n\n@task(retries=3)\ndef extract():\n    return [1, 2, 3]\n\n@task\ndef transform(data):\n    return [x * 10 for x in data]\n\n@flow\ndef pipeline():\n    raw = extract()\n    return transform(raw)\n\nif __name__ == "__main__":\n    print(pipeline())',
+                "packages": ['prefect'],
+                "links": [('🌐 Prefect', 'https://www.prefect.io'), ('📖 Docs', 'https://docs.prefect.io')],
+            },
+        ],
+    },
 ]

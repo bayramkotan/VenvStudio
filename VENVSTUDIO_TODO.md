@@ -74,8 +74,15 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   tetikleniyor (eskiden default venv olduğu için atlanıyordu).
 
 ### 🟢 Özellikler
-- **N6 — Kütüphane kataloğunu kat kat artır** + yeni presetler ekle + daha
-  fazla launcher eklenebilir mi?
+- **N6 ✅ ÇÖZÜLDÜ (v1.6.29) — katalog + preset + launcher + Learn agresif genişletildi.**
+  Katalog 16→32 kategori / ~130→236 paket. Presetler 16→42 (hepsi açıklamalı).
+  Launcher 22→26 (+Shiny/NiceGUI/Bokeh/Chainlit; mevcut 22 zaten kapsamlıydı).
+  Learn 20→23 kategori / 204 topic (+4 launcher öğreticisi, +Async/Web Scraping/
+  Data Engineering kategorileri). Dosyalar: constants.py, launcher_ui.py,
+  launcher_links.json, package_ops.py, learn_content.py.
+  **Ders:** launcher komutları gerçek tool'la test edilmeli (shiny run bozuktu
+  → inline -c; reflex çıkarıldı — proje ister). Launcher 4 kaynaktan beslenir:
+  app_definitions + launcher_links.json (çok-linkli) + LAUNCHER_TOOLTIPS + _PACKAGE_DOCS.
 - **N7 — Yeni env tipleri:** Hatch, PDM, Pipenv, Rye, Pixi (uv/poetry/pipx
   paritesiyle: create/list/install/uninstall/freeze/clone).
 - **N8 — Terminal komutlarını geliştir:** env tipini de ekle; env yönetimi

@@ -111,6 +111,10 @@ _PACKAGE_DOCS = {
     "typer": "https://typer.tiangolo.com/",
     "tabulate": "https://github.com/astanin/python-tabulate",
     "prettytable": "https://prettytable.readthedocs.io/",
+    "shiny": "https://shiny.posit.co/py/",
+    "reflex": "https://reflex.dev/docs/",
+    "nicegui": "https://nicegui.io/documentation",
+    "chainlit": "https://docs.chainlit.io/",
 }
 
 
@@ -901,38 +905,9 @@ class PackageOpsMixin:
                     return _pd
             except Exception:
                 pass
-        # Legacy fallback 1: marker dir itself might be the project dir
+        # Legacy fallback: marker dir itself might be the project dir
         if (_P(_vp) / "pyproject.toml").exists():
             return str(_vp)
-        # Legacy fallback 2: envs created before the project-dir marker
-        # existed have no pointer. Ask poetry itself: run `poetry env list
-        # --full-path` is project-scoped and won't help, but the venv's
-        # pyvenv.cfg records no project either. As a last resort, scan the
-        # manager's base_dir for a project whose .venvstudio_env points at
-        # this venv -- that marker lives in the project dir.
-        try:
-            import json as _json
-            _base = getattr(self.pip_manager, "base_dir", None)
-            if _base is None:
-                _vm = getattr(self, "venv_manager", None)
-                _base = getattr(_vm, "base_dir", None) if _vm else None
-            if _base:
-                for _sub in _P(_base).iterdir():
-                    _mk = _sub / ".venvstudio_env"
-                    if not _mk.exists():
-                        continue
-                    try:
-                        with open(_mk) as _f:
-                            _d = _json.load(_f)
-                        if _d.get("type") != "poetry":
-                            continue
-                        if _d.get("poetry_venv_path", "") == str(_vp) and \
-                                (_sub / "pyproject.toml").exists():
-                            return str(_sub)
-                    except Exception:
-                        continue
-        except Exception:
-            pass
         return None
 
     def _make_uninstall_worker(self, packages):

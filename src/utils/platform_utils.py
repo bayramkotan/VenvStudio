@@ -252,6 +252,31 @@ def get_pipx_home() -> Optional[str]:
     return None
 
 
+def list_pipx_apps(pipx_home) -> list:
+    """List (app_name, venv_path) for pipx-installed apps under
+    pipx_home/venvs/*. A pipx home is a container of many independently
+    activatable venvs, not one env itself, so terminal activation needs to
+    know WHICH app's venv to enter -- this is how the caller finds out
+    what's available. Only entries with a real activate script are kept."""
+    import os
+    apps = []
+    try:
+        venvs_dir = os.path.join(str(pipx_home), "venvs")
+        if not os.path.isdir(venvs_dir):
+            return apps
+        _win = get_platform() == "windows"
+        for name in sorted(os.listdir(venvs_dir)):
+            venv_path = os.path.join(venvs_dir, name)
+            activate = os.path.join(
+                venv_path, "Scripts" if _win else "bin",
+                "activate.bat" if _win else "activate")
+            if os.path.isfile(activate):
+                apps.append((name, venv_path))
+    except Exception:
+        pass
+    return apps
+
+
 def get_activate_command(venv_path: Path) -> str:
     """Return the activation command for a venv (for display purposes)."""
     system = get_platform()
@@ -505,6 +530,47 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                 # Default: cmd.exe via mamba_hook.bat (most reliable on Windows)
                 return f'start cmd /k "cd /d {path} && {cmd_activate}"'
 
+        elif env_type == "poetry":
+            # Same self-heal as POSIX: the marker may lack poetry_venv_path
+            # for envs created before that key existed, or if Poetry has
+            # since recreated the venv. Fall back to asking Poetry directly.
+            import json as _j
+            _marker = path / ".venvstudio_env"
+            _poetry_venv = ""
+            _proj_dir = ""
+            if _marker.exists():
+                try:
+                    _mdata = _j.loads(_marker.read_text())
+                    _poetry_venv = _mdata.get("poetry_venv_path", "")
+                    _proj_dir = _mdata.get("poetry_project_dir", "") or str(path)
+                except Exception:
+                    pass
+            else:
+                _proj_dir = str(path)
+            if (not _poetry_venv or not Path(_poetry_venv).exists()) and _proj_dir:
+                try:
+                    _poetry_exe = shutil.which("poetry") or shutil.which("poetry.exe")
+                    if _poetry_exe and Path(_proj_dir).is_dir():
+                        _r = subprocess.run(
+                            [_poetry_exe, "env", "info", "--path"],
+                            cwd=_proj_dir, **subprocess_args(
+                                capture_output=True, text=True, timeout=10))
+                        _cand = _r.stdout.strip().splitlines()[-1].strip() if _r.stdout.strip() else ""
+                        if _cand and Path(_cand).exists():
+                            _poetry_venv = _cand
+                except Exception:
+                    pass
+            _pv = Path(_poetry_venv) if _poetry_venv and Path(_poetry_venv).exists() else path
+            activate_bat = _pv / "Scripts" / "activate.bat"
+            activate_ps1 = _pv / "Scripts" / "Activate.ps1"
+            if terminal_type == "pwsh" and activate_ps1.exists():
+                return (f'start pwsh -NoExit -Command '
+                        f'"Set-Location \'{_pv}\'; & \'{activate_ps1}\'"')
+            if terminal_type == "wt" and shutil.which("wt") and activate_ps1.exists():
+                return f'start wt -d "{_pv}" powershell -NoExit -Command "& \'{activate_ps1}\'"'
+            if activate_bat.exists():
+                return f'start cmd /k "cd /d {_pv} && {activate_bat}"'
+            return f'start cmd /k "cd /d {_pv}"'
         else:  # venv
             activate_bat = path / "Scripts" / "activate.bat"
             activate_ps1 = path / "Scripts" / "Activate.ps1"
@@ -547,9 +613,30 @@ def open_terminal_at(path: Path, terminal_type: str = "",
             import json as _j
             _marker = path / ".venvstudio_env"
             _poetry_venv = ""
+            _proj_dir = ""
             if _marker.exists():
                 try:
-                    _poetry_venv = _j.loads(_marker.read_text()).get("poetry_venv_path", "")
+                    _mdata = _j.loads(_marker.read_text())
+                    _poetry_venv = _mdata.get("poetry_venv_path", "")
+                    _proj_dir = _mdata.get("poetry_project_dir", "") or str(path)
+                except Exception:
+                    pass
+            else:
+                _proj_dir = str(path)
+            # Self-heal: envs created before poetry_venv_path was added to
+            # the marker (or a venv poetry has since recreated) have no
+            # usable stored path. Ask Poetry itself, from the project dir.
+            if (not _poetry_venv or not Path(_poetry_venv).exists()) and _proj_dir:
+                try:
+                    _poetry_exe = shutil.which("poetry")
+                    if _poetry_exe and Path(_proj_dir).is_dir():
+                        _r = subprocess.run(
+                            [_poetry_exe, "env", "info", "--path"],
+                            cwd=_proj_dir, **subprocess_args(
+                                capture_output=True, text=True, timeout=10))
+                        _cand = _r.stdout.strip().splitlines()[-1].strip() if _r.stdout.strip() else ""
+                        if _cand and Path(_cand).exists():
+                            _poetry_venv = _cand
                 except Exception:
                     pass
             if _poetry_venv and Path(_poetry_venv).exists():

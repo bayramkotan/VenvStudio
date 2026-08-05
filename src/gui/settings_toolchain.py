@@ -437,7 +437,7 @@ class ToolchainMixin:
         refresh_btn.setFixedWidth(100)
         refresh_btn.setToolTip("Reload tool status for selected Python")
         refresh_btn.clicked.connect(lambda: self._tc_load_table(
-            self._tc_py_combo.currentData() or "") if self._tc_py_cb.isChecked() else None)
+            self._tc_py_combo.currentData() or "", force=True) if self._tc_py_cb.isChecked() else None)
         note_row.addWidget(refresh_btn)
         vl.addLayout(note_row)
 
@@ -450,6 +450,14 @@ class ToolchainMixin:
         tbl.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
         tbl.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
         tbl.setColumnWidth(3, 380)
+        # N12: long paths (e.g. C:\Program Files\Python314\Scripts\uv.EXE)
+        # overflowed the Path column instead of being readable. Elide in the
+        # middle so both the drive/leading folder and the filename stay
+        # visible; the full path is still available via the tooltip set on
+        # each Path cell below.
+        tbl.setTextElideMode(Qt.ElideMiddle)
+        tbl.setWordWrap(False)
+        tbl.setMinimumWidth(720)
         tbl.verticalHeader().setVisible(False)
         tbl.setEditTriggers(QAbstractItemView.NoEditTriggers)
         tbl.setSelectionMode(QAbstractItemView.NoSelection)
@@ -483,9 +491,14 @@ class ToolchainMixin:
         layout.addWidget(grp)
 
         # Populate combo from python_table, then auto-load
+        # Auto-refresh (same as clicking the Refresh button) whenever the
+        # selected Python changes -- no manual click needed. The combo is
+        # disabled while the checkbox is off, so it can't receive a
+        # user-driven change in that state anyway; this just makes the
+        # "changing Python reloads the table" behaviour unconditional and
+        # explicit rather than depending on the checkbox flag.
         self._tc_py_combo.currentIndexChanged.connect(
-            lambda: self._tc_py_cb.isChecked() and self._tc_load_table(
-                self._tc_py_combo.currentData() or ""))
+            lambda: self._tc_load_table(self._tc_py_combo.currentData() or ""))
         # Auto-enable and load on startup
         def _auto_load():
             self._tc_scan_pythons()
@@ -666,9 +679,12 @@ class ToolchainMixin:
         """Find tool exe for given Python. Returns path or ''."""
         import os, sys, shutil, site
         cands = []
-        for n in (tool, tool+".exe"):
-            w = shutil.which(n)
-            if w: cands.append(w)
+        # N11 fix: the SELECTED Python's own Scripts/bin dir must be checked
+        # FIRST. shutil.which() searches system PATH, which resolves to
+        # whichever install happens to be on PATH (often unrelated to the
+        # Python just picked in the dropdown) -- putting it first meant the
+        # table showed the SAME uv/poetry/pipx path no matter which Python
+        # was selected, since next() returns the first match.
         py_sc = os.path.join(os.path.dirname(py_exe),
             "Scripts" if sys.platform=="win32" else "bin")
         for n in (tool,tool+".exe"):
@@ -684,6 +700,11 @@ class ToolchainMixin:
                 for sub in os.listdir(pa):
                     sc = os.path.join(pa,sub,"Scripts")
                     for n in (tool,tool+".exe"): cands.append(os.path.join(sc,n))
+        # Global PATH search LAST -- fallback only when the selected Python
+        # has no local install of the tool, not the first candidate checked.
+        for n in (tool, tool+".exe"):
+            w = shutil.which(n)
+            if w: cands.append(w)
         found = next((c for c in cands if c and os.path.isfile(c)), "")
         if found:
             return found
@@ -699,11 +720,23 @@ class ToolchainMixin:
         return ""
 
 
-    def _tc_load_table(self, py_exe):
-        """Reload table rows for the selected Python."""
+    def _tc_load_table(self, py_exe, force=False):
+        """Reload table rows for the selected Python.
+
+        force=False (default): serve from the on-disk cache when this
+        Python has been scanned before -- instant, no subprocess calls, no
+        lag when switching between Pythons you've already looked at.
+        force=True: always rescan (Refresh button, and after an
+        install/upgrade/remove where the on-disk state just changed).
+        """
         import os
         if not py_exe or not hasattr(self,"_tc_table"):
             return
+        if not force:
+            cached = self._tc_cache_read(py_exe)
+            if cached is not None:
+                self._tc_populate_table(py_exe, cached)
+                return
         import subprocess, sys
         from PySide6.QtGui import QColor
         from PySide6.QtWidgets import QTableWidgetItem
@@ -766,12 +799,33 @@ class ToolchainMixin:
                             if ver == "—": ver = out[:20]
                     except Exception:
                         pass
-                rows.append((path, ver))
+                # Resolve the real module location up front (was previously
+                # done again on every table repaint, in _done on the UI
+                # thread) so a cache hit never needs to run `pip show` again.
+                display_path = path
+                tid_local = tid
+                if path and os.path.normpath(path) == os.path.normpath(py_exe):
+                    try:
+                        _pr = subprocess.run([py_exe, "-m", "pip", "show", tid_local],
+                            **subprocess_args(capture_output=True, text=True, timeout=5))
+                        _loc = next((l.split(":", 1)[1].strip()
+                                     for l in _pr.stdout.splitlines()
+                                     if l.startswith("Location:")), "")
+                        if _loc:
+                            import importlib.util as _iu
+                            _spec = _iu.find_spec(tid_local.replace("-", "_"))
+                            if _spec and _spec.origin:
+                                display_path = os.path.dirname(_spec.origin)
+                            else:
+                                display_path = os.path.join(_loc, tid_local)
+                    except Exception:
+                        pass
+                rows.append((path, ver, display_path))
             import json
             return True, json.dumps({"py": py_exe, "rows": rows})
 
         def _done(ok, result):
-            import json, os
+            import json
             if not ok:
                 _log.warning(f"🧰 [TC] _done called with ok=False, result={result[:120]!r}")
                 return
@@ -783,121 +837,160 @@ class ToolchainMixin:
                 _log.warning(f"🧰 [TC] JSON parse error: {e!r}, result={result[:120]!r}")
                 return
             _log.debug(f"🧰 [TC] _done: {len(rows)} rows loaded for {_py[:40]}")
-            from PySide6.QtGui import QColor
-            from PySide6.QtWidgets import QTableWidgetItem
-            import os as _os
-            _py_scripts = _os.path.dirname(_py)  # Python's own Scripts/bin dir
-            for row, item in enumerate(rows):
-                path, ver = item[0], item[1]
-                ok2 = bool(path)
-                # Detect if tool is global (not in selected Python's Scripts dir)
-                _is_global = (ok2 and
-                    _py_scripts and
-                    not path.lower().startswith(_py_scripts.lower()))
-                # col 1: Status
-                _tid = self._TC_TOOLS[row][0] if row < len(self._TC_TOOLS) else ""
-                import os as _os2
-                _home = _os2.path.expanduser("~").lower()
-                _managed_dir = _os2.path.join(_home, ".local", "share", "venvstudio").lower()
-                _managed_dir_win = _os2.path.join(
-                    _os2.environ.get("APPDATA", ""), "VenvStudio"
-                ).lower()
-                _path_lower = path.lower() if path else ""
-                _is_managed = (ok2 and (
-                    _path_lower.startswith(_managed_dir) or
-                    _path_lower.startswith(_managed_dir_win)
-                ))
-                # Python Scripts/bin dir — only match if it's a venv-style path
-                # e.g. /home/user/venv/bin, not /usr/bin
-                _py_scripts_lower = _py_scripts.lower() if _py_scripts else ""
-                _is_system_scripts = any(_py_scripts_lower.startswith(p) for p in (
-                    "/usr/bin", "/usr/local/bin", "/bin",
-                    "c:\\windows", "c:\\program files"
-                ))
-                _is_python_local = (ok2 and not _is_managed and
-                    not _is_system_scripts and
-                    _py_scripts and
-                    path.lower().startswith(_py_scripts_lower))
-                _is_user = (ok2 and not _is_managed and not _is_python_local and (
-                    _path_lower.startswith(_os2.path.join(_home, ".local").lower()) or
-                    _path_lower.startswith(_os2.path.join(_home, ".cargo").lower()) or
-                    _path_lower.startswith(_os2.environ.get("LOCALAPPDATA", "~~~").lower()) or
-                    _path_lower.startswith(_os2.environ.get("APPDATA", "~~~").lower())
-                ))
-                # Global = /usr/bin, /usr/local/bin, C:\Program Files etc.
-                _global_prefixes = ("/usr/bin/", "/usr/local/bin/", "/bin/",
-                    "/opt/homebrew/bin/")
-                _is_global_path = ok2 and any(
-                    path.lower().startswith(p) for p in _global_prefixes
-                )
-                if ok2:
-                    if _tid in ("pip", "venv"):
-                        st_text = "✅ Built-in"
-                        st_color = "#a6e3a1"
-                    elif _is_managed:
-                        st_text = "📦 Managed"
-                        st_color = "#cba6f7"
-                    elif _is_global_path:
-                        st_text = "🌐 Global"
-                        st_color = "#89b4fa"
-                    elif _is_user:
-                        st_text = "👤 User"
-                        st_color = "#a6e3a1"
-                    elif _is_python_local:
-                        st_text = "🐍 Python"
-                        st_color = "#f9e2af"
-                    else:
-                        st_text = "✅ Installed"
-                        st_color = "#a6e3a1"
-                else:
-                    st_text = "❌ Not found"
-                    st_color = "#f38ba8"
-                si = QTableWidgetItem(st_text)
-                si.setForeground(QColor(st_color))
-                si.setData(256, path)
-                si.setData(257, _py)
-                tbl.setItem(row, 1, si)
-
-                # col 2: Version
-                vi = QTableWidgetItem(ver if ok2 else "—")
-                vi.setForeground(QColor(self._c()["fg"]))
-                tbl.setItem(row, 2, vi)
-
-                # col 3: Path — if path == py_exe, tool is module-only, show real module path
-                import os as _os2
-                _display_path = path
-                if ok2 and _os2.path.normpath(path) == _os2.path.normpath(_py):
-                    # Get real location via pip show
-                    try:
-                        import subprocess as _sp_path
-                        _pr = _sp_path.run([_py, "-m", "pip", "show", _tid],
-                                           capture_output=True, text=True, timeout=5)
-                        _loc = next((l.split(":", 1)[1].strip()
-                                     for l in _pr.stdout.splitlines()
-                                     if l.startswith("Location:")), "")
-                        if _loc:
-                            import importlib.util as _iu
-                            _spec = _iu.find_spec(_tid.replace("-", "_"))
-                            if _spec and _spec.origin:
-                                _display_path = _os2.path.dirname(_spec.origin)
-                            else:
-                                _display_path = _os2.path.join(_loc, _tid)
-                        else:
-                            _display_path = path
-                    except Exception:
-                        _display_path = path
-                pi = QTableWidgetItem(_display_path if ok2 else "—")
-                pi.setForeground(QColor(self._c()["fg_muted"]))
-                pi.setToolTip(path)
-                tbl.setItem(row, 3, pi)
-
-                # Update action buttons
-                self._tc_update_row_btns(tbl, row, ok2)
+            self._tc_populate_table(_py, rows)
+            self._tc_cache_write(_py, rows)
 
         from src.gui.package_panel import WorkerThread
         w = WorkerThread(_do, parent=self); w.finished.connect(_done); w.start()
         if not hasattr(self,"_tc_ws"): self._tc_ws=[]
         self._tc_ws.append(w)
+
+    def _tc_populate_table(self, _py, rows):
+        """Fill the table from (path, ver, display_path) rows -- pure UI, no
+        subprocess calls, so this is fast enough to call directly from a
+        cache hit (no worker thread needed) as well as from a fresh scan."""
+        from PySide6.QtGui import QColor
+        from PySide6.QtWidgets import QTableWidgetItem
+        import os as _os
+        if not hasattr(self, "_tc_table"):
+            return
+        tbl = self._tc_table
+        _py_scripts = _os.path.dirname(_py)  # Python's own Scripts/bin dir
+        for row, item in enumerate(rows):
+            path = item[0]
+            ver = item[1]
+            _display_path = item[2] if len(item) > 2 else path
+            ok2 = bool(path)
+            # col 1: Status
+            _tid = self._TC_TOOLS[row][0] if row < len(self._TC_TOOLS) else ""
+            import os as _os2
+            _home = _os2.path.expanduser("~").lower()
+            _managed_dir = _os2.path.join(_home, ".local", "share", "venvstudio").lower()
+            _managed_dir_win = _os2.path.join(
+                _os2.environ.get("APPDATA", ""), "VenvStudio"
+            ).lower()
+            _path_lower = path.lower() if path else ""
+            _is_managed = (ok2 and (
+                _path_lower.startswith(_managed_dir) or
+                _path_lower.startswith(_managed_dir_win)
+            ))
+            # Python Scripts/bin dir — only match if it's a venv-style path
+            # e.g. /home/user/venv/bin, not /usr/bin
+            _py_scripts_lower = _py_scripts.lower() if _py_scripts else ""
+            _is_system_scripts = any(_py_scripts_lower.startswith(p) for p in (
+                "/usr/bin", "/usr/local/bin", "/bin",
+                "c:\\windows", "c:\\program files"
+            ))
+            _is_python_local = (ok2 and not _is_managed and
+                not _is_system_scripts and
+                _py_scripts and
+                path.lower().startswith(_py_scripts_lower))
+            _is_user = (ok2 and not _is_managed and not _is_python_local and (
+                _path_lower.startswith(_os2.path.join(_home, ".local").lower()) or
+                _path_lower.startswith(_os2.path.join(_home, ".cargo").lower()) or
+                _path_lower.startswith(_os2.environ.get("LOCALAPPDATA", "~~~").lower()) or
+                _path_lower.startswith(_os2.environ.get("APPDATA", "~~~").lower())
+            ))
+            # Global = /usr/bin, /usr/local/bin, C:\Program Files etc.
+            _global_prefixes = ("/usr/bin/", "/usr/local/bin/", "/bin/",
+                "/opt/homebrew/bin/")
+            _is_global_path = ok2 and any(
+                path.lower().startswith(p) for p in _global_prefixes
+            )
+            if ok2:
+                if _tid in ("pip", "venv"):
+                    st_text = "✅ Built-in"
+                    st_color = "#a6e3a1"
+                elif _is_managed:
+                    st_text = "📦 Managed"
+                    st_color = "#cba6f7"
+                elif _is_global_path:
+                    st_text = "🌐 Global"
+                    st_color = "#89b4fa"
+                elif _is_user:
+                    st_text = "👤 User"
+                    st_color = "#a6e3a1"
+                elif _is_python_local:
+                    st_text = "🐍 Python"
+                    st_color = "#f9e2af"
+                else:
+                    st_text = "✅ Installed"
+                    st_color = "#a6e3a1"
+            else:
+                st_text = "❌ Not found"
+                st_color = "#f38ba8"
+            si = QTableWidgetItem(st_text)
+            si.setForeground(QColor(st_color))
+            si.setData(256, path)
+            si.setData(257, _py)
+            tbl.setItem(row, 1, si)
+
+            # col 2: Version
+            vi = QTableWidgetItem(ver if ok2 else "—")
+            vi.setForeground(QColor(self._c()["fg"]))
+            tbl.setItem(row, 2, vi)
+
+            # col 3: Path (display_path already resolved by the scan, cached)
+            pi = QTableWidgetItem(_display_path if ok2 else "—")
+            pi.setForeground(QColor(self._c()["fg_muted"]))
+            pi.setToolTip(path)
+            tbl.setItem(row, 3, pi)
+
+            # Update action buttons
+            self._tc_update_row_btns(tbl, row, ok2)
+
+    def _tc_cache_file(self):
+        """Path to the toolchain scan cache -- same VenvStudio config dir
+        pattern already used elsewhere in this file (APPDATA/VenvStudio on
+        Windows, ~/.config/VenvStudio on Linux/Mac)."""
+        import os, sys
+        if sys.platform == "win32":
+            base = os.path.join(os.environ.get("APPDATA", os.path.expanduser("~")), "VenvStudio")
+        else:
+            base = os.path.join(os.path.expanduser("~"), ".config", "VenvStudio")
+        try:
+            os.makedirs(base, exist_ok=True)
+        except Exception:
+            pass
+        return os.path.join(base, "toolchain_cache.json")
+
+    def _tc_cache_read(self, py_exe):
+        """Return cached (path, ver, display_path) rows for py_exe, or None
+        if this Python has never been scanned. Switching between Pythons
+        was re-running every subprocess check on each switch; this lets a
+        Python seen before load instantly instead."""
+        import json, os
+        try:
+            fp = self._tc_cache_file()
+            if not os.path.isfile(fp):
+                return None
+            with open(fp, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            entry = data.get(os.path.normcase(py_exe))
+            if not entry:
+                return None
+            return [tuple(r) for r in entry.get("rows", [])]
+        except Exception:
+            return None
+
+    def _tc_cache_write(self, py_exe, rows):
+        """Persist scan results for py_exe so switching back to it later
+        skips rescanning entirely."""
+        import json, os, time
+        try:
+            fp = self._tc_cache_file()
+            data = {}
+            if os.path.isfile(fp):
+                try:
+                    with open(fp, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                except Exception:
+                    data = {}
+            data[os.path.normcase(py_exe)] = {"rows": list(rows), "ts": time.time()}
+            with open(fp, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            _log.debug(f"🧰 [TC] cache write failed: {e}")
 
     def _tc_check_python_update(self, tbl, row):
         """Check whether a newer standalone Python build is available than
@@ -1121,7 +1214,7 @@ class ToolchainMixin:
                     si2.setForeground(QColor("#f38ba8"))
                 QMessageBox.warning(None, f"Install Failed — {tool}", str(res))
                 return
-            QTimer.singleShot(500, lambda: self._tc_load_table(py_exe))
+            QTimer.singleShot(500, lambda: self._tc_load_table(py_exe, force=True))
 
         from src.gui.package_panel import WorkerThread
         w = WorkerThread(_do, parent=self); w.finished.connect(_done); w.start()
@@ -1298,7 +1391,7 @@ class ToolchainMixin:
                     si2.setForeground(QColor("#89b4fa"))
                 QMessageBox.information(None, "Cannot Remove Automatically", res)
                 return
-            QTimer.singleShot(300, lambda: self._tc_load_table(py_exe))
+            QTimer.singleShot(300, lambda: self._tc_load_table(py_exe, force=True))
 
         from src.gui.package_panel import WorkerThread
         w = WorkerThread(_do, parent=self); w.finished.connect(_done); w.start()

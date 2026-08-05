@@ -665,18 +665,53 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
             QMessageBox.warning(self, "No Environment", "Please select an environment first.")
             return
         try:
-            from src.utils.platform_utils import open_terminal_at
+            from src.utils.platform_utils import open_terminal_at, list_pipx_apps
             from src.core.config_manager import ConfigManager
             terminal_type = self._get_config("terminal_type", "")
             env_type = getattr(self, "_current_env_type", "venv")
+            target_path = self._current_venv_path
+            target_env_type = env_type
+            # A pipx "env" is really a home directory holding many
+            # independent app venvs -- there's no single Python to activate
+            # at that top level. Resolve to ONE specific app venv (asking
+            # the user if there's more than one) and activate THAT the same
+            # way any venv is activated, instead of just cd-ing into the home.
+            if env_type == "pipx":
+                _apps = list_pipx_apps(self._current_venv_path)
+                if len(_apps) == 1:
+                    target_path = Path(_apps[0][1])
+                    target_env_type = "venv"
+                elif len(_apps) > 1:
+                    from PySide6.QtWidgets import QInputDialog
+                    # A plain "open here, no activation" option leads the
+                    # list and is the default -- all Python apps under one
+                    # pipx home are typically the same interpreter version,
+                    # so sometimes you just want the folder, not any one
+                    # app's venv activated.
+                    _HOME_CHOICE = f"📁 {self._current_venv_path} (no activation)"
+                    _names = [_HOME_CHOICE] + [n for n, _ in _apps]
+                    _choice, _ok = QInputDialog.getItem(
+                        self, "Open Terminal",
+                        "Open the pipx folder as-is, or activate one app's venv?",
+                        _names, 0, False)
+                    if not _ok:
+                        return
+                    if _choice == _HOME_CHOICE:
+                        target_path = self._current_venv_path
+                        target_env_type = "pipx"
+                    else:
+                        target_path = Path(dict(_apps)[_choice])
+                        target_env_type = "venv"
+                # else: no app venvs found -- fall through, cd into the
+                # pipx home as before (honest: nothing to activate).
             from src.utils.logger import get_logger
             from src.core.venv_manager_common import _fmt_path
             get_logger("venvstudio.gui.terminal").info(
-                f"🖥️ [Terminal] Opening at {_fmt_path(self._current_venv_path)} "
-                f"(env_type={env_type}, terminal_type={terminal_type or 'auto'})"
+                f"🖥️ [Terminal] Opening at {_fmt_path(target_path)} "
+                f"(env_type={target_env_type}, terminal_type={terminal_type or 'auto'})"
             )
-            open_terminal_at(self._current_venv_path, terminal_type,
-                             env_type=env_type)
+            open_terminal_at(target_path, terminal_type,
+                             env_type=target_env_type)
         except Exception as e:
             from src.utils.logger import get_logger
             get_logger("venvstudio.gui.terminal").warning(

@@ -94,6 +94,63 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   (Tasarım henüz belirsiz.)
 - **N10 — Log başlangıç ekranını güzelleştir.** VS başlarken giriş bazen
   dağılıyor — daha temiz/tutarlı bir açılış banner'ı.
+- **N11 ✅ ÇÖZÜLDÜ — Toolchain Manager: Python sürümü değişince tablo
+  güncellenmiyordu.** Kök neden: `_tc_find_tool` adaylarında `shutil.which()`
+  (global PATH) önce kontrol ediliyordu, seçili Python'ın kendi Scripts
+  klasörü sonra — PATH'teki hep kazanıyordu. Sıra değiştirildi + dropdown
+  değişince artık KOŞULSUZ otomatik yenileniyor (Refresh'e basmaya gerek yok).
+  `settings_toolchain.py`.
+- **N12 ✅ ÇÖZÜLDÜ (kısmi) — Path kolonu taşıyordu.** `setTextElideMode
+  (Qt.ElideMiddle)` + min genişlik eklendi (tam yol tooltip'te zaten vardı).
+  Asıl dialog genişliği barındıran dosya (muhtemelen settings_page.py) elde
+  değildi, tam çözüm için gerekebilir.
+- **N12b ✅ BONUS — JSON cache eklendi.** Python geçişlerinde her seferinde
+  yeniden tarama yapıp yavaşlıyordu. `toolchain_cache.json`'a (py_exe başına)
+  cache'leniyor; sadece Refresh / install-upgrade-remove sonrası gerçek
+  tarama yapılıyor. `_tc_populate_table` tamamen subprocess'siz UI-only.
+
+## 📋 KULLANICI NOTLARI (2026-08-03) — sıradaki iş kuyruğu
+
+- **N13 — Log'da gereksiz Qt uyarısı:** `QFont::setPointSize: Point size <= 0
+  (-1), must be greater than 0`. Bir yerde font point size -1/0 ile set
+  ediliyor — hangi widget/tema kodu olduğunu bulup düzelt.
+- **N14 — Learn'de ölü link.** RAG konusu altında (AI/LLM veya ilgili
+  kategori) `https://huggingface.co/docs/hub/rag` linki 404. **Diğer TÜM
+  Learn linklerini de kontrol etmek gerekiyor** (learn_content.py, 200+ link).
+- **N15 — Aynı isimle env oluşturma engellenmiyor (en azından uv'de).** Aynı
+  isim + aynı konumda ikinci kez env yaratılınca "zaten var" hatası vermeli,
+  vermiyor. `env_dialog.py` / `venv_manager.py` create öncesi mevcut env
+  kontrolü env tipine göre eksik olabilir.
+- **N16 — Settings > Theme yanındaki checkbox aktif/pasif olması çok yavaş.**
+  Hangi dosyada (muhtemelen settings_appearance.py/settings_page.py) — UI
+  donması/gecikme sebebi araştırılmalı.
+- **N17 — Settings > Preferred Terminal dropdown'ının önünde checkbox yok**
+  (diğer satırlarla tutarsız — çoğu ayar satırında bir checkbox oluyor gibi).
+- **N18 — Command Line bölümünde örnek komutlar hep `venvstudio` gösteriyor,
+  `vs` kısa formu kullanılsa daha güzel olur** (constants.py COMMAND_HINTS /
+  ilgili yardım metinleri).
+- **N19 🔴 KRİTİK — Conda'ya HİÇBİR ŞEY kurulamıyor.** "Conda yuklemeleri hep
+  hatali" — kullanıcı conda env'e paket kuramıyor. Muhtemelen micromamba
+  install çağrısında bir hata var; `package_ops.py` conda dalı / micromamba
+  installer'a bakılmalı. ÖNCELİKLİ — temel bir işlev çalışmıyor.
+- **N20 — Preset listesi çok uzadı (42 preset), aşağı kaydırmak zaman alıyor.**
+  Arama kutusu eklenebilir mi (isimle filtrele)? Ayrıca bilimsel presetler
+  eksik: Kozmoloji, Fizik, Kimya vb. (astropy, sympy, pint gibi paketlerle).
+- **N21 — Create dialog'da "Include system site-packages" seçeneği ne işe
+  yarıyor, hangi kütüphaneler kurulur/neden — açıklama eksik. Ayrıca bu
+  seçenek için komut şeridinde/geçmişte hiç komut görünmüyor (F208 kapsamı
+  dışında kalmış olabilir).
+- **N22 — Environments tablosunda conda env seçince bir süre takılı
+  kalıyor.** Muhtemelen boyut hesaplama (`_EnvSizeWorker`/`get_venv_info`)
+  seçim anında UI thread'ini bloke ediyor — conda env'ler (R/RStudio dahil)
+  büyük olabiliyor. Async/cache'li hale getirilebilir mi araştırılmalı.
+- **N23 — Linux'ta terminal aktivasyonu poetry/pipx/conda için çalışmıyor**
+  ("sadece terminal açılıyor, o lokasyonda kalıyor" — venv/uv çalışıyor).
+  Windows'ta test edilen fix'ler (platform_utils v3, package_panel v3,
+  env_state v2) Linux'ta MD5 doğrulandı (güncel), yani eski dosya sorunu
+  değil — gerçek platform-özel bug. Teşhis için log satırı ("🖥️ [Terminal]
+  Opening at...") ve `/tmp/vs-*.venvstudio-rc` içeriği bekleniyor —
+  kullanıcıdan henüz gelmedi.
 
 ## ✅ FIX YAPILDI — Toolchain Manager: `venv` satırında Install/Upgrade crash
 

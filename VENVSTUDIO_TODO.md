@@ -111,9 +111,15 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
 
 ## 📋 KULLANICI NOTLARI (2026-08-03) — sıradaki iş kuyruğu
 
-- **N13 — Log'da gereksiz Qt uyarısı:** `QFont::setPointSize: Point size <= 0
-  (-1), must be greater than 0`. Bir yerde font point size -1/0 ile set
-  ediliyor — hangi widget/tema kodu olduğunu bulup düzelt.
+- **N13 (KISMİ ÇÖZÜLDÜ + DARALTILDI, hala AÇIK) — Log'da gereksiz Qt uyarısı:**
+  `QFont::setPointSize: Point size <= 0 (-1)`. `settings_appearance.py` +
+  `settings_python.py`'deki QFontComboBox family-only font sorunu düzeltildi
+  (v1.6.31) ama uyarı DEVAM ETTİ. Derin araştırma (v1.6.32): 9 dosya taranıp
+  hepsi temiz çıktı; widget-ağacı taramasıyla suçlu **QFontComboBox,
+  "launcher" (Quick Launch) sekmesinde** olarak tespit edildi ama
+  `launcher_ui.py`'de metin olarak QFontComboBox yok — dolaylı/paylaşılan bir
+  kaynaktan geliyor, construction site kesinleşmedi. Sonraki adım: widget'ın
+  parent zincirini yazdıran bir tarama. Detay: handoff v1.6.32 bölümü.
 - **N14 — Learn'de ölü link.** RAG konusu altında (AI/LLM veya ilgili
   kategori) `https://huggingface.co/docs/hub/rag` linki 404. **Diğer TÜM
   Learn linklerini de kontrol etmek gerekiyor** (learn_content.py, 200+ link).

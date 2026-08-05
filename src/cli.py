@@ -3,17 +3,20 @@
 Qt-free CLI over the same core the GUI uses (VenvManager / PipManager).
 Dispatched from src.main:main when subcommand arguments are present, so it
 works identically for `pip install venvstudio` and frozen builds
-(AppImage / .exe launched with arguments).
+(AppImage / .exe launched with arguments). Both `vs` and `venvstudio`
+install as entry points and behave identically -- `vs` is just shorter.
 
 Usage examples:
-    venvstudio list
-    venvstudio create ml
-    venvstudio create fast --python /usr/bin/python3.12
-    venvstudio packages ml
-    venvstudio install ml numpy pandas
-    venvstudio uninstall ml numpy
-    venvstudio delete ml -y
-    venvstudio version
+    vs list
+    vs create ml
+    vs create fast --python /usr/bin/python3.12
+    vs create web --type uv
+    vs create api --type poetry --python /usr/bin/python3.12
+    vs packages ml
+    vs install ml numpy pandas
+    vs uninstall ml numpy
+    vs delete ml -y
+    vs version
 """
 import argparse
 import sys
@@ -22,8 +25,16 @@ COMMANDS = ("list", "create", "delete", "packages", "install", "uninstall", "ver
 
 
 def is_cli_invocation(argv) -> bool:
-    """True if argv asks for CLI mode (subcommand present)."""
-    return len(argv) > 1 and argv[1] in COMMANDS
+    """True if argv asks for CLI mode: a known subcommand, or ANY
+    dash-prefixed argument. The latter matters because an unrecognized
+    flag (a typo, or one that doesn't exist) used to fall straight
+    through to launching the GUI silently -- now it reaches argparse,
+    which reports the invalid choice and lists what IS available
+    instead. This also routes -h/--help/-V/--version through argparse
+    (one consistent place) instead of main.py's separate hardcoded
+    handling of those two.
+    """
+    return len(argv) > 1 and (argv[1] in COMMANDS or argv[1].startswith("-"))
 
 
 def _managers():
@@ -58,17 +69,150 @@ def _cmd_list(args) -> int:
     return 0
 
 
+def _find_tool(name: str) -> str:
+    """Look up a CLI tool (uv/poetry) on PATH. Unlike the GUI, the CLI
+    does not auto-install a missing tool -- it reports how to install
+    it and stops, which is what CLI users generally expect (no surprise
+    background pip installs from a non-interactive command)."""
+    import shutil
+    return shutil.which(name) or ""
+
+
+def _create_uv_env(name: str, path, python: str = None):
+    """Create a uv-managed venv. Returns (ok, message)."""
+    import subprocess
+    from src.utils.platform_utils import subprocess_args
+    uv_exe = _find_tool("uv")
+    if not uv_exe:
+        return False, "uv is not installed. Install it with: pip install uv"
+    cmd = [uv_exe, "venv", str(path)]
+    if python:
+        cmd += ["--python", python]
+    print(f"$ {' '.join(cmd)}")
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=120,
+                        **subprocess_args())
+    if r.returncode != 0:
+        return False, r.stderr[:400] or "uv venv failed"
+    # Same marker the GUI writes, so opening VenvStudio later recognises
+    # this env as uv-managed instead of a plain venv.
+    import json, datetime
+    try:
+        (path / ".venvstudio_env").write_text(json.dumps({
+            "type": "uv", "name": name,
+            "created": datetime.datetime.now().isoformat(),
+        }, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+    return True, f"uv environment '{name}' created at {path}"
+
+
+def _create_poetry_env(name: str, path, python: str = None):
+    """Create a Poetry-managed venv. Covers the common path (poetry new
+    + relax requires-python for the chosen Python + poetry env use);
+    the GUI has extra retry/fallback branches for edge cases this
+    simpler CLI version does not replicate."""
+    import subprocess, re, json, datetime
+    from pathlib import Path
+    from src.utils.platform_utils import subprocess_args
+    poetry_exe = _find_tool("poetry")
+    if not poetry_exe:
+        return False, "Poetry is not installed. Install it with: pip install poetry"
+    path.mkdir(parents=True, exist_ok=True)
+    cmd = [poetry_exe, "new", str(path)]
+    print(f"$ {' '.join(cmd)}")
+    r = subprocess.run(cmd, capture_output=True, text=True, timeout=120,
+                        cwd=str(path.parent), **subprocess_args())
+    if r.returncode != 0:
+        return False, r.stderr[:400] or "poetry new failed"
+
+    if python:
+        # An unbounded requires-python (">=X.Y") makes Poetry's
+        # resolver reject packages carrying version exclusions later
+        # (e.g. torchvision "!=3.14.1") -- cap at the next minor so
+        # the range matches the ONE Python the env is built with.
+        pyproject = path / "pyproject.toml"
+        sel_xy = ""
+        try:
+            vr = subprocess.run(
+                [python, "-c", "import sys;print('%d.%d'%sys.version_info[:2])"],
+                capture_output=True, text=True, timeout=8, **subprocess_args())
+            sel_xy = (vr.stdout.strip() or vr.stderr.strip())
+        except Exception:
+            pass
+        if sel_xy:
+            try:
+                maj, minr = sel_xy.split(".")
+                new_req = f">={sel_xy},<{maj}.{int(minr) + 1}"
+            except Exception:
+                new_req = f">={sel_xy}"
+        else:
+            new_req = ">=3.0"
+        if pyproject.exists():
+            try:
+                txt = pyproject.read_text(encoding="utf-8")
+                txt2 = re.sub(
+                    r'(?m)^(\s*requires-python\s*=\s*)"[^"]*"',
+                    lambda m: m.group(1) + f'"{new_req}"', txt)
+                if txt2 != txt:
+                    pyproject.write_text(txt2, encoding="utf-8")
+            except Exception:
+                pass
+        cmd2 = [poetry_exe, "env", "use", python]
+        print(f"$ {' '.join(cmd2)}")
+        r2 = subprocess.run(cmd2, capture_output=True, text=True, timeout=60,
+                             cwd=str(path), **subprocess_args())
+        if r2.returncode != 0:
+            print(f"Warning: poetry env use failed: {r2.stderr[:200]}")
+
+    # Resolve + record the REAL venv path (poetry keeps it in its own
+    # cache, not inside the project dir), same dual-marker approach
+    # the GUI uses so features like Open Terminal can find it later.
+    real_venv = ""
+    try:
+        vr = subprocess.run([poetry_exe, "env", "info", "--path"],
+                             capture_output=True, text=True, timeout=10,
+                             cwd=str(path), **subprocess_args())
+        real_venv = vr.stdout.strip().splitlines()[-1].strip() if vr.stdout.strip() else ""
+    except Exception:
+        pass
+    marker = {
+        "type": "poetry", "name": name,
+        "poetry_project_dir": str(path),
+        "poetry_venv_path": real_venv,
+        "created": datetime.datetime.now().isoformat(),
+    }
+    try:
+        (path / ".venvstudio_env").write_text(json.dumps(marker, indent=2), encoding="utf-8")
+        if real_venv:
+            (Path(real_venv) / ".venvstudio_env").write_text(
+                json.dumps(marker, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+    return True, f"poetry environment '{name}' created at {path}"
+
+
 def _cmd_create(args) -> int:
     _config, vm = _managers()
     if _find_env(vm, args.name):
         print(f"Error: environment '{args.name}' already exists.")
         return 1
-    ok, msg = vm.create_venv(
-        args.name,
-        python_path=args.python,
-        with_pip=not args.no_pip,
-        system_site_packages=args.system_site_packages,
-    )
+    etype = getattr(args, "type", "venv") or "venv"
+    if etype == "venv":
+        ok, msg = vm.create_venv(
+            args.name,
+            python_path=args.python,
+            with_pip=not args.no_pip,
+            system_site_packages=args.system_site_packages,
+        )
+    else:
+        from pathlib import Path
+        path = Path(vm.base_dir) / args.name
+        if etype == "uv":
+            ok, msg = _create_uv_env(args.name, path, args.python)
+        elif etype == "poetry":
+            ok, msg = _create_poetry_env(args.name, path, args.python)
+        else:
+            ok, msg = False, f"--type {etype} is not supported yet"
     print(msg)
     return 0 if ok else 1
 
@@ -77,7 +221,7 @@ def _cmd_delete(args) -> int:
     _config, vm = _managers()
     info = _find_env(vm, args.name)
     if not info:
-        print(f"Error: environment '{args.name}' not found. Try: venvstudio list")
+        print(f"Error: environment '{args.name}' not found. Try: vs list")
         return 1
     if not args.yes:
         reply = input(f"Delete environment '{args.name}' at {info.path}? [y/N] ")
@@ -105,7 +249,7 @@ def _cmd_packages(args) -> int:
     _config, vm = _managers()
     info = _find_env(vm, args.env)
     if not info:
-        print(f"Error: environment '{args.env}' not found. Try: venvstudio list")
+        print(f"Error: environment '{args.env}' not found. Try: vs list")
         return 1
     pm = _pip_manager_for(info)
     pkgs = pm.list_packages()
@@ -131,7 +275,7 @@ def _pkg_op(args, install: bool) -> int:
     _config, vm = _managers()
     info = _find_env(vm, args.env)
     if not info:
-        print(f"Error: environment '{args.env}' not found. Try: venvstudio list")
+        print(f"Error: environment '{args.env}' not found. Try: vs list")
         return 1
     pm = _pip_manager_for(info)
     verb = "Installing" if install else "Uninstalling"
@@ -152,19 +296,26 @@ def _cmd_version(args) -> int:
 
 def run_cli(argv=None) -> int:
     """Parse arguments and run the requested subcommand. Returns exit code."""
+    from src.utils.constants import APP_VERSION
     parser = argparse.ArgumentParser(
-        prog="venvstudio",
+        prog="vs",
         description="VenvStudio CLI — manage Python environments without the GUI.",
+    )
+    parser.add_argument(
+        "-V", "--version", action="version",
+        version=f"VenvStudio v{APP_VERSION}",
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
     sub.add_parser("list", help="List all environments").set_defaults(func=_cmd_list)
 
-    p = sub.add_parser("create", help="Create a new venv environment")
+    p = sub.add_parser("create", help="Create a new environment")
     p.add_argument("name")
+    p.add_argument("-t", "--type", choices=["venv", "uv", "poetry"], default="venv",
+                    help="Environment type (default: venv). conda/pipx not yet supported here.")
     p.add_argument("--python", help="Path to the Python interpreter to use")
-    p.add_argument("--no-pip", action="store_true", help="Create without pip")
-    p.add_argument("--system-site-packages", action="store_true")
+    p.add_argument("--no-pip", action="store_true", help="Create without pip (venv type only)")
+    p.add_argument("--system-site-packages", action="store_true", help="venv type only")
     p.set_defaults(func=_cmd_create)
 
     p = sub.add_parser("delete", help="Delete an environment")

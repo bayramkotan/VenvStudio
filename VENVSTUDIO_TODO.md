@@ -92,8 +92,17 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   kütüphaneler bazı env/Python sürümlerine kurulmuyor. Tools (ya da File)
   menüsü altında bir tablo: hangi kütüphane hangi Python/env tipini ister.
   (Tasarım henüz belirsiz.)
-- **N10 — Log başlangıç ekranını güzelleştir.** VS başlarken giriş bazen
-  dağılıyor — daha temiz/tutarlı bir açılış banner'ı.
+- **N10 ✅ ÇÖZÜLDÜ (v1.6.34) — Log kutularına tarih tutarlılığı +
+  başlangıç banner'ı güzelleştirildi.** `banner()` fonksiyonuna (logger.py)
+  tek noktadan tarih eklendi — create/delete/install/error/warning/command
+  kutularının HEPSİ artık "Date: DD.MM.YYYY HH:MM:SS" satırı taşıyor (diğer
+  log satırlarıyla aynı format). Startup giriş kutusu, elle yazılmış sağ-
+  kenarı-açık/renksiz/tarihsiz koddan `banner()` üzerinden (yeni "welcome"
+  stili, 🐍 ikonu korunarak) yeniden inşa edildi — artık kapalı kutu,
+  dinamik genişlik, Rich varsa renkli panel.
+  **Kapsam dışı (opsiyonel gelecek iş):** startup'taki bağımsız satırlar
+  (Language/Screen/UI font) kutuya alınmadı — QApplication henüz yok,
+  başka dosyadan geliyor.
 - **N11 ✅ ÇÖZÜLDÜ — Toolchain Manager: Python sürümü değişince tablo
   güncellenmiyordu.** Kök neden: `_tc_find_tool` adaylarında `shutil.which()`
   (global PATH) önce kontrol ediliyordu, seçili Python'ın kendi Scripts

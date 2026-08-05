@@ -395,6 +395,7 @@ def banner(title: str, style: str = "info", details: Optional[List[str]] = None,
     Cross-platform: uses Rich panel if available, otherwise ANSI box art.
     """
     style_config = {
+        "welcome": {"color": "br_cyan",    "icon": "🐍", "rich_style": "bold cyan"},
         "start":   {"color": "br_cyan",    "icon": "🚀", "rich_style": "bold cyan"},
         "success": {"color": "br_green",   "icon": "✅", "rich_style": "bold green"},
         "warning": {"color": "br_yellow",  "icon": "⚠️ ", "rich_style": "bold yellow"},
@@ -403,6 +404,12 @@ def banner(title: str, style: str = "info", details: Optional[List[str]] = None,
         "command": {"color": "br_magenta", "icon": "💻", "rich_style": "bold magenta"},
     }
     cfg = style_config.get(style, style_config["info"])
+
+    # Every box (including COMMAND ones) gets the same date format the
+    # rest of the log uses, as the first detail line -- consistent no
+    # matter which box someone is looking at or copies out of context.
+    _ts = datetime.now().strftime("%d.%m.%Y %H:%M:%S")
+    details = [f"Date: {_ts}"] + list(details or [])
 
     # Always record to the log file (console gets the pretty box below)
     _banner_to_file(style, title, details)
@@ -642,16 +649,21 @@ def setup_logging() -> logging.Logger:
         logger.addHandler(_console_handler)
 
     # ── Session header ──
+    # Was a hand-rolled, fixed-width, right-open box built line-by-line
+    # with plain logger.info() calls -- no color, no closing border, and
+    # (unlike every event banner) no date. Routed through banner() now so
+    # it gets the same Rich/ANSI box, computed width, colour, and the Date
+    # line every other banner has -- one consistent look everywhere.
     ctx = _collect_session_context()
-    logger.info("╭" + "─" * 71)
-    logger.info(f"│  🐍  VenvStudio v{ctx['app_version']}")
-    logger.info(f"│  🆔  Session {_session_id}")
-    logger.info(f"│  💻  {ctx['os']}  ·  Python {ctx['python']}  ·  Qt {ctx['qt']}  ·  PySide6 {ctx['pyside6']}")
-    logger.info(f"│  ⚙️  Frozen: {ctx['frozen']}  ·  PID: {ctx['pid']}")
+    _welcome_details = [
+        f"Session {_session_id}",
+        f"{ctx['os']}  ·  Python {ctx['python']}  ·  Qt {ctx['qt']}  ·  PySide6 {ctx['pyside6']}",
+        f"Frozen: {ctx['frozen']}  ·  PID: {ctx['pid']}",
+    ]
     if ctx["screens"]:
         for s in ctx["screens"]:
-            logger.info(f"│  🖥️  Screen: {s['name']} {s['geometry']} @{s['dpr']}x")
-    logger.info("╰" + "─" * 71)
+            _welcome_details.append(f"Screen: {s['name']} {s['geometry']} @{s['dpr']}x")
+    banner(f"VenvStudio v{ctx['app_version']}", style="welcome", details=_welcome_details)
 
     _root_logger = logger
 

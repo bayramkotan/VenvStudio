@@ -24,6 +24,20 @@ import sys
 COMMANDS = ("list", "create", "delete", "packages", "install", "uninstall", "version")
 
 
+def _normalize_argv(argv):
+    """Accept `--create NAME` as an alias for `create NAME` (and the
+    same for every other subcommand). argparse subparsers are
+    positional by nature, so `--create` alone would be rejected as an
+    unrecognized flag -- rewrite it to the positional form first.
+    Only argv[1] is ever touched, and only on an exact --<command>
+    match, so unrelated flags (including genuinely unknown ones) are
+    left alone and still reach argparse's own error message."""
+    if len(argv) > 1 and argv[1].startswith("--") and argv[1][2:] in COMMANDS:
+        argv = list(argv)
+        argv[1] = argv[1][2:]
+    return argv
+
+
 def is_cli_invocation(argv) -> bool:
     """True if argv asks for CLI mode: a known subcommand, or ANY
     dash-prefixed argument. The latter matters because an unrecognized
@@ -300,6 +314,24 @@ def run_cli(argv=None) -> int:
     parser = argparse.ArgumentParser(
         prog="vs",
         description="VenvStudio CLI — manage Python environments without the GUI.",
+        epilog=(
+            "Examples:\n"
+            "  vs                                Launch GUI\n"
+            "  vs list                           List all environments\n"
+            "  vs create NAME                    Create a plain venv\n"
+            "  vs create NAME -t uv              Create a uv-managed venv\n"
+            "  vs create NAME -t poetry --python PATH\n"
+            "                                     Create a Poetry-managed venv\n"
+            "  vs delete NAME [-y]               Delete an environment\n"
+            "  vs packages ENV                   List packages in an environment\n"
+            "  vs install ENV PKG [PKG ...]      Install packages\n"
+            "  vs uninstall ENV PKG [PKG ...]    Uninstall packages\n"
+            "  vs version                        Show version\n"
+            "\n"
+            "Every subcommand also works as --<command>, e.g.\n"
+            "  vs --create NAME  is the same as  vs create NAME"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument(
         "-V", "--version", action="version",
@@ -339,7 +371,8 @@ def run_cli(argv=None) -> int:
 
     sub.add_parser("version", help="Show VenvStudio version").set_defaults(func=_cmd_version)
 
-    args = parser.parse_args((argv or sys.argv)[1:])
+    _argv = _normalize_argv(list(argv or sys.argv))
+    args = parser.parse_args(_argv[1:])
     try:
         return args.func(args)
     except KeyboardInterrupt:

@@ -144,13 +144,20 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   donması/gecikme sebebi araştırılmalı.
 - **N17 — Settings > Preferred Terminal dropdown'ının önünde checkbox yok**
   (diğer satırlarla tutarsız — çoğu ayar satırında bir checkbox oluyor gibi).
-- **N18 ✅ ÇÖZÜLDÜ (v1.6.35) — CLI (`src/cli.py`): venvstudio→vs, tanınmayan
-  argüman GUI'ye düşmüyor, env tipi desteği.** `is_cli_invocation` artık
-  `-` ile başlayan her şeyi yakalıyor (argparse invalid-choice hatası,
-  sessiz GUI fallback yok); `-h`/`-V` tek noktadan (argparse), main.py'deki
-  eski ölü kod temizlendi. `create -t uv|poetry --python <yol>` eklendi
-  (poetry requires-python cap dahil, GUI ile aynı marker formatı).
+- **N18 ✅ ÇÖZÜLDÜ (v1.6.35+v1.6.36) — CLI (`src/cli.py`): venvstudio→vs,
+  tanınmayan argüman GUI'ye düşmüyor, env tipi desteği, `--create`
+  normalizasyonu, zengin `-h`.** `is_cli_invocation` artık `-` ile başlayan
+  her şeyi yakalıyor; `-h`/`-V` tek noktadan (argparse); `create -t
+  uv|poetry --python <yol>` eklendi (poetry requires-python cap dahil).
+  v1.6.36: `--create NAME` de `create NAME` gibi çalışıyor (positional
+  öncesi normalizasyon); `-h` çıktısına zengin Examples epilog eklendi.
   **Kalan: `-t conda`** — micromamba_installer.py gerekiyor.
+- **N18b ✅ ÇÖZÜLDÜ (kısmi, v1.6.36) — Log komut kutularına kalın `vs` CLI
+  eşdeğeri.** `banner()`/`banner_command()`'a `bold_extra`/`vs_equivalent`
+  eklendi (logger.py). create (venv/uv/poetry) ve delete bağlandı.
+  **Kalan:** install/uninstall/export/import — `package_ops.py`/
+  `package_export.py` gerekiyor (altyapı `show_command`/`_show_command_hint`
+  içinde hazır, sadece çağıranlar bağlanmadı).
 - **N19 🔴 KRİTİK — Conda'ya HİÇBİR ŞEY kurulamıyor.** "Conda yuklemeleri hep
   hatali" — kullanıcı conda env'e paket kuramıyor. Muhtemelen micromamba
   install çağrısında bir hata var; `package_ops.py` conda dalı / micromamba

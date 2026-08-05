@@ -1245,7 +1245,15 @@ class EnvCreateDialog(QDialog):
                         "pipx": ["pipx", "install", "<app>"],
                     }.get(_etype)
                     if _head:
-                        _bc_a(_head, context=f"Create {_etype} (env: {_name})")
+                        # vs create -t <type> only covers uv/poetry so far --
+                        # pipx create does not map onto vs (no equivalent).
+                        _vs_eq_a = ""
+                        if _etype in ("uv", "poetry"):
+                            _vs_eq_a = f"vs create {_name} -t {_etype}"
+                            if _python:
+                                _vs_eq_a += f" --python {_python}"
+                        _bc_a(_head, context=f"Create {_etype} (env: {_name})",
+                              vs_equivalent=_vs_eq_a)
                 except Exception:
                     pass
 
@@ -1701,8 +1709,11 @@ class EnvCreateDialog(QDialog):
         try:
             from src.utils.logger import banner_command as _bc_v
             _py_v = python_path or "python"
+            _vs_eq_v = f"vs create {name}"
+            if python_path:
+                _vs_eq_v += f" --python {python_path}"
             _bc_v([_py_v, "-m", "venv", venv_path],
-                  context=f"Create venv (env: {name})")
+                  context=f"Create venv (env: {name})", vs_equivalent=_vs_eq_v)
         except Exception:
             pass
 

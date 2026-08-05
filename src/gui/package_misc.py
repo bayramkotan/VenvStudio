@@ -302,7 +302,7 @@ class PackageMiscMixin:
 
     # ── Helpers ──
 
-    def _show_command_hint(self, title, command):
+    def _show_command_hint(self, title, command, vs_equivalent: str = ""):
         """Show the terminal command behind an action.
 
         VenvStudio automates these operations, but the point is that the user
@@ -310,6 +310,10 @@ class PackageMiscMixin:
         what they would have typed. The command goes to the panel's output log
         and to the application log in a box of its own, so it stands out from
         the surrounding chatter and stays on one unbroken line to copy.
+
+        vs_equivalent: the same operation via the `vs` CLI, if one exists
+        (e.g. "vs install ml numpy pandas") -- shown as an extra bold line
+        under the raw command. Leave blank when there is no vs equivalent.
 
         Silenced by turning off "Show equivalent commands" in Settings.
         """
@@ -325,7 +329,7 @@ class PackageMiscMixin:
                     self.pip_manager, "venv_path", None):
                 _env = self.pip_manager.venv_path.name
             _ctx = f"{title} (env: {_env})" if _env else str(title)
-            banner_command(command, context=_ctx)
+            banner_command(command, context=_ctx, vs_equivalent=vs_equivalent)
         except Exception:
             pass
         self._set_env_cmd_strip(command)

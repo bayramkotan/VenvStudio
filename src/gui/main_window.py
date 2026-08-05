@@ -598,7 +598,7 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         return super().eventFilter(obj, event)
 
     def show_command(self, command, context: str = "",
-                     panel: bool = True) -> None:
+                     panel: bool = True, vs_equivalent: str = "") -> None:
         """Surface the terminal command behind a UI action.
 
         Single entry point for the educational side of VenvStudio: whatever
@@ -609,6 +609,11 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         command: string or argv list.
         context: short label, e.g. "Install packages (env: ml)".
         panel:   also update the on-screen command panel, not just the log.
+        vs_equivalent: the same operation via the `vs` CLI, if one
+            exists (e.g. "vs delete ml -y") -- shown as an extra bold
+            line under the raw command. Leave blank when vs has no
+            equivalent for this action (e.g. clone/rename, or a conda/
+            pipx create -- vs does not support those types yet).
 
         Does nothing when the user has turned equivalent commands off in
         Settings.
@@ -625,7 +630,7 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
             return
         try:
             from src.utils.logger import banner_command
-            banner_command(command, context=context)
+            banner_command(command, context=context, vs_equivalent=vs_equivalent)
         except Exception:
             pass
         if panel and hasattr(self, "_cmd_panel_live"):
@@ -694,7 +699,13 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
             try:
                 if self.config.get("show_commands", True):
                     from src.utils.logger import banner_command
-                    banner_command(live, context=f"{action} (env: {name})")
+                    # `vs` CLI has a real `delete` subcommand -- this is
+                    # the one action here it can actually replace 1:1,
+                    # regardless of env type. clone/rename have no vs
+                    # equivalent (vs does not support either yet).
+                    _vs_eq = f"vs delete {name} -y" if action == "delete" else ""
+                    banner_command(live, context=f"{action} (env: {name})",
+                                   vs_equivalent=_vs_eq)
             except Exception:
                 pass
 

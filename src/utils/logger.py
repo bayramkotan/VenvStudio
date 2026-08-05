@@ -377,7 +377,8 @@ def _safe_print(text: str) -> None:
 
 
 def banner(title: str, style: str = "info", details: Optional[List[str]] = None,
-           logger: Optional[logging.Logger] = None) -> None:
+           logger: Optional[logging.Logger] = None,
+           bold_extra: Optional[str] = None) -> None:
     """
     Print a visually distinct banner for major events.
 
@@ -412,7 +413,8 @@ def banner(title: str, style: str = "info", details: Optional[List[str]] = None,
     details = [f"Date: {_ts}"] + list(details or [])
 
     # Always record to the log file (console gets the pretty box below)
-    _banner_to_file(style, title, details)
+    _banner_to_file(style, title,
+                     (details or []) + ([bold_extra] if bold_extra else []))
 
     # ── Try Rich panel ──
     if _has_rich():
@@ -426,6 +428,11 @@ def banner(title: str, style: str = "info", details: Optional[List[str]] = None,
                 _prefix = "   " if style == "command" else "   • "
                 for d in details:
                     content_lines.append(Text(f"{_prefix}{d}", style="dim"))
+            if bold_extra:
+                # Rendered in the box's own accent style (not dim like the
+                # other details) -- used by banner_command() to make the
+                # `vs` CLI equivalent stand out under the raw command.
+                content_lines.append(Text(f"   {bold_extra}", style=cfg["rich_style"]))
 
             # Combine into a single renderable
             combined = Text()
@@ -459,6 +466,8 @@ def banner(title: str, style: str = "info", details: Optional[List[str]] = None,
         # A command line must stay copy-pasteable, so no bullet in front of it.
         _prefix = "   " if style == "command" else "   • "
         lines.extend(f"{_prefix}{d}" for d in details)
+    if bold_extra:
+        lines.append(f"   {bold_extra}")
     inner_width = min(max(max(_visual_width(line) for line in lines) + 4, 40), 78)
 
     top = f"{color}{bold}╭{'─' * (inner_width - 2)}╮{reset}"
@@ -469,6 +478,10 @@ def banner(title: str, style: str = "info", details: Optional[List[str]] = None,
         if pad < 0:
             pad = 0
         if i == 0:
+            _safe_print(f"{color}{bold}│{reset} {color}{bold}{line}{reset}{' ' * pad} {color}{bold}│{reset}")
+        elif bold_extra and i == len(lines) - 1:
+            # The `vs` CLI-equivalent line -- same bold/colour treatment
+            # as the title, so it stands out from the dim details above it.
             _safe_print(f"{color}{bold}│{reset} {color}{bold}{line}{reset}{' ' * pad} {color}{bold}│{reset}")
         else:
             _safe_print(f"{color}│{reset} {dim}{line}{reset}{' ' * pad} {color}│{reset}")
@@ -521,7 +534,8 @@ def clear_command_history() -> int:
 
 
 def banner_command(command, context: str = "",
-                   logger: Optional[logging.Logger] = None) -> None:
+                   logger: Optional[logging.Logger] = None,
+                   vs_equivalent: str = "") -> None:
     """Show the terminal command behind a UI action.
 
     VenvStudio is meant to teach as much as it automates: whatever the user
@@ -531,6 +545,12 @@ def banner_command(command, context: str = "",
 
     `command` may be a string or an argv list. `context` is a short label -
     what the command is for, and in which environment.
+
+    `vs_equivalent`, if given, is shown as an additional line below the
+    raw command -- rendered in the box's own accent colour (not dim like
+    the rest) so it stands out. This is the same operation via the `vs`
+    CLI, so users see both what actually ran under the hood AND the
+    shorter VenvStudio-native way to do the same thing next time.
     """
     if isinstance(command, (list, tuple)):
         command = " ".join(str(part) for part in command)
@@ -547,7 +567,7 @@ def banner_command(command, context: str = "",
         del _COMMAND_HISTORY[:-_COMMAND_HISTORY_MAX]
 
     title = f"COMMAND — {context}" if context else "COMMAND"
-    banner(title, "command", [command], logger)
+    banner(title, "command", [command], logger, bold_extra=vs_equivalent or None)
 
 
 # =====================================================================

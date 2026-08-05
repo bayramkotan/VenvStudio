@@ -596,6 +596,20 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
             all_cache[key]["needs_refresh"] = 1
         self._save_all_cache(all_cache)
 
+    def invalidate_memory_cache(self) -> None:
+        """Clear only the in-memory env-list cache -- does NOT mark any
+        env's on-disk needs_refresh flag. Pair with invalidate_cache(path)
+        for the one env that actually changed, instead of
+        invalidate_all_caches() (which marks EVERY env stale and forces a
+        full sequential subprocess re-scan of the whole list -- observed
+        taking 30-40+ seconds with several envs, even though only one had
+        actually changed). Envs whose disk cache is still valid keep
+        being served instantly from it; only the target env re-scans.
+        """
+        VenvManager._mem_envs.pop(self._base_key, None)
+        VenvManager._mem_envs_valid.pop(self._base_key, None)
+        type(self)._all_cache = None  # force re-read of disk cache too
+
     def sync_cache_with_disk(self) -> None:
         """Remove stale cache entries — but only for envs inside base_dir.
         External envs (pipx, poetry, conda outside base_dir) are preserved."""

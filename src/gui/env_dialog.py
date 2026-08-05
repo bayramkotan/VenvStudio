@@ -965,6 +965,16 @@ class EnvCreateDialog(QDialog):
             import os
             location = self.location_label.text()
             env_path = Path(os.path.join(location, name))
+            # N15: conda create went straight to create_conda_env with no
+            # check that this path was already taken -- same guard as
+            # plain venv creation already has.
+            if env_path.exists():
+                self.progress_bar.setVisible(False)
+                self.status_label.setStyleSheet(
+                    "color: #f38ba8; font-size: 15px; font-weight: bold;")
+                self.status_label.setText(
+                    f"❌ Environment '{name}' already exists at {env_path}")
+                return
             python_version = self.conda_python_combo.currentData() \
                 if hasattr(self, "conda_python_combo") else "3.12"
 
@@ -1081,6 +1091,22 @@ class EnvCreateDialog(QDialog):
                 env_path.mkdir(parents=True, exist_ok=True)
             else:
                 env_path = Path(os.path.join(location, name))
+                # N15: uv/poetry create ran straight into `uv venv`/
+                # `poetry new` with no check that this path was already
+                # taken -- uv in particular reuses an existing dir
+                # silently instead of erroring, so a duplicate name
+                # quietly overwrote/reused the old env. Match the same
+                # guard plain venv creation already has.
+                if env_path.exists():
+                    # Inline in the Progress panel, matching how real
+                    # create failures are shown -- a popup dialog on top
+                    # of the progress bar read as "is it still running?"
+                    self.progress_bar.setVisible(False)
+                    self.status_label.setStyleSheet(
+                        "color: #f38ba8; font-size: 15px; font-weight: bold;")
+                    self.status_label.setText(
+                        f"❌ Environment '{name}' already exists at {env_path}")
+                    return
 
             python_path = self.python_combo.currentData() or None
 
@@ -1614,6 +1640,23 @@ class EnvCreateDialog(QDialog):
 
         python_path = self.python_combo.currentData() or None
 
+        py_exe = python_path or "python"
+        location = self.location_label.text()
+        import os
+        venv_path = os.path.join(location, name)
+
+        # N15: check for a name collision BEFORE showing the progress
+        # bar / locking the UI down. Doing this after starting the
+        # worker (as before) meant the progress bar sat there alongside
+        # a popup dialog, and it wasn't clear whether creation was still
+        # running. Same inline pattern as uv/poetry/conda now use.
+        if os.path.exists(venv_path):
+            self.status_label.setStyleSheet(
+                "color: #f38ba8; font-size: 15px; font-weight: bold;")
+            self.status_label.setText(
+                f"❌ Environment '{name}' already exists at {venv_path}")
+            return
+
         self.progress_bar.setVisible(True)
         self.create_btn.setEnabled(False)
         self.create_btn.setText("Creating...")
@@ -1624,11 +1667,6 @@ class EnvCreateDialog(QDialog):
         self.cancel_btn.setText("Cancel")
         self.cancel_btn.setObjectName("danger")
         self.cancel_btn.setStyleSheet("")
-
-        py_exe = python_path or "python"
-        location = self.location_label.text()
-        import os
-        venv_path = os.path.join(location, name)
 
         from src.utils.platform_utils import get_platform
         def _c(t): return f"<span style='color:#89b4fa;font-family:Consolas,monospace;font-size:15px;'>{t}</span>"

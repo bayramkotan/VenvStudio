@@ -464,10 +464,19 @@ class EnvOperationsMixin:
             # That served the OLD size (pkg count survived only because it's
             # passed in explicitly). Force the memory cache invalid so the size
             # is recomputed from disk.
+            # N22-adjacent perf fix: invalidate_all_caches() ALSO marked
+            # every OTHER env's disk cache stale (needs_refresh=1), so the
+            # next list refresh re-scanned the WHOLE env list one env at a
+            # time via subprocess -- 30-40+ seconds observed with several
+            # envs, for updating just ONE row. invalidate_cache(cur_path)
+            # (above, step 1) already marked the target env's disk entry
+            # stale; only the in-memory list cache needs clearing here so
+            # everyone else keeps being served from their still-valid disk
+            # cache instead of being needlessly re-scanned.
             try:
-                self.venv_manager.invalidate_all_caches()
+                self.venv_manager.invalidate_memory_cache()
             except Exception as _e:
-                self._log.debug(f"refresh_current_row: invalidate_all_caches: {_e}")
+                self._log.debug(f"refresh_current_row: invalidate_memory_cache: {_e}")
             env_info = None
             try:
                 # list_venvs_fast returns all envs; pick the one with a matching path

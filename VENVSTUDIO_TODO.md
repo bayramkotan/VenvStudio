@@ -123,10 +123,13 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
 - **N14 — Learn'de ölü link.** RAG konusu altında (AI/LLM veya ilgili
   kategori) `https://huggingface.co/docs/hub/rag` linki 404. **Diğer TÜM
   Learn linklerini de kontrol etmek gerekiyor** (learn_content.py, 200+ link).
-- **N15 — Aynı isimle env oluşturma engellenmiyor (en azından uv'de).** Aynı
-  isim + aynı konumda ikinci kez env yaratılınca "zaten var" hatası vermeli,
-  vermiyor. `env_dialog.py` / `venv_manager.py` create öncesi mevcut env
-  kontrolü env tipine göre eksik olabilir.
+- **N15 ✅ ÇÖZÜLDÜ (v1.6.33) — Aynı isimle env oluşturma artık engelleniyor.**
+  Kök neden: uv/poetry/conda hedef path'i hiç kontrol etmiyordu (sadece plain
+  venv kontrol ediyordu). Üç dala da inline kırmızı uyarı eklendi (popup YOK,
+  progress bar gösterilmiyor — kullanıcı geri bildirimiyle 3 turda netleşti).
+  **Bilinen sınır (kasıtlı, kullanıcı onayladı):** farklı tip/konumdaki aynı
+  isim (örn. bir uv env'ine "pipx" adı vermek, gerçek pipx home'uyla path
+  çakışmadığı için yakalanmıyor) — düzeltilmedi, önemli değil kararı verildi.
 - **N16 — Settings > Theme yanındaki checkbox aktif/pasif olması çok yavaş.**
   Hangi dosyada (muhtemelen settings_appearance.py/settings_page.py) — UI
   donması/gecikme sebebi araştırılmalı.
@@ -146,10 +149,13 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   yarıyor, hangi kütüphaneler kurulur/neden — açıklama eksik. Ayrıca bu
   seçenek için komut şeridinde/geçmişte hiç komut görünmüyor (F208 kapsamı
   dışında kalmış olabilir).
-- **N22 — Environments tablosunda conda env seçince bir süre takılı
-  kalıyor.** Muhtemelen boyut hesaplama (`_EnvSizeWorker`/`get_venv_info`)
-  seçim anında UI thread'ini bloke ediyor — conda env'ler (R/RStudio dahil)
-  büyük olabiliyor. Async/cache'li hale getirilebilir mi araştırılmalı.
+- **N22 (muhtemelen ✅ ÇÖZÜLDÜ v1.6.33, doğrulama bekliyor) — conda env
+  seçince/işlem sonrası takılma.** Log kanıtıyla (12:47:26→12:48:04, 38sn)
+  kök neden bulundu: `invalidate_all_caches()` HERHANGİ bir env'e yapılan
+  işlem sonrası TÜM env listesini (7 env) sırayla subprocess'le yeniden
+  tarıyordu — conda'nın kendisi yavaş değildi. Yeni `invalidate_memory_cache()`
+  ile sadece değişen env işaretleniyor artık. Mock testle doğrulandı.
+  Kullanıcının canlı testi bekleniyor (muhtemelen aynı fix N22'yi de kapatır).
 - **N23 — Linux'ta terminal aktivasyonu poetry/pipx/conda için çalışmıyor**
   ("sadece terminal açılıyor, o lokasyonda kalıyor" — venv/uv çalışıyor).
   Windows'ta test edilen fix'ler (platform_utils v3, package_panel v3,

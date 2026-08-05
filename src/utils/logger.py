@@ -214,7 +214,51 @@ def _ansi_supported() -> bool:
     return True
 
 
+
+# ===================================================================
+#  FRIENDLY LOGGER NAMES
+# ===================================================================
+# The raw logger names (venvstudio.core.venv_manager, venvstudio.pkg_cache,
+# ...) are Python's dotted-module convention, not something a user reading
+# the log needs to parse. Translate the known ones to short, readable
+# labels; anything not in this map still shows something reasonable (its
+# venvstudio.-prefix-stripped form) rather than breaking.
+_FRIENDLY_LOGGER_NAMES = {
+    "venvstudio":                    "VenvStudio",
+    "venvstudio.main_window":        "Main Window",
+    "venvstudio.core.venv_manager":  "Env Manager",
+    "venvstudio.pkg_cache":          "Package Cache",
+    "venvstudio.install":            "Install",
+    "venvstudio.conda":              "Conda",
+    "venvstudio.cli":                "CLI",
+    "venvstudio.worker":             "Worker",
+    "venvstudio.safe_call":          "Safe Call",
+    "venvstudio.slot":               "Slot",
+    "venvstudio.subprocess":         "Subprocess",
+    "venvstudio.tabs":               "Tabs",
+    "venvstudio.gui.terminal":       "Terminal",
+    "venvstudio.gui.launcher":       "Launcher",
+    "venvstudio.gui.toolchain":      "Toolchain",
+}
+
+
+class _FriendlyNameFilter(logging.Filter):
+    """Rewrite a record's logger name to a short, readable label before any
+    formatter renders it. Attached to each handler (not the logger) so it
+    catches records from every child logger, since handler-level filters
+    apply regardless of which logger originated the record."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        friendly = _FRIENDLY_LOGGER_NAMES.get(record.name)
+        if friendly:
+            record.name = friendly
+        elif record.name.startswith("venvstudio."):
+            record.name = record.name[len("venvstudio."):]
+        return True
+
+
 class _AnsiFormatter(logging.Formatter):
+    """Colored formatter with level-based coloring for ANSI terminals."""
     """Colored formatter with level-based coloring for ANSI terminals."""
 
     LEVEL_COLORS = {
@@ -249,8 +293,10 @@ class _AnsiFormatter(logging.Formatter):
         if not self.use_color:
             level_color = ""
 
-        # Shorten the logger name (venvstudio.core.venv_manager → core.venv_manager)
-        name = record.name
+        # Friendly label (venvstudio.core.venv_manager -> "Env Manager")
+        # instead of the raw dotted module path; falls back to the old
+        # prefix-stripped form for any logger name not yet mapped.
+        name = _FRIENDLY_LOGGER_NAMES.get(record.name, record.name)
         if name.startswith("venvstudio."):
             name = name[len("venvstudio."):]
 
@@ -619,6 +665,7 @@ def setup_logging() -> logging.Logger:
     )
     fh.setLevel(logging.DEBUG)
     fh.setFormatter(fmt)
+    fh.addFilter(_FriendlyNameFilter())
     logger.addHandler(fh)
 
     # ── Console handler ──
@@ -661,6 +708,7 @@ def setup_logging() -> logging.Logger:
             rh.setLevel(logging.DEBUG)
             # Rich handles level/time formatting; we only want the message
             rh.setFormatter(logging.Formatter("%(name)-22s  %(message)s"))
+            rh.addFilter(_FriendlyNameFilter())
             _console_handler = rh
         except ImportError:
             # ── Fallback: ANSI colored console handler ──

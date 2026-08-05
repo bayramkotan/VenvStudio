@@ -12,6 +12,7 @@ Usage examples:
     vs create fast --python /usr/bin/python3.12
     vs create web --type uv
     vs create api --type poetry --python /usr/bin/python3.12
+    vs create cnd --type conda --python 3.13
     vs packages ml
     vs install ml numpy pandas
     vs uninstall ml numpy
@@ -205,6 +206,48 @@ def _create_poetry_env(name: str, path, python: str = None):
     return True, f"poetry environment '{name}' created at {path}"
 
 
+def _create_conda_env(name: str, path, python: str = None):
+    """Create a conda-managed venv via micromamba. Returns (ok, message).
+    Reuses the exact same core.micromamba_installer functions the GUI
+    uses (create_conda_env / write_conda_marker) -- no subprocess logic
+    duplicated here, including mirror rotation and error handling."""
+    import subprocess, re
+    from src.core.micromamba_installer import (
+        get_micromamba_exe, create_conda_env, write_conda_marker,
+    )
+    if not get_micromamba_exe():
+        return False, ("micromamba is not installed. Open VenvStudio once "
+                        "and it will download it automatically, or put a "
+                        "micromamba binary on PATH yourself.")
+    py_version = ""
+    if python:
+        # Accept a bare version ("3.13") directly, or a Python executable
+        # path (extract its version), since conda wants a version tag,
+        # not a path -- unlike uv/poetry's --python.
+        if re.match(r"^\d+\.\d+$", python):
+            py_version = python
+        else:
+            try:
+                from src.utils.platform_utils import subprocess_args
+                vr = subprocess.run(
+                    [python, "-c", "import sys;print('%d.%d'%sys.version_info[:2])"],
+                    capture_output=True, text=True, timeout=8, **subprocess_args())
+                py_version = (vr.stdout.strip() or vr.stderr.strip())
+            except Exception:
+                pass
+    _pyspec = f" python={py_version}" if py_version else ""
+    print(f"$ micromamba create --prefix {path} -c conda-forge{_pyspec}")
+    ok = create_conda_env(path, python_version=py_version,
+                          progress_cb=lambda m: print(f"  {m}"))
+    if not ok:
+        return False, "conda environment creation failed"
+    try:
+        write_conda_marker(path, python_version=py_version)
+    except Exception:
+        pass
+    return True, f"conda environment '{name}' created at {path}"
+
+
 def _cmd_create(args) -> int:
     _config, vm = _managers()
     if _find_env(vm, args.name):
@@ -225,6 +268,8 @@ def _cmd_create(args) -> int:
             ok, msg = _create_uv_env(args.name, path, args.python)
         elif etype == "poetry":
             ok, msg = _create_poetry_env(args.name, path, args.python)
+        elif etype == "conda":
+            ok, msg = _create_conda_env(args.name, path, args.python)
         else:
             ok, msg = False, f"--type {etype} is not supported yet"
     print(msg)
@@ -322,6 +367,8 @@ def run_cli(argv=None) -> int:
             "  vs create NAME -t uv              Create a uv-managed venv\n"
             "  vs create NAME -t poetry --python PATH\n"
             "                                     Create a Poetry-managed venv\n"
+            "  vs create NAME -t conda --python 3.13\n"
+            "                                     Create a conda-managed venv\n"
             "  vs delete NAME [-y]               Delete an environment\n"
             "  vs packages ENV                   List packages in an environment\n"
             "  vs install ENV PKG [PKG ...]      Install packages\n"
@@ -343,8 +390,8 @@ def run_cli(argv=None) -> int:
 
     p = sub.add_parser("create", help="Create a new environment")
     p.add_argument("name")
-    p.add_argument("-t", "--type", choices=["venv", "uv", "poetry"], default="venv",
-                    help="Environment type (default: venv). conda/pipx not yet supported here.")
+    p.add_argument("-t", "--type", choices=["venv", "uv", "poetry", "conda"], default="venv",
+                    help="Environment type (default: venv). pipx not supported here.")
     p.add_argument("--python", help="Path to the Python interpreter to use")
     p.add_argument("--no-pip", action="store_true", help="Create without pip (venv type only)")
     p.add_argument("--system-site-packages", action="store_true", help="venv type only")

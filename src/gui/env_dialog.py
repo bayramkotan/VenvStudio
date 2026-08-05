@@ -1057,7 +1057,11 @@ class EnvCreateDialog(QDialog):
                        "-c", "conda-forge"]
                 if python_version:
                     _cc.append(f"python={python_version}")
-                _bc_c(_cc, context=f"Create conda (env: {name})")
+                _vs_eq_c = f"vs create {name} -t conda"
+                if python_version:
+                    _vs_eq_c += f" --python {python_version}"
+                _bc_c(_cc, context=f"Create conda (env: {name})",
+                      vs_equivalent=_vs_eq_c)
             except Exception:
                 pass
 

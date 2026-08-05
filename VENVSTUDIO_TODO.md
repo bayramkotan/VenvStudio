@@ -144,14 +144,16 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   donması/gecikme sebebi araştırılmalı.
 - **N17 — Settings > Preferred Terminal dropdown'ının önünde checkbox yok**
   (diğer satırlarla tutarsız — çoğu ayar satırında bir checkbox oluyor gibi).
-- **N18 ✅ ÇÖZÜLDÜ (v1.6.35+v1.6.36) — CLI (`src/cli.py`): venvstudio→vs,
-  tanınmayan argüman GUI'ye düşmüyor, env tipi desteği, `--create`
-  normalizasyonu, zengin `-h`.** `is_cli_invocation` artık `-` ile başlayan
-  her şeyi yakalıyor; `-h`/`-V` tek noktadan (argparse); `create -t
-  uv|poetry --python <yol>` eklendi (poetry requires-python cap dahil).
-  v1.6.36: `--create NAME` de `create NAME` gibi çalışıyor (positional
-  öncesi normalizasyon); `-h` çıktısına zengin Examples epilog eklendi.
-  **Kalan: `-t conda`** — micromamba_installer.py gerekiyor.
+- **N18 ✅ TAMAMEN ÇÖZÜLDÜ (v1.6.35+v1.6.36+v1.6.37) — CLI (`src/cli.py`):
+  venvstudio→vs, tanınmayan argüman GUI'ye düşmüyor, tüm env tipleri
+  (venv/uv/poetry/conda) destekleniyor, `--create` normalizasyonu, zengin
+  `-h`.** `is_cli_invocation` artık `-` ile başlayan her şeyi yakalıyor;
+  `-h`/`-V` tek noktadan (argparse); `create -t venv|uv|poetry|conda
+  --python <yol|sürüm>` (poetry requires-python cap dahil, conda
+  micromamba_installer.py'nin hazır fonksiyonlarını kullanıyor).
+  `--create NAME` de `create NAME` gibi çalışıyor; `-h` çıktısına zengin
+  Examples epilog eklendi. **Kalan: `-t pipx`** — pipx'in "tek env" modeline
+  uymadığı için kasıtlı olarak desteklenmiyor.
 - **N18b ✅ ÇÖZÜLDÜ (kısmi, v1.6.36) — Log komut kutularına kalın `vs` CLI
   eşdeğeri.** `banner()`/`banner_command()`'a `bold_extra`/`vs_equivalent`
   eklendi (logger.py). create (venv/uv/poetry) ve delete bağlandı.
@@ -189,6 +191,24 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   ikonlu gösterirken pipx satırı sadece "3.14.6" gösteriyor (prefix/ikon
   eksik) — muhtemelen pipx için farklı bir kod yolu kullanılıyor.
   `env_list.py` (tabloyu dolduran dosya) incelenmeli.
+- **N25 — Settings'e Poetry/pipx konum ayarı eklenebilir mi?** Poetry
+  varsayılan olarak venv'i merkezi cache'te tutuyor
+  (`~/.cache/pypoetry/virtualenvs/` / `AppData\Local\pypoetry\Cache\...`)
+  ama `poetry config virtualenvs.in-project true` (global ya da proje
+  bazlı `poetry.toml`) ile venv'i proje klasörünün İÇİNDE (`.venv`) tutmak
+  mümkün — VenvStudio bunu otomatik açarsa poetry env'leri de "venv
+  klasörü altında" olurdu. pipx'in de `PIPX_HOME` ortam değişkeniyle yeri
+  değişebiliyor ama TEK/paylaşılan bir home (VenvStudio'ya özgü değil,
+  sistem genelinde pipx'in tamamını etkiler — poetry'deki gibi "proje
+  bazlı" bir kavram yok). Sonraya bırakıldı, kullanıcı sonra bakacak.
+- **N26 ✅ ÇÖZÜLDÜ (v1.6.37) — Log'daki teknik logger isimleri okunaklı
+  hale getirildi.** `logger.py`'ye merkezi `_FRIENDLY_LOGGER_NAMES` sözlüğü
+  + `_FriendlyNameFilter` eklendi — `venvstudio.core.venv_manager`→"Env
+  Manager", `venvstudio.pkg_cache`→"Package Cache" vb. Dosya kaydı, Rich
+  console, ANSI fallback hepsi tutarlı. Haritada olmayan isim güvenli
+  fallback yapıyor (eski prefix-kırpma davranışı, çökme yok).
+  **Kalan:** yeni bir teknik isim çıkarsa (`_FRIENDLY_LOGGER_NAMES`'te
+  yoksa) kullanıcı bildirdikçe haritaya eklenmeli.
 
 ## ✅ FIX YAPILDI — Toolchain Manager: `venv` satırında Install/Upgrade crash
 

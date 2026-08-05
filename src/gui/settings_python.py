@@ -49,7 +49,14 @@ class PythonMixin:
             if saved_family and saved_family not in _sys_fonts:
                 cb.setChecked(True)
                 combo.setEnabled(True)
-                combo.setCurrentFont(QFont(saved_family))
+                # N13: QFont(family_only) leaves pointSize at -1 (Qt's
+                # "unset" marker), which triggers a
+                # QFont::setPointSize(-1) warning internally. Give it the
+                # size we're about to apply to the spin box anyway.
+                _restore_size = saved_size if saved_size and saved_size > 0 else def_size
+                _restore_font = QFont(saved_family)
+                _restore_font.setPointSize(_restore_size)
+                combo.setCurrentFont(_restore_font)
                 spin.setEnabled(True)
                 spin.setValue(saved_size)
             elif saved_size != def_size and saved_size > 0:

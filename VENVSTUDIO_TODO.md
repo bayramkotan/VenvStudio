@@ -151,6 +151,12 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   değil — gerçek platform-özel bug. Teşhis için log satırı ("🖥️ [Terminal]
   Opening at...") ve `/tmp/vs-*.venvstudio-rc` içeriği bekleniyor —
   kullanıcıdan henüz gelmedi.
+- **N24 — Virtual Environments tablosunda pipx satırının font/hizalaması
+  bazen yanlış oluyor** (Linux'ta da Windows'ta da). Ekran görüntüsünde
+  görülen: Runtime kolonunda diğer satırlar "🐍 Python 3.9.23" gibi tam/
+  ikonlu gösterirken pipx satırı sadece "3.14.6" gösteriyor (prefix/ikon
+  eksik) — muhtemelen pipx için farklı bir kod yolu kullanılıyor.
+  `env_list.py` (tabloyu dolduran dosya) incelenmeli.
 
 ## ✅ FIX YAPILDI — Toolchain Manager: `venv` satırında Install/Upgrade crash
 

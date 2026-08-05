@@ -101,6 +101,26 @@ def main():
             except Exception:
                 pass
 
+        # ── TEMPORARY diagnostic for N13 ──────────────────────────
+        # Prints a Python stack trace the moment Qt logs the
+        # 'QFont::setPointSize: Point size <= 0 (-1)' warning, so we can
+        # find exactly which line builds the invalid font. Remove this
+        # whole block once N13's real source is found and fixed.
+        import traceback as _tb_n13
+        from PySide6.QtCore import qInstallMessageHandler as _qimh_n13
+
+        def _n13_qt_msg_handler(mode, context, message):
+            if "setPointSize" in message:
+                print("\n" + "=" * 70)
+                print(f"[N13] QT WARNING: {message}")
+                _tb_n13.print_stack()
+                print("=" * 70 + "\n")
+            else:
+                sys.stderr.write(message + "\n")
+
+        _qimh_n13(_n13_qt_msg_handler)
+        # ── end N13 diagnostic ─────────────────────────────────
+
         app = QApplication(sys.argv)
         app.setApplicationName(APP_NAME)
         app.setApplicationVersion(APP_VERSION)

@@ -27,7 +27,14 @@ class AppearanceMixin:
             spin = getattr(self, f"font_{level_id}_size")
             cb.setChecked(False)
             combo.setEnabled(False)
-            combo.setCurrentFont(QFont("Segoe UI"))
+            # N13: QFont(family_only) leaves pointSize at -1 (Qt's "unset"
+            # marker), which triggers a QFont::setPointSize(-1) warning
+            # internally. QFontComboBox itself only cares about the family,
+            # but give the QFont a real size anyway (same default the spin
+            # box below is about to get) so it's never in that unset state.
+            _reset_font = QFont("Segoe UI")
+            _reset_font.setPointSize(def_size)
+            combo.setCurrentFont(_reset_font)
             spin.setEnabled(False)
             spin.setValue(def_size)
             self.config.set(f"font_{level_id}_family", "")

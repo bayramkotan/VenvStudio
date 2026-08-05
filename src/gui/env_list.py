@@ -170,6 +170,11 @@ class EnvListMixin:
             )
         except Exception as _e:
             self._log.debug(f"env_table colour detection failed: {_e}")
+        # Cached so the async detail-ready handler (rows filled in later
+        # from a background scan) can match this same styling instead of
+        # falling back to Qt's unstyled default (N24: async-updated rows
+        # had a different font/colour than rows painted synchronously here).
+        self._is_light_theme = _is_light_theme
         if _is_light_theme:
             _type_colors = {
                 "uv":           "#8a6d00",  # darker amber, more contrast on white
@@ -196,6 +201,7 @@ class EnvListMixin:
         # triggers QFont::setPointSize(-1) warnings during Qt's font cascade.
         _row_font = QFont(self.env_table.font())
         _row_font.setBold(True)
+        self._row_font = _row_font
 
         for i, env in enumerate(envs):
             etype = getattr(env, "env_type", "venv")
@@ -375,16 +381,27 @@ class EnvListMixin:
         if row < self.env_table.rowCount():
             _rv = str(python_version).strip()
             if _rv and _rv not in ("Unknown", "?", "..."):
-                if _rv[0].isdigit():
-                    _runtime_str = f"  Python {_rv}"
-                else:
-                    _runtime_str = f"  Python {_rv}"
+                _runtime_str = f"  Python {_rv}"
             else:
                 _runtime_str = "  ----"
-            self.env_table.setItem(row, 3, QTableWidgetItem(_runtime_str))
-            self.env_table.setItem(row, 4, QTableWidgetItem(f"  {package_count}"))
+            # N24: these items were created without the bold row font or
+            # light-theme colour applied in the synchronous populate path
+            # above, so rows filled in later by this async callback (e.g.
+            # a fresh/uncached env) visibly mismatched the rest of the
+            # table. Reuse the same cached font/theme flag.
+            _font = getattr(self, "_row_font", None) or QFont(self.env_table.font())
+            _light = getattr(self, "_is_light_theme", False)
+            _runtime_item = QTableWidgetItem(_runtime_str)
+            _pkg_item = QTableWidgetItem(f"  {package_count}")
             _size = size if size and size not in ("N/A", "?", "...") else "0 MB"
-            self.env_table.setItem(row, 5, QTableWidgetItem(f"  {_size}"))
+            _size_item = QTableWidgetItem(f"  {_size}")
+            for _item in (_runtime_item, _pkg_item, _size_item):
+                _item.setFont(_font)
+                if _light:
+                    _item.setForeground(QColor("#1f2937"))
+            self.env_table.setItem(row, 3, _runtime_item)
+            self.env_table.setItem(row, 4, _pkg_item)
+            self.env_table.setItem(row, 5, _size_item)
 
     def _on_all_details_done(self):
         self.loading_label.setVisible(False)

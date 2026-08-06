@@ -1012,8 +1012,9 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
                         info.package_count = _cached.get("package_count", 0)
                         info.size = _cached.get("size", "")
                     else:
-                        # Python version from marker
-                        info.python_version = marker_data.get("python", "") or marker_pyver or ""
+                        # Python version from marker — prefer python_version (e.g. "3.13.1")
+                        # over python (which is a path like "/usr/local/bin/python3.13")
+                        info.python_version = marker_data.get("python_version", "") or marker_pyver or ""
                         # Package count
                         try:
                             import shutil as _sh, os as _os

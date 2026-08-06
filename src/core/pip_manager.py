@@ -25,8 +25,9 @@ class PackageInfo:
 class PipManager:
     """Manages pip/uv operations for a specific virtual environment."""
 
-    def __init__(self, venv_path: Path, backend: str = "pip"):
+    def __init__(self, venv_path: Path, backend: str = "pip", env_type: str = "venv"):
         self.venv_path = venv_path
+        self.env_type = env_type  # N7: hatch/pdm/pixi use different install commands
         self.pip_exe = get_pip_executable(venv_path)
         self.python_exe = get_python_executable(venv_path)
         self._ssl_available = None  # cached SSL check
@@ -323,6 +324,14 @@ class PipManager:
         if not packages:
             return False, "No packages specified"
 
+        # N7: Route to the correct tool for hatch/pdm/pixi
+        if self.env_type == "hatch":
+            return self._install_hatch(packages, upgrade=upgrade, callback=callback)
+        if self.env_type == "pdm":
+            return self._install_pdm(packages, upgrade=upgrade, callback=callback)
+        if self.env_type == "pixi":
+            return self._install_pixi(packages, upgrade=upgrade, callback=callback)
+
         # conda envs may ship without pip (e.g. `micromamba create python=3.13`).
         # Installing a pip app (Gradio, Streamlit...) then failed with
         # "[WinError 2]". Bootstrap pip via ensurepip if it's missing.
@@ -375,6 +384,74 @@ class PipManager:
             return False, "Installation timed out (300s)"
         except Exception as e:
             return False, f"Error: {str(e)}"
+
+    # ── N7: Modern env install helpers ───────────────────────────────────────
+
+    def _install_hatch(self, packages, upgrade=False, callback=None):
+        """Install packages via hatch run pip install."""
+        import shutil, subprocess as _sp
+        from src.utils.platform_utils import subprocess_args as _spa
+        hatch = shutil.which("hatch")
+        if not hatch:
+            return False, "hatch not found on PATH"
+        cmd = [hatch, "run", "pip", "install"]
+        if upgrade:
+            cmd.append("--upgrade")
+        cmd.extend(packages)
+        if callback:
+            callback(f"Installing via hatch: {', '.join(packages)}...")
+        try:
+            r = _sp.run(cmd, capture_output=True, text=True, timeout=300,
+                        cwd=str(self.venv_path), **_spa())
+            out = r.stdout + r.stderr
+            if r.returncode == 0:
+                return True, out
+            return False, f"hatch install failed:\n{out}"
+        except Exception as e:
+            return False, f"Error: {e}"
+
+    def _install_pdm(self, packages, upgrade=False, callback=None):
+        """Install packages via pdm add."""
+        import shutil, subprocess as _sp
+        from src.utils.platform_utils import subprocess_args as _spa
+        pdm = shutil.which("pdm")
+        if not pdm:
+            return False, "pdm not found on PATH"
+        cmd = [pdm, "add"] + list(packages)
+        if callback:
+            callback(f"Installing via pdm: {', '.join(packages)}...")
+        try:
+            r = _sp.run(cmd, capture_output=True, text=True, timeout=300,
+                        cwd=str(self.venv_path), **_spa())
+            out = r.stdout + r.stderr
+            if r.returncode == 0:
+                return True, out
+            return False, f"pdm add failed:\n{out}"
+        except Exception as e:
+            return False, f"Error: {e}"
+
+    def _install_pixi(self, packages, upgrade=False, callback=None):
+        """Install packages via pixi add --pypi."""
+        import shutil, subprocess as _sp, os
+        from src.utils.platform_utils import subprocess_args as _spa
+        # Prefer ~/.pixi/bin/pixi over system pixi
+        pixi = os.path.expanduser("~/.pixi/bin/pixi")
+        if not os.path.isfile(pixi):
+            pixi = shutil.which("pixi") or "pixi"
+        cmd = [pixi, "add", "--pypi"] + list(packages)
+        if callback:
+            callback(f"Installing via pixi: {', '.join(packages)}...")
+        try:
+            r = _sp.run(cmd, capture_output=True, text=True, timeout=300,
+                        cwd=str(self.venv_path), **_spa())
+            out = r.stdout + r.stderr
+            if r.returncode == 0:
+                return True, out
+            return False, f"pixi add failed:\n{out}"
+        except Exception as e:
+            return False, f"Error: {e}"
+
+    # ─────────────────────────────────────────────────────────────────────────
 
     def uninstall_packages(
         self,

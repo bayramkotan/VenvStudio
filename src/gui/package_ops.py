@@ -468,11 +468,17 @@ class PackageOpsMixin:
             "venv": "pip install {packages}", "uv": "uv pip install {packages}",
             "poetry": "poetry add {packages}",
             "conda": "conda install {packages}", "pipx": "pipx install {packages}",
+            "hatch": "hatch run pip install {packages}",
+            "pdm": "pdm add {packages}",
+            "pixi": "pixi add --pypi {packages}",
         }
         _uninstall_cmds = {
             "venv": "pip uninstall -y {packages}", "uv": "uv pip uninstall {packages}",
             "poetry": "poetry remove {packages}",
             "conda": "conda remove {packages}", "pipx": "pipx uninstall {packages}",
+            "hatch": "hatch run pip uninstall -y {packages}",
+            "pdm": "pdm remove {packages}",
+            "pixi": "pixi remove --pypi {packages}",
         }
         cmds = []
         if to_uninstall:
@@ -583,6 +589,9 @@ class PackageOpsMixin:
             "poetry": "poetry add {packages}",
             "conda":  "conda install {packages}",
             "pipx":   "pipx install {packages}",
+            "hatch":  "hatch run pip install {packages}",
+            "pdm":    "pdm add {packages}",
+            "pixi":   "pixi add --pypi {packages}",
         }
         _cmd_template = _install_cmds.get(_env_type, COMMAND_HINTS["install"])
         cmd = _cmd_template.format(packages=" ".join(packages))
@@ -740,6 +749,81 @@ class PackageOpsMixin:
                 return (True, f"Installed: {', '.join(_pkgs)}")
 
             self.current_worker = WorkerThread(_do_poetry_install)
+        elif _env_type == "hatch":
+            _pkgs_hatch = list(packages)
+            _hatch_path = self.pip_manager.venv_path if self.pip_manager else None
+
+            def _do_hatch_install(callback=None, _pkgs=_pkgs_hatch, _path=_hatch_path):
+                import subprocess, shutil
+                from src.utils.platform_utils import subprocess_args
+                _hatch = shutil.which("hatch")
+                if not _hatch:
+                    return (False, "hatch executable not found")
+                if callback:
+                    callback(f"hatch run pip install {' '.join(_pkgs)}...")
+                r = subprocess.run(
+                    [_hatch, "run", "pip", "install"] + _pkgs,
+                    capture_output=True, text=True, timeout=300,
+                    cwd=str(_path) if _path else None, **subprocess_args()
+                )
+                if r.returncode != 0:
+                    return (False, f"hatch install failed: {(r.stderr or r.stdout or '').strip()[:400]}")
+                return (True, f"Installed: {', '.join(_pkgs)}")
+
+            self.current_worker = WorkerThread(_do_hatch_install)
+        elif _env_type == "pdm":
+            _pkgs_pdm = list(packages)
+            _pdm_path = self.pip_manager.venv_path if self.pip_manager else None
+
+            def _do_pdm_install(callback=None, _pkgs=_pkgs_pdm, _path=_pdm_path):
+                import subprocess, shutil
+                from src.utils.platform_utils import subprocess_args
+                _pdm = shutil.which("pdm")
+                if not _pdm:
+                    return (False, "pdm executable not found")
+                if callback:
+                    callback(f"pdm add {' '.join(_pkgs)}...")
+                r = subprocess.run(
+                    [_pdm, "add"] + _pkgs,
+                    capture_output=True, text=True, timeout=300,
+                    cwd=str(_path) if _path else None, **subprocess_args()
+                )
+                if r.returncode != 0:
+                    return (False, f"pdm add failed: {(r.stderr or r.stdout or '').strip()[:400]}")
+                return (True, f"Installed: {', '.join(_pkgs)}")
+
+            self.current_worker = WorkerThread(_do_pdm_install)
+        elif _env_type == "pixi":
+            _pkgs_pixi = list(packages)
+            _pixi_path = self.pip_manager.venv_path if self.pip_manager else None
+
+            def _do_pixi_install(callback=None, _pkgs=_pkgs_pixi, _path=_pixi_path):
+                import subprocess, shutil, os
+                from src.utils.platform_utils import subprocess_args
+                # Prefer ~/.pixi/bin/pixi over system pixi
+                _pixi = os.path.expanduser("~/.pixi/bin/pixi")
+                if not os.path.isfile(_pixi):
+                    _pixi = shutil.which("pixi") or "pixi"
+                # Pixi needs python in the environment before --pypi packages
+                if callback:
+                    callback("Ensuring python is in pixi environment...")
+                _py_check = subprocess.run(
+                    [_pixi, "add", "python"],
+                    capture_output=True, text=True, timeout=120,
+                    cwd=str(_path) if _path else None, **subprocess_args()
+                )
+                if callback:
+                    callback(f"pixi add --pypi {' '.join(_pkgs)}...")
+                r = subprocess.run(
+                    [_pixi, "add", "--pypi"] + _pkgs,
+                    capture_output=True, text=True, timeout=300,
+                    cwd=str(_path) if _path else None, **subprocess_args()
+                )
+                if r.returncode != 0:
+                    return (False, f"pixi add failed: {(r.stderr or r.stdout or '').strip()[:400]}")
+                return (True, f"Installed: {', '.join(_pkgs)}")
+
+            self.current_worker = WorkerThread(_do_pixi_install)
         else:
             self.current_worker = WorkerThread(self.pip_manager.install_packages, packages)
 
@@ -1060,6 +1144,9 @@ class PackageOpsMixin:
             "poetry": "poetry remove {packages}",
             "conda":  "conda remove {packages}",
             "pipx":   "pipx uninstall {packages}",
+            "hatch":  "hatch run pip uninstall -y {packages}",
+            "pdm":    "pdm remove {packages}",
+            "pixi":   "pixi remove --pypi {packages}",
         }
         cmd = _uninstall_cmds.get(_env_type, COMMAND_HINTS["uninstall"]).format(packages=" ".join(packages))
         self._show_command_hint("Uninstall Packages", cmd)

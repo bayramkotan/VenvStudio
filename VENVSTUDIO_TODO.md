@@ -125,8 +125,7 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   isim (örn. bir uv env'ine "pipx" adı vermek, gerçek pipx home'uyla path
   çakışmadığı için yakalanmıyor) — düzeltilmedi, önemli değil kararı verildi.
 - **N16 ✅ KAPATILDI (2026-08-06) — Fix denendi (settings_page.py + window_theme.py sweep/refresh defer), tam çözüm sağlanamadı, kabul edildi.**
-- **N17 — Settings > Preferred Terminal dropdown'ının önünde checkbox yok**
-  (diğer satırlarla tutarsız — çoğu ayar satırında bir checkbox oluyor gibi).
+- **N17 ✅ ÇÖZÜLDÜ (2026-08-06) — Preferred Terminal dropdown'ına checkbox eklendi. Unchecked=auto-detect, checked=seçilen terminal config'e kaydediliyor. settings_page.py.**
 - **N18 ✅ TAMAMEN ÇÖZÜLDÜ (v1.6.35+v1.6.36+v1.6.37) — CLI (`src/cli.py`):
   venvstudio→vs, tanınmayan argüman GUI'ye düşmüyor, tüm env tipleri
   (venv/uv/poetry/conda) destekleniyor, `--create` normalizasyonu, zengin
@@ -147,10 +146,7 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
 - **N20 — Preset listesi çok uzadı (42 preset), aşağı kaydırmak zaman alıyor.**
   Arama kutusu eklenebilir mi (isimle filtrele)? Ayrıca bilimsel presetler
   eksik: Kozmoloji, Fizik, Kimya vb. (astropy, sympy, pint gibi paketlerle).
-- **N21 — Create dialog'da "Include system site-packages" seçeneği ne işe
-  yarıyor, hangi kütüphaneler kurulur/neden — açıklama eksik. Ayrıca bu
-  seçenek için komut şeridinde/geçmişte hiç komut görünmüyor (F208 kapsamı
-  dışında kalmış olabilir).
+- **N21 ⚠️ KISMİ — Create dialog'da "Include system site-packages" açıklama label eklendi (env_dialog_ui.py, #a6adc8 renk) ama UI'da görünmüyor. __pycache__ temizleme de işe yaramadı. Sonraya bırakıldı.**
 - **N22 ✅ KAPATILDI (2026-08-06) — v1.6.33 fix doğrulandı, çalışıyor.**
 - **N23 ✅ KAPATILDI (2026-08-06) — Kullanıcı kapattı, ileriye bırakıldı.**
 - **N24 ✅ ÇÖZÜLDÜ (v1.6.31) — env_list.py async path'e font/renk uygulandı.**
@@ -184,9 +180,41 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   gömülü Python'u mu (bu, bayrağın gerekip gerekmediğini belirler).
   Henüz hiç kod dokunulmadı, sadece niyet/bulgu handoff'a not düşüldü.
 
-- **N28 — 11 dilin çevirisini detaylıca test et.** Her şeyin (Learn sayfası
-  DAHİL — kullanıcı özellikle vurguladı) çevirisi olmalı. Şu an eksik/
-  çevrilmemiş metin var mı sistematik kontrol edilmeli.
+- **🔴 ÖNCELİKLİ — F151 (Conflict Management System) — Bkz. F151 maddesi aşağıda. Aktif geliştirme sırası buraya alındı (2026-08-06). Aşama 1: constants.py static rules → Aşama 2: conflict_resolver.py → Aşama 3: pip --dry-run → Aşama 4: pre-flight dialog.**
+
+- **N28 — Learn sayfası i18n (10 dil × ~606 çeviri birimi) — BÜYÜK İŞ, aşamalı.**
+
+  **Mevcut durum:** UI string'leri (126 key) tüm 11 dilde eksiksiz ✅.
+  Learn sayfası (`learn_content.py`, 3000 satır, 308KB) tamamen hardcoded İngilizce.
+  Kod snippet'leri ve link URL'leri çevrilmeyecek — sadece:
+  - Kategori title + desc (20 kategori)
+  - Topic title (206 konu)
+  - body, tip, note, diagram, table headers+rows (~360 alan)
+  - Toplam ~606 birim × 10 dil = ~6060 çeviri
+
+  **Teknik mimari (önce bu, kod sonra):**
+  - `learn_content.py` İngilizce kalır, kaynak (source of truth)
+  - `src/utils/i18n_data/learn_<lang>.py` — her dil için ayrı dosya (dict)
+  - Key formatı: `"quickstart.topic0.title"`, `"quickstart.topic0.body"` vb.
+  - `learn_content.py`'de yeni `get_learn_categories(lang)` fonksiyonu —
+    İngilizce yapıyı alır, çeviri dict'ten ilgili alanları override eder,
+    snippet/links/diagram dokunulmaz
+  - Fallback: çeviri yoksa İngilizce gösterilir
+
+  **Aşamalar:**
+  - [ ] **AŞAMA 1** — Mimari: `get_learn_categories(lang)` + key sistemi + fallback mekanizması
+  - [ ] **AŞAMA 2** — Türkçe (tr) çevirisi — 606 birim, öncelikli
+  - [ ] **AŞAMA 3** — Almanca (de) + Fransızca (fr)
+  - [ ] **AŞAMA 4** — İspanyolca (es) + Portekizce (pt) + Rusça (ru)
+  - [ ] **AŞAMA 5** — Çince (zh) + Japonca (ja) + Korece (ko) + Arapça (ar)
+  - [ ] **AŞAMA 6** — Learn sayfası UI'ını dil değişince yeniden yükleyecek şekilde bağla
+
+  **Diagram ve table:** diagram içindeki İngilizce etiketler (folder names vb.)
+  çevrilmeyebilir — teknik, platforma özgü. Table header'ları çevrilecek.
+  Body içindeki inline code (backtick) dokunulmayacak.
+
+  **Önce AŞAMA 1'i yap, sonra dil dil ilerle.**
+
 - **N29 — Preset/Launcher/Library kurulumu bitince 3-5sn takılı kalıyor,
   progress bar/spinner yok.** Kurulum sırasında her şey normal, ama
   BİTİNCE (özellikle preset kurulumunda) birkaç saniye donuk kalıyor —

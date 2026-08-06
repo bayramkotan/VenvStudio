@@ -146,12 +146,18 @@ class EnvDialogUIMixin:
         self.env_type_combo.addItem("📜 Poetry Environment", "poetry")
         # pipx removed from Create dialog — auto-detected and managed automatically
         self.env_type_combo.addItem("🦎 Conda Environment (micromamba)", "conda")
+        self.env_type_combo.addItem("🏗️ Hatch Environment", "hatch")
+        self.env_type_combo.addItem("📦 PDM Environment", "pdm")
+        self.env_type_combo.addItem("🌊 Pixi Environment", "pixi")
         # Tool Environment removed — system apps accessible from all env types
         self.env_type_combo.setToolTip(
             "Python venv: isolated Python environment with pip\n"
             "uv: fast Rust-powered environment (10-100× faster)\n"
             "Poetry: dependency management with pyproject.toml\n"
             "Conda: micromamba-powered — R, RStudio, scientific packages\n"
+            "Hatch: modern project manager by PyPA (pyproject.toml)\n"
+            "PDM: PEP 582 / pyproject.toml based package manager\n"
+            "Pixi: conda-forge + PyPI, blazing fast (Rust-powered)\n"
             "pipx: auto-detected and shown automatically if installed"
         )
         self.env_type_combo.currentIndexChanged.connect(self._on_env_type_changed)
@@ -373,7 +379,7 @@ class EnvDialogUIMixin:
         is_venv  = env_type == "venv"
         is_conda = env_type == "conda"
         is_pipx  = env_type == "pipx"
-        is_pip_like = env_type in ("venv", "uv", "poetry", "pipx")  # types that use Python combo
+        is_pip_like = env_type in ("venv", "uv", "poetry", "pipx", "hatch", "pdm")  # types that use Python combo
 
         # ── Name label + placeholder per env type ─────────────────────────
         if is_pipx:
@@ -384,13 +390,20 @@ class EnvDialogUIMixin:
                 "Enter an environment name for managing pipx apps.\n"
                 "You can install CLI apps later from the Installed/Catalog tabs."
             )
+        elif env_type == "pixi":
+            if hasattr(self, "_name_form_label"):
+                self._name_form_label.setText("Name:")
+            self.name_input.setPlaceholderText("e.g., my-pixi-project, data-env")
+            self.name_input.setToolTip(
+                "Pixi project name — a new folder will be created with pixi.toml inside."
+            )
         else:
             if hasattr(self, "_name_form_label"):
                 self._name_form_label.setText("Name:")
             self.name_input.setPlaceholderText("e.g., my-project, data-science, web-api")
             self.name_input.setToolTip("")
 
-        # Python row (venv + uv)
+        # Python row (venv + uv + hatch + pdm)
         if hasattr(self, "python_label_widget"):
             self.python_label_widget.setVisible(is_pip_like)
         if hasattr(self, "python_combo"):
@@ -406,12 +419,12 @@ class EnvDialogUIMixin:
         if hasattr(self, "conda_row_label"):
             self.conda_row_label.setVisible(is_conda)
 
-        # Options (venv + uv only)
+        # Options (venv only — pip/system-site-packages not relevant for others)
         if hasattr(self, "options_group"):
-            self.options_group.setVisible(is_pip_like)
+            self.options_group.setVisible(is_venv)
 
-        # ── Tool status note (uv / poetry / pipx only) ───────────────────
-        _tool_types = ("uv", "poetry", "pipx")
+        # ── Tool status note (uv / poetry / pipx / hatch / pdm / pixi) ──
+        _tool_types = ("uv", "poetry", "pipx", "hatch", "pdm", "pixi")
         _show_tool_row = env_type in _tool_types
         if hasattr(self, "tool_status_widget"):
             self.tool_status_widget.setVisible(_show_tool_row)
@@ -427,6 +440,9 @@ class EnvDialogUIMixin:
             "poetry": "Create a Poetry project environment",
             "pipx":   "Install an isolated Python CLI application",
             "conda":  "Create a conda environment powered by micromamba",
+            "hatch":  "Create a Hatch project environment (PyPA)",
+            "pdm":    "Create a PDM project with pyproject.toml",
+            "pixi":   "Create a Pixi project (conda-forge + PyPI, Rust-powered)",
         }
         if hasattr(self, "subtitle_label"):
             self.subtitle_label.setText(subtitles.get(env_type, subtitles["venv"]))
@@ -503,6 +519,46 @@ class EnvDialogUIMixin:
                 _line(_cmd("micromamba") + " install -c conda-forge " + _kw("numpy") + " " + _kw("r-base")) +
                 _note("List environments:") +
                 _line(_cmd("micromamba") + " env list")
+            ),
+            "hatch": (
+                _title("🏗️", "Hatch", "#f38ba8") +
+                _note("Modern Python project manager by PyPA") +
+                _line(_cmd("pip") + " install " + _kw("hatch")) +
+                _note("Create new project:") +
+                _line(_cmd("hatch") + " new " + _path(_name)) +
+                _note("Create / activate environment:") +
+                _line(_cmd("hatch") + " env create") +
+                _line(_cmd("hatch") + " shell") +
+                _note("Add dependencies (pyproject.toml):") +
+                _line(_cmd("hatch") + " add " + _kw("numpy") + " " + _kw("pandas")) +
+                _note("Run scripts:") +
+                _line(_cmd("hatch") + " run " + _kw("python") + " script.py")
+            ),
+            "pdm": (
+                _title("📦", "PDM", "#89b4fa") +
+                _note("Python package manager with PEP 582 support") +
+                _line(_cmd("pip") + " install " + _kw("pdm")) +
+                _note("Create new project:") +
+                _line(_cmd("pdm") + " init " + _path(_name)) +
+                _note("Add dependencies:") +
+                _line(_cmd("pdm") + " add " + _kw("numpy") + " " + _kw("pandas")) +
+                _note("Install all dependencies:") +
+                _line(_cmd("pdm") + " install") +
+                _note("Run scripts:") +
+                _line(_cmd("pdm") + " run " + _kw("python") + " script.py")
+            ),
+            "pixi": (
+                _title("🌊", "Pixi", "#94e2d5") +
+                _note("conda-forge + PyPI, blazing fast (Rust-powered)") +
+                _line(_cmd("pixi") + " init " + _path(_name)) +
+                _note("Add conda-forge packages:") +
+                _line(_cmd("pixi") + " add " + _kw("numpy") + " " + _kw("pandas")) +
+                _note("Add PyPI packages:") +
+                _line(_cmd("pixi") + " add --pypi " + _kw("fastapi")) +
+                _note("Run in environment:") +
+                _line(_cmd("pixi") + " run " + _kw("python") + " script.py") +
+                _note("Open shell:") +
+                _line(_cmd("pixi") + " shell")
             ),
         }
         self.cmd_label.setHtml(hints.get(env_type, hints["venv"]))

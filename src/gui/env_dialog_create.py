@@ -55,6 +55,9 @@ class EnvCreateMixin:
         if env_type in ("uv", "poetry", "pipx"):
             return self._create_alt_env(name, env_type)
 
+        if env_type in ("hatch", "pdm", "pixi"):
+            return self._create_modern_env(name, env_type)
+
         return self._create_venv(name)
 
     # ─────────────────────────────────────────────────────────────────────
@@ -753,3 +756,201 @@ class EnvCreateMixin:
         self.worker.finished.connect(self._on_finished)
         self.worker.start()
 
+
+    def _create_modern_env(self, name, env_type):
+        """Create Hatch, PDM, or Pixi environment."""
+        import os, shutil as _shutil, subprocess, json, datetime
+        from src.utils.platform_utils import get_platform, subprocess_args
+
+        location = self.location_label.text()
+        env_path = os.path.join(location, name)
+        python_path = (
+            self.python_combo.currentData() or None
+            if hasattr(self, "python_combo") else None
+        )
+
+        # ── Tool availability check ───────────────────────────────────────
+        _tool_install_hints = {
+            "hatch": "pip install hatch",
+            "pdm":   "pip install pdm",
+            "pixi":  "https://pixi.sh (curl/winget installer)",
+        }
+        _tool_exe = _shutil.which(env_type)
+        if not _tool_exe:
+            # try python -m <tool> for hatch/pdm
+            try:
+                import sys as _sys
+                _r = subprocess.run(
+                    [_sys.executable, "-m", env_type, "--version"],
+                    capture_output=True, text=True, timeout=5
+                )
+                if _r.returncode == 0:
+                    _tool_exe = _sys.executable  # will call via -m
+            except Exception:
+                pass
+
+        if not _tool_exe:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self, f"{env_type} not found",
+                f"{env_type} is not installed or not on PATH.\n\n"
+                f"Install it with:\n    {_tool_install_hints.get(env_type, f'pip install {env_type}')}\n\n"
+                f"Then restart VenvStudio."
+            )
+            return
+
+        # ── UI setup ─────────────────────────────────────────────────────
+        if hasattr(self, "env_type_combo"):
+            self.env_type_combo.setEnabled(False)
+        if hasattr(self, "create_btn"):
+            self.create_btn.setEnabled(False)
+        if hasattr(self, "status_label"):
+            self.status_label.setText(f"⚙️ Creating {env_type} environment...")
+        if hasattr(self, "progress_bar"):
+            self.progress_bar.setVisible(True)
+        if hasattr(self, "progress_msg_label"):
+            self.progress_msg_label.setVisible(True)
+            self.progress_msg_label.setText(f"Initializing {env_type} project...")
+
+        _etype = env_type
+        _name  = name
+        _path  = env_path
+        _py    = python_path
+
+        try:
+            from src.utils.logger import banner_start, banner_success, banner_error
+        except ImportError:
+            banner_start = banner_success = banner_error = lambda *a, **kw: None
+
+        banner_start(
+            f"Creating {_etype} environment '{_name}'",
+            details=[
+                f"Type: {_etype}",
+                f"Path: {_path}",
+                f"Python: {_py or 'system default'}",
+            ]
+        )
+
+        from src.gui.package_panel import WorkerThread
+
+        def _run_create():
+            os.makedirs(_path, exist_ok=True)
+
+            if _etype == "hatch":
+                # hatch new <name> creates a project skeleton
+                cmd = [_shutil.which("hatch") or "hatch", "new", _name]
+                if _py:
+                    # hatch doesn't take --python at init; set via env config later
+                    pass
+                r = subprocess.run(
+                    cmd,
+                    capture_output=True, text=True,
+                    cwd=location, **subprocess_args()
+                )
+                if r.returncode != 0:
+                    raise RuntimeError(r.stderr or r.stdout or "hatch new failed")
+
+                # Write marker
+                marker = os.path.join(_path, ".venvstudio_env")
+                with open(marker, "w") as f:
+                    json.dump({
+                        "type": "hatch",
+                        "name": _name,
+                        "created": datetime.datetime.now().isoformat(),
+                        "python": _py or "",
+                    }, f, indent=2)
+
+            elif _etype == "pdm":
+                # pdm init --non-interactive in the project dir
+                os.makedirs(_path, exist_ok=True)
+                cmd = [_shutil.which("pdm") or "pdm", "init", "--non-interactive"]
+                if _py:
+                    cmd += ["--python", _py]
+                r = subprocess.run(
+                    cmd,
+                    capture_output=True, text=True,
+                    cwd=_path, **subprocess_args()
+                )
+                if r.returncode != 0:
+                    raise RuntimeError(r.stderr or r.stdout or "pdm init failed")
+
+                marker = os.path.join(_path, ".venvstudio_env")
+                with open(marker, "w") as f:
+                    json.dump({
+                        "type": "pdm",
+                        "name": _name,
+                        "created": datetime.datetime.now().isoformat(),
+                        "python": _py or "",
+                    }, f, indent=2)
+
+            elif _etype == "pixi":
+                # pixi init <path>
+                cmd = [_shutil.which("pixi") or "pixi", "init", _path]
+                r = subprocess.run(
+                    cmd,
+                    capture_output=True, text=True,
+                    cwd=location, **subprocess_args()
+                )
+                if r.returncode != 0:
+                    raise RuntimeError(r.stderr or r.stdout or "pixi init failed")
+
+                marker = os.path.join(_path, ".venvstudio_env")
+                with open(marker, "w") as f:
+                    json.dump({
+                        "type": "pixi",
+                        "name": _name,
+                        "created": datetime.datetime.now().isoformat(),
+                    }, f, indent=2)
+
+            return True, f"{_etype} environment '{_name}' created successfully"
+
+        def _on_done(result):
+            ok, msg = result
+            if hasattr(self, "progress_bar"):
+                self.progress_bar.setVisible(False)
+            if hasattr(self, "progress_msg_label"):
+                self.progress_msg_label.setVisible(False)
+            if hasattr(self, "env_type_combo"):
+                self.env_type_combo.setEnabled(True)
+            if hasattr(self, "create_btn"):
+                self.create_btn.setEnabled(True)
+            if ok:
+                banner_success(
+                    f"{_etype} environment '{_name}' created successfully",
+                    details=[f"Path: {_path}"]
+                )
+                if hasattr(self, "status_label"):
+                    self.status_label.setText(f"✅ {_etype} environment '{_name}' created!")
+                if hasattr(self, "_on_env_created"):
+                    self._on_env_created(_name)
+                elif hasattr(self, "accept"):
+                    self.accept()
+            else:
+                banner_error(
+                    f"Failed to create {_etype} environment '{_name}'",
+                    details=[msg]
+                )
+                if hasattr(self, "status_label"):
+                    self.status_label.setText(f"❌ Failed: {msg}")
+
+        def _on_error(exc):
+            err = str(exc)
+            banner_error(
+                f"Failed to create {_etype} environment '{_name}'",
+                details=[err]
+            )
+            if hasattr(self, "progress_bar"):
+                self.progress_bar.setVisible(False)
+            if hasattr(self, "progress_msg_label"):
+                self.progress_msg_label.setVisible(False)
+            if hasattr(self, "env_type_combo"):
+                self.env_type_combo.setEnabled(True)
+            if hasattr(self, "create_btn"):
+                self.create_btn.setEnabled(True)
+            if hasattr(self, "status_label"):
+                self.status_label.setText(f"❌ Error: {err[:80]}")
+
+        self._modern_worker = WorkerThread(_run_create)
+        self._modern_worker.result_ready.connect(_on_done)
+        self._modern_worker.error_occurred.connect(_on_error)
+        self._modern_worker.start()

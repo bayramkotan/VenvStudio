@@ -61,7 +61,7 @@ class VenvInfo:
     created: str = ""
     package_count: int = 0
     is_valid: bool = True
-    env_type: str = "venv"  # venv | uv | poetry | pipx | conda
+    env_type: str = "venv"  # venv | uv | poetry | pipx | conda | hatch | pdm | pixi
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -1002,6 +1002,53 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
                                 info.package_count = 0
                         except Exception:
                             info.package_count = 0
+                        self.write_cache(item, info.python_version, info.package_count, info.size)
+
+                elif env_type in ("hatch", "pdm", "pixi"):
+                    # Check cache first
+                    _cached = self._read_cache(item)
+                    if _cached:
+                        info.python_version = _cached.get("python_version", marker_pyver or "")
+                        info.package_count = _cached.get("package_count", 0)
+                        info.size = _cached.get("size", "")
+                    else:
+                        # Python version from marker
+                        info.python_version = marker_data.get("python", "") or marker_pyver or ""
+                        # Package count
+                        try:
+                            import shutil as _sh
+                            if env_type == "pixi":
+                                _exe = _sh.which("pixi")
+                                if _exe:
+                                    _r = _run([_exe, "list", "--json"],
+                                              capture_output=True, text=True,
+                                              timeout=15, cwd=str(item))
+                                    if _r.returncode == 0:
+                                        _data = json.loads(_r.stdout)
+                                        info.package_count = len(_data) if isinstance(_data, list) else 0
+                            elif env_type == "pdm":
+                                _exe = _sh.which("pdm")
+                                if _exe:
+                                    _r = _run([_exe, "list", "--json"],
+                                              capture_output=True, text=True,
+                                              timeout=15, cwd=str(item))
+                                    if _r.returncode == 0:
+                                        _data = json.loads(_r.stdout)
+                                        info.package_count = len(_data) if isinstance(_data, list) else 0
+                            elif env_type == "hatch":
+                                # hatch has no --json list; use pip list inside hatch env
+                                _exe = _sh.which("hatch")
+                                if _exe:
+                                    _r = _run(
+                                        [_exe, "run", "pip", "list", "--format=json"],
+                                        capture_output=True, text=True,
+                                        timeout=15, cwd=str(item))
+                                    if _r.returncode == 0:
+                                        _data = json.loads(_r.stdout)
+                                        info.package_count = len(_data) if isinstance(_data, list) else 0
+                        except Exception:
+                            info.package_count = 0
+                        info.size = get_venv_size(item)
                         self.write_cache(item, info.python_version, info.package_count, info.size)
 
                 else:  # system_tools

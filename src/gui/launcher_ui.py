@@ -706,18 +706,37 @@ class LauncherUIMixin:
             if venv_key in self._launcher_py_version_cache:
                 env_py_version = self._launcher_py_version_cache[venv_key]
             else:
-                try:
-                    python_exe = get_python_executable(self.pip_manager.venv_path)
-                    from src.utils.platform_utils import subprocess_args
-                    result = subprocess.run(
-                        [str(python_exe), "--version"],
-                        **subprocess_args(capture_output=True, text=True, timeout=5)
-                    )
-                    ver_str = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
-                    env_py_version = tuple(int(x) for x in ver_str.split(".")[:2])
+                _env_type = getattr(self, "_current_env_type", "venv")
+                # N7: Hatch/PDM/Pixi don't have /bin/python — read from marker
+                if _env_type in ("hatch", "pdm", "pixi"):
+                    try:
+                        import json as _json
+                        _marker = self.pip_manager.venv_path / ".venvstudio_env"
+                        if _marker.exists():
+                            with open(_marker) as _mf:
+                                _mdata = _json.load(_mf)
+                            _ver_str = _mdata.get("python_version", "")
+                            if _ver_str:
+                                env_py_version = tuple(int(x) for x in _ver_str.split(".")[:2])
+                    except Exception:
+                        pass
+                    if env_py_version is None:
+                        import sys
+                        env_py_version = (sys.version_info.major, sys.version_info.minor)
                     self._launcher_py_version_cache[venv_key] = env_py_version
-                except Exception:
-                    pass
+                else:
+                    try:
+                        python_exe = get_python_executable(self.pip_manager.venv_path)
+                        from src.utils.platform_utils import subprocess_args
+                        result = subprocess.run(
+                            [str(python_exe), "--version"],
+                            **subprocess_args(capture_output=True, text=True, timeout=5)
+                        )
+                        ver_str = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
+                        env_py_version = tuple(int(x) for x in ver_str.split(".")[:2])
+                        self._launcher_py_version_cache[venv_key] = env_py_version
+                    except Exception:
+                        pass
 
         for name, card in self.launcher_cards.items():
             app_def = card._app_def

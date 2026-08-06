@@ -91,7 +91,8 @@ class EnvStateMixin:
         # callbacks can refresh the env info bar without guessing.
         self._current_backend = backend
 
-        self.pip_manager = PipManager(venv_path, backend=backend)
+        self.pip_manager = PipManager(venv_path, backend=backend,
+                                      env_type=self._current_env_type)
         self._current_venv_path = venv_path
         # Inject shared cache dir if enabled (pip/uv only)
         if self.pip_manager and self._current_env_type in ("venv", "uv"):
@@ -428,7 +429,8 @@ class EnvStateMixin:
             elif self._current_env_type == "pipx":
                 backend = "pipx"
 
-            self.pip_manager = PipManager(venv_path, backend=backend)
+            self.pip_manager = PipManager(venv_path, backend=backend,
+                                          env_type=self._current_env_type)
             # B182 follow-up: remember the active backend so post-install
             # callbacks can refresh the env info bar without guessing.
             self._current_backend = backend
@@ -829,6 +831,86 @@ class EnvStateMixin:
                                     meta = info.get("metadata", {})
                                     ver = meta.get("main_package", {}).get("package_version", "")
                                     pkgs.append(_Pkg(pkg_name, ver))
+                        except Exception:
+                            pass
+                    elif self.env_type == "hatch":
+                        # hatch run pip list --format=json
+                        import subprocess, json as _json, shutil
+                        from src.utils.platform_utils import subprocess_args
+                        class _Pkg:
+                            def __init__(self, name, version):
+                                self.name = name
+                                self.version = version
+                        pkgs = []
+                        try:
+                            _hatch = shutil.which("hatch")
+                            if _hatch:
+                                r = subprocess.run(
+                                    [_hatch, "run", "pip", "list", "--format=json"],
+                                    capture_output=True, text=True, timeout=30,
+                                    cwd=str(self.venv_path) if self.venv_path else None,
+                                    **subprocess_args()
+                                )
+                                if r.returncode == 0:
+                                    for p in _json.loads(r.stdout):
+                                        pkgs.append(_Pkg(p["name"], p["version"]))
+                        except Exception:
+                            pass
+                    elif self.env_type == "pdm":
+                        # pdm list --json
+                        import subprocess, json as _json, shutil
+                        from src.utils.platform_utils import subprocess_args
+                        class _Pkg:
+                            def __init__(self, name, version):
+                                self.name = name
+                                self.version = version
+                        pkgs = []
+                        try:
+                            _pdm = shutil.which("pdm")
+                            if _pdm:
+                                r = subprocess.run(
+                                    [_pdm, "list", "--json"],
+                                    capture_output=True, text=True, timeout=30,
+                                    cwd=str(self.venv_path) if self.venv_path else None,
+                                    **subprocess_args()
+                                )
+                                if r.returncode == 0:
+                                    data = _json.loads(r.stdout)
+                                    if isinstance(data, list):
+                                        for p in data:
+                                            pkgs.append(_Pkg(
+                                                p.get("name", p.get("package", "")),
+                                                p.get("version", "")
+                                            ))
+                        except Exception:
+                            pass
+                    elif self.env_type == "pixi":
+                        # pixi list --json
+                        import subprocess, json as _json, shutil, os
+                        from src.utils.platform_utils import subprocess_args
+                        class _Pkg:
+                            def __init__(self, name, version):
+                                self.name = name
+                                self.version = version
+                        pkgs = []
+                        try:
+                            _pixi = os.path.expanduser("~/.pixi/bin/pixi")
+                            if not os.path.isfile(_pixi):
+                                _pixi = shutil.which("pixi") or "pixi"
+                            r = subprocess.run(
+                                [_pixi, "list", "--json"],
+                                capture_output=True, text=True, timeout=30,
+                                cwd=str(self.venv_path) if self.venv_path else None,
+                                **subprocess_args()
+                            )
+                            if r.returncode == 0:
+                                data = _json.loads(r.stdout)
+                                if isinstance(data, list):
+                                    for p in data:
+                                        pkgs.append(_Pkg(
+                                            p.get("name", ""),
+                                            p.get("version", "")
+                                        ))
                         except Exception:
                             pass
                     else:

@@ -1966,11 +1966,26 @@ class EnvCreateDialog(QDialog):
                         if r.returncode != 0:
                             raise RuntimeError(r.stderr or r.stdout or "pixi init failed")
                 marker = os.path.join(_path, ".venvstudio_env")
+
+                # Detect actual Python version if not specified
+                _python_version = ""
+                if _py:
+                    try:
+                        _rv = subprocess.run([_py, "--version"],
+                                             capture_output=True, text=True, timeout=5)
+                        _python_version = (_rv.stdout.strip() or _rv.stderr.strip()).replace("Python ", "")
+                    except Exception:
+                        pass
+                if not _python_version:
+                    import sys as _sys
+                    _python_version = f"{_sys.version_info.major}.{_sys.version_info.minor}.{_sys.version_info.micro}"
+
                 with open(marker, "w") as f:
                     json.dump({
                         "type": _etype, "name": _name,
                         "created": datetime.datetime.now().isoformat(),
                         "python": _py or "",
+                        "python_version": _python_version,
                     }, f, indent=2)
 
                 from PySide6.QtCore import QMetaObject, Qt

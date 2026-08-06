@@ -150,6 +150,9 @@ class EnvListMixin:
             "pipx":         "📦 pipx",
             "conda":        "🦎 Conda",
             "system_tools": "🗂 Tools",
+            "hatch":        "🏗️ Hatch",
+            "pdm":          "📦 PDM",
+            "pixi":         "🌊 Pixi",
         }
         # B183: previously hardcoded pastel Catppuccin Mocha colours, which
         # were illegible on a light background. Pick darker, saturated

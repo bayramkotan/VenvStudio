@@ -277,7 +277,24 @@ class EnvDialogUIMixin:
         options_layout.addWidget(self.upgrade_pip_cb)
         self.system_packages_cb = QCheckBox("Include system site-packages")
         self.system_packages_cb.setChecked(False)
+        self.system_packages_cb.setToolTip(
+            "Passes --system-site-packages to venv.\n"
+            "The new environment will see all packages installed in the\n"
+            "base Python (e.g. numpy installed system-wide).\n"
+            "Useful when you want to reuse heavy system packages without\n"
+            "reinstalling them. Not supported for conda/uv/pipx."
+        )
         options_layout.addWidget(self.system_packages_cb)
+        _sys_pkg_desc = QLabel(
+            "Allow access to system-installed packages inside this env "
+            "(passes <code>--system-site-packages</code> to venv)."
+        )
+        _sys_pkg_desc.setWordWrap(True)
+        _sys_pkg_desc.setTextFormat(Qt.RichText)
+        _sys_pkg_desc.setStyleSheet(
+            "color: #a6adc8; font-size: 12px; padding: 0px 20px 4px 20px;"
+        )
+        options_layout.addWidget(_sys_pkg_desc)
         self.options_group.setLayout(options_layout)
         left.addWidget(self.options_group)
         left.addStretch()

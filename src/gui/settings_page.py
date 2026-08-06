@@ -2064,6 +2064,12 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
 
         # ── Preferred terminal (used by every "Open Terminal" action) ──
         term_row = QHBoxLayout()
+        # N17 fix: add checkbox like other settings rows so the combo is
+        # gated — unchecked = auto-detect, checked = use selected terminal.
+        self.terminal_type_cb = QCheckBox()
+        _terminal_type_enabled = bool(self.config.get("terminal_type", ""))
+        self.terminal_type_cb.setChecked(_terminal_type_enabled)
+        term_row.addWidget(self.terminal_type_cb)
         term_row.addWidget(QLabel("Preferred terminal:"))
         self.terminal_type_combo = QComboBox()
         _terms = [
@@ -2095,11 +2101,25 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         _cur = self.config.get("terminal_type", "")
         _idx = self.terminal_type_combo.findData(_cur)
         self.terminal_type_combo.setCurrentIndex(_idx if _idx >= 0 else 0)
+        self.terminal_type_combo.setEnabled(_terminal_type_enabled)
 
         def _on_terminal_changed(_i):
             self.config.set("terminal_type", self.terminal_type_combo.currentData())
             self.config.save()
+
+        def _on_terminal_cb_toggled(on):
+            self.terminal_type_combo.setEnabled(on)
+            if not on:
+                # unchecked → revert to auto-detect
+                self.terminal_type_combo.setCurrentIndex(0)
+                self.config.set("terminal_type", "")
+                self.config.save()
+            else:
+                self.config.set("terminal_type", self.terminal_type_combo.currentData())
+                self.config.save()
+
         self.terminal_type_combo.currentIndexChanged.connect(_on_terminal_changed)
+        self.terminal_type_cb.toggled.connect(_on_terminal_cb_toggled)
         term_row.addWidget(self.terminal_type_combo)
         term_row.addStretch()
         cli_layout.addLayout(term_row)

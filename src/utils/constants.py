@@ -188,6 +188,37 @@ PRESET_DESCRIPTIONS = {
     "📝 NLP (Transformers)": (
         "Modern NLP with Hugging Face Transformers, Datasets, and Tokenizers, plus spaCy and NLTK."
     ),
+    "🔭 Astronomy & Astrophysics": (
+        "Python tools for astronomy and astrophysics. "
+        "Astropy as the core framework, AstroQuery for catalog access, "
+        "Astroplan for observation planning, Reproject for WCS reprojection, "
+        "and Matplotlib for sky maps and spectra."
+    ),
+    "⚛️ Physics Simulation": (
+        "Simulate physical systems in Python. "
+        "SciPy for ODEs and linear algebra, SymPy for symbolic math, "
+        "Pint for unit handling, Matplotlib for visualizations, "
+        "and QuTiP for quantum mechanics simulations."
+    ),
+    "🧪 Computational Chemistry": (
+        "Molecular modeling and computational chemistry. "
+        "RDKit for cheminformatics and molecular manipulation, "
+        "MDAnalysis for molecular dynamics trajectories, "
+        "Mendeleev for element data, and ASE (Atomic Simulation Environment) "
+        "for atomistic simulations."
+    ),
+    "🌍 Climate & Earth Science": (
+        "Analyze climate and Earth science data. "
+        "Xarray for labeled N-D arrays (NetCDF/HDF5), Cartopy for map projections, "
+        "cfgrib for GRIB files, MetPy for meteorological calculations, "
+        "and Pandas for time series."
+    ),
+    "🔬 Scientific Computing (SciPy Stack)": (
+        "The full scientific Python stack. "
+        "NumPy for arrays, SciPy for algorithms (optimization, FFT, signal processing), "
+        "SymPy for symbolic math, Matplotlib for plotting, "
+        "Pandas for data, and Numba for JIT-compiled fast loops."
+    ),
 }
 
 # ─── Educational: Launcher Tooltips ──────────────────────────────────────────
@@ -891,6 +922,11 @@ PRESETS = {
     "🐳 DevOps Toolkit": ["docker", "fabric", "paramiko", "pyyaml", "rich"],
     "🤖 Computer Vision (Full)": ["opencv-python", "pillow", "scikit-image", "albumentations", "torch", "torchvision", "ultralytics"],
     "📝 NLP (Transformers)": ["transformers", "datasets", "tokenizers", "sentencepiece", "torch", "spacy", "nltk"],
+    "🔭 Astronomy & Astrophysics": ["astropy", "astroquery", "astroplan", "reproject", "matplotlib", "numpy", "scipy"],
+    "⚛️ Physics Simulation": ["scipy", "sympy", "numpy", "pint", "matplotlib", "qutip"],
+    "🧪 Computational Chemistry": ["rdkit", "mdanalysis", "mendeleev", "ase", "numpy", "matplotlib"],
+    "🌍 Climate & Earth Science": ["xarray", "cartopy", "cfgrib", "metpy", "pandas", "numpy", "matplotlib"],
+    "🔬 Scientific Computing (SciPy Stack)": ["numpy", "scipy", "sympy", "matplotlib", "pandas", "numba"],
 }
 
 COMMAND_HINTS = {

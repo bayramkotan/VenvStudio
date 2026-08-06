@@ -69,39 +69,49 @@ class WindowThemeMixin:
                         self.settings_page._refresh_styles()
                     except Exception:
                         pass
-            # B183 fix: learn_page was previously skipped during theme switch,
-            # so it stayed in dark colours when the user picked light theme.
-            # Try multiple known refresh entry points to stay compatible if
-            # the LearnPage API changes.
-            if hasattr(self, "learn_page") and self.learn_page is not None:
-                try:
-                    if hasattr(self.learn_page, "apply_theme"):
-                        self.learn_page.apply_theme(theme)
-                    elif hasattr(self.learn_page, "_refresh_styles"):
-                        self.learn_page._refresh_styles()
-                    else:
-                        # Last resort: re-apply the global stylesheet to force a repaint
-                        self.learn_page.setStyleSheet(self.learn_page.styleSheet())
-                except Exception:
-                    pass
-            # B183 fix: env_table item colours (uv yellow, poetry purple, etc.)
-            # are baked into items at refresh time. Without re-running
-            # _refresh_env_list after a theme switch, items keep the old
-            # palette's pastel colours and look unreadable on light themes.
-            if hasattr(self, "env_table") and self.env_table is not None:
-                try:
-                    self.env_table.setStyleSheet(
-                        f"QTableWidget {{ font-size: 16px; "
-                        f"color: {self._c()['fg']}; }}"
-                        f"QTableWidget::item {{ padding: 8px 12px; font-weight: bold; font-size: 16px; }}"
-                        f"QHeaderView::section {{ font-size: 15px; "
-                        f"font-weight: bold; padding: 10px; }}"
-                    )
-                    # Re-render rows with the new theme's colours. Use the
-                    # cached env list so this is cheap (no subprocess).
-                    self._refresh_env_list(force=False)
-                except Exception:
-                    pass
+            # N16 fix: defer learn_page + env_table refresh so the theme
+            # dropdown/checkbox responds instantly. Both sweeps run on the
+            # next event-loop tick — imperceptible to the user but eliminates
+            # the multi-second freeze that was blocking the UI thread.
+            _theme_snap = theme  # capture for closures below
+
+            def _deferred_learn_refresh(_t=_theme_snap):
+                # B183 fix: learn_page was previously skipped during theme
+                # switch, so it stayed in dark colours when the user picked
+                # light theme. Try multiple known refresh entry points to
+                # stay compatible if the LearnPage API changes.
+                if hasattr(self, "learn_page") and self.learn_page is not None:
+                    try:
+                        if hasattr(self.learn_page, "apply_theme"):
+                            self.learn_page.apply_theme(_t)
+                        elif hasattr(self.learn_page, "_refresh_styles"):
+                            self.learn_page._refresh_styles()
+                        else:
+                            self.learn_page.setStyleSheet(self.learn_page.styleSheet())
+                    except Exception:
+                        pass
+
+            def _deferred_env_refresh():
+                # B183 fix: env_table item colours (uv yellow, poetry purple,
+                # etc.) are baked into items at refresh time. Without
+                # re-running _refresh_env_list after a theme switch, items
+                # keep the old palette's pastel colours and look unreadable
+                # on light themes.
+                if hasattr(self, "env_table") and self.env_table is not None:
+                    try:
+                        self.env_table.setStyleSheet(
+                            f"QTableWidget {{ font-size: 16px; "
+                            f"color: {self._c()['fg']}; }}"
+                            f"QTableWidget::item {{ padding: 8px 12px; font-weight: bold; font-size: 16px; }}"
+                            f"QHeaderView::section {{ font-size: 15px; "
+                            f"font-weight: bold; padding: 10px; }}"
+                        )
+                        self._refresh_env_list(force=False)
+                    except Exception:
+                        pass
+
+            QTimer.singleShot(0, _deferred_learn_refresh)
+            QTimer.singleShot(0, _deferred_env_refresh)
             self._refresh_sidebar_styles()
         except RuntimeError:
             # Widget may be in an unstable state during screen transition

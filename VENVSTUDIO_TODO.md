@@ -55,15 +55,8 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   env_operations.py: tip+path artık worker'a geçiriliyor. Poetry/conda tipleri
   korunuyor. **Canlı test kaldı:** poetry clone→poetry tipi, source_path'in
   gerçek venv (pypoetry cache) vs proje dizini ayrımı (`pyvenv.cfg` bulunuyor mu).
-- **N2 — Bazı env'lerde 1 paket varken bile "paket yok" deyip export
-  etmiyor** (requirements.txt). freeze()/export boş dönüyor. pip'se pip.
-  Muhtemelen freeze() env-tespiti bazı env'lerde yanlış kind döndürüp boş
-  sonuç veriyor, ya da `if not freeze` fazla erken kesiyor.
-- **N3 — Tools→View Commands'ta env SİLME var ama env OLUŞTURMA yok.**
-  v1.6.25'te create'e banner_command ekledik ama geçmişte görünmüyor. Ya
-  worker-thread'den emit edilen banner_command history'ye düşmüyor, ya create
-  banner'ı yanlış yere gidiyor. → create komut noktasının history'ye
-  gerçekten yazdığını doğrula (delete neden çalışıyor, create neden değil?).
+- **N2 ✅ KAPATILDI (2026-08-06) — Kullanıcı test etti, sorun yok.**
+- **N3 ✅ KAPATILDI (2026-08-06) — Kullanıcı test etti, sorun yok.**
 
 ### 🟡 Kapsamlı kontroller
 - **N4 — Tüm launcher'ları kontrol et** (kısayolları/shortcut'ları dahil):
@@ -88,10 +81,10 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
 - **N8 — Terminal komutlarını geliştir:** env tipini de ekle; env yönetimi
   (create/delete/clone/rename) + preset yükle/kaldır terminalden rahat
   yapılabilsin.
-- **N9 — Kütüphane ↔ env-tipi/Python-sürümü uyumluluk tablosu.** Bazı
-  kütüphaneler bazı env/Python sürümlerine kurulmuyor. Tools (ya da File)
-  menüsü altında bir tablo: hangi kütüphane hangi Python/env tipini ister.
-  (Tasarım henüz belirsiz.)
+- **N9 — "Conflict Management": Kütüphane ↔ env-tipi/Python-sürümü
+  uyumluluk tablosu.** Bazı kütüphaneler bazı env/Python sürümlerine
+  kurulmuyor. Tools altında ÇOK DETAYLI bir dialog: hangi kütüphane hangi
+  Python sürümü/env tipiyle çalışır. (Tasarım henüz belirsiz.)
 - **N10 ✅ ÇÖZÜLDÜ (v1.6.34) — Log kutularına tarih tutarlılığı +
   başlangıç banner'ı güzelleştirildi.** `banner()` fonksiyonuna (logger.py)
   tek noktadan tarih eklendi — create/delete/install/error/warning/command
@@ -120,15 +113,7 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
 
 ## 📋 KULLANICI NOTLARI (2026-08-03) — sıradaki iş kuyruğu
 
-- **N13 (KISMİ ÇÖZÜLDÜ + DARALTILDI, hala AÇIK) — Log'da gereksiz Qt uyarısı:**
-  `QFont::setPointSize: Point size <= 0 (-1)`. `settings_appearance.py` +
-  `settings_python.py`'deki QFontComboBox family-only font sorunu düzeltildi
-  (v1.6.31) ama uyarı DEVAM ETTİ. Derin araştırma (v1.6.32): 9 dosya taranıp
-  hepsi temiz çıktı; widget-ağacı taramasıyla suçlu **QFontComboBox,
-  "launcher" (Quick Launch) sekmesinde** olarak tespit edildi ama
-  `launcher_ui.py`'de metin olarak QFontComboBox yok — dolaylı/paylaşılan bir
-  kaynaktan geliyor, construction site kesinleşmedi. Sonraki adım: widget'ın
-  parent zincirini yazdıran bir tarama. Detay: handoff v1.6.32 bölümü.
+- **N13 ✅ KAPATILDI (2026-08-06) — Kaynak bulunamadı, işlevsel bozukluk yok, log gürültüsü olarak bırakıldı.**
 - **N14 — Learn'de ölü link.** RAG konusu altında (AI/LLM veya ilgili
   kategori) `https://huggingface.co/docs/hub/rag` linki 404. **Diğer TÜM
   Learn linklerini de kontrol etmek gerekiyor** (learn_content.py, 200+ link).
@@ -139,9 +124,7 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   **Bilinen sınır (kasıtlı, kullanıcı onayladı):** farklı tip/konumdaki aynı
   isim (örn. bir uv env'ine "pipx" adı vermek, gerçek pipx home'uyla path
   çakışmadığı için yakalanmıyor) — düzeltilmedi, önemli değil kararı verildi.
-- **N16 — Settings > Theme yanındaki checkbox aktif/pasif olması çok yavaş.**
-  Hangi dosyada (muhtemelen settings_appearance.py/settings_page.py) — UI
-  donması/gecikme sebebi araştırılmalı.
+- **N16 ✅ KAPATILDI (2026-08-06) — Fix denendi (settings_page.py + window_theme.py sweep/refresh defer), tam çözüm sağlanamadı, kabul edildi.**
 - **N17 — Settings > Preferred Terminal dropdown'ının önünde checkbox yok**
   (diğer satırlarla tutarsız — çoğu ayar satırında bir checkbox oluyor gibi).
 - **N18 ✅ TAMAMEN ÇÖZÜLDÜ (v1.6.35+v1.6.36+v1.6.37) — CLI (`src/cli.py`):
@@ -160,10 +143,7 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   **Kalan:** install/uninstall/export/import — `package_ops.py`/
   `package_export.py` gerekiyor (altyapı `show_command`/`_show_command_hint`
   içinde hazır, sadece çağıranlar bağlanmadı).
-- **N19 🔴 KRİTİK — Conda'ya HİÇBİR ŞEY kurulamıyor.** "Conda yuklemeleri hep
-  hatali" — kullanıcı conda env'e paket kuramıyor. Muhtemelen micromamba
-  install çağrısında bir hata var; `package_ops.py` conda dalı / micromamba
-  installer'a bakılmalı. ÖNCELİKLİ — temel bir işlev çalışmıyor.
+- **N19 ✅ KAPATILDI (2026-08-06) — Kullanıcı test etti, şu an çalışıyor.**
 - **N20 — Preset listesi çok uzadı (42 preset), aşağı kaydırmak zaman alıyor.**
   Arama kutusu eklenebilir mi (isimle filtrele)? Ayrıca bilimsel presetler
   eksik: Kozmoloji, Fizik, Kimya vb. (astropy, sympy, pint gibi paketlerle).
@@ -171,26 +151,9 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   yarıyor, hangi kütüphaneler kurulur/neden — açıklama eksik. Ayrıca bu
   seçenek için komut şeridinde/geçmişte hiç komut görünmüyor (F208 kapsamı
   dışında kalmış olabilir).
-- **N22 (muhtemelen ✅ ÇÖZÜLDÜ v1.6.33, doğrulama bekliyor) — conda env
-  seçince/işlem sonrası takılma.** Log kanıtıyla (12:47:26→12:48:04, 38sn)
-  kök neden bulundu: `invalidate_all_caches()` HERHANGİ bir env'e yapılan
-  işlem sonrası TÜM env listesini (7 env) sırayla subprocess'le yeniden
-  tarıyordu — conda'nın kendisi yavaş değildi. Yeni `invalidate_memory_cache()`
-  ile sadece değişen env işaretleniyor artık. Mock testle doğrulandı.
-  Kullanıcının canlı testi bekleniyor (muhtemelen aynı fix N22'yi de kapatır).
-- **N23 — Linux'ta terminal aktivasyonu poetry/pipx/conda için çalışmıyor**
-  ("sadece terminal açılıyor, o lokasyonda kalıyor" — venv/uv çalışıyor).
-  Windows'ta test edilen fix'ler (platform_utils v3, package_panel v3,
-  env_state v2) Linux'ta MD5 doğrulandı (güncel), yani eski dosya sorunu
-  değil — gerçek platform-özel bug. Teşhis için log satırı ("🖥️ [Terminal]
-  Opening at...") ve `/tmp/vs-*.venvstudio-rc` içeriği bekleniyor —
-  kullanıcıdan henüz gelmedi.
-- **N24 — Virtual Environments tablosunda pipx satırının font/hizalaması
-  bazen yanlış oluyor** (Linux'ta da Windows'ta da). Ekran görüntüsünde
-  görülen: Runtime kolonunda diğer satırlar "🐍 Python 3.9.23" gibi tam/
-  ikonlu gösterirken pipx satırı sadece "3.14.6" gösteriyor (prefix/ikon
-  eksik) — muhtemelen pipx için farklı bir kod yolu kullanılıyor.
-  `env_list.py` (tabloyu dolduran dosya) incelenmeli.
+- **N22 ✅ KAPATILDI (2026-08-06) — v1.6.33 fix doğrulandı, çalışıyor.**
+- **N23 ✅ KAPATILDI (2026-08-06) — Kullanıcı kapattı, ileriye bırakıldı.**
+- **N24 ✅ ÇÖZÜLDÜ (v1.6.31) — env_list.py async path'e font/renk uygulandı.**
 - **N25 — Settings'e Poetry/pipx konum ayarı eklenebilir mi?** Poetry
   varsayılan olarak venv'i merkezi cache'te tutuyor
   (`~/.cache/pypoetry/virtualenvs/` / `AppData\Local\pypoetry\Cache\...`)
@@ -209,6 +172,42 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   fallback yapıyor (eski prefix-kırpma davranışı, çökme yok).
   **Kalan:** yeni bir teknik isim çıkarsa (`_FRIENDLY_LOGGER_NAMES`'te
   yoksa) kullanıcı bildirdikçe haritaya eklenmeli.
+- **N27 — Settings'te platforma göre zorlanmış pip install (exe/mac/
+  AppImage self-update).** Linux'ta `pip install venvstudio==X.Y.Z
+  --no-cache-dir` YETMİYOR, ayrıca `--break-system-packages` de gerekiyor
+  (PEP 668 externally-managed-environment koruması). Eğer VenvStudio'nun
+  bir self-update/"check for updates" özelliği varsa (ya da eklenecekse),
+  Linux'ta bu bayrağı otomatik kullanmalı; Windows'ta gerekmiyor; macOS
+  ve AppImage'ın durumu netleşmedi (araştırılmalı). **Açık sorular:**
+  (1) böyle bir özellik şu an var mı, Settings'in neresinde? (2) yoksa
+  sıfırdan mı yapılacak? (3) AppImage sistem pip'i mi kullanıyor yoksa
+  gömülü Python'u mu (bu, bayrağın gerekip gerekmediğini belirler).
+  Henüz hiç kod dokunulmadı, sadece niyet/bulgu handoff'a not düşüldü.
+
+- **N28 — 11 dilin çevirisini detaylıca test et.** Her şeyin (Learn sayfası
+  DAHİL — kullanıcı özellikle vurguladı) çevirisi olmalı. Şu an eksik/
+  çevrilmemiş metin var mı sistematik kontrol edilmeli.
+- **N29 — Preset/Launcher/Library kurulumu bitince 3-5sn takılı kalıyor,
+  progress bar/spinner yok.** Kurulum sırasında her şey normal, ama
+  BİTİNCE (özellikle preset kurulumunda) birkaç saniye donuk kalıyor —
+  en azından bir progress bar/indeterminate spinner gösterilmeli.
+- **N30 — Tema ve CLI'ları kapsamlı test et.** Tüm temalar (dark/light
+  vb.) ve `vs` CLI komutlarının hepsi baştan sona test edilmeli.
+- **N31 — "Hangi Launcher'a hangi Python/env tipi lazım" — Tools altında
+  ayrı bir ayar/dialog.** N9'dan farklı: N9 kütüphane→Python uyumluluğu,
+  bu ise launcher (Jupyter, Streamlit vb.) → gerekli Python sürümü/env
+  tipi uyumluluğu. Ayrı bir dialog/tablo olmalı.
+- **N32 — pipx için `vs create -t pipx` YOK — bu kasıtlı bir tasarım
+  kararı (kayıt için).** pipx "env"i tek bir isimlendirilebilir/
+  konumlandırılabilir env değil (çok sayıda izole app venv'i barındıran
+  paylaşılan bir home) — `vs create NAME -t pipx` modeline uymuyor.
+  N15/N18 çalışmalarında bilerek dışarıda bırakıldı. İleride pipx için
+  farklı bir CLI komutu (örn. `vs pipx install <app>`) düşünülebilir.
+- **N33 — Tools → View Commands'daki komutlar kalıcı olsun, JSON
+  dosyasında tarihle birlikte kaydedilsin.** Şu an `command_history.py`
+  ile satır satır komut geçmişi/filtre/kopyala/Clear var ama muhtemelen
+  session-only (kalıcı değil) — bir JSON dosyasına (zaman damgasıyla)
+  yazılıp VS yeniden başlatılınca da korunmalı.
 
 ## ✅ FIX YAPILDI — Toolchain Manager: `venv` satırında Install/Upgrade crash
 
@@ -4540,7 +4539,8 @@ Kurulum yöntemleri:
 
 ### F142 — README Güncellemesi
   - Ana README.md: yeni özellikler, ekran görüntüleri, kurulum
-  - TR/EN her iki dil
+  - TR/EN her iki dil — DAHA GÜZEL bir şekilde yapılmalı (kullanıcı
+    özellikle vurguladı), yeni ekran görüntüleri çekilmeli
   - Yeni kategoriler: Terminal Emulators, Learn sayfası, Bookmark sistemi
   - Badges güncelle (versiyon, PyPI, platform)
 

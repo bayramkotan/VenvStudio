@@ -232,9 +232,27 @@ class TabBuildersMixin:
         self._update_preset_badges()
 
     def _create_presets_tab(self) -> QWidget:
+        outer = QWidget()
+        outer_layout = QVBoxLayout(outer)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+
+        # ── Search bar (N20) ──────────────────────────────────────────────
+        from PySide6.QtWidgets import QLineEdit
+        search_bar = QLineEdit()
+        search_bar.setPlaceholderText("🔍  Search presets...")
+        search_bar.setClearButtonEnabled(True)
+        search_bar.setStyleSheet(
+            f"QLineEdit {{ background: {self._c()['input_bg']}; color: {self._c()['fg']}; "
+            f"border: 1px solid {self._c()['border']}; border-radius: 6px; "
+            f"padding: 6px 10px; font-size: {self._c()['fs_small']}px; margin: 8px; }}"
+        )
+        outer_layout.addWidget(search_bar)
+
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QFrame.NoFrame)
+        outer_layout.addWidget(scroll)
 
         container = QWidget()
         self._presets_grid = QGridLayout(container)
@@ -319,7 +337,29 @@ class TabBuildersMixin:
 
         self._presets_grid.setRowStretch(row // 2 + 1, 1)
         scroll.setWidget(container)
-        return scroll
+
+        # ── Wire search filter ────────────────────────────────────────────
+        # Store card frames keyed by preset name for show/hide
+        self._preset_card_frames = {
+            name: info["install_btn"].parentWidget()
+            for name, info in self._preset_cards.items()
+            if info["install_btn"].parentWidget() is not None
+        }
+
+        def _filter_presets(text):
+            query = text.strip().lower()
+            for name, card_widget in self._preset_card_frames.items():
+                if not query:
+                    card_widget.setVisible(True)
+                    continue
+                pkgs = self._preset_cards[name]["packages"]
+                desc = PRESET_DESCRIPTIONS.get(name, "")
+                haystack = (name + " " + " ".join(pkgs) + " " + desc).lower()
+                card_widget.setVisible(query in haystack)
+
+        search_bar.textChanged.connect(_filter_presets)
+
+        return outer
 
     def _update_preset_badges(self):
         """Update 'Installed' badge on presets."""

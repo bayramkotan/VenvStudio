@@ -36,6 +36,8 @@ class EnvCreateDialog(QDialog):
     """Dialog for creating a new virtual environment."""
 
     env_created = Signal(str)
+    _modern_done_signal  = Signal()      # N7: Hatch/PDM/Pixi success
+    _modern_error_signal = Signal(str)   # N7: Hatch/PDM/Pixi failure
 
     def __init__(self, venv_manager, config_manager, parent=None):
         super().__init__(parent)
@@ -43,6 +45,13 @@ class EnvCreateDialog(QDialog):
         self.config = config_manager
         self.pythons = []   # populated async after show
         self.worker = None
+        self._modern_name  = ""
+        self._modern_etype = ""
+        self._modern_path  = ""
+
+        # N7: Connect modern env signals once here — safe for repeated calls
+        self._modern_done_signal.connect(self._on_modern_done)
+        self._modern_error_signal.connect(self._on_modern_error)
 
         self.setWindowTitle("Create New Environment")
         self.setMinimumSize(1060, 620)
@@ -186,12 +195,18 @@ class EnvCreateDialog(QDialog):
         self.env_type_combo.addItem("📜 Poetry Environment", "poetry")
         # pipx removed from Create dialog — auto-detected and managed automatically
         self.env_type_combo.addItem("🦎 Conda Environment (micromamba)", "conda")
+        self.env_type_combo.addItem("🏗️ Hatch Environment", "hatch")
+        self.env_type_combo.addItem("📦 PDM Environment", "pdm")
+        self.env_type_combo.addItem("🌊 Pixi Environment", "pixi")
         # Tool Environment removed — system apps accessible from all env types
         self.env_type_combo.setToolTip(
             "Python venv: isolated Python environment with pip\n"
             "uv: fast Rust-powered environment (10-100× faster)\n"
             "Poetry: dependency management with pyproject.toml\n"
             "Conda: micromamba-powered — R, RStudio, scientific packages\n"
+            "Hatch: modern project manager by PyPA (pyproject.toml)\n"
+            "PDM: PEP 582 / pyproject.toml based package manager\n"
+            "Pixi: conda-forge + PyPI, blazing fast (Rust-powered)\n"
             "pipx: auto-detected and shown automatically if installed"
         )
         self.env_type_combo.currentIndexChanged.connect(self._on_env_type_changed)
@@ -402,7 +417,7 @@ class EnvCreateDialog(QDialog):
         is_venv  = env_type == "venv"
         is_conda = env_type == "conda"
         is_pipx  = env_type == "pipx"
-        is_pip_like = env_type in ("venv", "uv", "poetry", "pipx")  # types that use Python combo
+        is_pip_like = env_type in ("venv", "uv", "poetry", "pipx", "hatch", "pdm")  # types that use Python combo
 
         # ── Name label + placeholder per env type ─────────────────────────
         if is_pipx:
@@ -437,10 +452,10 @@ class EnvCreateDialog(QDialog):
 
         # Options (venv + uv only)
         if hasattr(self, "options_group"):
-            self.options_group.setVisible(is_pip_like)
+            self.options_group.setVisible(is_venv)
 
         # ── Tool status note (uv / poetry / pipx only) ───────────────────
-        _tool_types = ("uv", "poetry", "pipx")
+        _tool_types = ("uv", "poetry", "pipx", "hatch", "pdm", "pixi")
         _show_tool_row = env_type in _tool_types
         if hasattr(self, "tool_status_widget"):
             self.tool_status_widget.setVisible(_show_tool_row)
@@ -456,6 +471,9 @@ class EnvCreateDialog(QDialog):
             "poetry": "Create a Poetry project environment",
             "pipx":   "Install an isolated Python CLI application",
             "conda":  "Create a conda environment powered by micromamba",
+            "hatch":  "Create a Hatch project environment (PyPA)",
+            "pdm":    "Create a PDM project with pyproject.toml",
+            "pixi":   "Create a Pixi project (conda-forge + PyPI, Rust-powered)",
         }
         if hasattr(self, "subtitle_label"):
             self.subtitle_label.setText(subtitles.get(env_type, subtitles["venv"]))
@@ -549,6 +567,42 @@ class EnvCreateDialog(QDialog):
                 _line(_cmd("micromamba") + " install -c conda-forge " + _kw("numpy") + " " + _kw("r-base")) +
                 _note("List environments:") +
                 _line(_cmd("micromamba") + " env list")
+            ),
+            "hatch": (
+                _title("🏗️", "Hatch", "#f38ba8") +
+                _note("Modern Python project manager by PyPA") +
+                _line(_cmd("pip") + " install " + _kw("hatch")) +
+                _note("Create new project:") +
+                _line(_cmd("hatch") + " new " + _path(_name)) +
+                _note("Create / activate environment:") +
+                _line(_cmd("hatch") + " env create") +
+                _line(_cmd("hatch") + " shell") +
+                _note("Run scripts:") +
+                _line(_cmd("hatch") + " run " + _kw("python") + " script.py")
+            ),
+            "pdm": (
+                _title("📦", "PDM", "#89b4fa") +
+                _note("Python package manager with pyproject.toml") +
+                _line(_cmd("pip") + " install " + _kw("pdm")) +
+                _note("Create new project:") +
+                _line(_cmd("pdm") + " init " + _path(_name)) +
+                _note("Add dependencies:") +
+                _line(_cmd("pdm") + " add " + _kw("numpy") + " " + _kw("pandas")) +
+                _note("Run scripts:") +
+                _line(_cmd("pdm") + " run " + _kw("python") + " script.py")
+            ),
+            "pixi": (
+                _title("🌊", "Pixi", "#94e2d5") +
+                _note("conda-forge + PyPI, blazing fast (Rust-powered)") +
+                _line(_cmd("pixi") + " init " + _path(_name)) +
+                _note("Add conda-forge packages:") +
+                _line(_cmd("pixi") + " add " + _kw("numpy") + " " + _kw("pandas")) +
+                _note("Add PyPI packages:") +
+                _line(_cmd("pixi") + " add --pypi " + _kw("fastapi")) +
+                _note("Run in environment:") +
+                _line(_cmd("pixi") + " run " + _kw("python") + " script.py") +
+                _note("Open shell:") +
+                _line(_cmd("pixi") + " shell")
             ),
         }
         self.cmd_label.setHtml(hints.get(env_type, hints["venv"]))
@@ -1073,6 +1127,11 @@ class EnvCreateDialog(QDialog):
             self.worker.start()
             return
         # ── conda end ─────────────────────────────────────────────────────
+
+        # ── Hatch / PDM / Pixi ───────────────────────────────────────────
+        if env_type in ("hatch", "pdm", "pixi"):
+            self._create_modern_env(name, env_type)
+            return
 
         # ── uv / Poetry / pipx ───────────────────────────────────────────
         if env_type in ("uv", "poetry", "pipx"):
@@ -1783,3 +1842,182 @@ class EnvCreateDialog(QDialog):
             self.worker.quit()
             self.worker.wait(500)   # max 0.5s — accept event regardless
         super().closeEvent(event)
+
+    def _create_modern_env(self, name, env_type):
+        """Create Hatch, PDM, or Pixi environment."""
+        import os, shutil as _shutil, subprocess, json, datetime
+        from src.utils.platform_utils import subprocess_args
+
+        location = self.location_label.text()
+        env_path = os.path.join(location, name)
+        python_path = (
+            self.python_combo.currentData() or None
+            if hasattr(self, "python_combo") else None
+        )
+
+        # ── Tool availability check ───────────────────────────────────────
+        _tool_install_hints = {
+            "hatch": "pip install hatch",
+            "pdm":   "pip install pdm",
+            "pixi":  "curl -fsSL https://pixi.sh/install.sh | bash",
+        }
+
+        def _find_tool_exe(tool):
+            import os
+            # For pixi: prefer ~/.pixi/bin/pixi over system pixi
+            # (system may have a different tool named pixi e.g. Pixiv downloader)
+            if tool == "pixi":
+                _candidates = [
+                    os.path.expanduser("~/.pixi/bin/pixi"),
+                    os.path.join(os.environ.get("LOCALAPPDATA", ""), ".pixi", "bin", "pixi.exe"),
+                ]
+                for _c in _candidates:
+                    if os.path.isfile(_c) and os.access(_c, os.X_OK):
+                        # Verify it's really prefix-dev pixi
+                        try:
+                            _r = subprocess.run([_c, "--version"],
+                                                capture_output=True, text=True, timeout=5)
+                            if "pixi" in (_r.stdout + _r.stderr).lower() and "pixiv" not in (_r.stdout + _r.stderr).lower():
+                                return _c
+                        except Exception:
+                            pass
+                return None
+            return _shutil.which(tool)
+
+        _tool_exe = _find_tool_exe(env_type)
+        if not _tool_exe:
+            try:
+                import sys as _sys
+                _r = subprocess.run(
+                    [_sys.executable, "-m", env_type, "--version"],
+                    capture_output=True, text=True, timeout=5
+                )
+                if _r.returncode == 0:
+                    _tool_exe = _sys.executable
+            except Exception:
+                pass
+
+        if not _tool_exe:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(
+                self, f"{env_type} not found",
+                f"{env_type} is not installed or not on PATH.\n\n"
+                f"Install it with:\n    {_tool_install_hints.get(env_type, f'pip install {env_type}')}\n\n"
+                f"Then restart VenvStudio."
+            )
+            return
+
+        # ── UI setup ─────────────────────────────────────────────────────
+        self.env_type_combo.setEnabled(False)
+        self.create_btn.setEnabled(False)
+        self.progress_bar.setVisible(True)
+        self.status_label.setText(f"⚙️ Creating {env_type} environment...")
+
+        _etype = env_type
+        _name  = name
+        _path  = env_path
+        _py    = python_path
+
+        try:
+            from src.utils.logger import banner_start, banner_success, banner_error
+        except ImportError:
+            banner_start = banner_success = banner_error = lambda *a, **kw: None
+
+        banner_start(
+            f"Creating {_etype} environment '{_name}'",
+            details=[f"Type: {_etype}", f"Path: {_path}", f"Python: {_py or 'system default'}"]
+        )
+
+        from src.gui.workers import CreateWorker as _CW
+        import threading
+
+        def _run():
+            try:
+                os.makedirs(_path, exist_ok=True)
+                if _etype == "hatch":
+                    cmd = [_shutil.which("hatch") or "hatch", "new", _name]
+                    r = subprocess.run(cmd, capture_output=True, text=True,
+                                       cwd=location, **subprocess_args())
+                    if r.returncode != 0:
+                        raise RuntimeError(r.stderr or r.stdout or "hatch new failed")
+                elif _etype == "pdm":
+                    os.makedirs(_path, exist_ok=True)
+                    cmd = [_shutil.which("pdm") or "pdm", "init", "--non-interactive"]
+                    if _py:
+                        cmd += ["--python", _py]
+                    r = subprocess.run(cmd, capture_output=True, text=True,
+                                       cwd=_path, **subprocess_args())
+                    if r.returncode != 0:
+                        raise RuntimeError(r.stderr or r.stdout or "pdm init failed")
+                elif _etype == "pixi":
+                    _pixi_exe = _tool_exe or _shutil.which("pixi") or "pixi"
+                    cmd = [_pixi_exe, "init", _path]
+                    r = subprocess.run(cmd, capture_output=True, text=True,
+                                       cwd=location, **subprocess_args())
+                    if r.returncode != 0:
+                        _combined = (r.stderr or "") + (r.stdout or "")
+                        # If pixi needs migration, run migrate first then retry
+                        if "migrate" in _combined.lower() or "database" in _combined.lower():
+                            subprocess.run([_pixi_exe, "migrate"],
+                                           capture_output=True, text=True, timeout=30,
+                                           **subprocess_args())
+                            r = subprocess.run(cmd, capture_output=True, text=True,
+                                               cwd=location, **subprocess_args())
+                        if r.returncode != 0:
+                            raise RuntimeError(r.stderr or r.stdout or "pixi init failed")
+                marker = os.path.join(_path, ".venvstudio_env")
+                with open(marker, "w") as f:
+                    json.dump({
+                        "type": _etype, "name": _name,
+                        "created": datetime.datetime.now().isoformat(),
+                        "python": _py or "",
+                    }, f, indent=2)
+
+                from PySide6.QtCore import QMetaObject, Qt
+                QMetaObject.invokeMethod(self, "_on_modern_done",
+                                         Qt.QueuedConnection)
+            except Exception as e:
+                self._modern_error = str(e)
+                from PySide6.QtCore import QMetaObject, Qt
+                QMetaObject.invokeMethod(self, "_on_modern_error",
+                                         Qt.QueuedConnection)
+
+        self._modern_error = ""
+        self._modern_name  = _name
+        self._modern_etype = _etype
+        self._modern_path  = _path
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+
+    def _on_modern_done(self):
+        banner_success = lambda *a, **kw: None
+        try:
+            from src.utils.logger import banner_success
+        except ImportError:
+            pass
+        self.progress_bar.setVisible(False)
+        self.env_type_combo.setEnabled(True)
+        self.create_btn.setEnabled(True)
+        banner_success(
+            f"{self._modern_etype} environment '{self._modern_name}' created",
+            details=[f"Path: {self._modern_path}"]
+        )
+        self.status_label.setText(
+            f"✅ {self._modern_etype} environment '{self._modern_name}' created!")
+        self.env_created.emit(self._modern_name)
+        self.accept()
+
+    def _on_modern_error(self):
+        banner_error = lambda *a, **kw: None
+        try:
+            from src.utils.logger import banner_error
+        except ImportError:
+            pass
+        self.progress_bar.setVisible(False)
+        self.env_type_combo.setEnabled(True)
+        self.create_btn.setEnabled(True)
+        banner_error(
+            f"Failed to create {self._modern_etype} environment '{self._modern_name}'",
+            details=[self._modern_error]
+        )
+        self.status_label.setText(f"❌ Error: {self._modern_error[:80]}")

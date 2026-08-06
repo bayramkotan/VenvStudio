@@ -1016,9 +1016,26 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
                         info.python_version = marker_data.get("python", "") or marker_pyver or ""
                         # Package count
                         try:
-                            import shutil as _sh
+                            import shutil as _sh, os as _os
+                            def _find_pixi():
+                                """Prefer ~/.pixi/bin/pixi over system pixi (which may be Pixiv downloader)."""
+                                _candidates = [
+                                    _os.path.expanduser("~/.pixi/bin/pixi"),
+                                    _os.path.join(_os.environ.get("LOCALAPPDATA", ""), ".pixi", "bin", "pixi.exe"),
+                                ]
+                                for _c in _candidates:
+                                    if _os.path.isfile(_c) and _os.access(_c, _os.X_OK):
+                                        try:
+                                            _rv = _run([_c, "--version"], capture_output=True, text=True, timeout=5)
+                                            _out = (_rv.stdout + _rv.stderr).lower()
+                                            if "pixi" in _out and "pixiv" not in _out:
+                                                return _c
+                                        except Exception:
+                                            pass
+                                return _sh.which("pixi")
+
                             if env_type == "pixi":
-                                _exe = _sh.which("pixi")
+                                _exe = _find_pixi()
                                 if _exe:
                                     _r = _run([_exe, "list", "--json"],
                                               capture_output=True, text=True,

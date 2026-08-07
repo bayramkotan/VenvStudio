@@ -31,15 +31,91 @@ def _get_micromamba_dir() -> Path:
     return d
 
 
+def get_conda_backend() -> str:
+    """Return the user-selected conda backend id from config.
+
+    Values: 'auto' (default), 'micromamba_bundled', 'micromamba_system',
+    'mamba', 'conda', 'miniforge', 'custom'.
+    Falls back to 'auto' on any error.
+    """
+    try:
+        from src.core.config_manager import ConfigManager as _CM
+        return _CM().get("conda_backend", "auto") or "auto"
+    except Exception:
+        return "auto"
+
+
+def get_conda_backend_custom_path() -> str:
+    """Return the custom conda binary path from config (for backend='custom')."""
+    try:
+        from src.core.config_manager import ConfigManager as _CM
+        return _CM().get("conda_backend_custom_path", "") or ""
+    except Exception:
+        return ""
+
+
 def get_micromamba_exe() -> Path | None:
-    """Return path to micromamba binary if available (bundled or system)."""
-    # 1. VenvStudio bundled
+    """Return the conda backend binary based on Settings → Conda Backend.
+
+    backend='auto'               → bundled micromamba → system micromamba
+    backend='micromamba_bundled' → bundled only
+    backend='micromamba_system'  → system PATH micromamba only
+    backend='mamba'              → system mamba
+    backend='conda'              → system conda
+    backend='miniforge'          → miniforge/mambaforge binary
+    backend='custom'             → user-supplied path from config
+    """
+    backend = get_conda_backend()
+
+    if backend == "custom":
+        _p = get_conda_backend_custom_path()
+        if _p and os.path.isfile(_p):
+            return Path(_p)
+        # Fall through to auto if custom path is invalid
+        backend = "auto"
+
+    if backend == "mamba":
+        found = shutil.which("mamba")
+        return Path(found) if found else None
+
+    if backend == "conda":
+        found = shutil.which("conda")
+        return Path(found) if found else None
+
+    if backend == "miniforge":
+        # Common miniforge/mambaforge installation paths
+        _home = Path.home()
+        _candidates = [
+            _home / "miniforge3" / ("Scripts" if sys.platform == "win32" else "bin") /
+            ("mamba.exe" if sys.platform == "win32" else "mamba"),
+            _home / "mambaforge" / ("Scripts" if sys.platform == "win32" else "bin") /
+            ("mamba.exe" if sys.platform == "win32" else "mamba"),
+            _home / "miniforge3" / ("Scripts" if sys.platform == "win32" else "bin") /
+            ("conda.exe" if sys.platform == "win32" else "conda"),
+        ]
+        for _c in _candidates:
+            if _c.exists():
+                return _c
+        # Also check system PATH
+        found = shutil.which("mamba") or shutil.which("conda")
+        return Path(found) if found else None
+
+    if backend == "micromamba_system":
+        found = shutil.which("micromamba")
+        return Path(found) if found else None
+
+    if backend == "micromamba_bundled":
+        bundled = _get_micromamba_dir() / (
+            "micromamba.exe" if sys.platform == "win32" else "micromamba"
+        )
+        return bundled if bundled.exists() else None
+
+    # backend == 'auto' (default): bundled → system micromamba
     bundled = _get_micromamba_dir() / (
         "micromamba.exe" if sys.platform == "win32" else "micromamba"
     )
     if bundled.exists():
         return bundled
-    # 2. System PATH
     found = shutil.which("micromamba")
     return Path(found) if found else None
 

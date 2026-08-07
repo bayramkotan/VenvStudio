@@ -16,7 +16,7 @@ from PySide6.QtGui import QFont, QColor
 from src.utils.platform_utils import find_system_pythons, get_platform, subprocess_args
 from src.utils.constants import APP_NAME, APP_VERSION
 from src.utils.i18n import tr
-import os, subprocess, shutil
+import os, sys, subprocess, shutil
 from pathlib import Path
 
 from .settings_common import NoScrollComboBox
@@ -602,7 +602,78 @@ class ToolchainMixin:
             elif chosen == a_system: cb_system()
 
         if tool == "micromamba":
-            # Micromamba: Download/Upgrade + Remove (with warning)
+            # ── Conda Backend selector ────────────────────────────────────
+            from PySide6.QtWidgets import QComboBox as _CB2, QLabel as _LB2
+            _backend_label = _LB2("Backend:")
+            _backend_label.setStyleSheet(
+                f"font-size: {self._c()['fs_tiny']}px; color: {self._c()['fg_muted']};"
+            )
+            hl.addWidget(_backend_label)
+
+            _backend_combo = _CB2()
+            _backend_combo.setFixedHeight(26)
+            _backend_combo.setMinimumWidth(170)
+            _backend_combo.setToolTip(
+                "Which conda-compatible binary VenvStudio uses for creating and\n"
+                "managing conda environments.\n\n"
+                "  Auto          — bundled micromamba, then system micromamba\n"
+                "  micromamba (bundled) — VenvStudio's own download\n"
+                "  micromamba (system)  — system PATH only\n"
+                "  mamba         — system mamba (faster solver)\n"
+                "  conda         — system conda / Anaconda\n"
+                "  miniforge     — miniforge / mambaforge installation\n"
+                "  Custom path…  — browse to any compatible binary"
+            )
+            _BACKENDS = [
+                ("auto",               "Auto (default)"),
+                ("micromamba_bundled", "micromamba (bundled)"),
+                ("micromamba_system",  "micromamba (system)"),
+                ("mamba",              "mamba"),
+                ("conda",              "conda"),
+                ("miniforge",          "miniforge / mambaforge"),
+                ("custom",             "Custom path…"),
+            ]
+            for _bid, _blbl in _BACKENDS:
+                _backend_combo.addItem(_blbl, _bid)
+
+            # Load saved value
+            try:
+                _saved_backend = self.config.get("conda_backend", "auto") or "auto"
+                _idx = _backend_combo.findData(_saved_backend)
+                if _idx >= 0:
+                    _backend_combo.setCurrentIndex(_idx)
+            except Exception:
+                pass
+
+            def _on_backend_changed(_i):
+                _bid = _backend_combo.currentData()
+                try:
+                    self.config.set("conda_backend", _bid)
+                    self.config.save()
+                except Exception:
+                    pass
+                if _bid == "custom":
+                    _pick_custom_path()
+
+            def _pick_custom_path():
+                from PySide6.QtWidgets import QFileDialog as _QFD
+                _path, _ = _QFD.getOpenFileName(
+                    self, "Select conda binary",
+                    str(Path.home()),
+                    "Executables (*.exe *.bat *);;All Files (*)" if sys.platform == "win32"
+                    else "All Files (*)"
+                )
+                if _path and os.path.isfile(_path):
+                    try:
+                        self.config.set("conda_backend_custom_path", _path)
+                        self.config.save()
+                    except Exception:
+                        pass
+
+            _backend_combo.currentIndexChanged.connect(_on_backend_changed)
+            hl.addWidget(_backend_combo)
+
+            # ── Download/Upgrade/Remove buttons ──────────────────────────
             install_btn = _b("⬇ Install", "Download micromamba binary", name="install_user")
             install_btn.setVisible(True)
             upgrade_btn = _b("⬆ Upgrade", "Re-download micromamba",     name="upgrade_user")

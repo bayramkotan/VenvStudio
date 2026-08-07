@@ -434,6 +434,14 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         self.env_table.installEventFilter(self)
         self.env_table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.env_table.customContextMenuRequested.connect(self._show_env_context_menu)
+
+        # ── Column sort state ─────────────────────────────────────────────
+        # Col: 0=Name 1=Type 2=Path 3=Runtime 4=Packages 5=Size 6=Created
+        # -1 = default sort (type-group then alpha), otherwise click-sort.
+        self._env_sort_column = -1
+        self._env_sort_asc = True
+        self.env_table.horizontalHeader().sectionClicked.connect(self._on_env_header_clicked)
+
         layout.addWidget(self.env_table)
 
         # Loading indicator (shown during refresh)
@@ -566,6 +574,19 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
             self._cmd_panel_widget.setVisible(False)
         self._cmd_panel_env_name = None
         self._cmd_panel_sticky = False
+
+    def _on_env_header_clicked(self, col: int):
+        """Toggle sort column/direction on header click; re-populate the table."""
+        # Col 7 (Default/star) is not sortable — clicking it does nothing
+        if col == 7:
+            return
+        if getattr(self, "_env_sort_column", -1) == col:
+            self._env_sort_asc = not getattr(self, "_env_sort_asc", True)
+        else:
+            self._env_sort_column = col
+            self._env_sort_asc = True
+        # Refresh with current cache (no force) — just re-sorts in memory
+        self._refresh_env_list(force=False)
 
     def _on_env_user_interaction(self, *args):
         """Called on manual user interaction (mouse click / key press) with env table.

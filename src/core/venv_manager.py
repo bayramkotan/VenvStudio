@@ -742,16 +742,12 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
         except Exception:
             import traceback; traceback.print_exc()
 
-        # ── Include poetry envs from platform-specific poetry virtualenvs dir ─
+        # ── Include poetry envs from poetry virtualenvs dir ──────────────────
+        # Uses user-configured override if set (Settings → Paths → Poetry
+        # virtualenvs), otherwise falls back to the platform default.
         try:
-            import sys as _sys
-            _plat = _sys.platform
-            if _plat == "win32":
-                _poetry_base = Path(os.environ.get("LOCALAPPDATA", os.environ.get("APPDATA", ""))) / "pypoetry" / "Cache" / "virtualenvs"
-            elif _plat == "darwin":
-                _poetry_base = Path.home() / "Library" / "Caches" / "pypoetry" / "virtualenvs"
-            else:  # linux
-                _poetry_base = Path.home() / ".cache" / "pypoetry" / "virtualenvs"
+            from src.utils.platform_utils import get_poetry_venvs_path as _gpp
+            _poetry_base = Path(_gpp())
             if _poetry_base.exists():
                 for _penv in sorted(_poetry_base.iterdir()):
                     if not _penv.is_dir():

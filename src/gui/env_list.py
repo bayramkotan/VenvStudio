@@ -107,15 +107,57 @@ class EnvListMixin:
 
         # Fast load — never skip_calc (pyvenv.cfg reading is fast, no subprocess)
         envs = self.venv_manager.list_venvs_fast(skip_calc=False)
-        # Sort: base_dir envs first (alphabetic), then poetry (alphabetic), then pipx
-        def _env_sort_key(e):
-            if e.env_type == "pipx":
-                return (2, e.name.lower())
-            elif e.env_type == "poetry":
-                return (1, e.name.lower())
+
+        # ── Sort ──────────────────────────────────────────────────────────
+        # _env_sort_column: -1=default(type-group→alpha), 0=Name, 1=Type,
+        #   2=Path, 3=Runtime, 4=Packages, 5=Size, 6=Created
+        _sort_col = getattr(self, "_env_sort_column", -1)
+        _sort_asc = getattr(self, "_env_sort_asc", True)
+
+        def _size_bytes(s):
+            """Convert "12.3 MB" → float bytes for numeric sort."""
+            try:
+                n, u = (s or "0 B").strip().split()
+                return float(n) * {"B":1,"KB":1024,"MB":1024**2,
+                                   "GB":1024**3,"TB":1024**4}.get(u, 1)
+            except Exception:
+                return 0.0
+
+        if _sort_col == -1:
+            # Default: venv/uv/hatch/pdm/pixi first (alpha), poetry second (alpha), pipx last
+            def _env_sort_key(e):
+                if e.env_type == "pipx":
+                    return (2, e.name.lower())
+                elif e.env_type == "poetry":
+                    return (1, e.name.lower())
+                else:
+                    return (0, e.name.lower())
+            envs = sorted(envs, key=_env_sort_key)
+        else:
+            _col_key = {
+                0: lambda e: e.name.lower(),
+                1: lambda e: e.env_type.lower(),
+                2: lambda e: str(e.path).lower(),
+                3: lambda e: str(e.python_version or "").lower(),
+                4: lambda e: int(e.package_count or 0),
+                5: lambda e: _size_bytes(e.size),
+                6: lambda e: e.created or "",
+            }.get(_sort_col, lambda e: e.name.lower())
+            envs = sorted(envs, key=_col_key, reverse=not _sort_asc)
+
+        # ── Update header labels with sort indicator ───────────────────────
+        _base_labels = ["Name", "Type", "Path", "Runtime", "Packages", "Size", "Created", "Default"]
+        _hdr = self.env_table.horizontalHeader()
+        for _ci, _lbl in enumerate(_base_labels):
+            if _ci == _sort_col:
+                _arrow = "  ▲" if _sort_asc else "  ▼"
+                self.env_table.setHorizontalHeaderItem(
+                    _ci, __import__('PySide6.QtWidgets', fromlist=['QTableWidgetItem']).QTableWidgetItem(_lbl + _arrow)
+                )
             else:
-                return (0, e.name.lower())
-        envs = sorted(envs, key=_env_sort_key)
+                self.env_table.setHorizontalHeaderItem(
+                    _ci, __import__('PySide6.QtWidgets', fromlist=['QTableWidgetItem']).QTableWidgetItem(_lbl)
+                )
 
         # Also show loading if some envs are missing cache in normal load
         has_missing_cache = any(e.python_version == "..." for e in envs)

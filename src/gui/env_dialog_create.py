@@ -309,6 +309,24 @@ class EnvCreateMixin:
                 def _find_tool(name_):
                     return _find_tool_registered(name_)
 
+                # ── PM path overrides from Settings → Paths ───────────────
+                # Inject env vars so each tool uses the user-configured path.
+                # Done once here so every subprocess call below inherits them.
+                try:
+                    from src.utils.platform_utils import (
+                        get_poetry_venvs_path as _gpp2,
+                        get_conda_envs_dir as _gced,
+                        get_pipx_home as _gph2,
+                    )
+                    _poetry_override = _gpp2()
+                    if _poetry_override:
+                        os.environ["POETRY_VIRTUALENVS_PATH"] = _poetry_override
+                    _pipx_override = _gph2()
+                    if _pipx_override:
+                        os.environ["PIPX_HOME"] = _pipx_override
+                except Exception:
+                    pass
+
                 if _etype == "uv":
                     # ── uv ───────────────────────────────────────────────
                     uv_exe = _find_tool("uv")

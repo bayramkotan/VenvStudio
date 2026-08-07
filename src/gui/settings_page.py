@@ -857,6 +857,133 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
 
         self._load_conda_mirrors()
 
+        # ── PM Custom Paths ──────────────────────────────────────────────────
+        # Each row: [checkbox] [label] [QLineEdit (read-only)] [Browse] [Reset]
+        # Disabled by default; checkbox enables editing + saves immediately.
+        _pm_sep = QFrame()
+        _pm_sep.setFrameShape(QFrame.HLine)
+        _pm_sep.setStyleSheet(
+            f"background: {self._c()['border']}; max-height: 1px; margin: 6px 0;"
+        )
+        paths_layout.addRow(_pm_sep)
+
+        _pm_title = QLabel("📦 Package Manager Custom Paths")
+        _pm_title.setStyleSheet(
+            f"color: {self._c()['fg']}; font-size: {self._c()['fs_small']}px; font-weight: bold;"
+        )
+        paths_layout.addRow(_pm_title)
+
+        _pm_desc = QLabel(
+            "By default, each tool stores environments in its own standard location. "
+            "Enable a row to override that location — the tool will be directed to "
+            "use your chosen path instead."
+        )
+        _pm_desc.setWordWrap(True)
+        _pm_desc.setStyleSheet(
+            f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;"
+        )
+        paths_layout.addRow(_pm_desc)
+
+        def _make_pm_path_row(config_key_enabled, config_key_path, default_hint):
+            """Build a checkbox+lineedit+browse+reset row for a PM path override."""
+            row = QHBoxLayout()
+            cb = QCheckBox()
+            cb.setChecked(bool(self.config.get(config_key_enabled, False)))
+            row.addWidget(cb)
+
+            edit = QLineEdit()
+            edit.setReadOnly(True)
+            edit.setEnabled(False)
+            edit.setPlaceholderText(default_hint)
+            _saved_path = self.config.get(config_key_path, "") or ""
+            if _saved_path:
+                edit.setText(_saved_path)
+            row.addWidget(edit, 1)
+
+            browse_btn = QPushButton("Browse…")
+            browse_btn.setObjectName("secondary")
+            browse_btn.setFixedWidth(90)
+            browse_btn.setEnabled(False)
+            row.addWidget(browse_btn)
+
+            reset_btn = QPushButton("Reset")
+            reset_btn.setObjectName("secondary")
+            reset_btn.setFixedWidth(65)
+            reset_btn.setEnabled(False)
+            row.addWidget(reset_btn)
+
+            def _on_cb_toggled(on):
+                edit.setEnabled(on)
+                browse_btn.setEnabled(on)
+                reset_btn.setEnabled(on)
+                self.config.set(config_key_enabled, on)
+                if not on:
+                    # Disable → clear override
+                    self.config.set(config_key_path, "")
+                    edit.clear()
+                self.config.save()
+
+            def _on_browse():
+                folder = QFileDialog.getExistingDirectory(
+                    self, "Select Directory", edit.text() or str(Path.home())
+                )
+                if folder:
+                    edit.setText(folder)
+                    self.config.set(config_key_path, folder)
+                    self.config.save()
+
+            def _on_reset():
+                edit.clear()
+                self.config.set(config_key_path, "")
+                self.config.save()
+
+            cb.toggled.connect(_on_cb_toggled)
+            browse_btn.clicked.connect(_on_browse)
+            reset_btn.clicked.connect(_on_reset)
+
+            # Restore enabled state on load
+            if cb.isChecked():
+                edit.setEnabled(True)
+                browse_btn.setEnabled(True)
+                reset_btn.setEnabled(True)
+
+            return row
+
+        # Poetry virtualenvs path
+        _poetry_row = _make_pm_path_row(
+            "poetry_venvs_path_enabled",
+            "poetry_venvs_path",
+            "~/.cache/pypoetry/virtualenvs  (platform default)",
+        )
+        paths_layout.addRow("🎭 Poetry virtualenvs:", _poetry_row)
+
+        # Pipx home path
+        _pipx_row = _make_pm_path_row(
+            "pipx_home_enabled",
+            "pipx_home",
+            "~/.local/share/pipx  (platform default)",
+        )
+        paths_layout.addRow("📦 Pipx home:", _pipx_row)
+
+        # Conda envs dir
+        _conda_row = _make_pm_path_row(
+            "conda_envs_dir_enabled",
+            "conda_envs_dir",
+            "~/.local/share/mamba/envs  (platform default)",
+        )
+        paths_layout.addRow("🐍 Conda envs dir:", _conda_row)
+
+        _pm_note = QLabel(
+            "Changes take effect immediately for new environments. "
+            "Existing environments are not moved — they remain in their original locations "
+            "and will still appear in the list."
+        )
+        _pm_note.setWordWrap(True)
+        _pm_note.setStyleSheet(
+            f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;"
+        )
+        paths_layout.addRow("", _pm_note)
+
         paths_group.setLayout(paths_layout)
         layout.addWidget(paths_group)
 

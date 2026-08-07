@@ -219,9 +219,68 @@ def get_pipx_cmd() -> list:
     return [exe]
 
 
+def _get_config_path_override(key_enabled: str, key_path: str) -> Optional[str]:
+    """Return a user-configured path override from VenvStudio config, or None.
+
+    Reads config only when the matching ``key_enabled`` flag is True and the
+    stored path is non-empty. Importing config_manager here (inside the
+    function) avoids a circular import because platform_utils is imported very
+    early in the startup sequence.
+    """
+    try:
+        from src.core.config_manager import ConfigManager as _CM
+        _cfg = _CM()
+        if _cfg.get(key_enabled, False) and _cfg.get(key_path, ""):
+            _p = _cfg.get(key_path, "")
+            if _p:
+                return _p
+    except Exception:
+        pass
+    return None
+
+
+def get_poetry_venvs_path() -> Optional[str]:
+    """Return the poetry virtualenvs directory.
+
+    Returns the user-configured override (Settings → Paths → Poetry virtualenvs)
+    when enabled, otherwise falls back to the platform default that poetry uses.
+    """
+    override = _get_config_path_override(
+        "poetry_venvs_path_enabled", "poetry_venvs_path"
+    )
+    if override:
+        return override
+    # Platform default (mirrors what venv_manager.py uses in list_venvs_fast)
+    import sys as _sys, os as _os
+    if _sys.platform == "win32":
+        return str(
+            Path(_os.environ.get("LOCALAPPDATA", _os.environ.get("APPDATA", "")))
+            / "pypoetry" / "Cache" / "virtualenvs"
+        )
+    elif _sys.platform == "darwin":
+        return str(Path.home() / "Library" / "Caches" / "pypoetry" / "virtualenvs")
+    else:
+        return str(Path.home() / ".cache" / "pypoetry" / "virtualenvs")
+
+
+def get_conda_envs_dir() -> Optional[str]:
+    """Return the conda/micromamba envs directory.
+
+    Returns the user-configured override (Settings → Paths → Conda envs dir)
+    when enabled, otherwise returns None (caller uses micromamba default).
+    """
+    return _get_config_path_override(
+        "conda_envs_dir_enabled", "conda_envs_dir"
+    )
+
+
 def get_pipx_home() -> Optional[str]:
     """Find pipx home directory (where venvs are stored)."""
     import subprocess, os, sys
+    # 0. VenvStudio config override (Settings → Paths → Pipx home)
+    _override = _get_config_path_override("pipx_home_enabled", "pipx_home")
+    if _override:
+        return _override
     # 1. Env var override
     env_home = os.environ.get("PIPX_HOME")
     if env_home and os.path.isdir(env_home):

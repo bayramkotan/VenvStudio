@@ -170,6 +170,46 @@ class ToolchainMixin:
                             r = subprocess.run(["sh", "-c", "curl -LsSf https://astral.sh/uv/install.sh | sh"],
                                                capture_output=True, text=True, timeout=120)
                             if r.returncode != 0: return False, r.stderr[:200]
+                    elif tool == "pixi":
+                        # Pixi: always use official installer, never pip
+                        # First: remove pip-installed fake pixi if present
+                        import shutil as _sh2, subprocess as _sp2
+                        _pip_pixi = None
+                        try:
+                            import importlib.util
+                            if importlib.util.find_spec("pixi") is not None:
+                                _pip_pixi = True
+                        except Exception:
+                            pass
+                        if _pip_pixi:
+                            # Try to remove pip pixi (may need admin on Windows)
+                            _sp2.run(
+                                [sys.executable, "-m", "pip", "uninstall", "pixi", "-y"],
+                                capture_output=True, text=True, timeout=60)
+                        if sys.platform == "win32":
+                            _winget = _sh2.which("winget")
+                            if _winget:
+                                r = subprocess.run([_winget, "install", "prefix-dev.pixi",
+                                                    "--accept-package-agreements",
+                                                    "--accept-source-agreements"],
+                                                   capture_output=True, text=True, timeout=300)
+                                if r.returncode != 0:
+                                    # Fallback: PowerShell installer
+                                    r = subprocess.run(
+                                        ["powershell", "-NoProfile", "-Command",
+                                         "iwr -useb https://pixi.sh/install.ps1 | iex"],
+                                        capture_output=True, text=True, timeout=300)
+                            else:
+                                r = subprocess.run(
+                                    ["powershell", "-NoProfile", "-Command",
+                                     "iwr -useb https://pixi.sh/install.ps1 | iex"],
+                                    capture_output=True, text=True, timeout=300)
+                            if r.returncode != 0: return False, r.stderr[:300]
+                        else:
+                            r = subprocess.run(
+                                ["sh", "-c", "curl -fsSL https://pixi.sh/install.sh | bash"],
+                                capture_output=True, text=True, timeout=300)
+                            if r.returncode != 0: return False, r.stderr[:300]
                     elif tool == "poetry":
                         _pipx = shutil.which("pipx")
                         _done_poetry = False
@@ -314,6 +354,27 @@ class ToolchainMixin:
                     **subprocess_args(capture_output=True, text=True, timeout=60))
                 return r.returncode == 0
 
+            # pixi: remove ~/.pixi directory + pip-installed fake if present
+            if tool == "pixi":
+                import shutil as _sh
+                # Remove pip-installed fake pixi
+                try:
+                    subprocess.run(
+                        [sys.executable, "-m", "pip", "uninstall", "pixi", "-y"],
+                        capture_output=True, text=True, timeout=60)
+                except Exception:
+                    pass
+                # Remove ~/.pixi (official install location)
+                _pixi_home = os.path.expanduser("~/.pixi")
+                if not os.path.exists(_pixi_home):
+                    _pixi_home = os.path.join(os.environ.get("LOCALAPPDATA", ""), ".pixi")
+                if os.path.exists(_pixi_home):
+                    try:
+                        _sh.rmtree(_pixi_home)
+                    except Exception as e:
+                        return False
+                return True
+
             # Default: pip uninstall with --break-system-packages fallback
             r = subprocess.run(
                 [sys.executable, "-m", "pip", "uninstall", pkg, "-y", "-q"],
@@ -377,10 +438,13 @@ class ToolchainMixin:
         # (id,          pip_pkg,   label,    icon)
         ("pip",         "pip",     "pip",    "📦"),
         ("venv",        None,      "venv",   "🐍"),
-        ("uv",          "uv",      "uv",     "⚡"),
-        ("poetry",      "poetry",  "Poetry", "📜"),
-        ("pipx",        "pipx",    "pipx",   "📦"),
+        ("hatch",       "hatch",   "Hatch",  "🏗️"),
         ("micromamba",  None,      "Conda",  "🦎"),
+        ("pdm",         "pdm",     "PDM",    "📦"),
+        ("pixi",        None,      "Pixi",   "🌊"),  # pixi uses its own installer
+        ("pipx",        "pipx",    "pipx",   "📦"),
+        ("poetry",      "poetry",  "Poetry", "📜"),
+        ("uv",          "uv",      "uv",     "⚡"),
     ]
 
     def _build_toolchain_ui(self, layout):
@@ -538,15 +602,36 @@ class ToolchainMixin:
             elif chosen == a_system: cb_system()
 
         if tool == "micromamba":
-            # Micromamba: Download only (standalone binary)
+            # Micromamba: Download/Upgrade + Remove (with warning)
             install_btn = _b("⬇ Install", "Download micromamba binary", name="install_user")
             install_btn.setVisible(True)
             upgrade_btn = _b("⬆ Upgrade", "Re-download micromamba",     name="upgrade_user")
             upgrade_btn.setVisible(False)
+            remove_btn  = _b("🗑 Remove",  "Remove micromamba binary",   True, name="rm_user")
+            remove_btn.setVisible(False)
             hl.addWidget(install_btn)
             hl.addWidget(upgrade_btn)
+            hl.addWidget(remove_btn)
             install_btn.clicked.connect(lambda: self._tc_download_mamba(tbl, row))
             upgrade_btn.clicked.connect(lambda: self._tc_download_mamba(tbl, row))
+            remove_btn.clicked.connect(lambda chk=False, t=tool, p=pkg, tb=tbl, r=row:
+                self._tc_do_remove(t, p, "user", tb, r))
+        elif tool == "pixi":
+            # Pixi: always user-local (~/.pixi/bin) — no scope popup like Conda
+            install_btn = _b("⬇ Install", "Install Pixi (official installer)", name="install_user")
+            upgrade_btn = _b("⬆ Upgrade", "Update Pixi (pixi self-update)",    name="upgrade_user")
+            remove_btn  = _b("🗑 Remove",  "Uninstall Pixi (~/.pixi folder)",   True, name="rm_user")
+            upgrade_btn.setVisible(False)
+            remove_btn.setVisible(False)
+            hl.addWidget(install_btn)
+            hl.addWidget(upgrade_btn)
+            hl.addWidget(remove_btn)
+            install_btn.clicked.connect(lambda chk=False, t=tool, p=pkg, tb=tbl, r=row:
+                self._tc_do_install(t, p, "user", tb, r))
+            upgrade_btn.clicked.connect(lambda chk=False, t=tool, p=pkg, tb=tbl, r=row:
+                self._tc_do_install(t, p, "user", tb, r))
+            remove_btn.clicked.connect(lambda chk=False, t=tool, p=pkg, tb=tbl, r=row:
+                self._tc_do_remove(t, p, "user", tb, r))
         else:
             install_btn = _b("⬇ Install", "Install this tool",   name="install_user")
             upgrade_btn = _b("⬆ Upgrade", "Upgrade this tool",   name="upgrade_user")
@@ -707,7 +792,35 @@ class ToolchainMixin:
             if w: cands.append(w)
         found = next((c for c in cands if c and os.path.isfile(c)), "")
         if found:
-            return found
+            # For pixi: verify it's the real prefix-dev pixi, not pip-installed fake
+            if tool == "pixi":
+                try:
+                    import subprocess as _sp
+                    _r = _sp.run([found, "--version"], capture_output=True, text=True, timeout=5)
+                    _out = (_r.stdout + _r.stderr).lower()
+                    if "pixiv" in _out or ("pixi" not in _out):
+                        found = ""  # wrong pixi, keep searching
+                except Exception:
+                    pass
+            if found:
+                return found
+        # For pixi: also check user-install locations
+        if tool == "pixi" and not found:
+            _pixi_cands = [
+                os.path.expanduser("~/.pixi/bin/pixi"),
+                os.path.join(os.environ.get("LOCALAPPDATA", ""), ".pixi", "bin", "pixi.exe"),
+                os.path.join(os.environ.get("USERPROFILE", ""), ".pixi", "bin", "pixi.exe"),
+            ]
+            for _c in _pixi_cands:
+                if os.path.isfile(_c):
+                    try:
+                        import subprocess as _sp
+                        _r = _sp.run([_c, "--version"], capture_output=True, text=True, timeout=5)
+                        _out = (_r.stdout + _r.stderr).lower()
+                        if "pixi" in _out and "pixiv" not in _out:
+                            return _c
+                    except Exception:
+                        pass
         # Fallback: check if tool is available as python module (e.g. python3 -m pipx)
         try:
             import subprocess
@@ -956,26 +1069,48 @@ class ToolchainMixin:
 
     def _tc_cache_read(self, py_exe):
         """Return cached (path, ver, display_path) rows for py_exe, or None
-        if this Python has never been scanned. Switching between Pythons
-        was re-running every subprocess check on each switch; this lets a
-        Python seen before load instantly instead."""
-        import json, os
+        if this Python has never been scanned. Cache is invalidated automatically
+        when _TC_TOOLS changes or cache is older than 1 hour."""
+        import json, os, time
         try:
             fp = self._tc_cache_file()
             if not os.path.isfile(fp):
                 return None
             with open(fp, "r", encoding="utf-8") as f:
                 data = json.load(f)
+            # Version fingerprint: sorted tool IDs joined
+            _current_sig = ",".join(t[0] for t in self._TC_TOOLS)
+            if data.get("_sig") != _current_sig:
+                return None  # _TC_TOOLS changed — invalidate entire cache
             entry = data.get(os.path.normcase(py_exe))
             if not entry:
                 return None
-            return [tuple(r) for r in entry.get("rows", [])]
+            # TTL: invalidate if older than 1 hour
+            _ts = entry.get("ts", 0)
+            if time.time() - _ts > 3600:
+                return None
+            raw_rows = entry.get("rows", [])
+            is_keyed = entry.get("keyed", False)
+            if is_keyed:
+                _id_to_row = {}
+                for r in raw_rows:
+                    if r and len(r) >= 2:
+                        _id_to_row[r[0]] = tuple(r[1:])
+                result = []
+                for tid, pkg, lbl, icon in self._TC_TOOLS:
+                    result.append(_id_to_row.get(tid, ("", "—", "")))
+                return result
+            else:
+                if len(raw_rows) != len(self._TC_TOOLS):
+                    return None
+                return [tuple(r) for r in raw_rows]
         except Exception:
             return None
 
     def _tc_cache_write(self, py_exe, rows):
         """Persist scan results for py_exe so switching back to it later
-        skips rescanning entirely."""
+        skips rescanning entirely. Rows are stored with tool_id so order
+        changes in _TC_TOOLS don't corrupt the cache."""
         import json, os, time
         try:
             fp = self._tc_cache_file()
@@ -986,7 +1121,15 @@ class ToolchainMixin:
                         data = json.load(f)
                 except Exception:
                     data = {}
-            data[os.path.normcase(py_exe)] = {"rows": list(rows), "ts": time.time()}
+            # Store rows keyed by tool_id, not positionally
+            _keyed_rows = []
+            for i, row in enumerate(rows):
+                _tid = self._TC_TOOLS[i][0] if i < len(self._TC_TOOLS) else f"_unknown_{i}"
+                _keyed_rows.append([_tid] + list(row))
+            _current_sig = ",".join(t[0] for t in self._TC_TOOLS)
+            data["_sig"] = _current_sig
+            data[os.path.normcase(py_exe)] = {"rows": _keyed_rows, "ts": time.time(),
+                                               "keyed": True}
             with open(fp, "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
         except Exception as e:
@@ -1088,13 +1231,120 @@ class ToolchainMixin:
         # separately pip-installable package) — installing/upgrading it
         # would crash subprocess.run() with a None arg. Guard it here,
         # consistent with the existing guard in _tc_do_remove.
-        if tool == "venv" or not pkg:
+        if tool == "venv":
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.information(
                 self, "Nothing to install",
                 f"'{tool}' is part of the Python standard library — "
                 f"it cannot be installed or upgraded separately."
             )
+            return
+
+        # Pixi: pkg=None but has its own installer — handle via WorkerThread like other tools
+        if tool == "pixi" and not pkg:
+            import subprocess, shutil, os, sys
+            from PySide6.QtGui import QColor
+            from PySide6.QtWidgets import QTableWidgetItem
+
+            # Get py_exe early for cache invalidation
+            _si0 = tbl.item(row, 1)
+            py_exe = (_si0.data(257) if _si0 else "") or ""
+            if not py_exe and hasattr(self, "_tc_py_combo"):
+                py_exe = self._tc_py_combo.currentData() or sys.executable
+            if not py_exe:
+                py_exe = sys.executable
+
+            _pixi_cands = [
+                os.path.expanduser("~/.pixi/bin/pixi"),
+                os.path.join(os.environ.get("LOCALAPPDATA", ""), ".pixi", "bin", "pixi.exe"),
+                os.path.join(os.environ.get("USERPROFILE", ""), ".pixi", "bin", "pixi.exe"),
+            ]
+            _pixi_exe = next((c for c in _pixi_cands if os.path.isfile(c)), None)
+
+            si = tbl.item(row, 1)
+            if si:
+                si.setText("⏳ Installing...")
+                si.setForeground(QColor("#89b4fa"))
+
+            def _do_pixi(_pixi_exe=_pixi_exe, callback=None):
+                import subprocess, shutil, os, sys
+                if _pixi_exe:
+                    # Already installed — self-update
+                    r = subprocess.run([_pixi_exe, "self-update"],
+                                       capture_output=True, text=True, timeout=120)
+                    if r.returncode == 0:
+                        return True, _pixi_exe
+                    # self-update failed but pixi exists — not an error
+                    _out = (r.stdout + r.stderr).lower()
+                    if "already" in _out or "up to date" in _out or "latest" in _out:
+                        return True, _pixi_exe
+                    return False, r.stderr[:300] or r.stdout[:300]
+                else:
+                    # Not installed — remove pip fake, then install
+                    subprocess.run(
+                        [sys.executable, "-m", "pip", "uninstall", "pixi", "-y"],
+                        capture_output=True, text=True, timeout=60)
+                    if sys.platform == "win32":
+                        _winget = shutil.which("winget")
+                        if _winget:
+                            r = subprocess.run([_winget, "install", "prefix-dev.pixi",
+                                                "--accept-package-agreements",
+                                                "--accept-source-agreements"],
+                                               capture_output=True, text=True, timeout=300)
+                            if r.returncode == 0:
+                                _new = os.path.join(os.environ.get("USERPROFILE", ""),
+                                                    ".pixi", "bin", "pixi.exe")
+                                return True, _new if os.path.isfile(_new) else ""
+                        r = subprocess.run(
+                            ["powershell", "-NoProfile", "-Command",
+                             "iwr -useb https://pixi.sh/install.ps1 | iex"],
+                            capture_output=True, text=True, timeout=300)
+                    else:
+                        r = subprocess.run(
+                            ["sh", "-c", "curl -fsSL https://pixi.sh/install.sh | bash"],
+                            capture_output=True, text=True, timeout=300)
+                    if r.returncode == 0:
+                        _new = os.path.expanduser("~/.pixi/bin/pixi")
+                        if not os.path.isfile(_new):
+                            _new = os.path.join(os.environ.get("USERPROFILE", ""),
+                                                ".pixi", "bin", "pixi.exe")
+                        return True, _new if os.path.isfile(_new) else ""
+                    return False, r.stderr[:300] or r.stdout[:300]
+
+            def _on_pixi_done(ok, result, _row=row, _tbl=tbl, _py=py_exe):
+                from PySide6.QtCore import QTimer as _QTimer
+                # Invalidate cache so next open shows fresh state
+                try:
+                    import json, os
+                    fp = self._tc_cache_file()
+                    if os.path.isfile(fp):
+                        with open(fp, "r", encoding="utf-8") as f:
+                            data = json.load(f)
+                        data.pop(os.path.normcase(_py), None)
+                        with open(fp, "w", encoding="utf-8") as f:
+                            json.dump(data, f, indent=2)
+                except Exception:
+                    pass
+                si2 = _tbl.item(_row, 1)
+                if ok:
+                    if si2:
+                        si2.setText("✅ Installed")
+                        si2.setForeground(QColor("#a6e3a1"))
+                    _QTimer.singleShot(800, lambda: self._tc_load_table(_py, force=True))
+                else:
+                    if si2:
+                        si2.setText("❌ Failed")
+                        si2.setForeground(QColor("#f38ba8"))
+                    from PySide6.QtWidgets import QMessageBox
+                    QMessageBox.warning(self, "Pixi Install Failed", result)
+
+            from src.gui.package_panel import WorkerThread
+            w = WorkerThread(_do_pixi, parent=self)
+            w.finished.connect(_on_pixi_done)
+            w.start()
+            if not hasattr(self, "_tc_ws"):
+                self._tc_ws = []
+            self._tc_ws.append(w)
             return
 
         si = tbl.item(row, 1)
@@ -1272,7 +1522,30 @@ class ToolchainMixin:
             if tool in ("pip", "venv"):
                 return False, f"{tool} cannot be removed — it is a core Python component"
             elif tool == "micromamba":
-                return False, "micromamba is a standalone binary — delete it manually from its install path"
+                from PySide6.QtWidgets import QMessageBox
+                reply = QMessageBox.warning(
+                    self, "Remove Conda (micromamba)",
+                    "This will remove the micromamba binary managed by VenvStudio.\n\n"
+                    "⚠️ Conda environments will no longer be accessible until you\n"
+                    "re-install micromamba via Toolchain Manager.\n\n"
+                    "Proceed?",
+                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No
+                )
+                if reply != QMessageBox.Yes:
+                    return False, "cancelled"
+                try:
+                    from src.core.micromamba_installer import get_micromamba_exe
+                    _mamba_exe = get_micromamba_exe()
+                    if _mamba_exe and os.path.isfile(str(_mamba_exe)):
+                        os.remove(str(_mamba_exe))
+                    # Also remove the managed dir if empty
+                    _mamba_dir = os.path.dirname(str(_mamba_exe)) if _mamba_exe else None
+                    if _mamba_dir and os.path.isdir(_mamba_dir):
+                        import shutil as _sh
+                        _sh.rmtree(_mamba_dir, ignore_errors=True)
+                    return True
+                except Exception as e:
+                    return False, str(e)
 
             # For uv/poetry/pipx: try direct binary removal first (curl-installed)
             # then fall back to pip uninstall --break-system-packages

@@ -76,8 +76,23 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   **Ders:** launcher komutları gerçek tool'la test edilmeli (shiny run bozuktu
   → inline -c; reflex çıkarıldı — proje ister). Launcher 4 kaynaktan beslenir:
   app_definitions + launcher_links.json (çok-linkli) + LAUNCHER_TOOLTIPS + _PACKAGE_DOCS.
-- **N7 — Yeni env tipleri:** Hatch, PDM, Pipenv, Rye, Pixi (uv/poetry/pipx
-  paritesiyle: create/list/install/uninstall/freeze/clone).
+- **🆕 ÖNCELİKLİ — Conda Backend Ayarı:** Settings'e "Conda Backend" seçeneği eklenecek.
+  Kullanıcı micromamba (varsayılan/yönetilen), mamba, conda, miniforge veya özel path
+  seçebilecek. Pixi de conda-forge desteklediği için buraya dahil edilebilir.
+  **Kapsamı:** micromamba'nın kullanıldığı TÜM yerler değişmeli (env oluşturma, paket
+  kurma, listeleme, Toolchain Manager). Önce `grep -rn "micromamba\|get_micromamba_exe"`
+  ile tüm kullanım yerlerini tespit et, sonra config'e `conda_backend` ayarı ekle.
+  Aşamalar:
+  - [ ] Kullanım yerlerini tespit et
+  - [ ] Config'e `conda_backend` + `conda_custom_path` ekle
+  - [ ] Settings UI'a backend seçici ekle (dropdown: micromamba/mamba/conda/miniforge/custom)
+  - [ ] Tüm micromamba çağrılarını `get_conda_exe()` helper'ına yönlendir
+  - [ ] Toolchain Manager'da seçilen backend'i göster
+- **N7 ⚠️ KISMİ (2026-08-06/07) — Hatch, PDM, Pixi eklendi. Pipenv düşük öncelik, Rye uv'a birleşti.**
+  Yapılanlar: create/list/install/uninstall/env_list ikonları/toolchain manager.
+  Açık: Launcher tab "No apps installed" (Hatch/PDM/Pixi) — tam düzeltme bekliyor.
+  Dosyalar: env_dialog.py, venv_manager.py, env_list.py, package_ops.py, env_state.py,
+  launcher_ui.py, settings_toolchain.py, constants.py.
 - **N8 — Terminal komutlarını geliştir:** env tipini de ekle; env yönetimi
   (create/delete/clone/rename) + preset yükle/kaldır terminalden rahat
   yapılabilsin.
@@ -143,9 +158,9 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   `package_export.py` gerekiyor (altyapı `show_command`/`_show_command_hint`
   içinde hazır, sadece çağıranlar bağlanmadı).
 - **N19 ✅ KAPATILDI (2026-08-06) — Kullanıcı test etti, şu an çalışıyor.**
-- **N20 — Preset listesi çok uzadı (42 preset), aşağı kaydırmak zaman alıyor.**
-  Arama kutusu eklenebilir mi (isimle filtrele)? Ayrıca bilimsel presetler
-  eksik: Kozmoloji, Fizik, Kimya vb. (astropy, sympy, pint gibi paketlerle).
+- **N20 ✅ ÇÖZÜLDÜ (2026-08-06) — Preset arama kutusu + 5 bilimsel preset eklendi.**
+  Arama: tab_builders.py. Presetler: 🔭 Astronomy, ⚛️ Physics, 🧪 Chem, 🌍 Climate, 🔬 SciPy.
+  Toplam preset: 42 → 47.
 - **N21 ⚠️ KISMİ — Create dialog'da "Include system site-packages" açıklama label eklendi (env_dialog_ui.py, #a6adc8 renk) ama UI'da görünmüyor. __pycache__ temizleme de işe yaramadı. Sonraya bırakıldı.**
 - **N22 ✅ KAPATILDI (2026-08-06) — v1.6.33 fix doğrulandı, çalışıyor.**
 - **N23 ✅ KAPATILDI (2026-08-06) — Kullanıcı kapattı, ileriye bırakıldı.**

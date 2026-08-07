@@ -191,13 +191,13 @@ class EnvCreateDialog(QDialog):
         from PySide6.QtWidgets import QComboBox as _QCB
         self.env_type_combo = _QCB()
         self.env_type_combo.addItem("🐍 Python Virtual Environment", "venv")
-        self.env_type_combo.addItem("⚡ uv Environment", "uv")
-        self.env_type_combo.addItem("📜 Poetry Environment", "poetry")
-        # pipx removed from Create dialog — auto-detected and managed automatically
         self.env_type_combo.addItem("🦎 Conda Environment (micromamba)", "conda")
         self.env_type_combo.addItem("🏗️ Hatch Environment", "hatch")
         self.env_type_combo.addItem("📦 PDM Environment", "pdm")
         self.env_type_combo.addItem("🌊 Pixi Environment", "pixi")
+        # pipx removed from Create dialog — auto-detected and managed automatically
+        self.env_type_combo.addItem("📜 Poetry Environment", "poetry")
+        self.env_type_combo.addItem("⚡ uv Environment", "uv")
         # Tool Environment removed — system apps accessible from all env types
         self.env_type_combo.setToolTip(
             "Python venv: isolated Python environment with pip\n"
@@ -575,7 +575,7 @@ class EnvCreateDialog(QDialog):
                 _note("Create new project:") +
                 _line(_cmd("hatch") + " new " + _path(_name)) +
                 _note("Create / activate environment:") +
-                _line(_cmd("hatch") + " env create") +
+                _line(_cmd("hatch") + " env create" + (f" --python {_ver(_sel_ver)}" if _sel_ver != "3.12" else "")) +
                 _line(_cmd("hatch") + " shell") +
                 _note("Run scripts:") +
                 _line(_cmd("hatch") + " run " + _kw("python") + " script.py")
@@ -585,7 +585,7 @@ class EnvCreateDialog(QDialog):
                 _note("Python package manager with pyproject.toml") +
                 _line(_cmd("pip") + " install " + _kw("pdm")) +
                 _note("Create new project:") +
-                _line(_cmd("pdm") + " init " + _path(_name)) +
+                _line(_cmd("pdm") + " init --python " + _ver(_sel_ver) + " " + _path(_name)) +
                 _note("Add dependencies:") +
                 _line(_cmd("pdm") + " add " + _kw("numpy") + " " + _kw("pandas")) +
                 _note("Run scripts:") +
@@ -726,7 +726,8 @@ class EnvCreateDialog(QDialog):
         if not env_type:
             return
         import sys
-        _pip_pkgs = {"uv": "uv", "poetry": "poetry", "pipx": "pipx"}
+        _pip_pkgs = {"uv": "uv", "poetry": "poetry", "pipx": "pipx",
+                     "hatch": "hatch", "pdm": "pdm"}
         pkg = _pip_pkgs.get(env_type, env_type)
         python_path = self.python_combo.currentData() or sys.executable
 
@@ -862,6 +863,41 @@ class EnvCreateDialog(QDialog):
                 r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
                 if r.returncode == 0: return True, ""
                 return False, r.stderr[:300]
+
+            # ── Pixi: never use pip — use official installer ─────────────
+            if env_type == "pixi":
+                if sys.platform == "win32":
+                    # Windows: use winget or PowerShell installer
+                    _winget = shutil.which("winget")
+                    if _winget:
+                        r = subprocess.run(
+                            [_winget, "install", "prefix-dev.pixi", "--accept-package-agreements",
+                             "--accept-source-agreements"],
+                            capture_output=True, text=True, timeout=300)
+                        if r.returncode == 0:
+                            return True, ""
+                    # Fallback: PowerShell installer
+                    try:
+                        r = subprocess.run(
+                            ["powershell", "-NoProfile", "-Command",
+                             "iwr -useb https://pixi.sh/install.ps1 | iex"],
+                            capture_output=True, text=True, timeout=300)
+                        if r.returncode == 0:
+                            return True, ""
+                        return False, r.stderr[:400]
+                    except Exception as e:
+                        return False, str(e)
+                else:
+                    # Linux/macOS: curl installer
+                    try:
+                        r = subprocess.run(
+                            ["sh", "-c", "curl -fsSL https://pixi.sh/install.sh | bash"],
+                            capture_output=True, text=True, timeout=300)
+                        if r.returncode == 0:
+                            return True, ""
+                        return False, r.stderr[:400]
+                    except Exception as e:
+                        return False, str(e)
 
             if scope == "system":
                 if sys.platform == "win32":
@@ -1863,26 +1899,40 @@ class EnvCreateDialog(QDialog):
         }
 
         def _find_tool_exe(tool):
-            import os
-            # For pixi: prefer ~/.pixi/bin/pixi over system pixi
-            # (system may have a different tool named pixi e.g. Pixiv downloader)
+            import os, sys as _sys2
+            # For pixi: prefer user-installed pixi over system/pip pixi
             if tool == "pixi":
                 _candidates = [
                     os.path.expanduser("~/.pixi/bin/pixi"),
                     os.path.join(os.environ.get("LOCALAPPDATA", ""), ".pixi", "bin", "pixi.exe"),
+                    os.path.join(os.environ.get("USERPROFILE", ""), ".pixi", "bin", "pixi.exe"),
                 ]
                 for _c in _candidates:
                     if os.path.isfile(_c) and os.access(_c, os.X_OK):
-                        # Verify it's really prefix-dev pixi
                         try:
                             _r = subprocess.run([_c, "--version"],
                                                 capture_output=True, text=True, timeout=5)
-                            if "pixi" in (_r.stdout + _r.stderr).lower() and "pixiv" not in (_r.stdout + _r.stderr).lower():
+                            _out = (_r.stdout + _r.stderr).lower()
+                            if "pixi" in _out and "pixiv" not in _out:
                                 return _c
                         except Exception:
                             pass
                 return None
-            return _shutil.which(tool)
+            found = _shutil.which(tool)
+            if found:
+                return found
+            if _sys2.platform == "win32":
+                _extras = [
+                    os.path.join("C:\\Program Files\\Python314\\Scripts", f"{tool}.exe"),
+                    os.path.join(os.environ.get("APPDATA", ""), "Python", "Python314",
+                                 "Scripts", f"{tool}.exe"),
+                    os.path.join(os.environ.get("LOCALAPPDATA", ""), "Programs", "Python",
+                                 "Python314", "Scripts", f"{tool}.exe"),
+                ]
+                for _c in _extras:
+                    if os.path.isfile(_c):
+                        return _c
+            return None
 
         _tool_exe = _find_tool_exe(env_type)
         if not _tool_exe:

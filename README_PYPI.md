@@ -47,7 +47,7 @@ Or download the standalone binary — **no Python required:**
 ### 🗂️ Environment Management
 - **8 environment types** — Python venv, uv, Poetry, Conda (micromamba), pipx, Hatch, PDM, Pixi
 - Create, rename, clone, delete virtual environments with a modern GUI
-- **Type** column — see each env's package manager at a glance (🐍 venv, ⚡ uv, 📜 Poetry, 🦎 Conda, 📦 pipx)
+- **Type** column — see each env's package manager at a glance (🐍 venv, ⚡ uv, 📜 Poetry, 🦎 Conda, 📦 pipx, 🏗️ Hatch, 📦 PDM, 🌊 Pixi)
 - **Runtime** column — actual Python version detected from each environment's binary
 - Auto-detect existing environments on disk at startup
 - Per-environment cache — instant load, no subprocess delays
@@ -64,6 +64,9 @@ Or download the standalone binary — **no Python required:**
 | 📜 | **Poetry** | `poetry new` | Dependency management with lock file |
 | 📦 | **pipx** | `pipx install` | Isolated CLI applications |
 | 🦎 | **Conda** | micromamba | conda-forge — R, RStudio, jamovi, JASP, DBeaver and 25,000+ packages |
+| 🏗️ | **Hatch** | `hatch new` | Modern Python project manager by PyPA with pyproject.toml |
+| 📦 | **PDM** | `pdm init` | PEP 582 / pyproject.toml based package manager |
+| 🌊 | **Pixi** | `pixi init` | conda-forge + PyPI, blazing fast Rust-powered environment |
 
 ### 📦 Package Management
 - **Installed** tab — filter, select, uninstall, export, import packages

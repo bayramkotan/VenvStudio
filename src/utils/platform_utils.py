@@ -530,6 +530,36 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                 # Default: cmd.exe via mamba_hook.bat (most reliable on Windows)
                 return f'start cmd /k "cd /d {path} && {cmd_activate}"'
 
+        elif env_type in ("hatch", "pdm", "pixi"):
+            # Hatch/PDM/Pixi: cd into project dir and run the tool's shell command
+            import shutil as _sh2, os as _os2
+            if env_type == "hatch":
+                _tool = _sh2.which("hatch") or "hatch"
+                _shell_cmd = f'"{_tool}" shell'
+            elif env_type == "pixi":
+                _pixi_cands = [
+                    _os2.path.join(_os2.environ.get("USERPROFILE", ""), ".pixi", "bin", "pixi.exe"),
+                    _os2.path.join(_os2.environ.get("LOCALAPPDATA", ""), ".pixi", "bin", "pixi.exe"),
+                ]
+                _tool = next((c for c in _pixi_cands if _os2.path.isfile(c)), None) \
+                        or _sh2.which("pixi") or "pixi"
+                _shell_cmd = f'"{_tool}" shell'
+            else:  # pdm
+                _tool = _sh2.which("pdm") or "pdm"
+                _shell_cmd = f'"{_tool}" run cmd'
+
+            if terminal_type == "wt" and shutil.which("wt"):
+                return f'start wt -d "{path}" cmd /k "{_shell_cmd}"'
+            elif terminal_type == "pwsh":
+                return f'start pwsh -NoExit -Command "Set-Location \'{path}\'; {_shell_cmd}"'
+            elif terminal_type == "powershell":
+                return f'start powershell -NoExit -Command "Set-Location \'{path}\'; {_shell_cmd}"'
+            elif terminal_type == "git-bash" and shutil.which("bash"):
+                git_bash = shutil.which("bash")
+                return f'start "" "{git_bash}" --login -c "cd \'{path}\' && {_shell_cmd} && exec bash"'
+            else:
+                return f'start cmd /k "cd /d {path} && {_shell_cmd}"'
+
         elif env_type == "poetry":
             # Same self-heal as POSIX: the marker may lack poetry_venv_path
             # for envs created before that key existed, or if Poetry has
@@ -608,6 +638,19 @@ def open_terminal_at(path: Path, terminal_type: str = "",
     def _make_cmd_posix(path: Path) -> str:
         if env_type in ("system_tools", "pipx"):
             return f"cd '{path}'"
+        elif env_type in ("hatch", "pdm", "pixi"):
+            import shutil as _sh3, os as _os3
+            if env_type == "hatch":
+                _tool = _sh3.which("hatch") or "hatch"
+                return f"cd '{path}' && '{_tool}' shell"
+            elif env_type == "pixi":
+                _pixi = _os3.path.expanduser("~/.pixi/bin/pixi")
+                if not _os3.path.isfile(_pixi):
+                    _pixi = _sh3.which("pixi") or "pixi"
+                return f"cd '{path}' && '{_pixi}' shell"
+            else:  # pdm
+                _tool = _sh3.which("pdm") or "pdm"
+                return f"cd '{path}' && '{_tool}' run bash"
         elif env_type == "poetry":
             # Poetry venv is in ~/.cache/pypoetry/virtualenvs/
             import json as _j

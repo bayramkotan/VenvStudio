@@ -800,14 +800,18 @@ class PackageOpsMixin:
             def _do_pixi_install(callback=None, _pkgs=_pkgs_pixi, _path=_pixi_path):
                 import subprocess, shutil, os
                 from src.utils.platform_utils import subprocess_args
-                # Prefer ~/.pixi/bin/pixi over system pixi
-                _pixi = os.path.expanduser("~/.pixi/bin/pixi")
-                if not os.path.isfile(_pixi):
-                    _pixi = shutil.which("pixi") or "pixi"
+                # Prefer user-installed pixi over system pixi (which may be fake)
+                _pixi_cands = [
+                    os.path.expanduser("~/.pixi/bin/pixi"),
+                    os.path.join(os.environ.get("USERPROFILE", ""), ".pixi", "bin", "pixi.exe"),
+                    os.path.join(os.environ.get("LOCALAPPDATA", ""), ".pixi", "bin", "pixi.exe"),
+                ]
+                _pixi = next((c for c in _pixi_cands if os.path.isfile(c)), None) \
+                        or shutil.which("pixi") or "pixi"
                 # Pixi needs python in the environment before --pypi packages
                 if callback:
                     callback("Ensuring python is in pixi environment...")
-                _py_check = subprocess.run(
+                subprocess.run(
                     [_pixi, "add", "python"],
                     capture_output=True, text=True, timeout=120,
                     cwd=str(_path) if _path else None, **subprocess_args()

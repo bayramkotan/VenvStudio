@@ -1344,10 +1344,10 @@ class EnvCreateDialog(QDialog):
                         "pipx": ["pipx", "install", "<app>"],
                     }.get(_etype)
                     if _head:
-                        # vs create -t <type> only covers uv/poetry so far --
+                        # vs create -t <type> only covers uv/poetry/hatch/pdm/pixi --
                         # pipx create does not map onto vs (no equivalent).
                         _vs_eq_a = ""
-                        if _etype in ("uv", "poetry"):
+                        if _etype in ("uv", "poetry", "hatch", "pdm", "pixi"):
                             _vs_eq_a = f"vs create {_name} -t {_etype}"
                             if _python:
                                 _vs_eq_a += f" --python {_python}"

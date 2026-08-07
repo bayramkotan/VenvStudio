@@ -1054,16 +1054,43 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
                                         _data = json.loads(_r.stdout)
                                         info.package_count = len(_data) if isinstance(_data, list) else 0
                             elif env_type == "hatch":
-                                # hatch has no --json list; use pip list inside hatch env
+                                # hatch stores envs in AppData — find real env path first
                                 _exe = _sh.which("hatch")
                                 if _exe:
-                                    _r = _run(
-                                        [_exe, "run", "pip", "list", "--format=json"],
+                                    # Get real env path via hatch env find
+                                    _find_r = _run(
+                                        [_exe, "env", "find"],
                                         capture_output=True, text=True,
-                                        timeout=15, cwd=str(item))
-                                    if _r.returncode == 0:
-                                        _data = json.loads(_r.stdout)
-                                        info.package_count = len(_data) if isinstance(_data, list) else 0
+                                        timeout=10, cwd=str(item))
+                                    _hatch_env_path = _find_r.stdout.strip() if _find_r.returncode == 0 else ""
+                                    if _hatch_env_path:
+                                        # Use pip directly from the hatch env
+                                        import sys as _sys
+                                        _pip = None
+                                        for _p in (
+                                            str(Path(_hatch_env_path) / "Scripts" / "pip.exe"),
+                                            str(Path(_hatch_env_path) / "bin" / "pip"),
+                                        ):
+                                            if Path(_p).exists():
+                                                _pip = _p
+                                                break
+                                        if _pip:
+                                            _r = _run(
+                                                [_pip, "list", "--format=json"],
+                                                capture_output=True, text=True,
+                                                timeout=15)
+                                            if _r.returncode == 0:
+                                                _data = json.loads(_r.stdout)
+                                                info.package_count = len(_data) if isinstance(_data, list) else 0
+                                    else:
+                                        # Fallback: hatch run pip list
+                                        _r = _run(
+                                            [_exe, "run", "pip", "list", "--format=json"],
+                                            capture_output=True, text=True,
+                                            timeout=15, cwd=str(item))
+                                        if _r.returncode == 0:
+                                            _data = json.loads(_r.stdout)
+                                            info.package_count = len(_data) if isinstance(_data, list) else 0
                         except Exception:
                             info.package_count = 0
                         info.size = get_venv_size(item)

@@ -88,11 +88,17 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   - [ ] Settings UI'a backend seçici ekle (dropdown: micromamba/mamba/conda/miniforge/custom)
   - [ ] Tüm micromamba çağrılarını `get_conda_exe()` helper'ına yönlendir
   - [ ] Toolchain Manager'da seçilen backend'i göster
-- **N7 ⚠️ KISMİ (2026-08-06/07) — Hatch, PDM, Pixi eklendi. Pipenv düşük öncelik, Rye uv'a birleşti.**
-  Yapılanlar: create/list/install/uninstall/env_list ikonları/toolchain manager.
-  Açık: Launcher tab "No apps installed" (Hatch/PDM/Pixi) — tam düzeltme bekliyor.
-  Dosyalar: env_dialog.py, venv_manager.py, env_list.py, package_ops.py, env_state.py,
-  launcher_ui.py, settings_toolchain.py, constants.py.
+- **N7 ✅ ÇÖZÜLDÜ (2026-08-07, v1.6.38) — Hatch, PDM, Pixi eklendi.**
+  - Create/list/install/uninstall/terminal/env_list ikonları/toolchain manager/CLI
+  - `vs create NAME -t hatch/pdm/pixi` CLI desteği eklendi
+  - Launcher tab: hatch/pdm/pixi env'lerde venv kartları gösteriyor
+  - Paket listesi: hatch env find → gerçek env path → pip list
+  - Backend label: "Hatch"/"PDM"/"Pixi" gösteriyor (artık "PIP" değil)
+  - Open Terminal: her tip için doğru shell komutu (hatch shell / pixi shell / pdm run cmd)
+  - Pipenv düşük öncelik, Rye uv'a birleşti — eklenmeyecek
+  - Dosyalar: env_dialog.py, venv_manager.py, env_list.py, package_ops.py,
+    env_state.py, launcher_ui.py, settings_toolchain.py, platform_utils.py,
+    constants.py, cli.py, README.md, README_PYPI.md
 - **N8 — Terminal komutlarını geliştir:** env tipini de ekle; env yönetimi
   (create/delete/clone/rename) + preset yükle/kaldır terminalden rahat
   yapılabilsin.

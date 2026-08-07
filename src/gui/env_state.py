@@ -267,7 +267,7 @@ class EnvStateMixin:
             # they get the pip cards PLUS the conda-only system apps —
             # previously conda showed only 6 cards while Quick Launch
             # correctly listed pip apps installed in the env.
-            if env_type in ("uv", "poetry", "pipx"):
+            if env_type in ("uv", "poetry", "pipx", "hatch", "pdm", "pixi"):
                 _match = {"venv"}
             elif env_type == "conda":
                 _match = {"venv", "conda"}
@@ -832,6 +832,100 @@ class EnvStateMixin:
                                     meta = info.get("metadata", {})
                                     ver = meta.get("main_package", {}).get("package_version", "")
                                     pkgs.append(_Pkg(pkg_name, ver))
+                        except Exception:
+                            pass
+                    elif self.env_type == "hatch":
+                        import subprocess, json as _json, shutil, sys
+                        from pathlib import Path as _Path
+                        from src.utils.platform_utils import subprocess_args
+                        class _Pkg:
+                            def __init__(self, name, version):
+                                self.name = name; self.version = version
+                        pkgs = []
+                        try:
+                            _hatch = shutil.which("hatch")
+                            if _hatch and self.venv_path:
+                                # Find real env path first
+                                _fr = subprocess.run(
+                                    [_hatch, "env", "find"],
+                                    capture_output=True, text=True, timeout=10,
+                                    cwd=str(self.venv_path), **subprocess_args())
+                                _env_path = _fr.stdout.strip() if _fr.returncode == 0 else ""
+                                if _env_path:
+                                    _pip = None
+                                    for _p in (
+                                        str(_Path(_env_path) / "Scripts" / "pip.exe"),
+                                        str(_Path(_env_path) / "bin" / "pip"),
+                                    ):
+                                        if _Path(_p).exists():
+                                            _pip = _p; break
+                                    if _pip:
+                                        _r = subprocess.run(
+                                            [_pip, "list", "--format=json"],
+                                            capture_output=True, text=True, timeout=30)
+                                        if _r.returncode == 0:
+                                            for p in _json.loads(_r.stdout):
+                                                pkgs.append(_Pkg(p["name"], p["version"]))
+                                else:
+                                    # Fallback: hatch run pip list
+                                    _r = subprocess.run(
+                                        [_hatch, "run", "pip", "list", "--format=json"],
+                                        capture_output=True, text=True, timeout=30,
+                                        cwd=str(self.venv_path), **subprocess_args())
+                                    if _r.returncode == 0:
+                                        for p in _json.loads(_r.stdout):
+                                            pkgs.append(_Pkg(p["name"], p["version"]))
+                        except Exception:
+                            pass
+                    elif self.env_type == "pdm":
+                        import subprocess, json as _json, shutil
+                        from src.utils.platform_utils import subprocess_args
+                        class _Pkg:
+                            def __init__(self, name, version):
+                                self.name = name; self.version = version
+                        pkgs = []
+                        try:
+                            _pdm = shutil.which("pdm")
+                            if _pdm and self.venv_path:
+                                _r = subprocess.run(
+                                    [_pdm, "list", "--json"],
+                                    capture_output=True, text=True, timeout=30,
+                                    cwd=str(self.venv_path), **subprocess_args())
+                                if _r.returncode == 0:
+                                    data = _json.loads(_r.stdout)
+                                    if isinstance(data, list):
+                                        for p in data:
+                                            pkgs.append(_Pkg(
+                                                p.get("name", p.get("package", "")),
+                                                p.get("version", "")))
+                        except Exception:
+                            pass
+                    elif self.env_type == "pixi":
+                        import subprocess, json as _json, shutil, os
+                        from src.utils.platform_utils import subprocess_args
+                        class _Pkg:
+                            def __init__(self, name, version):
+                                self.name = name; self.version = version
+                        pkgs = []
+                        try:
+                            _pixi = os.path.expanduser("~/.pixi/bin/pixi")
+                            if not os.path.isfile(_pixi):
+                                _pixi = os.path.join(os.environ.get("USERPROFILE", ""),
+                                                     ".pixi", "bin", "pixi.exe")
+                            if not os.path.isfile(_pixi):
+                                _pixi = shutil.which("pixi") or "pixi"
+                            if self.venv_path:
+                                _r = subprocess.run(
+                                    [_pixi, "list", "--json"],
+                                    capture_output=True, text=True, timeout=30,
+                                    cwd=str(self.venv_path), **subprocess_args())
+                                if _r.returncode == 0:
+                                    data = _json.loads(_r.stdout)
+                                    if isinstance(data, list):
+                                        for p in data:
+                                            pkgs.append(_Pkg(
+                                                p.get("name", ""),
+                                                p.get("version", "")))
                         except Exception:
                             pass
                     else:

@@ -45,7 +45,7 @@ Or download the standalone binary — **no Python required:**
 ## ✨ Features
 
 ### 🗂️ Environment Management
-- **5 environment types** — Python venv, uv, Poetry, Conda (micromamba), pipx
+- **8 environment types** — Python venv, uv, Poetry, Conda (micromamba), pipx, Hatch, PDM, Pixi
 - Create, rename, clone, delete virtual environments with a modern GUI
 - **Type** column — see each env's package manager at a glance (🐍 venv, ⚡ uv, 📜 Poetry, 🦎 Conda, 📦 pipx)
 - **Runtime** column — actual Python version detected from each environment's binary
@@ -201,6 +201,10 @@ Installing with pip gives you two names for the same tool: **`vs`** to type and
 | `vs` | `venvstudio` | Launch the GUI |
 | `vs list` | `venvstudio list` | List every detected environment |
 | `vs create NAME` | `venvstudio create NAME` | Create a venv environment |
+| `vs create NAME -t uv` | `venvstudio create NAME -t uv` | Create a uv environment |
+| `vs create NAME -t hatch` | `venvstudio create NAME -t hatch` | Create a Hatch environment |
+| `vs create NAME -t pdm` | `venvstudio create NAME -t pdm` | Create a PDM environment |
+| `vs create NAME -t pixi` | `venvstudio create NAME -t pixi` | Create a Pixi environment |
 | `vs delete NAME` | `venvstudio delete NAME` | Delete an environment (asks first) |
 | `vs delete NAME -y` | `venvstudio delete NAME -y` | Delete without the confirmation prompt |
 | `vs packages ENV` | `venvstudio packages ENV` | List packages installed in ENV |

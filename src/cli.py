@@ -248,6 +248,85 @@ def _create_conda_env(name: str, path, python: str = None):
     return True, f"conda environment '{name}' created at {path}"
 
 
+def _create_modern_env(name: str, path, env_type: str, python: str = None):
+    """Create a Hatch, PDM, or Pixi environment via CLI. Returns (ok, message)."""
+    import subprocess, shutil, json, datetime, os
+    from src.utils.platform_utils import subprocess_args
+
+    _tool_install_hints = {
+        "hatch": "pip install hatch",
+        "pdm":   "pip install pdm",
+        "pixi":  "curl -fsSL https://pixi.sh/install.sh | bash  (or iwr -useb https://pixi.sh/install.ps1 | iex on Windows)",
+    }
+
+    # Find tool executable
+    if env_type == "pixi":
+        _pixi_cands = [
+            os.path.expanduser("~/.pixi/bin/pixi"),
+            os.path.join(os.environ.get("USERPROFILE", ""), ".pixi", "bin", "pixi.exe"),
+            os.path.join(os.environ.get("LOCALAPPDATA", ""), ".pixi", "bin", "pixi.exe"),
+        ]
+        tool_exe = next((c for c in _pixi_cands if os.path.isfile(c)), None) \
+                   or shutil.which("pixi")
+    else:
+        tool_exe = shutil.which(env_type)
+
+    if not tool_exe:
+        return False, (
+            f"{env_type} is not installed or not on PATH.\n"
+            f"Install it with: {_tool_install_hints.get(env_type, f'pip install {env_type}')}"
+        )
+
+    os.makedirs(str(path), exist_ok=True)
+
+    if env_type == "hatch":
+        cmd = [tool_exe, "new", name]
+        print(f"$ hatch new {name}")
+        r = subprocess.run(cmd, capture_output=True, text=True,
+                           cwd=str(path.parent), **subprocess_args())
+    elif env_type == "pdm":
+        cmd = [tool_exe, "init", "--non-interactive"]
+        if python:
+            cmd += ["--python", python]
+        print(f"$ pdm init --non-interactive" + (f" --python {python}" if python else ""))
+        r = subprocess.run(cmd, capture_output=True, text=True,
+                           cwd=str(path), **subprocess_args())
+    elif env_type == "pixi":
+        cmd = [tool_exe, "init", str(path)]
+        print(f"$ pixi init {path}")
+        r = subprocess.run(cmd, capture_output=True, text=True,
+                           cwd=str(path.parent), **subprocess_args())
+
+    if r.returncode != 0:
+        return False, f"{env_type} init failed:\n{r.stderr or r.stdout or 'unknown error'}"
+
+    # Write marker
+    marker = path / ".venvstudio_env"
+    try:
+        import sys
+        _pyver = ""
+        if python:
+            try:
+                _rv = subprocess.run([python, "--version"], capture_output=True,
+                                     text=True, timeout=5)
+                _pyver = (_rv.stdout.strip() or _rv.stderr.strip()).replace("Python ", "")
+            except Exception:
+                pass
+        if not _pyver:
+            _pyver = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
+        with open(str(marker), "w") as f:
+            json.dump({
+                "type": env_type, "name": name,
+                "created": datetime.datetime.now().isoformat(),
+                "python": python or "",
+                "python_version": _pyver,
+            }, f, indent=2)
+    except Exception:
+        pass
+
+    return True, f"{env_type} environment '{name}' created at {path}"
+
+
 def _cmd_create(args) -> int:
     _config, vm = _managers()
     if _find_env(vm, args.name):
@@ -270,6 +349,8 @@ def _cmd_create(args) -> int:
             ok, msg = _create_poetry_env(args.name, path, args.python)
         elif etype == "conda":
             ok, msg = _create_conda_env(args.name, path, args.python)
+        elif etype in ("hatch", "pdm", "pixi"):
+            ok, msg = _create_modern_env(args.name, path, etype, args.python)
         else:
             ok, msg = False, f"--type {etype} is not supported yet"
     print(msg)
@@ -390,7 +471,7 @@ def run_cli(argv=None) -> int:
 
     p = sub.add_parser("create", help="Create a new environment")
     p.add_argument("name")
-    p.add_argument("-t", "--type", choices=["venv", "uv", "poetry", "conda"], default="venv",
+    p.add_argument("-t", "--type", choices=["venv", "uv", "poetry", "conda", "hatch", "pdm", "pixi"], default="venv",
                     help="Environment type (default: venv). pipx not supported here.")
     p.add_argument("--python", help="Path to the Python interpreter to use")
     p.add_argument("--no-pip", action="store_true", help="Create without pip (venv type only)")

@@ -75,7 +75,7 @@ Or download the standalone binary — **no Python required:**
 <td width="50%" valign="top">
 
 ### 🗂️ Environment Management
-- **5 environment types** — venv, uv, Poetry, Conda, pipx
+- **8 environment types** — venv, uv, Poetry, Conda, pipx, Hatch, PDM, Pixi
 - Create, rename, clone, delete environments with a modern GUI
 - **Type** column in the environment table — see each env's manager at a glance
 - Auto-detect existing environments at startup
@@ -152,7 +152,7 @@ Or download the standalone binary — **no Python required:**
 
 ## 🔧 Supported Environment Types
 
-VenvStudio supports **5 environment types**, each with its own icon and color in the environment table:
+VenvStudio supports **8 environment types**, each with its own icon and color in the environment table:
 
 | Icon | Type | Backend | Description |
 |:----:|:-----|:--------|:------------|
@@ -161,6 +161,9 @@ VenvStudio supports **5 environment types**, each with its own icon and color in
 | 📜 | **Poetry** | `poetry new` | Dependency management with lock file and pyproject.toml |
 | 📦 | **pipx** | `pipx install` | Install Python CLI apps in isolated environments |
 | 🦎 | **Conda** | micromamba | conda-forge powered — R, RStudio, jamovi, JASP, DBeaver and 25,000+ packages |
+| 🏗️ | **Hatch** | `hatch new` | Modern Python project manager by PyPA with pyproject.toml |
+| 📦 | **PDM** | `pdm init` | PEP 582 / pyproject.toml based package manager |
+| 🌊 | **Pixi** | `pixi init` | conda-forge + PyPI, blazing fast Rust-powered environment |
 
 Each environment is tracked with a `.venvstudio_env` marker file, and the **Runtime** column shows the actual Python version detected from the environment's binary.
 

@@ -104,8 +104,8 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   uyumluluk tablosu.** Bazı kütüphaneler bazı env/Python sürümlerine
   kurulmuyor. Tools altında ÇOK DETAYLI bir dialog: hangi kütüphane hangi
   Python sürümü/env tipiyle çalışır. (Tasarım henüz belirsiz.)
-- **❗ Quick Launch env dropdown pipx'te çalışmıyor** — davranış netleştirilecek.
-- **Preferred terminal + terminal içi aktivasyon doğrulaması** — test bekliyor.
+- **❗ Quick Launch env dropdown pipx'te çalışmıyor ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
+- **Preferred terminal + terminal içi aktivasyon doğrulaması ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
 - **PDM env gerçek venv path ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
 - **Preset UI sayaç ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
 - **webbrowser.open → open_url ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.

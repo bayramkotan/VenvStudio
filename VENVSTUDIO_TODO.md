@@ -95,7 +95,20 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
 - **B84 ✅ ÇÖZÜLDÜ (v1.6.39)** — Kullanıcı onayladı.
 - **B80 ✅ ÇÖZÜLDÜ (v1.6.39)** — Rye zaten yoktu.
 - **B81 ✅ ÇÖZÜLDÜ (v1.6.39)** — Kullanıcı onayladı.
-- **N9 — 🧩 Conflict Management (AKTİF GELİŞTİRME — EN BAŞTA):**
+- **B18 — 🔴 AppImage CI Startup Hang (ÖNCELİKLİ):**
+  GitHub Actions'ta Linux AppImage build'i CI'da başlarken takılıyor (`startup hang reproduced in CI`).
+  AppImage kullanan kullanıcıları doğrudan etkiler.
+  - CI log'larına bakılacak, hang nedenini tespit et
+  - Muhtemel neden: Qt/XCB display olmadan başlatma sorunu (headless CI)
+  - Fix: `QT_QPA_PLATFORM=offscreen` veya Xvfb kullanımı
+  - Dosya: `.github/workflows/build-linux-appimage.yml`
+
+- **B19 — 🟡 GitHub Actions Node.js 20 Deprecated:**
+  `actions/checkout@v4`, `actions/setup-python@v5`, `actions/upload-artifact@v4` Node.js 20 kullanıyor, GitHub Node.js 24'e geçti. Şimdilik build çalışıyor ama yakında kırılabilir.
+  - Tüm workflow yml'lerinde action versiyonlarını güncelle: `@v4` → `@v5` (checkout/upload-artifact), `setup-python` en güncel versiyona
+  - Dosyalar: `.github/workflows/*.yml`
+
+- **N9 — 🧩 Conflict Management (AKTİF GELİŞTİRME):**
   Aşama aşama geliştirilecek. Tamamlananlar:
   - ✅ Aşama 1: `CONFLICT_RULES` static tablo (constants.py) — 20+ paket, max/min python, blocked_envs, severity
   - ✅ Aşama 2: Pre-flight kontrol — paket kurmadan önce uyumsuzluk uyarısı (package_ops.py)

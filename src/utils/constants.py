@@ -3,7 +3,7 @@ VenvStudio - Constants and Popular Package Catalog
 """
 
 APP_NAME = "VenvStudio"
-APP_VERSION = "1.6.39"
+APP_VERSION = "1.6.40"
 
 # ─── Shared Package Cache ─────────────────────────────────────────────────────
 # Default path for pip/uv shared download cache.
@@ -939,4 +939,237 @@ COMMAND_HINTS = {
     "activate_win": r"{path}\Scripts\Activate.ps1",
     "activate_unix": "source {path}/bin/activate",
     "clone": "pip freeze > req.txt && python -m venv {target} && pip install -r req.txt",
+}
+
+# ─── Conflict Rules ───────────────────────────────────────────────────────────
+# Known package incompatibilities with Python versions and env types.
+# Used by the pre-flight installer check and the Conflict Manager dialog.
+#
+# Each entry:
+#   "package_name" (lowercase, normalized): {
+#       "max_python":   "X.Y"   — last known working Python minor version (None = no limit)
+#       "min_python":   "X.Y"   — minimum Python version required (None = no limit)
+#       "blocked_envs": [...]   — env types where this package cannot be installed
+#       "note":         str     — human-readable explanation shown in the UI
+#       "severity":     "error"|"warning"  — error = will fail, warning = may fail
+#   }
+#
+# Sources: PyPI classifiers, GitHub issues, personal testing (2026-08).
+
+CONFLICT_RULES = {
+    # ── PyQt5 ─────────────────────────────────────────────────────────────────
+    "pyqt5": {
+        "max_python": "3.12",
+        "min_python": None,
+        "blocked_envs": [],
+        "note": "PyQt5 wheels are not available for Python 3.13+. Use PySide6 instead.",
+        "severity": "error",
+    },
+    "pyqtwebengine": {
+        "max_python": "3.12",
+        "min_python": None,
+        "blocked_envs": [],
+        "note": "PyQtWebEngine wheels are not available for Python 3.13+.",
+        "severity": "error",
+    },
+
+    # ── TensorFlow ────────────────────────────────────────────────────────────
+    "tensorflow": {
+        "max_python": "3.12",
+        "min_python": "3.9",
+        "blocked_envs": [],
+        "note": "TensorFlow does not yet provide wheels for Python 3.13+. Use PyTorch as an alternative.",
+        "severity": "error",
+    },
+    "tensorflow-cpu": {
+        "max_python": "3.12",
+        "min_python": "3.9",
+        "blocked_envs": [],
+        "note": "TensorFlow-CPU does not yet provide wheels for Python 3.13+.",
+        "severity": "error",
+    },
+    "tensorflow-gpu": {
+        "max_python": "3.12",
+        "min_python": "3.9",
+        "blocked_envs": [],
+        "note": "TensorFlow-GPU does not yet provide wheels for Python 3.13+.",
+        "severity": "error",
+    },
+    "keras": {
+        "max_python": "3.12",
+        "min_python": "3.9",
+        "blocked_envs": [],
+        "note": "Keras (standalone) requires TensorFlow which does not support Python 3.13+ yet.",
+        "severity": "warning",
+    },
+
+    # ── Orange3 ───────────────────────────────────────────────────────────────
+    "orange3": {
+        "max_python": "3.12",
+        "min_python": "3.9",
+        "blocked_envs": [],
+        "note": "Orange3 requires PyQt5 which is not available for Python 3.13+.",
+        "severity": "error",
+    },
+
+    # ── Torch / PyTorch ───────────────────────────────────────────────────────
+    "torch": {
+        "max_python": None,
+        "min_python": "3.9",
+        "blocked_envs": [],
+        "note": "PyTorch requires Python 3.9+. GPU support requires CUDA-compatible hardware.",
+        "severity": "warning",
+    },
+    "torchvision": {
+        "max_python": None,
+        "min_python": "3.9",
+        "blocked_envs": [],
+        "note": "torchvision must match the installed PyTorch version exactly.",
+        "severity": "warning",
+    },
+    "torchaudio": {
+        "max_python": None,
+        "min_python": "3.9",
+        "blocked_envs": [],
+        "note": "torchaudio must match the installed PyTorch version exactly.",
+        "severity": "warning",
+    },
+
+    # ── Spyder ────────────────────────────────────────────────────────────────
+    "spyder": {
+        "max_python": "3.12",
+        "min_python": "3.8",
+        "blocked_envs": ["pipx"],
+        "note": "Spyder 6+ supports Python 3.13 but PyQt5 dependency may fail. pipx is not supported.",
+        "severity": "warning",
+    },
+
+    # ── bitsandbytes ─────────────────────────────────────────────────────────
+    "bitsandbytes": {
+        "max_python": None,
+        "min_python": "3.9",
+        "blocked_envs": [],
+        "note": "bitsandbytes requires CUDA on Linux/Windows. CPU-only support is limited.",
+        "severity": "warning",
+    },
+
+    # ── ta-lib ────────────────────────────────────────────────────────────────
+    "ta-lib": {
+        "max_python": None,
+        "min_python": None,
+        "blocked_envs": [],
+        "note": "ta-lib requires the TA-Lib C library to be installed on the system first (not a pure Python package).",
+        "severity": "warning",
+    },
+
+    # ── Zipline ───────────────────────────────────────────────────────────────
+    "zipline-reloaded": {
+        "max_python": "3.11",
+        "min_python": None,
+        "blocked_envs": [],
+        "note": "zipline-reloaded has limited support for Python 3.12+.",
+        "severity": "warning",
+    },
+
+    # ── apache-airflow ────────────────────────────────────────────────────────
+    "apache-airflow": {
+        "max_python": None,
+        "min_python": "3.9",
+        "blocked_envs": ["pipx", "pixi"],
+        "note": "Apache Airflow requires a dedicated environment and is not suited for pipx or pixi.",
+        "severity": "warning",
+    },
+
+    # ── scapy ─────────────────────────────────────────────────────────────────
+    "scapy": {
+        "max_python": None,
+        "min_python": None,
+        "blocked_envs": [],
+        "note": "Scapy requires root/admin privileges for raw packet operations.",
+        "severity": "warning",
+    },
+
+    # ── rdkit ─────────────────────────────────────────────────────────────────
+    "rdkit": {
+        "max_python": None,
+        "min_python": None,
+        "blocked_envs": [],
+        "note": "RDKit is best installed via conda-forge (conda env). PyPI wheel may be incomplete.",
+        "severity": "warning",
+    },
+
+    # ── cartopy ───────────────────────────────────────────────────────────────
+    "cartopy": {
+        "max_python": None,
+        "min_python": None,
+        "blocked_envs": [],
+        "note": "Cartopy requires GEOS and PROJ C libraries. Best installed via conda-forge.",
+        "severity": "warning",
+    },
+
+    # ── panda3d ───────────────────────────────────────────────────────────────
+    "panda3d": {
+        "max_python": "3.12",
+        "min_python": None,
+        "blocked_envs": [],
+        "note": "Panda3D does not yet provide wheels for Python 3.13+.",
+        "severity": "error",
+    },
+
+    # ── pywin32 ───────────────────────────────────────────────────────────────
+    "pywin32": {
+        "max_python": None,
+        "min_python": None,
+        "blocked_envs": [],
+        "note": "pywin32 is Windows-only and will fail on Linux/macOS.",
+        "severity": "error",
+    },
+    "winreg": {
+        "max_python": None,
+        "min_python": None,
+        "blocked_envs": [],
+        "note": "winreg is a Windows built-in module — not installable via pip.",
+        "severity": "error",
+    },
+
+    # ── asyncpg ───────────────────────────────────────────────────────────────
+    "asyncpg": {
+        "max_python": None,
+        "min_python": "3.8",
+        "blocked_envs": [],
+        "note": "asyncpg requires PostgreSQL to be running and accessible.",
+        "severity": "warning",
+    },
+
+    # ── qutip ─────────────────────────────────────────────────────────────────
+    "qutip": {
+        "max_python": "3.12",
+        "min_python": None,
+        "blocked_envs": [],
+        "note": "QuTiP may not have binary wheels for Python 3.13+. Compilation from source may be needed.",
+        "severity": "warning",
+    },
+}
+
+# Normalized aliases — map common alternate names to the canonical key above.
+CONFLICT_RULES_ALIASES = {
+    "torch":              "torch",
+    "pytorch":            "torch",
+    "tensorflow-cpu":     "tensorflow-cpu",
+    "tensorflow_cpu":     "tensorflow-cpu",
+    "tensorflow-gpu":     "tensorflow-gpu",
+    "tensorflow_gpu":     "tensorflow-gpu",
+    "tf":                 "tensorflow",
+    "keras":              "keras",
+    "pyqt5":              "pyqt5",
+    "PyQt5":              "pyqt5",
+    "pyqtwebengine":      "pyqtwebengine",
+    "PyQtWebEngine":      "pyqtwebengine",
+    "orange3":            "orange3",
+    "Orange3":            "orange3",
+    "ta_lib":             "ta-lib",
+    "talib":              "ta-lib",
+    "zipline":            "zipline-reloaded",
+    "rdkit-pypi":         "rdkit",
+    "rdkit_pypi":         "rdkit",
 }

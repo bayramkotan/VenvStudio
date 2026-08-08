@@ -3,7 +3,7 @@
 ## Proje
 - **Repo:** https://github.com/bayramkotan/VenvStudio
 - **PyPI:** https://pypi.org/project/venvstudio/
-- **GÜNCEL VERSİYON: v1.6.39** (Bu oturum — F86 PM custom paths, F87 sidebar sort, Conda backend selector, B181 sys import fix, Launcher pixi/pdm/hatch install+uninstall+launch, Hatch env path/size/delete düzeltmeleri, env summary bar güncellendi) — PUSH EDİLDİ. PUSH SONRASI PyPI history sayfasını MUTLAKA kontrol et + `pip install venvstudio==1.6.39 --no-cache-dir` ile doğrula. Çok makineli çalışma: commit öncesi `git fetch` + `git log origin/main`.
+- **GÜNCEL VERSİYON: v1.6.40** (Bu oturum — N9 Conflict Management Aşama 1-3: CONFLICT_RULES static tablo, pre-flight kontrol, Tools → 🧩 Conflict Manager dialog; TODO temizlendi, N11-N17 eklendi) — PUSH EDİLDİ. PUSH SONRASI PyPI history sayfasını MUTLAKA kontrol et + `pip install venvstudio==1.6.40 --no-cache-dir --break-system-packages` ile doğrula. Çok makineli çalışma: commit öncesi `git fetch` + `git log origin/main`.
 - **Bir sonraki oturumun kuyruğu:** aşağıdaki "Bu Oturumda Yapılanlar (2026-07-23/24)" bölümünün *Açık maddeler* kısmı
 - **Proje dizini (Windows):** `C:\Github\VenvStudio`
 - **Proje dizini (Linux - CachyOS/Pardus):** `~/Github/VenvStudio`
@@ -5461,6 +5461,45 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 
 ---
 
+## Bu Oturumda Yapılanlar (v1.6.40) — 2026-08-08
+
+### N9 — 🧩 Conflict Management (Aşama 1-3)
+
+**Aşama 1 — CONFLICT_RULES static tablo (constants.py)**
+- 20+ paket için uyumluluk kuralları: `max_python`, `min_python`, `blocked_envs`, `note`, `severity`
+- `CONFLICT_RULES_ALIASES` dict'i — alternatif isimler normalize edildi
+- Kapsanan paketler: PyQt5, PyQtWebEngine, TensorFlow (cpu/gpu/keras), Orange3, torch/torchvision/torchaudio, Spyder, bitsandbytes, ta-lib, zipline-reloaded, apache-airflow, scapy, rdkit, cartopy, panda3d, pywin32, asyncpg, qutip
+
+**Aşama 2 — Pre-flight kontrol (package_ops.py)**
+- `_install_packages()` içine CONFLICT_RULES kontrolü eklendi
+- Error (kesin başarısız): kırmızı uyarı dialog → "Proceed anyway?" sorusu → kullanıcı "No" derse install iptal
+- Warning (muhtemelen sorunlu): confirm dialog'una ek not olarak ekleniyor
+- Kontrol asla install'ı bloke etmez (try/except ile korunuyor)
+
+**Aşama 3 — Tools → 🧩 Conflict Manager dialog (conflict_manager.py + window_menu.py)**
+- Tools menüsüne "🧩 Conflict Manager" eklendi
+- Python dropdown: `find_system_pythons()` ile Settings'teki Python'lar listeleniyor (serbest metin yok)
+- Env type dropdown: mevcut env otomatik seçili geliyor
+- 🔎 Scan Installed Packages: mevcut env'deki paketleri arka planda tarar, uyumsuz olanları listeler
+- Search: paket adı yaz → uyumluluk durumu göster (✅/⚠️/⛔)
+- All Rules tablosu: tüm CONFLICT_RULES, seçili env/Python'a göre highlight
+- Show All / Issues Only toggle
+
+**TODO güncellemeleri**
+- Tüm eski açık maddeler kapatıldı
+- N11-N17 yeni maddeler eklendi
+- N17: Toolchain Manager UX Yeniden Düzenleme
+
+### Değişen Dosyalar (v1.6.40)
+| Dosya | Değişiklik |
+|-------|-----------|
+| `src/utils/constants.py` | CONFLICT_RULES + CONFLICT_RULES_ALIASES tabloları |
+| `src/gui/package_ops.py` | Pre-flight conflict check |
+| `src/gui/conflict_manager.py` | YENİ — Conflict Manager dialog |
+| `src/gui/window_menu.py` | Tools → 🧩 Conflict Manager menü öğesi + _show_conflict_manager() |
+
+---
+
 ## Bu Oturumda Yapılanlar (v1.6.39) — 2026-08-08
 
 ### Tamamlanan Maddeler
@@ -5590,16 +5629,18 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 ---
 
 ## Sonraki Öncelikler
-1. **Quick Launch env dropdown pipx'te çalışmıyor** — davranış netleştirilecek
-2. **webbrowser.open kalanları** → open_url'e geçir (learn_page, window_menu, main_window)
-3. **F201** — launcher_links + Learn scroll API (buton yarısı)
-4. **N4** — Tüm launcher'ları kontrol et (kısayollar dahil)
-5. **N8** — Terminal komutlarını geliştir
-6. **N9** — Conflict Management
-7. **Preset UI sayaç** — "5 paket" ama zaten kurulu olanlar eksiliyor
+1. **N9** — 🧩 Conflict Management Aşama 4-7 (pip --dry-run, CONFLICT_RULES genişlet, export, otomatik öneri)
+2. **N11** — Apps → Kurulum Rehberi (File menüsü)
+3. **N12** — Farklı Lokasyona Env + Recent Envs
+4. **N13** — 11 Dil Çevirisi (aşamalı)
+5. **N14** — Conda Detaylandırma (README + Settings)
+6. **N15** — 🤖 Lokal LLM Yönetimi (Ollama entegrasyonu)
+7. **N16** — 📚 Akademik YZ Diyagramları (LSTM/Transformer/GAN...)
+8. **N8** — Terminal komutlarını geliştir
+9. **N17** — Toolchain Manager UX Yeniden Düzenleme
 
 ## Sonraki Chat Başlangıç Promptu
-> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.39, sıradaki: v1.6.40.
+> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.40, sıradaki: v1.6.41.
 
 ## 📋 Dosya Kopyalama Kuralları
 

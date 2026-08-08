@@ -60,6 +60,15 @@ class WindowMenuMixin:
         tools_menu.addAction(shortcut_action)
 
         tools_menu.addSeparator()
+        conflict_action = QAction("🧩 Conflict Manager", self)
+        conflict_action.setToolTip(
+            "Check package compatibility with the current environment.\n"
+            "Search any package to see known Python version and env-type restrictions."
+        )
+        conflict_action.triggered.connect(self._show_conflict_manager)
+        tools_menu.addAction(conflict_action)
+
+        tools_menu.addSeparator()
         commands_action = QAction("💻 View Commands", self)
         commands_action.setToolTip(
             "Every terminal command VenvStudio ran this session, "
@@ -315,6 +324,35 @@ class WindowMenuMixin:
             f.write("#!/bin/bash\n")
             f.write(f'"{vs_exe}"\n')
         os.chmod(script, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP)
+
+    def _show_conflict_manager(self):
+        """Open the Conflict Manager dialog."""
+        try:
+            from src.gui.conflict_manager import ConflictManagerDialog
+            _env_type = "venv"
+            _py_ver   = None
+            _installed = []
+            _pip_mgr  = None
+            if hasattr(self, "package_panel") and self.package_panel:
+                _env_type = getattr(self.package_panel, "_current_env_type", "venv") or "venv"
+                _pip_mgr  = getattr(self.package_panel, "pip_manager", None)
+                _vkey = str(getattr(_pip_mgr, "venv_path", "") or "")
+                _py_ver = getattr(self.package_panel,
+                                  "_launcher_py_version_cache", {}).get(_vkey)
+                # installed package names from cache
+                _installed = list(getattr(self.package_panel,
+                                          "installed_package_names", set()))
+            dlg = ConflictManagerDialog(
+                parent=self,
+                env_type=_env_type,
+                py_version=_py_ver,
+                installed_packages=_installed,
+                pip_manager=_pip_mgr,
+            )
+            dlg.exec()
+        except Exception as _e:
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Error", f"Could not open Conflict Manager:\n{_e}")
 
     def _populate_recent_menu(self):
         """Rebuild the Recent Environments submenu from recent_envs.json."""

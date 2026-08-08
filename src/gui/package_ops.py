@@ -572,6 +572,102 @@ class PackageOpsMixin:
             except Exception:
                 pass
 
+        # ── CONFLICT_RULES pre-flight check ───────────────────────────────────
+        # Check each package against known incompatibilities before showing
+        # the confirm dialog. Errors block; warnings are shown alongside.
+        _conflict_errors   = []  # will definitely fail
+        _conflict_warnings = []  # may fail / user should know
+        try:
+            from src.utils.constants import CONFLICT_RULES, CONFLICT_RULES_ALIASES
+            import re as _re_cf
+
+            # Resolve current Python version (already fetched above if available)
+            _py_ver = None
+            if _env_type != "pipx" and self.pip_manager:
+                try:
+                    venv_key = str(self.pip_manager.venv_path)
+                    _py_ver = self._launcher_py_version_cache.get(venv_key)
+                    if not _py_ver:
+                        python_exe = get_python_executable(self.pip_manager.venv_path)
+                        from src.utils.platform_utils import subprocess_args as _sa_cf
+                        _rv = subprocess.run(
+                            [str(python_exe), "--version"],
+                            **_sa_cf(capture_output=True, text=True, timeout=5)
+                        )
+                        _vs = (_rv.stdout + _rv.stderr).strip().replace("Python ", "")
+                        _py_ver = tuple(int(x) for x in _vs.split(".")[:2])
+                        self._launcher_py_version_cache[venv_key] = _py_ver
+                except Exception:
+                    pass
+
+            for _pkg_spec in packages:
+                # Normalize: strip version spec, lowercase, dash→underscore
+                _pkg_raw  = _re_cf.split(r'[><=!~;]', _pkg_spec)[0].strip()
+                _pkg_key  = _pkg_raw.lower().replace("_", "-")
+                # Check alias map first
+                _rule_key = CONFLICT_RULES_ALIASES.get(_pkg_raw, CONFLICT_RULES_ALIASES.get(_pkg_key, _pkg_key))
+                _rule     = CONFLICT_RULES.get(_rule_key)
+                if not _rule:
+                    continue
+
+                _msgs = []
+
+                # Python version checks
+                if _py_ver:
+                    _max = _rule.get("max_python")
+                    _min = _rule.get("min_python")
+                    if _max:
+                        _max_t = tuple(int(x) for x in _max.split("."))
+                        if _py_ver > _max_t:
+                            _msgs.append(
+                                f"requires Python ≤ {_max} "
+                                f"(env has Python {_py_ver[0]}.{_py_ver[1]})"
+                            )
+                    if _min:
+                        _min_t = tuple(int(x) for x in _min.split("."))
+                        if _py_ver < _min_t:
+                            _msgs.append(
+                                f"requires Python ≥ {_min} "
+                                f"(env has Python {_py_ver[0]}.{_py_ver[1]})"
+                            )
+
+                # Env type check
+                _blocked = _rule.get("blocked_envs", [])
+                if _env_type in _blocked:
+                    _msgs.append(f"not compatible with {_env_type} environments")
+
+                if _msgs:
+                    _detail = f"• {_pkg_raw}: {'; '.join(_msgs)}\n  ↳ {_rule['note']}"
+                    if _rule.get("severity") == "error":
+                        _conflict_errors.append(_detail)
+                    else:
+                        _conflict_warnings.append(_detail)
+        except Exception:
+            pass  # Never block install if conflict check itself fails
+
+        # Show errors — these will definitely fail, ask if user wants to proceed
+        if _conflict_errors:
+            _err_text = (
+                "⛔ The following packages are known to be incompatible with this environment:\n\n"
+                + "\n\n".join(_conflict_errors)
+                + "\n\nThese packages will likely fail to install. Proceed anyway?"
+            )
+            _err_reply = QMessageBox.warning(
+                self, "Compatibility Issues Detected",
+                _err_text,
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if _err_reply != QMessageBox.Yes:
+                return
+
+        # Append warnings to the existing py_warning string
+        if _conflict_warnings:
+            py_warning += (
+                "\n\n⚠️ Compatibility Notes:\n"
+                + "\n\n".join(_conflict_warnings)
+            )
+
         # Show ALL package names in confirm dialog
         reply = QMessageBox.question(
             self, "Confirm Installation",

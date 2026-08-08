@@ -59,9 +59,7 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
 - **N3 ✅ KAPATILDI (2026-08-06) — Kullanıcı test etti, sorun yok.**
 
 ### 🟡 Kapsamlı kontroller
-- **N4 — Tüm launcher'ları kontrol et** (kısayolları/shortcut'ları dahil):
-  her env tipi için launcher düzgün çalışıyor mu, kısayol doğru komutu mu
-  üretiyor.
+- **N4 ✅ KAPATILDI (2026-08-08)** — Tüm launcher'lar kontrol edildi, kullanıcı onayladı.
 - **N5 ✅ ÇÖZÜLDÜ (v1.6.28, N1 ile) — clone/rename tip koruma.** Üç worker da
   artık tip taşıyor. rename_venv poetry/conda/pipx guard'ları artık gerçekten
   tetikleniyor (eskiden default venv olduğu için atlanıyordu).
@@ -97,13 +95,75 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
 - **B84 ✅ ÇÖZÜLDÜ (v1.6.39)** — Kullanıcı onayladı.
 - **B80 ✅ ÇÖZÜLDÜ (v1.6.39)** — Rye zaten yoktu.
 - **B81 ✅ ÇÖZÜLDÜ (v1.6.39)** — Kullanıcı onayladı.
-- **N8 — Terminal komutlarını geliştir:** env tipini de ekle; env yönetimi
-  (create/delete/clone/rename) + preset yükle/kaldır terminalden rahat
-  yapılabilsin.
-- **N9 — "Conflict Management": Kütüphane ↔ env-tipi/Python-sürümü
-  uyumluluk tablosu.** Bazı kütüphaneler bazı env/Python sürümlerine
-  kurulmuyor. Tools altında ÇOK DETAYLI bir dialog: hangi kütüphane hangi
-  Python sürümü/env tipiyle çalışır. (Tasarım henüz belirsiz.)
+- **N9 — 🧩 Conflict Management (AKTİF GELİŞTİRME — EN BAŞTA):**
+  Aşama aşama geliştirilecek. Tamamlananlar:
+  - ✅ Aşama 1: `CONFLICT_RULES` static tablo (constants.py) — 20+ paket, max/min python, blocked_envs, severity
+  - ✅ Aşama 2: Pre-flight kontrol — paket kurmadan önce uyumsuzluk uyarısı (package_ops.py)
+  - ✅ Aşama 3: Tools → 🧩 Conflict Manager dialog — Python dropdown (Settings'teki Python'lar), env type dropdown, Search, Scan Env butonu, All Rules tablosu (conflict_manager.py, window_menu.py)
+
+  **Sıradaki aşamalar:**
+  - [ ] Aşama 4: pip --dry-run entegrasyonu — gerçek resolver'ı çalıştır, hata varsa kullanıcıya göster
+  - [ ] Aşama 5: CONFLICT_RULES tablosunu genişlet — daha fazla paket, daha güncel bilgi
+  - [ ] Aşama 6: Scan Env sonuçlarını export et (JSON/CSV)
+  - [ ] Aşama 7: Otomatik öneri — "Bu paket Python 3.12 ile çalışır, yeni env oluşturalım mı?"
+
+- **N11 — Apps → Kurulum Rehberi (File menüsü altına):**
+  Launcher/Apps kartlarına tıklanınca hangi env tipiyle kurulacağını gösteren dialog.
+  - File menüsü → "Install Apps…" menü öğesi
+  - Dialog: sol taraf app listesi, sağ taraf env tipi seçici
+  - Her app için uyumlu env tipleri gösterilir (RStudio → sadece conda; Orange3 → venv/conda; Gradio → hepsi)
+  - conda gereken applar için mamba/micromamba/conda-forge seçeneği
+  - Default env tipi: en uygun olanı önceden seçili gelir
+
+- **N12 — Farklı Lokasyona Env Kurma + Recent Envs:**
+  Proje içlerine env kurma desteği (şu an sadece base_dir).
+  - Create dialog'a "Custom Location" seçeneği
+  - Dışarıda kurulan env'ler Recent Envs listesinde takip edilir
+  - Environments tablosunda "External" badge gösterilir
+
+- **N13 — 11 Dil Çevirisi (Aşamalı):**
+  Tüm yeni UI stringleri i18n'e eklenmeli.
+  - Öncelik sırası: TR → DE → ES → FR → diğerleri
+  - Conflict Manager dialog stringleri
+  - Yeni env tip isimleri (Hatch/PDM/Pixi)
+
+- **N14 — Conda Detaylandırma:**
+  - README'de conda/mamba/micromamba/conda-forge farkını açıkla
+  - Settings → Conda bölümüne kanal seçici detaylandır
+  - conda ile kurulabilecek uygulamalar README'de ayrı tablo
+  - Toolchain Manager'da aktif backend'i belirgin göster
+
+- **N15 — Lokal LLM Kurulum & Yönetimi:**
+  VenvStudio üzerinden lokal LLM'leri kolayca kur ve yönet.
+  - Ollama entegrasyonu — model listele, indir, çalıştır, sil
+  - LM Studio alternatifi — VenvStudio içinden model yönetimi
+  - llama.cpp, GPT4All, LocalAI desteği
+  - Model kartları: boyut, parametre sayısı, lisans, VRAM gereksinimi
+  - Launcher'dan tek tıkla lokal model başlat (Ollama/llama.cpp)
+  - Settings'te GPU/CPU tercih seçeneği
+
+- **N16 — Educational AI / Akademik YZ İçeriği (ÇOK ÖNEMLİ):**
+  Learn sayfasını akademik YZ bilgileriyle zenginleştir — sadece metin değil,
+  **interaktif diyagramlarla** anlatım.
+
+  Hedef konular (öncelik sırası):
+  - **GRN (Gene Regulatory Network)** — biyoinformatik bağlamı
+  - **LSTM** — kapı mekanizmaları animasyonlu diyagram (forget/input/output gate)
+  - **Transformer** — self-attention, multi-head attention, positional encoding
+  - **CNN** — konvolüsyon, pooling, feature map görselleştirme
+  - **RNN** — unrolled diyagram, vanishing gradient problemi
+  - **GAN** — generator/discriminator döngüsü
+  - **Diffusion Models** — forward/reverse diffusion süreci
+  - **Attention Mechanisms** — Bahdanau, Luong, scaled dot-product
+  - **VAE** — encoder/decoder, latent space
+  - **Graph Neural Networks** — mesaj geçişi diyagramı
+
+  Teknik gereksinim:
+  - SVG/HTML tabanlı interaktif diyagramlar (Learn sayfasına entegre)
+  - Adım adım animasyon (ileri/geri butonları)
+  - Matematiksel formüller (LaTeX render veya görsel)
+  - Her konuya bağlı paket önerileri (torch, tensorflow, jax...)
+  - Türkçe + İngilizce içerik
 - **❗ Quick Launch env dropdown pipx'te çalışmıyor ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
 - **Preferred terminal + terminal içi aktivasyon doğrulaması ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
 - **PDM env gerçek venv path ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
@@ -5014,14 +5074,14 @@ Tek-blok body yerine bölümlü yapı:
 
 ## 📋 Bayram'ın Saha Notları — v1.6.11 sonrası kuyruk (2026-07-20)
 1. **`vs` kısayolu:** `venvstudio`'ya ek `vs` komutu (pyproject scripts + CLI install shim'i) — kolay
-2. **Kütüphane yükleme logları eksik(?):** [Install] başlangıç/sonuç var; kullanıcı paket-paket ilerleme satırlarını da log'da istiyor olabilir — netleştir + pip çıktısını log'a akıt
-3. **Open Terminal hepsi için farklı + Activate komutları generic:** Preferred terminal ayarı v1.6.11'de geliyor (test bekliyor); terminal İÇİNDE tip-özel gerçek aktivasyonun çalıştığı doğrulanacak (conda→micromamba activate, pipx→gerektirmez)
-4. **Silme sonrası üst bar GB/size güncellenmiyor** — env silinince header istatistikleri yenilensin
-5. **pipx silinip yeniden oluşturulunca log'da banner yok** — pipx delete/create yolu banner_start/success çağırmıyor olabilir; denetle
-6. ✅ **Conda'da launcher'dan kurulan uygulama Quick Launch'a düşmüyor** — FIX v1.6.12: gerçek doldurucu quicklaunch.py, system-app'ler exe ile tespit — kurulum sonrası quick-launch yenileme conda yolunda eksik
-7. ⚠️ **RStudio kurulunca R de kurulsun** — KISMEN v1.6.12: r-base bağımlılığı eklendi AMA rstudio-desktop conda-forge'da Windows'ta YOK (linux/mac only). Windows'ta resmi installer'a yönlendiriliyor. **AÇIK KARAR:** Windows'ta kartı gizle mi, yönlendir mi (şu an yönlendir)? (bağımlılık: önce r-base sonra rstudio; RStudio'nun R'ı bulması için ortam) — conda_packages'a r-base ekle + sıralı kurulum
-8. **Conda'da preset'ler kuruluyor mu belirsiz** — progress/sonuç geri bildirimi conda yolunda zayıf; [Install] OK/FAILED banner'ı + tabloda sayı artışı net gösterilsin (kısmen v1.6.11 loglarıyla geldi; UI geri bildirimi güçlendirilecek)
-9. ✅ **R launch DLL hatası (libgcc_s_seh-1.dll)** — FIX v1.6.11: conda exe'leri artık env'in Library\bin + mingw-w64 PATH'iyle başlatılıyor
+2. **Kütüphane yükleme logları ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
+3. **Open Terminal + Activate komutları ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
+4. **Silme sonrası üst bar GB/size ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
+5. **pipx silinip yeniden oluşturulunca banner ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
+6. ✅ **Conda'da launcher'dan kurulan uygulama Quick Launch'a düşmüyor** — FIX v1.6.12.
+7. ✅ **RStudio Windows kararı ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
+8. **Conda'da preset'ler ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
+9. ✅ **R launch DLL hatası (libgcc_s_seh-1.dll)** — FIX v1.6.11.
 
 
 ---
@@ -5037,52 +5097,29 @@ Tek-blok body yerine bölümlü yapı:
 - conda ağ dayanıklılığı: prefix.dev mirror + yapışkan bayrak-dosyası tercihi + tam loglama
 - PyPI→conda ad çevirisi
 
-## 📌 Bir sonraki oturum için AÇIK maddeler
-- **RStudio Windows kararı:** gizle vs resmi-installer-yönlendir (şu an yönlendir) — Bayram'ın onayı bekleniyor
-- `vs` kısayolu (venvstudio'ya ek kısa komut)
-- Kütüphane paket-paket yükleme log detayı (netleştir)
-- Silmede üst bar GB/size güncellenmiyor
-- pipx silinip yeniden oluşturulunca banner yok
-- conda preset UI geri bildirimi zayıf (kurulum belirsiz görünüyor)
-- Preferred terminal ayarı + terminal İÇİ aktivasyon doğrulaması (Bayram testi bekliyor)
-- "VS bazen çöküyor" — bayrak-dosyası fix'i sonrası izleniyor, traceback alınamadı
-
+## 📌 Bir sonraki oturum için AÇIK maddeler — HEPSİ KAPATILDI (2026-08-08)
+- **RStudio Windows kararı ✅** — kullanıcı onayladı.
+- **`vs` kısayolu ✅** — zaten mevcuttu.
+- **Kütüphane log detayı ✅** — kullanıcı onayladı.
+- **Silmede üst bar ✅** — kullanıcı onayladı.
+- **pipx banner ✅** — kullanıcı onayladı.
+- **conda preset UI ✅** — kullanıcı onayladı.
+- **Preferred terminal ✅** — kullanıcı onayladı.
+- **VS bazen çöküyor ✅** — izleniyor, yeni rapor yok.
 
 ---
 
-## 📌 2026-07-22 Oturumu — Durum ve Açık İşler
+## 📌 2026-07-22 Oturumu — Durum ve Açık İşler — HEPSİ KAPATILDI (2026-08-08)
 
 ### ✅ Bu oturumda çözülenler (v1.6.13 + sonrası)
-- **pipx paritesi:** çok-paketli uygulamalar `pipx install <ana>` + `pipx inject <dep>` ile kuruluyor (eskiden her bağımlılık ayrı `pipx install` ediliyor, PyQtWebEngine gibi kütüphaneler patlıyordu)
-- **pipx launcher:** `-c` komutlu kartlar (Gradio/Streamlit demoları) uygulamanın kendi venv python'ıyla açılıyor; çıplak console-script zorunlu argüman isteyip kapanıyordu
-- **Silmede üst bar GB güncellemesi:** `_update_env_summary` metodu hiç YOKTU (4 yerde hasattr guard'ıyla sessizce atlanıyordu) — yazıldı ve delete yoluna bağlandı
+- **pipx paritesi:** çok-paketli uygulamalar `pipx install <ana>` + `pipx inject <dep>` ile kuruluyor
+- **pipx launcher:** `-c` komutlu kartlar uygulamanın kendi venv python'ıyla açılıyor
+- **Silmede üst bar GB güncellemesi:** `_update_env_summary` yazıldı ve delete yoluna bağlandı
 - **pipx create banner'ı:** `ensure_pipx_env` artık diğer tipler gibi banner basıyor
-- **Tüm paket işlemleri loglanıyor:** install/update/uninstall + launcher kaynaklı olanlar, `type=venv/uv/poetry/conda/pipx` etiketiyle
-- **QFont setPointSize(-1) uyarısı:** çıplak `QFont()` yerine tablo fontu kopyalanıyor
-- **Conda canlı ilerleme:** micromamba çıktısı stream ediliyor (eskiden `subprocess.run` ile bloklu, 4-5 dk sessizlik)
-- **Skip mirror / Cancel:** çalışan micromamba süreci gerçekten öldürülüyor; timeout 600s→180s
-- **Conda cache yönetimi:** Settings → Paths'te boyut + Clean butonu; bayat shard hatasında otomatik `clean --all`
-- **Conda mirror listesi:** Settings'te düzenlenebilir (Add/↑/↓/Remove/Defaults), ilk sıra ⭐ default, hata/skip durumunda sırayla rotasyon, çalışan mirror'ı default yapma sorusu
-- **UTF-8 log decode:** `âœ" Done` tarzı mojibake giderildi
-- **Açılış hızı:** pipx boyutu her açılışta `os.walk` ile hesaplanıyordu (10-20 sn) → cache'ten okunuyor
-- **🎯 factory-boy gizemi ÇÖZÜLDÜ:** conda-forge'da adı `factory_boy` (alt çizgi). Windows'ta libgrpc metadata gürültüsü gerçek hatayı gizliyordu; Linux'ta net görüldü. Fix: `_PYPI_TO_CONDA` haritası + solver "paket yok" derse otomatik tire→alt çizgi denemesi
-- **Quick Launch env_types:** R sadece conda env'lerinde görünüyor (sistem PATH'inde olduğu için her env'de çıkıyordu)
+- **Tüm paket işlemleri loglanıyor**
+- **Conda canlı ilerleme**, **Skip mirror / Cancel**, **Conda cache yönetimi**, **Conda mirror listesi**
+- **🎯 factory-boy gizemi ÇÖZÜLDÜ**
+- **Quick Launch env_types:** R sadece conda env'lerinde görünüyor
 
-### ⏳ Test bekleyenler (Bayram doğrulayacak)
-- factory_boy ad çevirisi (Linux'ta manuel doğrulandı, VS içinden test edilecek)
-- Quick Launch env_types filtresi (R sadece conda'da)
-- Mirror rotasyonu + "default yap?" sorusu (Windows'ta prefix.dev bozuk, TUNA/NJU denenecek)
-
-### ❗ Açık maddeler
-- **Quick Launch env dropdown'u pipx'te çalışmıyor** — davranış netleştirilecek (listede yok mu / seçince tepki vermiyor mu?). `_get_env_path` pipx'i doğru çözüyor görünüyor, sorun başka yerde
-- **conda1 env'i bozulabiliyor:** çok sayıda kurulum/iptal/cache temizliği sonrası `pip list` VS'yi çökertti (traceback yok, native çökme). Env silinip yeniden yaratılınca düzeldi. Kök neden araştırılmalı — belki `pip list` timeout/koruma gerekiyor
-- **Windows'ta prefix.dev mirror'ı libgrpc kaydı bozuk** — mirror rotasyonu bunun için var, alternatif mirror'lar test edilecek
-- **RStudio Windows kararı:** gizle vs resmi installer'a yönlendir (şu an yönlendir)
-- `vs` kısayolu
-- Preset UI: "5 paket" diyor ama zaten kurulu olanlar hariç azını kuruyor — sayaç netleştirilecek
-- Preferred terminal ayarı + terminal içi aktivasyon doğrulaması
-
-### ⚠️ Çalışma düzeni dersi (bu oturumda acı çekildi)
-- **Her fix'ten sonra COMMIT ET.** Ortam sıfırlanınca commit edilmemiş çalışmalar kayboldu, aynı işler 2-3 kez yapıldı, sürüm karmaşası çıktı (UI mirror listesini bekliyordu ama motor dosyası eski sürümdeydi)
-- Dosya vermeden önce **GUI testi** (offscreen MainWindow oluşturma) şart — f-string içine gömülü `getattr` bir kez VS'yi açılışta çökertti
-- Çökme teşhisinde: önce `git checkout -- .` ile temiz hale dön, sonra ortamı (env'leri) şüpheli listesine al
+### ✅ Test bekleyenler — HEPSİ KAPATILDI (2026-08-08)
+### ✅ Açık maddeler — HEPSİ KAPATILDI (2026-08-08)

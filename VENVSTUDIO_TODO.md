@@ -164,6 +164,18 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   - Matematiksel formüller (LaTeX render veya görsel)
   - Her konuya bağlı paket önerileri (torch, tensorflow, jax...)
   - Türkçe + İngilizce içerik
+
+- **N8 — Terminal komutlarını geliştir:** env tipini de ekle; env yönetimi
+  (create/delete/clone/rename) + preset yükle/kaldır terminalden rahat
+  yapılabilsin.
+
+- **N17 — Toolchain Manager UX Yeniden Düzenleme:**
+  Mevcut "Managed / System / User Install" gibi kavramlar kafa karıştırıcı.
+  - Terminoloji netleştirilecek — hangi seçenek ne anlama gelir?
+  - Install hedefleri daha açık gösterilecek (nereye kuruluyor?)
+  - Managed vs System vs User ayrımı kullanıcıya daha anlaşılır sunulacak
+  - Toolchain Manager layout'u yeniden tasarlanacak
+  - Önce kullanıcıyla tasarım kararları netleştirilecek, sonra kod yazılacak
 - **❗ Quick Launch env dropdown pipx'te çalışmıyor ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
 - **Preferred terminal + terminal içi aktivasyon doğrulaması ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
 - **PDM env gerçek venv path ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.

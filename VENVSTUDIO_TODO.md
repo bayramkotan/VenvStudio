@@ -104,6 +104,17 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   uyumluluk tablosu.** Bazı kütüphaneler bazı env/Python sürümlerine
   kurulmuyor. Tools altında ÇOK DETAYLI bir dialog: hangi kütüphane hangi
   Python sürümü/env tipiyle çalışır. (Tasarım henüz belirsiz.)
+- **❗ Quick Launch env dropdown pipx'te çalışmıyor** — davranış netleştirilecek.
+- **Preferred terminal + terminal içi aktivasyon doğrulaması** — test bekliyor.
+- **PDM env gerçek venv path ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
+- **Preset UI sayaç ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
+- **webbrowser.open → open_url ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
+- **N4 ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
+- **Silme sonrası üst bar güncellenmiyordu ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
+- **conda preset UI geri bildirimi ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
+- **`vs` kısayolu ✅ KAPATILDI (2026-08-08)** — zaten mevcuttu.
+- **F201 ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
+- **RStudio Windows kararı ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
 - **N10 ✅ ÇÖZÜLDÜ (v1.6.34) — Log kutularına tarih tutarlılığı +
   başlangıç banner'ı güzelleştirildi.** `banner()` fonksiyonuna (logger.py)
   tek noktadan tarih eklendi — create/delete/install/error/warning/command

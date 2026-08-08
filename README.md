@@ -51,7 +51,7 @@ Most current distributions mark the system Python as *externally managed*
 pipx install venvstudio
 
 # Into the system Python — needs the override flag
-sudo pip install venvstudio --break-system-packages -U
+sudo pip install venvstudio --break-system-packages --no-cache-dir -U
 ```
 
 The same flag applies when upgrading a system-wide install later on.
@@ -350,6 +350,12 @@ Installing with pip gives you two names for the same tool: **`vs`** to type and
 | `vs` | `venvstudio` | Launch the GUI |
 | `vs list` | `venvstudio list` | List every detected environment |
 | `vs create NAME` | `venvstudio create NAME` | Create a venv environment |
+| `vs create NAME -t uv` | `venvstudio create NAME -t uv` | Create a uv environment |
+| `vs create NAME -t poetry` | `venvstudio create NAME -t poetry` | Create a Poetry environment |
+| `vs create NAME -t conda` | `venvstudio create NAME -t conda` | Create a Conda environment |
+| `vs create NAME -t hatch` | `venvstudio create NAME -t hatch` | Create a Hatch environment |
+| `vs create NAME -t pdm` | `venvstudio create NAME -t pdm` | Create a PDM environment |
+| `vs create NAME -t pixi` | `venvstudio create NAME -t pixi` | Create a Pixi environment |
 | `vs delete NAME` | `venvstudio delete NAME` | Delete an environment (asks first) |
 | `vs delete NAME -y` | `venvstudio delete NAME -y` | Delete without the confirmation prompt |
 | `vs packages ENV` | `venvstudio packages ENV` | List packages installed in ENV |

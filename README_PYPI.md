@@ -27,7 +27,7 @@ with `error: externally-managed-environment`. Two ways around it:
 pipx install venvstudio
 
 # Into the system Python — needs the override flag
-sudo pip install venvstudio --break-system-packages -U
+sudo pip install venvstudio --break-system-packages --no-cache-dir -U
 ```
 
 The same flag applies when upgrading a system-wide install later on.

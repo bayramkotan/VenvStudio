@@ -509,39 +509,47 @@ class LauncherRunMixin:
         python_exe = get_python_executable(venv_path)
         work_dir = os.path.dirname(filepath)
         pkg = app_def["package"].lower()
+        _is_pixi_script = getattr(self, "_current_env_type", "venv") == "pixi"
+
+        def _py(*args):
+            """Build command: pixi run python <args> for pixi, else python <args>."""
+            if _is_pixi_script:
+                import shutil as _sh3
+                _pb = _sh3.which("pixi") or str(Path.home() / ".pixi" / "bin" / "pixi")
+                return [_pb, "run", "python"] + list(args)
+            return [str(python_exe)] + list(args)
 
         # Build command based on framework
         if pkg == "streamlit":
-            cmd = [str(python_exe), "-m", "streamlit", "run", filepath, "--server.headless", "true"]
+            cmd = _py("-m", "streamlit", "run", filepath, "--server.headless", "true")
             url = "http://localhost:8501"
         elif pkg == "dash":
-            cmd = [str(python_exe), filepath]
+            cmd = _py(filepath)
             url = "http://localhost:8050"
         elif pkg == "gradio":
-            cmd = [str(python_exe), filepath]
+            cmd = _py(filepath)
             url = "http://localhost:7860"
         elif pkg == "fastapi":
-            # Extract module name for uvicorn
             module = os.path.splitext(os.path.basename(filepath))[0]
-            cmd = [str(python_exe), "-m", "uvicorn", f"{module}:app", "--reload"]
+            cmd = _py("-m", "uvicorn", f"{module}:app", "--reload")
             url = "http://localhost:8000/docs"
         elif pkg == "panel":
-            cmd = [str(python_exe), "-m", "panel", "serve", filepath, "--show"]
+            cmd = _py("-m", "panel", "serve", filepath, "--show")
             url = ""
         elif pkg == "voila":
-            cmd = [str(python_exe), "-m", "voila", filepath]
+            cmd = _py("-m", "voila", filepath)
             url = "http://localhost:8866"
         elif pkg == "mlflow":
-            cmd = [str(python_exe), filepath]
+            cmd = _py(filepath)
             url = ""
         elif pkg == "tensorboard":
-            cmd = [str(python_exe), "-m", "tensorboard.main", "--logdir", work_dir]
+            cmd = _py("-m", "tensorboard.main", "--logdir", work_dir)
             url = "http://localhost:6006"
         elif pkg == "datasette":
-            cmd = [str(python_exe), "-m", "datasette", filepath]
+            cmd = _py("-m", "datasette", filepath)
             url = "http://localhost:8001"
         else:
-            cmd = [str(python_exe), filepath]
+            cmd = _py(filepath)
             url = ""
 
         try:
@@ -691,6 +699,9 @@ class LauncherRunMixin:
                 "uv":     "uv pip install {packages}",
                 "poetry": "poetry add {packages}",
                 "conda":  "conda install {packages}",
+                "hatch":  "pip install {packages}",
+                "pdm":    "pdm add {packages}",
+                "pixi":   "pixi add {packages}",
             }
             if _et == "pipx":
                 _main_hint = app_def.get("package") or pkgs_to_install[0]
@@ -763,6 +774,77 @@ class LauncherRunMixin:
                     return (True, f"pipx installed: {_main}"
                             + (f" (+{len(_extras)} injected)" if _extras else ""))
                 self.current_worker = WorkerThread(_do_pipx_launch_install)
+            elif _et == "pixi":
+                _pixi_pkgs = list(pkgs_to_install)
+                _pixi_env_path = self.pip_manager.venv_path
+
+                def _do_pixi_install(callback=None,
+                                     _pkgs=_pixi_pkgs, _ep=_pixi_env_path):
+                    import subprocess as _sp, shutil as _sh
+                    from src.utils.platform_utils import subprocess_args as _sa
+                    _pixi_bin = _sh.which("pixi") or str(Path.home() / ".pixi" / "bin" / "pixi")
+                    # Packages not available on conda-forge — must use --pypi
+                    _PYPI_ONLY = {"pyqt5", "pyqtwebengine", "pyqt6", "pyqt6-webengine"}
+                    _failed = []
+                    for _pkg in _pkgs:
+                        if callback:
+                            callback(f"pixi add {_pkg}...")
+                        # Try conda channel first; if pkg is pypi-only, use --pypi directly
+                        _pkg_lower = _pkg.split("<")[0].split(">")[0].split("=")[0].lower()
+                        _use_pypi = _pkg_lower in _PYPI_ONLY
+                        _cmd = [_pixi_bin, "add"] + (["--pypi"] if _use_pypi else []) + [_pkg]
+                        _r = _sp.run(
+                            _cmd,
+                            cwd=str(_ep),
+                            **_sa(capture_output=True, text=True, timeout=300)
+                        )
+                        if _r.returncode != 0 and not _use_pypi:
+                            # conda channel failed — retry with --pypi
+                            if callback:
+                                callback(f"conda channel failed, retrying via PyPI...")
+                            _r = _sp.run(
+                                [_pixi_bin, "add", "--pypi", _pkg],
+                                cwd=str(_ep),
+                                **_sa(capture_output=True, text=True, timeout=300)
+                            )
+                        if _r.returncode != 0:
+                            _failed.append(_pkg)
+                            if callback:
+                                callback(f"pixi add failed: {(_r.stderr or _r.stdout)[:200]}")
+                    if _failed:
+                        return (False, f"pixi add failed for: {', '.join(_failed)}")
+                    return (True, f"pixi installed: {', '.join(_pkgs)}")
+
+                self.current_worker = WorkerThread(_do_pixi_install)
+            elif _et == "pdm":
+                _pdm_pkgs = list(pkgs_to_install)
+                _pdm_env_path = self.pip_manager.venv_path
+
+                def _do_pdm_install(callback=None,
+                                    _pkgs=_pdm_pkgs, _ep=_pdm_env_path):
+                    import subprocess as _sp, shutil as _sh
+                    from src.utils.platform_utils import subprocess_args as _sa
+                    _pdm_bin = _sh.which("pdm")
+                    if not _pdm_bin:
+                        return (False, "pdm executable not found")
+                    _failed = []
+                    for _pkg in _pkgs:
+                        if callback:
+                            callback(f"pdm add {_pkg}...")
+                        _r = _sp.run(
+                            [_pdm_bin, "add", _pkg],
+                            cwd=str(_ep),
+                            **_sa(capture_output=True, text=True, timeout=300)
+                        )
+                        if _r.returncode != 0:
+                            _failed.append(_pkg)
+                            if callback:
+                                callback(f"pdm add failed: {(_r.stderr or _r.stdout)[:200]}")
+                    if _failed:
+                        return (False, f"pdm add failed for: {', '.join(_failed)}")
+                    return (True, f"pdm installed: {', '.join(_pkgs)}")
+
+                self.current_worker = WorkerThread(_do_pdm_install)
             else:
                 self.current_worker = WorkerThread(
                     self.pip_manager.install_packages, pkgs_to_install
@@ -861,7 +943,14 @@ class LauncherRunMixin:
                 # fallback: python -m ...
                 cmd = [str(python_exe)] + _app_cmd
         else:
-            cmd = [str(python_exe)] + app_def["command"]
+            # Pixi env: run via `pixi run python <cmd>` so pixi sets up the
+            # correct environment variables and site-packages are found.
+            if getattr(self, "_current_env_type", "venv") == "pixi":
+                import shutil as _sh2
+                _pixi_bin2 = _sh2.which("pixi") or str(Path.home() / ".pixi" / "bin" / "pixi")
+                cmd = [_pixi_bin2, "run", "python"] + list(app_def["command"])
+            else:
+                cmd = [str(python_exe)] + app_def["command"]
 
         # Spyder: point it at a per-environment config directory whose
         # interpreter is already set to this environment. Otherwise every
@@ -893,6 +982,9 @@ class LauncherRunMixin:
             # Pass --notebook-dir so Jupyter actually opens in the chosen folder
             app_def = dict(app_def)
             app_def["command"] = list(app_def["command"]) + ["--notebook-dir", notebook_dir]
+        elif getattr(self, "_current_env_type", "venv") == "pixi":
+            # pixi run must be executed from the project dir (where pixi.toml lives)
+            work_dir = str(venv_path)
         elif get_platform() == "windows":
             work_dir = os.environ.get("USERPROFILE", "C:\\")
         else:
@@ -1168,6 +1260,9 @@ class LauncherRunMixin:
             "poetry": "poetry remove {packages}",
             "conda":  "conda remove {packages}",
             "pipx":   "pipx uninstall {packages}",
+            "pdm":    "pdm remove {packages}",
+            "pixi":   "pixi remove {packages}",
+            "hatch":  "pip uninstall -y {packages}",
         }
         _hint_pkgs = pkgs_to_remove
         if _is_pipx_env:
@@ -1250,6 +1345,72 @@ class LauncherRunMixin:
                 lambda ok, msg, a=app_def:
                     self._on_system_uninstall_finished(ok, msg, a)
             )
+            self.current_worker.start()
+            return
+
+        if _et2 == "pixi":
+            _pixi_rm_pkgs = list(pkgs_to_remove)
+            _pixi_rm_path = self.pip_manager.venv_path
+            _pixi_lbl = app_def["name"]
+
+            def _do_pixi_remove(callback=None,
+                                _pkgs=_pixi_rm_pkgs, _ep=_pixi_rm_path,
+                                _lbl=_pixi_lbl):
+                import subprocess as _sp, shutil as _sh
+                from src.utils.platform_utils import subprocess_args as _sa
+                _pixi_bin = _sh.which("pixi") or str(Path.home() / ".pixi" / "bin" / "pixi")
+                _failed = []
+                for _pkg in _pkgs:
+                    if callback:
+                        callback(f"pixi remove {_pkg}...")
+                    _r = _sp.run(
+                        [_pixi_bin, "remove", _pkg],
+                        cwd=str(_ep),
+                        **_sa(capture_output=True, text=True, timeout=300)
+                    )
+                    if _r.returncode != 0:
+                        _failed.append(_pkg)
+                if _failed:
+                    return (False, f"pixi remove failed for: {', '.join(_failed)}")
+                return (True, f"{_lbl} removed")
+
+            self.current_worker = WorkerThread(_do_pixi_remove)
+            self.current_worker.progress.connect(self._on_progress)
+            self.current_worker.finished.connect(self._on_install_finished)
+            self.current_worker.start()
+            return
+
+        if _et2 == "pdm":
+            _pdm_rm_pkgs = list(pkgs_to_remove)
+            _pdm_rm_path = self.pip_manager.venv_path
+            _pdm_lbl = app_def["name"]
+
+            def _do_pdm_remove(callback=None,
+                               _pkgs=_pdm_rm_pkgs, _ep=_pdm_rm_path,
+                               _lbl=_pdm_lbl):
+                import subprocess as _sp, shutil as _sh
+                from src.utils.platform_utils import subprocess_args as _sa
+                _pdm_bin = _sh.which("pdm")
+                if not _pdm_bin:
+                    return (False, "pdm executable not found")
+                _failed = []
+                for _pkg in _pkgs:
+                    if callback:
+                        callback(f"pdm remove {_pkg}...")
+                    _r = _sp.run(
+                        [_pdm_bin, "remove", _pkg],
+                        cwd=str(_ep),
+                        **_sa(capture_output=True, text=True, timeout=300)
+                    )
+                    if _r.returncode != 0:
+                        _failed.append(_pkg)
+                if _failed:
+                    return (False, f"pdm remove failed for: {', '.join(_failed)}")
+                return (True, f"{_lbl} removed")
+
+            self.current_worker = WorkerThread(_do_pdm_remove)
+            self.current_worker.progress.connect(self._on_progress)
+            self.current_worker.finished.connect(self._on_install_finished)
             self.current_worker.start()
             return
 

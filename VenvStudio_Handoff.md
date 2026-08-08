@@ -3,7 +3,7 @@
 ## Proje
 - **Repo:** https://github.com/bayramkotan/VenvStudio
 - **PyPI:** https://pypi.org/project/venvstudio/
-- **GÜNCEL VERSİYON: v1.6.38** (N7 tamamlandı — Hatch/PDM/Pixi env tipleri, Toolchain Pixi/Conda, Launcher fix, CLI, README) — PUSH EDİLDİ. PUSH SONRASI PyPI history sayfasını MUTLAKA kontrol et + `pip install venvstudio==1.6.38 --no-cache-dir` ile doğrula. Çok makineli çalışma: commit öncesi `git fetch` + `git log origin/main`.
+- **GÜNCEL VERSİYON: v1.6.39** (Bu oturum — F86 PM custom paths, F87 sidebar sort, Conda backend selector, B181 sys import fix, Launcher pixi/pdm/hatch install+uninstall+launch, Hatch env path/size/delete düzeltmeleri, env summary bar güncellendi) — PUSH EDİLDİ. PUSH SONRASI PyPI history sayfasını MUTLAKA kontrol et + `pip install venvstudio==1.6.39 --no-cache-dir` ile doğrula. Çok makineli çalışma: commit öncesi `git fetch` + `git log origin/main`.
 - **Bir sonraki oturumun kuyruğu:** aşağıdaki "Bu Oturumda Yapılanlar (2026-07-23/24)" bölümünün *Açık maddeler* kısmı
 - **Proje dizini (Windows):** `C:\Github\VenvStudio`
 - **Proje dizini (Linux - CachyOS/Pardus):** `~/Github/VenvStudio`
@@ -5461,7 +5461,92 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 
 ---
 
-## Bu Oturumda Yapılanlar — devam (v1.6.5, v1.6.6, v1.6.7)
+## Bu Oturumda Yapılanlar (v1.6.39) — 2026-08-08
+
+### Tamamlanan Maddeler
+
+**F88 ✅ — Poetry/Rye create'te --python flag** — Kullanıcı onayladı, kapatıldı.
+
+**F83 ✅ — Force Delete** — Kullanıcı onayladı, kapatıldı.
+
+**F86 ✅ — PM env yolu sorunu (Custom Path override)**
+- Settings → Paths altına "📦 Package Manager Custom Paths" bölümü eklendi
+- Poetry virtualenvs, Pipx home, Conda envs dir için checkbox+QLineEdit+Browse+Reset satırları
+- `platform_utils.py`: `_get_config_path_override()`, `get_poetry_venvs_path()`, `get_conda_envs_dir()` eklendi; `get_pipx_home()` config override'ı aldı
+- `venv_manager.py`: poetry path artık `get_poetry_venvs_path()` kullanıyor
+- `env_dialog_create.py`: POETRY_VIRTUALENVS_PATH + PIPX_HOME env var enjeksiyonu
+- Dosyalar: settings_page.py, platform_utils.py, venv_manager.py, env_dialog_create.py
+
+**F87 ✅ — Sidebar sıralama**
+- Header tıklanınca kolon bazlı sıralama (Name/Type/Path/Runtime/Packages/Size/Created)
+- Size için byte dönüşümü, Packages için int karşılaştırma
+- Aktif kolonda ▲/▼ göstergesi
+- Dosyalar: env_list.py, main_window.py
+
+**B84 ✅ — System install UAC fix** — Kullanıcı onayladı, kapatıldı.
+
+**B80 ✅ — Rye kaldırıldı** — Zaten yoktu, kapatıldı.
+
+**B81 ✅ — Tool Environment kaldırıldı** — Kullanıcı onayladı, kapatıldı.
+
+**Conda Backend Ayarı ✅**
+- Settings → Toolchain Manager → Conda satırına "Backend:" dropdown eklendi
+- 7 seçenek: Auto, micromamba (bundled), micromamba (system), mamba, conda, miniforge, Custom
+- Custom seçilince dosya seçici açılıyor, anlık kaydediyor
+- `micromamba_installer.py`: `get_conda_backend()`, `get_conda_backend_custom_path()`, `get_micromamba_exe()` backend-aware yapıldı
+- **B181 da burada fix edildi:** settings_toolchain.py'ye `import sys` eklendi
+- Dosyalar: settings_toolchain.py, micromamba_installer.py
+
+**Launcher pixi/pdm/hatch install+uninstall+launch ✅**
+- `launcher_run.py`: pixi/pdm/hatch için doğru install/uninstall branch'ları eklendi
+- pixi install: `pixi add`, conda channel başarısız → `--pypi` fallback; PyQt5/PyQtWebEngine için direkt `--pypi`
+- pdm install: `pdm add`, uninstall: `pdm remove`
+- hatch: pip fallback (hatch env içinde pip çalışır)
+- `_inst_cmds` ve `_rm_cmds` dict'lerine pixi/pdm/hatch eklendi
+- pixi launch: `pixi run python <cmd>`, cwd=venv_path (pixi.toml'un yeri)
+- `platform_utils.py`: `get_python_executable()` pixi branch — `pixi run which python` ile bulur, marker'a cache'ler
+- Dosyalar: launcher_run.py, platform_utils.py
+
+**Hatch env path/size/delete düzeltmeleri ✅**
+- `venv_manager.py`: hatch env için `info.path` artık gerçek venv dizini (`~/.local/share/hatch/env/virtual/...`)
+- Size: `get_venv_size(hatch_env_path)` kullanılıyor (proje dizini değil)
+- Size overwrite bug fix: hatch/pdm/pixi/poetry/pipx için `get_venv_size(item)` override yapılmıyor
+- Delete: `~/.local/share/hatch/env/virtual/<name>` de siliniyor + proje marker dizini de siliniyor
+- `env_dialog_create.py`: hatch create'te `hatch env find` çalıştırılıp `hatch_env_path` marker'a yazılıyor
+- `~/.local/share/hatch/env/virtual/` dizini `list_venvs_fast`'ta taranıyor (proje dizini olmayan hatch env'leri de listeleniyor)
+- Dosyalar: venv_manager.py, env_dialog_create.py
+
+**Env summary bar güncellendi ✅**
+- `env_list.py`: hatch/pdm/pixi için ayrı satır (`🎩 hatch`, `📦 pdm`, `🦜 pixi`)
+- Hem `_update_env_summary` hem `_refresh_env_list` güncellendi
+- Settings'teki cache description'a hatch/pdm/pixi eklendi
+
+**CLI hint banner'ları ✅**
+- `env_dialog.py`: `_head` dict'ine hatch/pdm/pixi eklendi
+- hatch/pdm/pixi create'te artık COMMAND banner gösteriyor (`hatch new`, `pdm init`, `pixi init` + `vs create -t ...`)
+
+### Açık / Test Bekleyen
+- pixi `get_python_executable` ilk açılışta `pixi run which python` çağırıyor (küçük gecikme, sonraki açılışlarda cache)
+- hatch env'ler `~/.local/share/hatch/env/virtual/` dışına create edilirse görünmez
+- PDM env'inin gerçek venv path'i ayrıca araştırılabilir (PDM de `~/.local/share/pdm/` kullanıyor olabilir)
+
+### Değişen Dosyalar (v1.6.39)
+| Dosya | Değişiklik |
+|-------|-----------|
+| `src/gui/settings_page.py` | PM Custom Paths bölümü, cache description güncelleme |
+| `src/gui/settings_toolchain.py` | Conda Backend dropdown, B181 sys import fix |
+| `src/utils/platform_utils.py` | F86 override helpers, get_python_executable pixi branch |
+| `src/core/micromamba_installer.py` | Backend-aware get_micromamba_exe |
+| `src/core/venv_manager.py` | Hatch path/size/delete fixes, hatch virtual dir scan |
+| `src/gui/env_dialog_create.py` | hatch_env_path marker'a yazma, PM path env var enjeksiyonu |
+| `src/gui/env_list.py` | F87 kolon sort, summary bar hatch/pdm/pixi |
+| `src/gui/main_window.py` | F87 sort state + _on_env_header_clicked |
+| `src/gui/launcher_run.py` | pixi/pdm/hatch install/uninstall/launch branches |
+| `src/gui/env_dialog.py` | CLI hint _head dict'e hatch/pdm/pixi |
+
+---
+
+## Bu Oturumda Yapılanlar (v1.6.38)
 
 ### v1.6.5 — AppImage-safe URL + Launcher logları
 - **KÖK NEDEN (Links tıklanınca tarayıcı açılmıyor):** AppImage ortamı LD_LIBRARY_PATH/APPDIR enjekte eder; `webbrowser.open` → xdg-open bu zehirli ortamı miras alır → host tarayıcı sessizce ölür. pip kurulumunda ortam temiz olduğundan sorun yok.
@@ -5505,16 +5590,16 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 ---
 
 ## Sonraki Öncelikler
-1. F88 — Poetry/Rye create'te --python flag
-2. F83 — Force Delete
-3. F86 — PM env yolu sorunu (AppData vs Custom Path)
-4. F87 — Sidebar sıralama
-5. B84 — System install UAC fix
-6. B80 — Rye kaldırılacak
-7. B81 — Tool Environment kaldırılacak
+1. **Quick Launch env dropdown pipx'te çalışmıyor** — davranış netleştirilecek
+2. **webbrowser.open kalanları** → open_url'e geçir (learn_page, window_menu, main_window)
+3. **F201** — launcher_links + Learn scroll API (buton yarısı)
+4. **N4** — Tüm launcher'ları kontrol et (kısayollar dahil)
+5. **N8** — Terminal komutlarını geliştir
+6. **N9** — Conflict Management
+7. **Preset UI sayaç** — "5 paket" ama zaten kurulu olanlar eksiliyor
 
 ## Sonraki Chat Başlangıç Promptu
-> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.9, sıradaki: v1.6.10.
+> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.39, sıradaki: v1.6.40.
 
 ## 📋 Dosya Kopyalama Kuralları
 

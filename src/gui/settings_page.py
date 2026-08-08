@@ -749,7 +749,7 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
 
         _cache_note = QLabel(
             "Shared cache speeds up repeated installs and saves disk space on downloads. "
-            "pip/uv environments only — conda, poetry and pipx are not affected."
+            "pip/uv environments only — conda, poetry, pipx, hatch, pdm and pixi are not affected."
         )
         _cache_note.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
         _cache_note.setWordWrap(True)

@@ -32,9 +32,12 @@ class EnvListMixin:
                 return
             _base_dir = str(self.venv_manager.base_dir)
             _base_envs = [e for e in envs if str(e.path).startswith(_base_dir)
-                          and e.env_type not in ("poetry", "pipx")]
+                          and e.env_type not in ("poetry", "pipx", "hatch", "pdm", "pixi")]
             _poetry_envs = [e for e in envs if e.env_type == "poetry"]
-            _pipx_envs = [e for e in envs if e.env_type == "pipx"]
+            _pipx_envs   = [e for e in envs if e.env_type == "pipx"]
+            _hatch_envs  = [e for e in envs if e.env_type == "hatch"]
+            _pdm_envs    = [e for e in envs if e.env_type == "pdm"]
+            _pixi_envs   = [e for e in envs if e.env_type == "pixi"]
 
             def _fmt_size(lst):
                 total = 0
@@ -61,6 +64,15 @@ class EnvListMixin:
             if _pipx_envs:
                 parts.append(f"\U0001f4e6 pipx  \u2022  {len(_pipx_envs)} "
                              f"env(s)  \u2022  {_fmt_size(_pipx_envs)}")
+            if _hatch_envs:
+                parts.append(f"\U0001f3a9 hatch  \u2022  {len(_hatch_envs)} "
+                             f"env(s)  \u2022  {_fmt_size(_hatch_envs)}")
+            if _pdm_envs:
+                parts.append(f"\U0001f4e6 pdm  \u2022  {len(_pdm_envs)} "
+                             f"env(s)  \u2022  {_fmt_size(_pdm_envs)}")
+            if _pixi_envs:
+                parts.append(f"\U0001f986 pixi  \u2022  {len(_pixi_envs)} "
+                             f"env(s)  \u2022  {_fmt_size(_pixi_envs)}")
             parts.append(f"\U0001f5c2 total  \u2022  {_fmt_size(envs)}")
             self.info_label.setText("        ".join(parts))
         except Exception:
@@ -354,9 +366,13 @@ class EnvListMixin:
         _home = str(Path.home())
         _base_envs = [e for e in envs if str(e.path).startswith(_base_dir)]
         _poetry_envs = [e for e in envs if e.env_type == "poetry"]
-        _pipx_envs = [e for e in envs if e.env_type == "pipx"]
-        # Remove poetry and pipx from base count (they have their own paths)
-        _base_envs = [e for e in _base_envs if e.env_type not in ("poetry", "pipx")]
+        _pipx_envs   = [e for e in envs if e.env_type == "pipx"]
+        _hatch_envs  = [e for e in envs if e.env_type == "hatch"]
+        _pdm_envs    = [e for e in envs if e.env_type == "pdm"]
+        _pixi_envs   = [e for e in envs if e.env_type == "pixi"]
+        # Remove external-managed envs from base count
+        _base_envs = [e for e in _base_envs
+                      if e.env_type not in ("poetry", "pipx", "hatch", "pdm", "pixi")]
 
         def _fmt_size(envs_list):
             total = 0
@@ -382,6 +398,12 @@ class EnvListMixin:
             parts.append(f"📜 poetry  •  {len(_poetry_envs)} env(s)  •  {_fmt_size(_poetry_envs)}")
         if _pipx_envs:
             parts.append(f"📦 pipx  •  {len(_pipx_envs)} env(s)  •  {_fmt_size(_pipx_envs)}")
+        if _hatch_envs:
+            parts.append(f"🎩 hatch  •  {len(_hatch_envs)} env(s)  •  {_fmt_size(_hatch_envs)}")
+        if _pdm_envs:
+            parts.append(f"📦 pdm  •  {len(_pdm_envs)} env(s)  •  {_fmt_size(_pdm_envs)}")
+        if _pixi_envs:
+            parts.append(f"🦜 pixi  •  {len(_pixi_envs)} env(s)  •  {_fmt_size(_pixi_envs)}")
         parts.append(f"🗂 total  •  {_total_all}")
         self.info_label.setText("        ".join(parts))
 

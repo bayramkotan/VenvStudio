@@ -116,6 +116,40 @@ def get_python_executable(venv_path: Path) -> Path:
                     _scripts = "Scripts" if get_platform() == "windows" else "bin"
                     _exe = "python.exe" if get_platform() == "windows" else "python"
                     return Path(_pvenv) / _scripts / _exe
+            if _type == "pixi":
+                # Pixi stores the python inside its own cache, not under venv_path.
+                # Ask pixi where it put python for this project directory.
+                # Cache result in marker to avoid repeated subprocess calls.
+                _py_cached = _data.get("python_path", "")
+                if _py_cached and Path(_py_cached).exists():
+                    return Path(_py_cached)
+                try:
+                    import subprocess as _sp
+                    _pixi_bin = __import__("shutil").which("pixi") or \
+                        str(Path.home() / ".pixi" / "bin" / "pixi")
+                    _r = _sp.run(
+                        [_pixi_bin, "run", "which", "python"]
+                        if get_platform() != "windows" else
+                        [_pixi_bin, "run", "where", "python"],
+                        cwd=str(venv_path),
+                        capture_output=True, text=True, timeout=10
+                    )
+                    _found = (_r.stdout or "").strip().splitlines()
+                    for _line in _found:
+                        _line = _line.strip()
+                        if _line and Path(_line).exists():
+                            # Cache in marker so next call is instant
+                            try:
+                                _data["python_path"] = _line
+                                with open(marker, "w", encoding="utf-8") as _wf:
+                                    _json.dump(_data, _wf, indent=2)
+                            except Exception:
+                                pass
+                            return Path(_line)
+                except Exception:
+                    pass
+                # Fallback: system python
+                return Path(_sys.executable)
         except Exception:
             pass
     if get_platform() == "windows":
@@ -245,13 +279,12 @@ def get_poetry_venvs_path() -> Optional[str]:
     Returns the user-configured override (Settings → Paths → Poetry virtualenvs)
     when enabled, otherwise falls back to the platform default that poetry uses.
     """
+    import sys as _sys, os as _os
     override = _get_config_path_override(
         "poetry_venvs_path_enabled", "poetry_venvs_path"
     )
     if override:
         return override
-    # Platform default (mirrors what venv_manager.py uses in list_venvs_fast)
-    import sys as _sys, os as _os
     if _sys.platform == "win32":
         return str(
             Path(_os.environ.get("LOCALAPPDATA", _os.environ.get("APPDATA", "")))
@@ -264,14 +297,8 @@ def get_poetry_venvs_path() -> Optional[str]:
 
 
 def get_conda_envs_dir() -> Optional[str]:
-    """Return the conda/micromamba envs directory.
-
-    Returns the user-configured override (Settings → Paths → Conda envs dir)
-    when enabled, otherwise returns None (caller uses micromamba default).
-    """
-    return _get_config_path_override(
-        "conda_envs_dir_enabled", "conda_envs_dir"
-    )
+    """Return the conda/micromamba envs directory override, or None (use default)."""
+    return _get_config_path_override("conda_envs_dir_enabled", "conda_envs_dir")
 
 
 def get_pipx_home() -> Optional[str]:

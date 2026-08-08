@@ -556,8 +556,40 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
                     callback(f"Deleted pipx home for {name}")
                 return True, f"Environment '{name}' deleted successfully"
             _robust_rmtree(venv_path)
+            # For hatch: also delete ~/.local/share/hatch/env/virtual/<name>
+            if env_type == "hatch":
+                import sys as _sys, os as _os
+                if _sys.platform == "win32":
+                    _hatch_virtual = Path(_os.environ.get("APPDATA", "")) / "hatch" / "env" / "virtual" / name
+                else:
+                    _hatch_virtual = Path.home() / ".local" / "share" / "hatch" / "env" / "virtual" / name
+                if _hatch_virtual.exists():
+                    try:
+                        _robust_rmtree(_hatch_virtual)
+                        _log.info(f"delete_venv: removed hatch virtual env dir {_hatch_virtual}")
+                    except Exception as _he:
+                        _log.warning(f"delete_venv: could not remove hatch virtual dir {_hatch_virtual}: {_he}")
+                # Also remove the project marker dir in base_dir if venv_path was the real env
+                if env_path:
+                    for _item in self.base_dir.iterdir():
+                        if not _item.is_dir():
+                            continue
+                        _marker = _item / ".venvstudio_env"
+                        if _marker.exists():
+                            try:
+                                import json as _json
+                                _data = _json.loads(_marker.read_text())
+                                if (_data.get("type") == "hatch" and
+                                        _data.get("name") == name):
+                                    try:
+                                        _robust_rmtree(_item)
+                                    except Exception as _re:
+                                        _log.warning(f"delete_venv: could not remove hatch marker dir {_item}: {_re}")
+                                    break
+                            except Exception:
+                                pass
             # For poetry: also delete the project marker dir in base_dir if different
-            if env_type == "poetry" and env_path:
+            elif env_type == "poetry" and env_path:
                 for _item in self.base_dir.iterdir():
                     if not _item.is_dir():
                         continue
@@ -837,6 +869,36 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
                 info = VenvInfo(name=item.name, path=item, is_valid=True,
                                 env_type=env_type)
 
+                # For hatch: path shown in table should be the real venv dir,
+                # not the project dir (same pattern as poetry/pipx).
+                if env_type == "hatch":
+                    _hep = marker_data.get("hatch_env_path", "")
+                    if not _hep:
+                        # Discover on first encounter and persist to marker
+                        import shutil as _sh0
+                        _hatch_exe0 = _sh0.which("hatch")
+                        if _hatch_exe0:
+                            try:
+                                _hef0 = _run(
+                                    [_hatch_exe0, "env", "find"],
+                                    capture_output=True, text=True,
+                                    timeout=10, cwd=str(item)
+                                )
+                                if _hef0.returncode == 0 and _hef0.stdout.strip():
+                                    _hep = _hef0.stdout.strip()
+                                    try:
+                                        _md0 = dict(marker_data)
+                                        _md0["hatch_env_path"] = _hep
+                                        with open(item / ".venvstudio_env", "w") as _mf0:
+                                            json.dump(_md0, _mf0, indent=2)
+                                        marker_data = _md0
+                                    except Exception:
+                                        pass
+                            except Exception:
+                                pass
+                    if _hep and Path(_hep).exists():
+                        info.path = Path(_hep)
+
                 # ── Resolve Python version from marker or venv binary ─────
                 marker_pyver = marker_data.get("python_version", "")
 
@@ -1052,51 +1114,66 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
                             elif env_type == "hatch":
                                 # hatch stores envs in AppData — find real env path first
                                 _exe = _sh.which("hatch")
-                                if _exe:
-                                    # Get real env path via hatch env find
+                                # Check marker for cached hatch_env_path
+                                _hatch_env_path = marker_data.get("hatch_env_path", "")
+                                if not _hatch_env_path and _exe:
+                                    # Discover and persist for next time
                                     _find_r = _run(
                                         [_exe, "env", "find"],
                                         capture_output=True, text=True,
                                         timeout=10, cwd=str(item))
                                     _hatch_env_path = _find_r.stdout.strip() if _find_r.returncode == 0 else ""
                                     if _hatch_env_path:
-                                        # Use pip directly from the hatch env
-                                        import sys as _sys
-                                        _pip = None
-                                        for _p in (
-                                            str(Path(_hatch_env_path) / "Scripts" / "pip.exe"),
-                                            str(Path(_hatch_env_path) / "bin" / "pip"),
-                                        ):
-                                            if Path(_p).exists():
-                                                _pip = _p
-                                                break
-                                        if _pip:
-                                            _r = _run(
-                                                [_pip, "list", "--format=json"],
-                                                capture_output=True, text=True,
-                                                timeout=15)
-                                            if _r.returncode == 0:
-                                                _data = json.loads(_r.stdout)
-                                                info.package_count = len(_data) if isinstance(_data, list) else 0
-                                    else:
-                                        # Fallback: hatch run pip list
+                                        try:
+                                            _marker_path = item / ".venvstudio_env"
+                                            _md2 = dict(marker_data)
+                                            _md2["hatch_env_path"] = _hatch_env_path
+                                            with open(_marker_path, "w") as _mf:
+                                                json.dump(_md2, _mf, indent=2)
+                                        except Exception:
+                                            pass
+                                if _hatch_env_path and Path(_hatch_env_path).exists():
+                                    # Use pip directly from the hatch env
+                                    _pip = None
+                                    for _p in (
+                                        str(Path(_hatch_env_path) / "Scripts" / "pip.exe"),
+                                        str(Path(_hatch_env_path) / "bin" / "pip"),
+                                    ):
+                                        if Path(_p).exists():
+                                            _pip = _p
+                                            break
+                                    if _pip:
                                         _r = _run(
-                                            [_exe, "run", "pip", "list", "--format=json"],
+                                            [_pip, "list", "--format=json"],
                                             capture_output=True, text=True,
-                                            timeout=15, cwd=str(item))
+                                            timeout=15)
                                         if _r.returncode == 0:
                                             _data = json.loads(_r.stdout)
                                             info.package_count = len(_data) if isinstance(_data, list) else 0
+                                elif _exe:
+                                    # Fallback: hatch run pip list
+                                    _r = _run(
+                                        [_exe, "run", "pip", "list", "--format=json"],
+                                        capture_output=True, text=True,
+                                        timeout=15, cwd=str(item))
+                                    if _r.returncode == 0:
+                                        _data = json.loads(_r.stdout)
+                                        info.package_count = len(_data) if isinstance(_data, list) else 0
                         except Exception:
                             info.package_count = 0
-                        info.size = get_venv_size(item)
+                        # Size: for hatch use real env path, for others use project dir
+                        _hep = marker_data.get("hatch_env_path", "") if env_type == "hatch" else ""
+                        _size_path = Path(_hep) if _hep and Path(_hep).exists() else item
+                        info.size = get_venv_size(_size_path)
                         self.write_cache(item, info.python_version, info.package_count, info.size)
 
                 else:  # system_tools
                     info.python_version = ""
                     info.package_count = 0
 
-                info.size = get_venv_size(item)
+                # Size: skip for env types that already set info.size above
+                if env_type not in ("hatch", "pdm", "pixi", "poetry", "pipx"):
+                    info.size = get_venv_size(item)
                 # Created date: prefer marker, fallback to filesystem
                 _marker_created = marker_data.get("created", "")
                 if _marker_created:
@@ -1203,6 +1280,100 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
                     pass
 
             venvs.append(info)
+
+        # ── Include hatch envs from ~/.local/share/hatch/env/virtual/ ────────
+        # Hatch stores all project envs here regardless of where the project lives.
+        # Each subdirectory is a project name; inside are hash-named dirs containing
+        # the actual virtualenv (with a bin/python). We surface each project once,
+        # using the deepest virtualenv dir as the real env path for size/pkg counts.
+        try:
+            import sys as _sys, os as _os
+            if _sys.platform == "win32":
+                _hatch_virtual_base = Path(_os.environ.get("APPDATA", "")) / "hatch" / "env" / "virtual"
+            else:
+                _hatch_virtual_base = Path.home() / ".local" / "share" / "hatch" / "env" / "virtual"
+
+            if _hatch_virtual_base.exists():
+                import shutil as _sh2
+                _hatch_exe = _sh2.which("hatch")
+                _already_in_base = {item.name for item in self.base_dir.iterdir() if item.is_dir()}
+
+                for _hproj in sorted(_hatch_virtual_base.iterdir()):
+                    if not _hproj.is_dir():
+                        continue
+                    # Skip if already shown (project dir is inside base_dir)
+                    if _hproj.name in _already_in_base:
+                        continue
+                    # Find the real virtualenv inside: <project>/<hash>/<project>/
+                    _real_env = None
+                    for _hash_dir in sorted(_hproj.iterdir()):
+                        if not _hash_dir.is_dir():
+                            continue
+                        for _inner in _hash_dir.iterdir():
+                            _py = _inner / ("Scripts" / "python.exe" if _sys.platform == "win32" else "bin" / "python")
+                            if _py.exists():
+                                _real_env = _inner
+                                break
+                        if _real_env:
+                            break
+                    if not _real_env:
+                        continue
+
+                    _hinfo = VenvInfo(
+                        name=_hproj.name,
+                        path=_real_env,
+                        is_valid=True,
+                        env_type="hatch",
+                    )
+                    # Python version from pyvenv.cfg
+                    _pycfg2 = _real_env / "pyvenv.cfg"
+                    if _pycfg2.exists():
+                        try:
+                            for _line in _pycfg2.read_text().splitlines():
+                                if _line.strip().startswith("version"):
+                                    _ver2 = _line.split("=", 1)[1].strip()
+                                    _vp = [p for p in _ver2.split(".") if p.isdigit()]
+                                    _hinfo.python_version = ".".join(_vp) if _vp else _ver2
+                                    break
+                        except Exception:
+                            pass
+                    # Package count + size from cache or pip list
+                    _hcached = self._read_cache(_real_env)
+                    if _hcached:
+                        _hinfo.package_count = _hcached.get("package_count", 0)
+                        _hinfo.size = _hcached.get("size", "")
+                        if _hcached.get("python_version"):
+                            _hinfo.python_version = _hcached["python_version"]
+                    else:
+                        _pip2 = None
+                        for _pp in (
+                            str(_real_env / "Scripts" / "pip.exe"),
+                            str(_real_env / "bin" / "pip"),
+                        ):
+                            if Path(_pp).exists():
+                                _pip2 = _pp
+                                break
+                        if _pip2:
+                            try:
+                                _r2 = _run([_pip2, "list", "--format=json"],
+                                           capture_output=True, text=True, timeout=15)
+                                if _r2.returncode == 0:
+                                    _hinfo.package_count = len(json.loads(_r2.stdout))
+                            except Exception:
+                                pass
+                        _hinfo.size = get_venv_size(_real_env)
+                        self.write_cache(_real_env, _hinfo.python_version,
+                                         _hinfo.package_count, _hinfo.size)
+                    # Created from dir stat
+                    try:
+                        from datetime import datetime as _dt2
+                        _hinfo.created = _dt2.fromtimestamp(_real_env.stat().st_ctime).isoformat()
+                    except Exception:
+                        pass
+                    venvs.append(_hinfo)
+        except Exception:
+            pass
+
         # Store in memory cache for next call
         VenvManager._mem_envs[self._base_key] = list(venvs)
         VenvManager._mem_envs_valid[self._base_key] = True

@@ -76,18 +76,7 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   **Ders:** launcher komutları gerçek tool'la test edilmeli (shiny run bozuktu
   → inline -c; reflex çıkarıldı — proje ister). Launcher 4 kaynaktan beslenir:
   app_definitions + launcher_links.json (çok-linkli) + LAUNCHER_TOOLTIPS + _PACKAGE_DOCS.
-- **🆕 ÖNCELİKLİ — Conda Backend Ayarı:** Settings'e "Conda Backend" seçeneği eklenecek.
-  Kullanıcı micromamba (varsayılan/yönetilen), mamba, conda, miniforge veya özel path
-  seçebilecek. Pixi de conda-forge desteklediği için buraya dahil edilebilir.
-  **Kapsamı:** micromamba'nın kullanıldığı TÜM yerler değişmeli (env oluşturma, paket
-  kurma, listeleme, Toolchain Manager). Önce `grep -rn "micromamba\|get_micromamba_exe"`
-  ile tüm kullanım yerlerini tespit et, sonra config'e `conda_backend` ayarı ekle.
-  Aşamalar:
-  - [ ] Kullanım yerlerini tespit et
-  - [ ] Config'e `conda_backend` + `conda_custom_path` ekle
-  - [ ] Settings UI'a backend seçici ekle (dropdown: micromamba/mamba/conda/miniforge/custom)
-  - [ ] Tüm micromamba çağrılarını `get_conda_exe()` helper'ına yönlendir
-  - [ ] Toolchain Manager'da seçilen backend'i göster
+- **🆕 Conda Backend Ayarı ✅ ÇÖZÜLDÜ (v1.6.39)** — Settings → Toolchain Manager → Conda satırına Backend dropdown eklendi (auto/micromamba bundled/system/mamba/conda/miniforge/custom). B181 sys import da burada fix edildi.
 - **N7 ✅ ÇÖZÜLDÜ (2026-08-07, v1.6.38) — Hatch, PDM, Pixi eklendi.**
   - Create/list/install/uninstall/terminal/env_list ikonları/toolchain manager/CLI
   - `vs create NAME -t hatch/pdm/pixi` CLI desteği eklendi
@@ -99,6 +88,15 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   - Dosyalar: env_dialog.py, venv_manager.py, env_list.py, package_ops.py,
     env_state.py, launcher_ui.py, settings_toolchain.py, platform_utils.py,
     constants.py, cli.py, README.md, README_PYPI.md
+- **Launcher pixi/pdm/hatch install+launch ✅ ÇÖZÜLDÜ (v1.6.39)** — pixi add/remove, pdm add/remove, pixi run python, PyPI fallback, CLI hint banner'ları. Dosyalar: launcher_run.py, platform_utils.py, env_dialog.py
+- **Hatch env path/size/delete ✅ ÇÖZÜLDÜ (v1.6.39)** — Tabloda gerçek venv path + boyut; `~/.local/share/hatch/env/virtual/` taranıyor; delete her ikisini de siliyor. Dosyalar: venv_manager.py, env_dialog_create.py, env_list.py
+- **F86 ✅ ÇÖZÜLDÜ (v1.6.39)** — PM Custom Paths (Poetry/Pipx/Conda override). Dosyalar: settings_page.py, platform_utils.py, venv_manager.py, env_dialog_create.py
+- **F87 ✅ ÇÖZÜLDÜ (v1.6.39)** — Sidebar kolon bazlı sıralama. Dosyalar: env_list.py, main_window.py
+- **F88 ✅ ÇÖZÜLDÜ (v1.6.39)** — Kullanıcı onayladı.
+- **F83 ✅ ÇÖZÜLDÜ (v1.6.39)** — Kullanıcı onayladı.
+- **B84 ✅ ÇÖZÜLDÜ (v1.6.39)** — Kullanıcı onayladı.
+- **B80 ✅ ÇÖZÜLDÜ (v1.6.39)** — Rye zaten yoktu.
+- **B81 ✅ ÇÖZÜLDÜ (v1.6.39)** — Kullanıcı onayladı.
 - **N8 — Terminal komutlarını geliştir:** env tipini de ekle; env yönetimi
   (create/delete/clone/rename) + preset yükle/kaldır terminalden rahat
   yapılabilsin.

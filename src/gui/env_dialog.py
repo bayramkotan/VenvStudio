@@ -1339,9 +1339,12 @@ class EnvCreateDialog(QDialog):
                     from src.utils.logger import banner_command as _bc_a
                     _py_a = _python or "python"
                     _head = {
-                        "uv": ["uv", "venv", str(_env_path), "--python", _py_a],
+                        "uv":     ["uv", "venv", str(_env_path), "--python", _py_a],
                         "poetry": ["poetry", "new", str(_env_path)],
-                        "pipx": ["pipx", "install", "<app>"],
+                        "pipx":   ["pipx", "install", "<app>"],
+                        "hatch":  ["hatch", "new", str(_env_path)],
+                        "pdm":    ["pdm", "init", str(_env_path)],
+                        "pixi":   ["pixi", "init", str(_env_path)],
                     }.get(_etype)
                     if _head:
                         # vs create -t <type> only covers uv/poetry/hatch/pdm/pixi --

@@ -868,6 +868,20 @@ class EnvCreateMixin:
                 if r.returncode != 0:
                     raise RuntimeError(r.stderr or r.stdout or "hatch new failed")
 
+                # Discover the real hatch env path (where pip/python lives)
+                _hatch_real_env = ""
+                try:
+                    _hatch_exe2 = _shutil.which("hatch") or "hatch"
+                    _hef = subprocess.run(
+                        [_hatch_exe2, "env", "find"],
+                        capture_output=True, text=True, timeout=10,
+                        cwd=_path, **subprocess_args()
+                    )
+                    if _hef.returncode == 0 and _hef.stdout.strip():
+                        _hatch_real_env = _hef.stdout.strip()
+                except Exception:
+                    pass
+
                 # Write marker
                 marker = os.path.join(_path, ".venvstudio_env")
                 with open(marker, "w") as f:
@@ -876,6 +890,7 @@ class EnvCreateMixin:
                         "name": _name,
                         "created": datetime.datetime.now().isoformat(),
                         "python": _py or "",
+                        "hatch_env_path": _hatch_real_env,
                     }, f, indent=2)
 
             elif _etype == "pdm":

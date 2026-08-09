@@ -155,27 +155,54 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   - Launcher'dan tek tıkla lokal model başlat (Ollama/llama.cpp)
   - Settings'te GPU/CPU tercih seçeneği
 
-- **N16 — Educational AI / Akademik YZ İçeriği (ÇOK ÖNEMLİ):**
-  Learn sayfasını akademik YZ bilgileriyle zenginleştir — sadece metin değil,
-  **interaktif diyagramlarla** anlatım.
+- **N16 — Educational AI / Akademik YZ & NLP İçeriği (ÇOK ÖNEMLİ):**
+  Learn sayfasını akademik YZ ve NLP bilgileriyle zenginleştir — sadece metin değil,
+  **interaktif diyagramlarla** anlatım. Her konu için görsel animasyon + kod örneği + paket önerisi.
 
-  Hedef konular (öncelik sırası):
-  - **GRN (Gene Regulatory Network)** — biyoinformatik bağlamı
-  - **LSTM** — kapı mekanizmaları animasyonlu diyagram (forget/input/output gate)
-  - **Transformer** — self-attention, multi-head attention, positional encoding
-  - **CNN** — konvolüsyon, pooling, feature map görselleştirme
-  - **RNN** — unrolled diyagram, vanishing gradient problemi
-  - **GAN** — generator/discriminator döngüsü
-  - **Diffusion Models** — forward/reverse diffusion süreci
-  - **Attention Mechanisms** — Bahdanau, Luong, scaled dot-product
-  - **VAE** — encoder/decoder, latent space
-  - **Graph Neural Networks** — mesaj geçişi diyagramı
+  **🧠 Temel Kavramlar**
+  - Vektör & Embedding — kelime vektörleri, cosine similarity, vektörel aritmetik (`king - man + woman = queen`)
+  - Word2Vec / GloVe / FastText — nasıl eğitilir, skip-gram vs CBOW
+  - Tokenization — BPE, WordPiece, SentencePiece görsel anlatım
+
+  **🔄 Sıralı Modeller**
+  - RNN — unrolled diyagram, vanishing gradient problemi animasyonu
+  - LSTM — 4 kapı detaylı: Forget Gate / Input Gate / Cell State / Output Gate — her kapı ne işe yarar, animasyonlu akış
+  - GRU — LSTM'in daha sade hali, kapı karşılaştırması
+
+  **🎯 Attention & Transformer**
+  - Attention Mekanizması — Query/Key/Value sezgisel anlatım
+  - Self-Attention — her kelimenin diğerleriyle ilişkisi (ısı haritası görselleştirme)
+  - Multi-Head Attention — paralel attention başlıkları
+  - Positional Encoding — sıra bilgisi neden gerekli, sinüs fonksiyonu
+  - Transformer Mimarisi — Encoder/Decoder tam diyagram, blok blok açıklama
+
+  **📊 Eğitim Kavramları**
+  - Loss Fonksiyonları — Cross-entropy, MSE, animasyonlu optimizasyon
+  - Backpropagation — gradyan akışı adım adım
+  - Optimizer'lar — SGD vs Adam vs AdamW görsel karşılaştırma
+  - Overfitting/Underfitting — eğri görselleştirme, dropout etkisi
+
+  **🤖 Modern Modeller**
+  - GPT mimarisi — decoder-only Transformer, autoregressive üretim
+  - BERT — bidirectional, masked language model
+  - Diffusion Models — forward/reverse diffusion görsel animasyon
+  - GAN — generator/discriminator oyunu, loss dengesi
+  - VAE — latent space görselleştirme, reparameterization trick
+
+  **🧬 Biyoinformatik & Özel**
+  - GRN (Gene Regulatory Network) — gen düzenleyici ağlar, grafik gösterimi
+  - Graph Neural Networks — mesaj geçişi, node/edge embedding
+  - Protein Structure Prediction — AlphaFold bağlamı
+
+  **🛠️ Pratik & Paket Rehberi**
+  - Her konuya bağlı: `torch`, `transformers`, `spacy`, `gensim`, `sklearn`, `jax`
+  - Kod örnekleri: "Bu kavramı Python'da nasıl denerim?"
+  - Türkçe + İngilizce toggle
 
   Teknik gereksinim:
   - SVG/HTML tabanlı interaktif diyagramlar (Learn sayfasına entegre)
   - Adım adım animasyon (ileri/geri butonları)
   - Matematiksel formüller (LaTeX render veya görsel)
-  - Her konuya bağlı paket önerileri (torch, tensorflow, jax...)
   - Türkçe + İngilizce içerik
 
 - **N8 — Terminal komutlarını geliştir:** env tipini de ekle; env yönetimi

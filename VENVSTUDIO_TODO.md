@@ -95,6 +95,36 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
 - **B84 ✅ ÇÖZÜLDÜ (v1.6.39)** — Kullanıcı onayladı.
 - **B80 ✅ ÇÖZÜLDÜ (v1.6.39)** — Rye zaten yoktu.
 - **B81 ✅ ÇÖZÜLDÜ (v1.6.39)** — Kullanıcı onayladı.
+
+- **Hatch Env Sistemi Onarımı (v1.6.41) — 5 madde ✅ ÇÖZÜLDÜ:**
+  Detaylı kök neden analizi handoff'ta "Bu Oturumda Yapılanlar (2026-08-09 —
+  v1.6.41)" bölümünde. Özet:
+  - ✅ Rozet "PIP" gösteriyordu, "Hatch (pip)" olması gerekiyordu — env
+    tipi tespiti marker yerine venv_path'teki "hatch/env/virtual" kalıbına
+    bakacak şekilde düzeltildi (env_state.py)
+  - ✅ Env tablosunda boyut yanlıştı (9.9 MB vs gerçek 617.6 MB) — cache
+    anahtarı proje dizininden gerçek venv yoluna çevrildi (venv_manager.py)
+  - ✅ "0 packages installed" ama Install'a basınca "already installed"
+    çelişkisi — hem listeleme hem install artık `hatch env find`/`hatch
+    run` yerine venv'in pip'ini doğrudan çağırıyor (env_state.py,
+    package_ops.py)
+  - ✅ GERÇEK KÖK NEDEN: `hatch new` sadece proje iskeletini oluşturuyordu,
+    `hatch env create`'i hiç çalıştırmıyordu — venv hiç var olmuyordu.
+    Oluşturma koduna `hatch env create` + `hatch env find` eklendi,
+    `hatch_env_path` marker'a persist ediliyor (env_dialog.py)
+  - ✅ Create dialog hatch/pdm/pixi'de kendini kapatıyordu (diğer tipler
+    açık kalıyor) — `self.accept()` kaldırıldı (env_dialog.py)
+
+- **N35 — Hatch self-heal (Bayram'a soruldu, cevap bekleniyor):**
+  `list_venvs_fast` marker'da `hatch_env_path` yoksa şu an sadece İLK
+  karşılaşmada `hatch env find` ile bulmaya çalışıyor; başarısız olursa
+  (örn. env henüz oluşmadıysa) sonuç kalıcı kalıyor, bir daha denenmiyor.
+  Her refresh'te (marker'da hâlâ `hatch_env_path` yoksa) yeniden dene —
+  eski/bozuk env'lerin kendiliğinden düzelmesini sağlar, sil+yeniden-
+  oluştur gerektirmez. v1.6.41 ile yeni oluşturulan env'lerde bu sorun
+  zaten yok (create anında persist ediliyor); bu sadece eski/bozuk
+  env'ler için self-heal.
+
 - **B18 — 🔴 AppImage CI Startup Hang (ÖNCELİKLİ):**
   GitHub Actions'ta Linux AppImage build'i CI'da başlarken takılıyor (`startup hang reproduced in CI`).
   AppImage kullanan kullanıcıları doğrudan etkiler.
@@ -216,6 +246,28 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   - Managed vs System vs User ayrımı kullanıcıya daha anlaşılır sunulacak
   - Toolchain Manager layout'u yeniden tasarlanacak
   - Önce kullanıcıyla tasarım kararları netleştirilecek, sonra kod yazılacak
+
+- **N34 — Env tablosunda sağ tık → env tipine özel komut menüsü (terminalde çalıştır):**
+  Environments tablosunda hangi env'e sağ tıklanırsa, **o env tipine uygun**
+  komutlar bir bağlam menüsünde listelensin; bir komuta tıklanınca terminal
+  açılsın, env aktive edilsin ve komut orada çalıştırılıp çıktısı görünsün.
+  - Örnek: venv env'inde `pip ▸ list` → terminal açılır → env activate edilir
+    → `pip list` çalışır → paketler ekranda listelenir
+  - Menü env tipine göre değişir (asimetri kuralı — ENV TÜRÜ ASİMETRİSİ bölümüne bak):
+    - venv/uv → `pip list`, `pip freeze`, `pip check`, `pip cache dir`, `python -V`
+    - poetry → `poetry show`, `poetry check`, `poetry env info`, `poetry lock`
+    - conda → `conda list`, `conda info`, `conda env export`
+    - pipx → `pipx list`, `pipx runpip <app> list`, `pipx environment`
+    - hatch → `hatch env show`, `hatch dep show table`
+    - pdm → `pdm list`, `pdm info`
+    - pixi → `pixi list`, `pixi info`
+  - Terminal çağrısı mevcut altyapıdan: `platform_utils.open_terminal_at()` /
+    `launch_in_terminal()` + `get_activate_command()` — üç platform (Windows/
+    Linux/macOS) birlikte düşünülecek
+  - Çalıştırılan komut ayrıca komut şeridine/Command History'ye ve log kutusuna
+    düşsün (F208 altyapısı zaten var), `vs` CLI eşdeğeriyle birlikte
+  - **N8 ile yakın akraba** — N8 terminal komut setini genişletiyor, bu madde
+    onu tabloya sağ tık menüsü olarak bağlıyor; birlikte tasarlanmalı
 - **❗ Quick Launch env dropdown pipx'te çalışmıyor ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
 - **Preferred terminal + terminal içi aktivasyon doğrulaması ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
 - **PDM env gerçek venv path ✅ KAPATILDI (2026-08-08)** — kullanıcı onayladı.
@@ -288,7 +340,7 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
 - **N20 ✅ ÇÖZÜLDÜ (2026-08-06) — Preset arama kutusu + 5 bilimsel preset eklendi.**
   Arama: tab_builders.py. Presetler: 🔭 Astronomy, ⚛️ Physics, 🧪 Chem, 🌍 Climate, 🔬 SciPy.
   Toplam preset: 42 → 47.
-- **N21 ⚠️ KISMİ — Create dialog'da "Include system site-packages" açıklama label eklendi (env_dialog_ui.py, #a6adc8 renk) ama UI'da görünmüyor. __pycache__ temizleme de işe yaramadı. Sonraya bırakıldı.**
+- **N21 ✅ KAPATILDI (2026-08-09) — Kullanıcı kapattı.** Create dialog'daki "Include system site-packages" açıklama label'ı (env_dialog_ui.py) UI'da görünmüyordu; kök neden bulunamadı, işlevsel bozukluk olmadığı için kapatıldı.
 - **N22 ✅ KAPATILDI (2026-08-06) — v1.6.33 fix doğrulandı, çalışıyor.**
 - **N23 ✅ KAPATILDI (2026-08-06) — Kullanıcı kapattı, ileriye bırakıldı.**
 - **N24 ✅ ÇÖZÜLDÜ (v1.6.31) — env_list.py async path'e font/renk uygulandı.**

@@ -847,20 +847,31 @@ class PackageOpsMixin:
             self.current_worker = WorkerThread(_do_poetry_install)
         elif _env_type == "hatch":
             _pkgs_hatch = list(packages)
+            # self.pip_manager.venv_path is the real hatch virtualenv (see
+            # env_state.py PkgLoader comment) -- it has its own bin/pip, so
+            # install directly there instead of `hatch run pip install`,
+            # which needs a project-dir cwd this path no longer is.
             _hatch_path = self.pip_manager.venv_path if self.pip_manager else None
 
             def _do_hatch_install(callback=None, _pkgs=_pkgs_hatch, _path=_hatch_path):
-                import subprocess, shutil
-                from src.utils.platform_utils import subprocess_args
-                _hatch = shutil.which("hatch")
-                if not _hatch:
-                    return (False, "hatch executable not found")
+                import subprocess
+                from pathlib import Path as _Path
+                if not _path:
+                    return (False, "hatch environment path not found")
+                _pip = None
+                for _p in (
+                    str(_Path(_path) / "Scripts" / "pip.exe"),
+                    str(_Path(_path) / "bin" / "pip"),
+                ):
+                    if _Path(_p).exists():
+                        _pip = _p; break
+                if not _pip:
+                    return (False, f"pip not found in hatch environment: {_path}")
                 if callback:
-                    callback(f"hatch run pip install {' '.join(_pkgs)}...")
+                    callback(f"pip install {' '.join(_pkgs)}...")
                 r = subprocess.run(
-                    [_hatch, "run", "pip", "install"] + _pkgs,
+                    [_pip, "install"] + _pkgs,
                     capture_output=True, text=True, timeout=300,
-                    cwd=str(_path) if _path else None, **subprocess_args()
                 )
                 if r.returncode != 0:
                     return (False, f"hatch install failed: {(r.stderr or r.stdout or '').strip()[:400]}")

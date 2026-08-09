@@ -1063,8 +1063,13 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
                         self.write_cache(item, info.python_version, info.package_count, info.size)
 
                 elif env_type in ("hatch", "pdm", "pixi"):
-                    # Check cache first
-                    _cached = self._read_cache(item)
+                    # Cache is keyed on info.path, NOT item: for hatch the
+                    # real venv lives outside the project dir, and that real
+                    # path is what invalidate_cache() is called with after an
+                    # install. Keying on the project dir meant the entry was
+                    # never invalidated -> the table kept showing the size the
+                    # env had at creation time. pdm/pixi: info.path == item.
+                    _cached = self._read_cache(info.path)
                     if _cached:
                         info.python_version = _cached.get("python_version", marker_pyver or "")
                         info.package_count = _cached.get("package_count", 0)
@@ -1165,7 +1170,7 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
                         _hep = marker_data.get("hatch_env_path", "") if env_type == "hatch" else ""
                         _size_path = Path(_hep) if _hep and Path(_hep).exists() else item
                         info.size = get_venv_size(_size_path)
-                        self.write_cache(item, info.python_version, info.package_count, info.size)
+                        self.write_cache(info.path, info.python_version, info.package_count, info.size)
 
                 else:  # system_tools
                     info.python_version = ""

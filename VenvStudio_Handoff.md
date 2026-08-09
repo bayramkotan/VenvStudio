@@ -3,7 +3,8 @@
 ## Proje
 - **Repo:** https://github.com/bayramkotan/VenvStudio
 - **PyPI:** https://pypi.org/project/venvstudio/
-- **GÜNCEL VERSİYON: v1.6.40** (Bu oturum — N9 Conflict Management Aşama 1-3: CONFLICT_RULES static tablo, pre-flight kontrol, Tools → 🧩 Conflict Manager dialog; TODO temizlendi, N11-N17 eklendi) — PUSH EDİLDİ. PUSH SONRASI PyPI history sayfasını MUTLAKA kontrol et + `pip install venvstudio==1.6.40 --no-cache-dir --break-system-packages` ile doğrula. Çok makineli çalışma: commit öncesi `git fetch` + `git log origin/main`.
+- **GÜNCEL VERSİYON: v1.6.41** (Bu oturum — Hatch env sistemi kapsamlı onarım: 5 bug tek kök nedene çıktı — `hatch new` venv'i hiç oluşturmuyordu, oluşturma koduna `hatch env create` eklendi; rozet, boyut cache, paket listeleme/kurma, dialog kapanma bug'ları da düzeltildi; ayrıntı için "Bu Oturumda Yapılanlar (2026-08-09 — v1.6.41)" bölümüne bak) — PUSH EDİLECEK. PUSH SONRASI PyPI history sayfasını MUTLAKA kontrol et + `pip install venvstudio==1.6.41 --no-cache-dir --break-system-packages` ile doğrula. Çok makineli çalışma: commit öncesi `git fetch` + `git log origin/main`.
+- **Son TODO güncellemesi (2026-08-09, v1.6.41 ile birlikte):** N9/hatch grubu altında 5 madde ✅ ÇÖZÜLDÜ (v1.6.41) olarak işaretlendi (rozet, boyut cache, paket listeleme/kurma, dialog kapanma, `hatch env create` eksikliği); N35 eklendi (self-heal — marker'da hatch_env_path yoksa her refresh'te yeniden dene, Bayram'a soruldu, cevap bekleniyor). N34 (sağ tık komut menüsü) hâlâ açık.
 - **Bir sonraki oturumun kuyruğu:** aşağıdaki "Bu Oturumda Yapılanlar (2026-07-23/24)" bölümünün *Açık maddeler* kısmı
 - **Proje dizini (Windows):** `C:\Github\VenvStudio`
 - **Proje dizini (Linux - CachyOS/Pardus):** `~/Github/VenvStudio`
@@ -824,6 +825,168 @@ ama Qt sinyal string'i veya `getattr` ile çağrılanlar da yanlış işaretleni
 Neden elle tablo tutmuyoruz: handoff'taki el yazımı tablo `_update_quick_sidebar`'ı
 "sidebar güncelleme" diye listeliyordu, oysa o fonksiyon ölü koddu ve gerçek sidebar
 `quicklaunch.py`'deydi. Üretilen harita kaynakla senkron kalır.
+
+---
+
+## Bu Oturumda Yapılanlar (2026-08-09 — v1.6.41, PUSH EDİLMEDİ — bu oturumda push edilecek)
+
+### Konu: Hatch env sistemi baştan sona kırıktı — 5 ayrı bug, tek kök nedene çıktı
+
+Tetikleyici: Bayram `htccc` isimli Hatch env'e girince Package Manager panelinde
+`⚙️ PIP` rozeti gördü ("neden pip gösteriyor, hatch değil mi?"). Araştırma
+zincirle genişledi: rozet → boyut tutarsızlığı → paket sayımı → install
+hatası → **gerçek kök neden**. Aşağıda kronolojik sırayla.
+
+### ÖNCE: Hatch/Poetry/Pipx mimarisini anla (bu bilmeden hiçbir fix mantıklı değil)
+
+VenvStudio'daki env tipleri ikiye ayrılır:
+
+- **Proje dizini = venv dizini** (venv, uv, conda): tek klasör, basit.
+- **Proje dizini ≠ venv dizini** (hatch, poetry, pipx): İKİ AYRI YER.
+  - **Proje dizini** (`~/Github/VenvStudio/venv/<isim>` gibi, VenvStudio'nun
+    `base_dir`'i altında): sadece `pyproject.toml`, `src/`, ve
+    `.venvstudio_env` marker dosyası. Kod/metadata burada.
+  - **Gerçek venv** (araca göre farklı, kullanıcı-genelinde ortak önbellek
+    alanında): `bin/python`, `bin/pip`, kurulu paketler burada.
+    - Hatch → `~/.local/share/hatch/env/virtual/<proje>/<hash>/<proje>`
+      (Windows: `%APPDATA%\hatch\env\virtual\...`)
+    - Poetry → `~/.cache/pypoetry/virtualenvs/<proje>-<hash>-py3.XX`
+    - Pipx → `~/.local/share/pipx/venvs/<app>`
+
+Bu tasarım hatch/poetry/pipx'in kendi felsefesi — proje klasörü taşınabilir
+kalsın (venv git'e commit edilmez zaten), venv ise ortak önbellekte olsun ki
+aynı proje farklı yerde clone'lansa bile yeniden kurulmasın.
+
+VenvStudio'nun her yerinde `self.venv_path` / `item` / `_path` gibi
+değişkenler bazen proje dizinini bazen gerçek venv'i tutuyor —
+**hangisi olduğu koda göre değişiyor ve bu tutarsızlık bugünkü tüm
+bugların ortak kökü.**
+
+### Sorun 1 — Rozet "PIP" gösteriyordu, "Hatch" değil
+
+**Dosya:** `src/gui/env_state.py`
+
+`set_venv()` env tipini `.venvstudio_env` marker dosyasının
+`venv_path/.venvstudio_env` içinde olup olmadığına bakarak tespit ediyordu.
+Ama hatch'te marker **proje dizininde**, `venv_path` ise (tabloda gösterilen)
+**gerçek venv dizini** — marker orada yok, tespit "venv" tipine düşüyor,
+rozet haritası `"venv": "PIP"` diyor.
+
+**Çözüm:** İki tespit bloğuna da (satır ~540 ve ~390 civarı) poetry/pipx
+kalıbının aynısı eklendi: `venv_path` string'inde `"hatch/env/virtual"`
+geçiyorsa `_current_env_type = "hatch"`. Windows ters slash'ları için
+`.replace("\\", "/")` eklendi.
+
+Ardından Bayram'ın isteğiyle rozet metni `"Hatch"` yerine **`"Hatch (pip)"`**
+yapıldı — çünkü hatch paket kurulumunu gerçekte pip'e devrediyor, iki bilgi
+de doğru ve faydalı.
+
+### Sorun 2 — Env tablosunda boyut yanlış (9.9 MB vs gerçek 617.6 MB)
+
+**Dosya:** `src/core/venv_manager.py`
+
+`list_venvs_fast()`'in hatch/pdm/pixi dalı (satır ~1065) cache'i **proje
+dizini** (`item`) anahtarıyla okuyup yazıyordu. Ama install sonrası
+`invalidate_cache()` **gerçek venv yoluyla** çağrılıyor. Anahtarlar
+tutmadığı için cache hiç geçersizleşmiyor, tablo env'in oluşturulduğu
+andaki (boş) boyutu sonsuza kadar gösteriyordu.
+
+**Çözüm:** `_read_cache(item)` / `write_cache(item, ...)` →
+`_read_cache(info.path)` / `write_cache(info.path, ...)`. Hatch'te
+`info.path` (satır ~900'de zaten) gerçek venv'e çözülüyor; pdm/pixi'de
+zaten `item` ile aynı, davranışları değişmedi.
+
+*(Not: bu fix tek başına yetersiz kaldı — bkz. Sorun 5.)*
+
+### Sorun 3 — Paket listesi "0 packages installed" diyordu ama install'a basınca "already installed" hatası veriyordu
+
+**Dosyalar:** `src/gui/env_state.py` (`PkgLoader.run()`), `src/gui/package_ops.py`
+(`_do_hatch_install`)
+
+İki ayrı kod yolu, hâlâ `venv_path`'in **proje dizini** olduğunu varsayıp
+`hatch env find` / `hatch run pip install` çalıştırıyordu — proje dizini
+bağlamı gerektiren komutlar bunlar, ama artık `venv_path` gerçek venv
+yoluydu. `hatch env find` proje context'i bulamayıp sessizce boş dönüyor,
+`except` yutuyor → **0 paket**. "Already installed" kontrolü ise ayrı bir
+yoldan (`pip_manager.list_packages()`, doğrudan gerçek venv'deki pip'i
+çağırıyor) doğru sonucu buluyordu — iki kontrol birbirini yalanlıyordu.
+
+**Çözüm:** İkisinde de `hatch` CLI dolaylaması kaldırıldı, doğrudan
+`venv_path/bin/pip` (Windows: `Scripts\pip.exe`) bulunup çağrılıyor —
+"already installed" kontrolüyle birebir aynı yöntem.
+
+### Sorun 4 (GERÇEK KÖK NEDEN) — `hatch new` venv'i hiç oluşturmuyordu
+
+**Dosya:** `src/gui/env_dialog.py` (hatch oluşturma bloğu, `_run()` içinde)
+
+Yukarıdaki 3 fix hep semptomu düzeltti, hastalığı değil. Log incelemesiyle
+netleşti: `Cache HIT: /home/bayram/venv/htccc` (proje dizini!) — yani
+`info.path` gerçek venv'e hiç çözülmemiş. Sebep: **hatch oluşturma kodu
+sadece `hatch new <isim>` çalıştırıyordu.** Bu komut SADECE proje iskeletini
+(`pyproject.toml`) yazar, **virtualenv'i hiç kurmaz**. VenvStudio'nun kendi
+Presets ekranındaki komut ipucu metni bile doğru sırayı gösteriyordu
+(`hatch new` → `hatch env create` → `hatch shell`) ama kod ikinci adımı
+hiç çalıştırmıyordu.
+
+Sonuç: gerçek venv hiç var olmuyor → marker'a `hatch_env_path` yazılamıyor
+→ `list_venvs_fast`'teki `hatch env find` env olmadığı için başarısız
+oluyor → proje dizini fallback'i kalıcılaşıp cache'e yazılıyor → Install
+tıklanınca proje dizininde pip aranıyor → **"pip not found in hatch
+environment: /home/bayram/venv/htccc"**.
+
+**Çözüm:** `hatch new` başarılı olduktan sonra:
+1. `hatch env create` çalıştırılıyor (varsa `--python <sürüm>` ile)
+2. `hatch env find` ile gerçek venv yolu **oluşturma anında** çözülüyor
+3. Bu yol marker'a `hatch_env_path` olarak baştan yazılıyor — hiçbir
+   şeyin daha sonra tahmin etmesine gerek kalmıyor
+4. pdm/pixi dalları dokunulmadı
+
+### Sorun 5 — Dialog kapanma bug'ı (bu oturumun en başında, ayrı konu ama aynı dosyada)
+
+**Dosya:** `src/gui/env_dialog.py`
+
+Hatch/pdm/pixi için `_on_modern_done()` sonunda `self.accept()` vardı —
+diğer TÜM env tiplerinde (venv/uv/poetry/pipx/conda) yok, onlarda
+`cancel_btn.setText("Close")` ile dialog açık kalır, sağdaki komut paneli
+görünür kalır. hatch/pdm/pixi'de create bitince dialog kendini kapatıyordu.
+
+**Çözüm:** `self.accept()` kaldırıldı, `_on_modern_done`/`_on_modern_error`
+diğer tiplerle birebir aynı davranışa (form restore + "Close" butonu +
+renkli status) getirildi. UI setup bloğuna da diğer dallardaki kilitleme
+seti (create_btn/name_input disable, "Creating..." metni) eklendi.
+
+### Değişen Dosyalar (v1.6.41)
+
+| Dosya | Değişiklik |
+|---|---|
+| `src/gui/env_dialog.py` | (1) hatch/pdm/pixi create sonrası `self.accept()` kaldırıldı → diğer tiplerle aynı "Close" davranışı. (2) hatch dalına `hatch env create` + `hatch env find` eklendi, `hatch_env_path` marker'a persist ediliyor. |
+| `src/gui/env_state.py` | (1) `set_venv` + ikinci tespit bloğunda hatch path eşleşmesi eklendi (`"hatch/env/virtual" in venv_path`). (2) Rozet haritasında `"hatch": "Hatch (pip)"`. (3) `PkgLoader.run()` hatch dalında `hatch env find`/`hatch run pip list` kaldırıldı, doğrudan pip çağrısı. |
+| `src/core/venv_manager.py` | `list_venvs_fast()` hatch/pdm/pixi cache okuma/yazma anahtarı `item` → `info.path`. |
+| `src/gui/package_ops.py` | `_do_hatch_install`'da `hatch run pip install` kaldırıldı, doğrudan venv'in pip'i çağrılıyor; pip/yol bulunamazsa düzgün hata mesajı. |
+
+### Test Durumu
+- Her dosya `py_compile` + `pyflakes` ile doğrulandı (yeni uyarı yok)
+- Sahte `hatch` CLI (`new`/`env create`/`env find` simüle eden script) ile
+  oluşturma akışı uçtan uca mock test edildi — marker'a doğru
+  `hatch_env_path` yazıldığı ve o yolda gerçek `bin/pip` bulunduğu
+  doğrulandı
+- Listeleme/install fonksiyonları sahte bir venv klasörü (`bin/pip`
+  içeren) ile mock test edildi
+- Dialog kapanma davranışı mock nesnelerle test edildi
+- **Gerçek ortamda henüz test edilmedi** — mevcut bozuk `htccc` env'i
+  eski (yanlış) cache'i taşıdığı için sil+yeniden-oluştur ile test
+  gerekiyor (bkz. TODO)
+
+### Açık / Sonraki Oturuma Not
+- `htccc` (ve varsa başka önceden-bozuk hatch env'leri) silinip yeniden
+  oluşturulmalı — eski cache kendiliğinden düzelmiyor, self-heal yok
+- `venv_manager.py`'ye bir self-heal eklenebilir: marker'da
+  `hatch_env_path` yoksa `list_venvs_fast` her refresh'te yeniden
+  denesin (şu an sadece ilk karşılaşmada dener, başarısız olursa
+  kalıcı kalır) — Bayram'a soruldu, cevap bekleniyor, N35 olarak
+  TODO'ya eklendi
+- pdm/poetry'de de aynı "iki ayrı konum" tuzağı teorik olarak var
+  olabilir ama bu oturumda sadece hatch test edildi/onarıldı
 
 ---
 
@@ -5565,9 +5728,9 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 - hatch/pdm/pixi create'te artık COMMAND banner gösteriyor (`hatch new`, `pdm init`, `pixi init` + `vs create -t ...`)
 
 ### Açık / Test Bekleyen
-- pixi `get_python_executable` ilk açılışta `pixi run which python` çağırıyor (küçük gecikme, sonraki açılışlarda cache)
-- hatch env'ler `~/.local/share/hatch/env/virtual/` dışına create edilirse görünmez
-- PDM env'inin gerçek venv path'i ayrıca araştırılabilir (PDM de `~/.local/share/pdm/` kullanıyor olabilir)
+- ✅ KAPATILDI (2026-08-09) — pixi `get_python_executable` ilk açılış gecikmesi (`pixi run which python`, sonraki açılışlarda marker'dan cache). Kullanıcı kapattı, kabul edilebilir davranış.
+- ✅ KAPATILDI (2026-08-09) — hatch env'lerin `~/.local/share/hatch/env/virtual/` dışında görünmemesi. Kullanıcı kapattı.
+- ✅ KAPATILDI (2026-08-08) — PDM env'inin gerçek venv path'i (kullanıcı onayladı).
 
 ### Değişen Dosyalar (v1.6.39)
 | Dosya | Değişiklik |
@@ -5638,9 +5801,11 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 7. **N16** — 📚 Akademik YZ Diyagramları (LSTM/Transformer/GAN...)
 8. **N8** — Terminal komutlarını geliştir
 9. **N17** — Toolchain Manager UX Yeniden Düzenleme
+10. **N34** — Env tablosunda sağ tık → env tipine özel komut menüsü, seçilen komut terminalde env aktive edilerek çalıştırılır (N8 ile birlikte tasarlanacak; detay TODO'da)
+11. **N35** — Hatch self-heal (marker'da hatch_env_path yoksa her refresh'te yeniden dene) — Bayram'a soruldu, cevap bekleniyor
 
 ## Sonraki Chat Başlangıç Promptu
-> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.40, sıradaki: v1.6.41.
+> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.41, sıradaki: v1.6.42.
 
 ## 📋 Dosya Kopyalama Kuralları
 

@@ -835,43 +835,34 @@ class EnvStateMixin:
                         except Exception:
                             pass
                     elif self.env_type == "hatch":
-                        import subprocess, json as _json, shutil, sys
+                        # self.venv_path is ALREADY the real hatch virtualenv
+                        # (~/.local/share/hatch/env/virtual/<proj>/<hash>/<proj>),
+                        # not the project dir -- resolved once by
+                        # venv_manager.py and cached in the marker's
+                        # hatch_env_path. Running `hatch env find` from INSIDE
+                        # that folder fails (no pyproject.toml there), which
+                        # silently produced pkgs=[] -> "0 packages installed"
+                        # even though the real venv had packages. Read pip
+                        # directly, same as PipManager / the install-check do.
+                        import subprocess, json as _json
                         from pathlib import Path as _Path
-                        from src.utils.platform_utils import subprocess_args
                         class _Pkg:
                             def __init__(self, name, version):
                                 self.name = name; self.version = version
                         pkgs = []
                         try:
-                            _hatch = shutil.which("hatch")
-                            if _hatch and self.venv_path:
-                                # Find real env path first
-                                _fr = subprocess.run(
-                                    [_hatch, "env", "find"],
-                                    capture_output=True, text=True, timeout=10,
-                                    cwd=str(self.venv_path), **subprocess_args())
-                                _env_path = _fr.stdout.strip() if _fr.returncode == 0 else ""
-                                if _env_path:
-                                    _pip = None
-                                    for _p in (
-                                        str(_Path(_env_path) / "Scripts" / "pip.exe"),
-                                        str(_Path(_env_path) / "bin" / "pip"),
-                                    ):
-                                        if _Path(_p).exists():
-                                            _pip = _p; break
-                                    if _pip:
-                                        _r = subprocess.run(
-                                            [_pip, "list", "--format=json"],
-                                            capture_output=True, text=True, timeout=30)
-                                        if _r.returncode == 0:
-                                            for p in _json.loads(_r.stdout):
-                                                pkgs.append(_Pkg(p["name"], p["version"]))
-                                else:
-                                    # Fallback: hatch run pip list
+                            if self.venv_path:
+                                _pip = None
+                                for _p in (
+                                    str(_Path(self.venv_path) / "Scripts" / "pip.exe"),
+                                    str(_Path(self.venv_path) / "bin" / "pip"),
+                                ):
+                                    if _Path(_p).exists():
+                                        _pip = _p; break
+                                if _pip:
                                     _r = subprocess.run(
-                                        [_hatch, "run", "pip", "list", "--format=json"],
-                                        capture_output=True, text=True, timeout=30,
-                                        cwd=str(self.venv_path), **subprocess_args())
+                                        [_pip, "list", "--format=json"],
+                                        capture_output=True, text=True, timeout=30)
                                     if _r.returncode == 0:
                                         for p in _json.loads(_r.stdout):
                                             pkgs.append(_Pkg(p["name"], p["version"]))

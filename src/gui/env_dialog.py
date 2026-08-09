@@ -1961,9 +1961,15 @@ class EnvCreateDialog(QDialog):
             return
 
         # ── UI setup ─────────────────────────────────────────────────────
-        self.env_type_combo.setEnabled(False)
-        self.create_btn.setEnabled(False)
+        # Same lock-down as the conda / uv / poetry / pipx branches: the
+        # form is disabled while the worker runs and restored by the
+        # done/error handler -- no auto-close.
         self.progress_bar.setVisible(True)
+        self.create_btn.setEnabled(False)
+        self.create_btn.setText("Creating...")
+        self.name_input.setEnabled(False)
+        self.env_type_combo.setEnabled(False)
+        self.status_label.setStyleSheet("color: #89b4fa; font-size: 15px; font-weight: bold;")
         self.status_label.setText(f"⚙️ Creating {env_type} environment...")
 
         _etype = env_type
@@ -1987,12 +1993,42 @@ class EnvCreateDialog(QDialog):
         def _run():
             try:
                 os.makedirs(_path, exist_ok=True)
+                _hatch_env_path = ""  # populated below only for _etype == "hatch"
                 if _etype == "hatch":
                     cmd = [_shutil.which("hatch") or "hatch", "new", _name]
                     r = subprocess.run(cmd, capture_output=True, text=True,
                                        cwd=location, **subprocess_args())
                     if r.returncode != 0:
                         raise RuntimeError(r.stderr or r.stdout or "hatch new failed")
+                    # `hatch new` only writes the project skeleton
+                    # (pyproject.toml) -- it does NOT build the virtualenv.
+                    # Without this explicit `hatch env create`, no venv
+                    # exists yet, so every later `hatch env find` (used to
+                    # locate the real venv for listing/installing/size)
+                    # fails, silently falls back to this project dir, and
+                    # that wrong path gets cached -- which is why listing
+                    # and installing looked broken. This is exactly the
+                    # sequence the tool's own command hint shows: new ->
+                    # env create -> shell.
+                    _hatch_exe = _shutil.which("hatch") or "hatch"
+                    _create_cmd = [_hatch_exe, "env", "create"]
+                    if _py:
+                        _create_cmd += ["--python", _py]
+                    _rc = subprocess.run(_create_cmd, capture_output=True, text=True,
+                                         cwd=_path, timeout=120, **subprocess_args())
+                    if _rc.returncode != 0:
+                        raise RuntimeError(_rc.stderr or _rc.stdout or "hatch env create failed")
+                    # Resolve the real venv path now, while we're in the
+                    # right cwd, and persist it below so nothing has to
+                    # guess it later.
+                    try:
+                        _rf = subprocess.run([_hatch_exe, "env", "find"],
+                                             capture_output=True, text=True,
+                                             cwd=_path, timeout=10, **subprocess_args())
+                        if _rf.returncode == 0:
+                            _hatch_env_path = _rf.stdout.strip()
+                    except Exception:
+                        pass
                 elif _etype == "pdm":
                     os.makedirs(_path, exist_ok=True)
                     cmd = [_shutil.which("pdm") or "pdm", "init", "--non-interactive"]
@@ -2033,13 +2069,16 @@ class EnvCreateDialog(QDialog):
                     import sys as _sys
                     _python_version = f"{_sys.version_info.major}.{_sys.version_info.minor}.{_sys.version_info.micro}"
 
+                _marker_data = {
+                    "type": _etype, "name": _name,
+                    "created": datetime.datetime.now().isoformat(),
+                    "python": _py or "",
+                    "python_version": _python_version,
+                }
+                if _etype == "hatch" and _hatch_env_path:
+                    _marker_data["hatch_env_path"] = _hatch_env_path
                 with open(marker, "w") as f:
-                    json.dump({
-                        "type": _etype, "name": _name,
-                        "created": datetime.datetime.now().isoformat(),
-                        "python": _py or "",
-                        "python_version": _python_version,
-                    }, f, indent=2)
+                    json.dump(_marker_data, f, indent=2)
 
                 from PySide6.QtCore import QMetaObject, Qt
                 QMetaObject.invokeMethod(self, "_on_modern_done",
@@ -2064,16 +2103,22 @@ class EnvCreateDialog(QDialog):
         except ImportError:
             pass
         self.progress_bar.setVisible(False)
-        self.env_type_combo.setEnabled(True)
         self.create_btn.setEnabled(True)
+        self.create_btn.setText("Create Environment")
+        self.name_input.setEnabled(True)
+        self.env_type_combo.setEnabled(True)
         banner_success(
             f"{self._modern_etype} environment '{self._modern_name}' created",
             details=[f"Path: {self._modern_path}"]
         )
+        self.status_label.setStyleSheet("color: #a6e3a1; font-size: 15px; font-weight: bold;")
         self.status_label.setText(
             f"✅ {self._modern_etype} environment '{self._modern_name}' created!")
         self.env_created.emit(self._modern_name)
-        self.accept()
+        # Keep dialog open so user can see commands. Cancel -> Close.
+        # hatch/pdm/pixi used to call self.accept() here, closing the dialog
+        # while every other env type stays open -- that was the bug.
+        self.cancel_btn.setText("Close")
 
     def _on_modern_error(self):
         banner_error = lambda *a, **kw: None
@@ -2082,10 +2127,14 @@ class EnvCreateDialog(QDialog):
         except ImportError:
             pass
         self.progress_bar.setVisible(False)
-        self.env_type_combo.setEnabled(True)
         self.create_btn.setEnabled(True)
+        self.create_btn.setText("Create Environment")
+        self.name_input.setEnabled(True)
+        self.env_type_combo.setEnabled(True)
         banner_error(
             f"Failed to create {self._modern_etype} environment '{self._modern_name}'",
             details=[self._modern_error]
         )
+        self.status_label.setStyleSheet("color: #f38ba8; font-size: 15px; font-weight: bold;")
         self.status_label.setText(f"❌ Error: {self._modern_error[:80]}")
+        self.cancel_btn.setText("Close")

@@ -3,8 +3,8 @@
 ## Proje
 - **Repo:** https://github.com/bayramkotan/VenvStudio
 - **PyPI:** https://pypi.org/project/venvstudio/
-- **GÜNCEL VERSİYON: v1.6.41** (Bu oturum — Hatch env sistemi kapsamlı onarım: 5 bug tek kök nedene çıktı — `hatch new` venv'i hiç oluşturmuyordu, oluşturma koduna `hatch env create` eklendi; rozet, boyut cache, paket listeleme/kurma, dialog kapanma bug'ları da düzeltildi; ayrıntı için "Bu Oturumda Yapılanlar (2026-08-09 — v1.6.41)" bölümüne bak) — PUSH EDİLECEK. PUSH SONRASI PyPI history sayfasını MUTLAKA kontrol et + `pip install venvstudio==1.6.41 --no-cache-dir --break-system-packages` ile doğrula. Çok makineli çalışma: commit öncesi `git fetch` + `git log origin/main`.
-- **Son TODO güncellemesi (2026-08-09, v1.6.41 ile birlikte):** N9/hatch grubu altında 5 madde ✅ ÇÖZÜLDÜ (v1.6.41) olarak işaretlendi (rozet, boyut cache, paket listeleme/kurma, dialog kapanma, `hatch env create` eksikliği); N35 eklendi (self-heal — marker'da hatch_env_path yoksa her refresh'te yeniden dene, Bayram'a soruldu, cevap bekleniyor). N34 (sağ tık komut menüsü) hâlâ açık.
+- **GÜNCEL VERSİYON: v1.6.41** (Bu oturum — Hatch env sistemi kapsamlı onarım: 5 bug tek kök nedene çıktı — `hatch new` venv'i hiç oluşturmuyordu, oluşturma koduna `hatch env create` eklendi; rozet, boyut cache, paket listeleme/kurma, dialog kapanma bug'ları da düzeltildi; ayrıntı için "Bu Oturumda Yapılanlar (2026-08-09 — v1.6.41)" bölümüne bak) — PUSH EDİLDİ, PyPI'de doğrulandı (`vs -V` → 1.6.41). PUSH SONRASI PyPI history sayfasını MUTLAKA kontrol et + `pip install venvstudio==1.6.41 --no-cache-dir --break-system-packages` ile doğrula. Çok makineli çalışma: commit öncesi `git fetch` + `git log origin/main`.
+- **Son TODO güncellemesi (2026-08-09, v1.6.41 ile birlikte):** N9/hatch grubu altında 5 madde ✅ ÇÖZÜLDÜ (v1.6.41) olarak işaretlendi (rozet, boyut cache, paket listeleme/kurma, dialog kapanma, `hatch env create` eksikliği); N35 eklendi (self-heal — marker'da hatch_env_path yoksa her refresh'te yeniden dene, Bayram'a soruldu, cevap bekleniyor). N34 (sağ tık komut menüsü) hâlâ açık. **ÖNEMLİ:** N36 eklendi — PDM create akışında hatch'in v1.6.41 öncesi hatasının BİREBİR AYNISI doğrulandı (venv hiç materyalize edilmiyor), henüz raporlanmadı ama kesin bozuk, bir sonraki oturumda öncelikli. N36/N37: PDM ve Pixi create akışları AYNI OTURUMDA düzeltildi (env_dialog.py), henüz push/test edilmedi — TODO'nun en başında. Detay: bu dosyada "ÖNLEME NOTU" bölümü.
 - **Bir sonraki oturumun kuyruğu:** aşağıdaki "Bu Oturumda Yapılanlar (2026-07-23/24)" bölümünün *Açık maddeler* kısmı
 - **Proje dizini (Windows):** `C:\Github\VenvStudio`
 - **Proje dizini (Linux - CachyOS/Pardus):** `~/Github/VenvStudio`
@@ -985,8 +985,118 @@ seti (create_btn/name_input disable, "Creating..." metni) eklendi.
   denesin (şu an sadece ilk karşılaşmada dener, başarısız olursa
   kalıcı kalır) — Bayram'a soruldu, cevap bekleniyor, N35 olarak
   TODO'ya eklendi
-- pdm/poetry'de de aynı "iki ayrı konum" tuzağı teorik olarak var
-  olabilir ama bu oturumda sadece hatch test edildi/onarıldı
+- ~~pdm/poetry'de de aynı "iki ayrı konum" tuzağı teorik olarak var
+  olabilir~~ → DOĞRULANDI, bkz. aşağıdaki "ÖNLEME NOTU": Poetry zaten
+  doğru yapılmış, **PDM'de hatch'in v1.6.41 öncesi haliyle birebir aynı
+  bug var** — henüz raporlanmadı ama kesin orada, öncelikli TODO.
+
+## ⚠️ ÖNLEME NOTU — Hatch'in yaşadığı bug'ı bir daha yaşamamak için (2026-08-09 sonrası eklendi)
+
+Bayram'ın sorusu: "Bu sorunlar neden oluyor, son 3-5 sürümdür tekrar ediyor,
+bir sonraki sürümde olmasın." Kısa cevap ve kalıcı çözüm burada.
+
+### Neden oluyordu — tek cümle
+
+Yeni bir env tipi (hatch/pdm/pixi) eklenirken "bu env'in dosyaları nerede,
+gerçek Python'u nerede" sorusunun cevabı **tek bir yerde** tutulması
+gerekirken, kodun 5 farklı köşesi (rozet, boyut cache, paket listeleme,
+kurulum, oluşturma) bu soruyu **kendi kendine ayrı ayrı tahmin etti**.
+Sonuç: aynı hatanın 4 farklı görünümü, teker teker avlanmak zorunda kalındı.
+
+### KRİTİK BULGU (2026-08-09, v1.6.41 sonrası) — Poetry zaten doğru yapılmıştı, PDM'de hâlâ aynı hastalık var
+
+`env_dialog.py`'nin `_do_alt_create` fonksiyonunu satır satır karşılaştırdık:
+
+- **Poetry (`_etype == "poetry"`, ~satır 1420-1628): DOĞRU, baştan beri.**
+  `poetry new` sonrası `poetry env use` + **`poetry install --no-root`**
+  çalıştırılıyor (venv'i gerçekten materyalize ediyor), ardından
+  `poetry env info --path` ile gerçek yol çözülüyor, ve marker **HEM proje
+  dizinine HEM gerçek venv yoluna** (`.venvstudio_env` iki kopya) yazılıyor.
+  Bu, hatch'in v1.6.41'de sonradan kopyaladığı desenin ta kendisi —
+  referans implementasyon aslında zaten repo'da varmış.
+
+- **Hatch (`_etype == "hatch"`): v1.6.41'de DÜZELTİLDİ.** Önceden sadece
+  `hatch new` çalışıyordu (bkz. yukarıdaki "Sorun 4" bölümü); artık
+  `hatch env create` + `hatch env find` + marker'a `hatch_env_path` persist
+  ediliyor — poetry'nin deseniyle aynı hizaya getirildi.
+
+- **PDM (`_etype == "pdm"`, satır ~2032-2040): HÂLÂ BOZUK, henüz hiç
+  raporlanmadı.** Kod sadece `pdm init --non-interactive` çalıştırıyor.
+  Bu SADECE `pyproject.toml` yazar — `pdm install` veya `pdm venv create`
+  hiç çağrılmıyor, yani **gerçek venv hiç materyalize edilmiyor**, gerçek
+  yol hiç çözülmüyor, marker'a persist edilmiyor. Hatch'in v1.6.41'den
+  önceki hali ile birebir aynı hastalık. Henüz kimse "PDM env'im boş
+  görünüyor" diye şikayet etmedi çünkü muhtemelen kimse PDM'i sıfırdan
+  yeterince test etmedi — ama aynı belirtiler (yanlış rozet, yanlış boyut,
+  "0 packages" / "already installed" çelişkisi, "pip not found") aynı
+  şekilde ortaya çıkacak.
+
+- **Pixi (`_etype == "pixi"`, satır ~2041-2054): ŞÜPHELİ, doğrulanmadı.**
+  Kod sadece `pixi init <path>` çalıştırıyor (+ migrate fallback). `pixi
+  install` veya benzeri bir materyalize adımı görünmüyor. Pixi'nin kendi
+  davranışı (init sırasında env'i otomatik kurup kurmadığı) doğrulanmadı —
+  bu netleşmeden PDM ile aynı kategoriye konulmamalı ama şüpheli.
+
+### YAPILDI (aynı oturumda, 2026-08-09) — kod yazıldı, PUSH/TEST EDİLMEDİ
+
+Bayram'ın "bir an önce doğru şekle çevirelim" talimatı üzerine ikisi de
+aynı oturumda düzeltildi (henüz push edilmedi, TODO'nun en başında
+N36/N37 olarak test bekliyor):
+
+1. **PDM — DÜZELTİLDİ.** `pdm init` sonrası `pdm install` eklendi.
+   PDM hatch'ten farklı: venv'i proje dizininin İÇİNE kuruyor (`.venv`),
+   ayrı bir global cache konumu yok — `venv_manager.py`'de zaten
+   `info.path == item` varsayımı vardı ve bu doğruymuş. Yani hatch'teki
+   gibi ayrı bir "gerçek yolu bul + marker'a persist et" adımına gerek
+   yoktu, sadece materyalize eden komut eksikti. Sahte `pdm` CLI ile
+   mock test edildi.
+2. **Pixi — savunmacı düzeltme eklendi, DOĞRULANAMADI.** Bu ortamda
+   pixi kurulu değil (kurulum kaynağı erişim listesinde yok), gerçek
+   davranışı (init'in env'i otomatik kurup kurmadığı) doğrulanamadı.
+   Riski bilinmeden bırakmak yerine `pixi init` sonrasına savunmacı bir
+   `pixi install` eklendi — pixi zaten otomatik kuruyorsa zararsız
+   no-op, kurmuyorsa açığı kapatır. Sahte `pixi` CLI ile mock test
+   edildi. **Gerçek pixi ile ilk oluşturmada oluşturma süresi anormal
+   uzarsa (gereksiz ikinci install), bu satır gözden geçirilmeli.**
+3. `package_ops.py`'deki `_do_pdm_install`/`_do_pixi_install` fonksiyonları
+   kontrol edildi — ikisi de zaten `self.pip_manager.venv_path`'i proje
+   dizini olarak doğru kullanıyor (hatch'teki cwd hatası yok), değişiklik
+   gerekmedi.
+4. Değişen dosya: sadece `env_dialog.py` (hatch fix'iyle aynı dosya,
+   üç blok — hatch/pdm/pixi — hepsi bu dosyada).
+
+### Genel kural — yeni bir env tipi eklenirken veya value tipi
+değiştirilirken bu kontrol listesi çalıştırılmalı
+
+Bir env tipinin "proje dizini ≠ gerçek venv" mimarisi varsa (hatch, poetry,
+pipx, pdm zaten böyle; pixi şüpheli), aşağıdaki 5 nokta **oluşturma anında**
+tek seferde halledilmeli — sonradan "nasılsa bir yerlerde çözülür" diye
+bırakılmamalı:
+
+1. **Oluşturma:** proje iskeletini yazan komuttan sonra, venv'i gerçekten
+   materyalize eden komut da mutlaka çalıştırılmalı (`X install` /
+   `X env create` / `X venv create` — araca göre değişir). Sadece "new"/
+   "init" YETMEZ.
+2. **Gerçek yolu çöz ve persist et:** oluşturma anında `X env find` /
+   `X env info --path` gibi bir komutla gerçek yol bulunup marker dosyasına
+   yazılmalı (`<araç>_env_path` gibi bir alan). Daha sonra tahmin etmeye
+   hiç gerek kalmamalı.
+3. **Tip tespiti** (`env_state.py` rozet/type detection): marker sadece
+   proje dizininde olabilir, gerçek venv'de olmayabilir — path string'inde
+   aracın imzasını (`"hatch/env/virtual"`, `"pypoetry/virtualenvs"`,
+   `"pipx/venvs"` gibi) arayan bir fallback MUTLAKA olmalı.
+4. **Cache anahtarı** (`venv_manager.py`): boyut/paket-sayısı cache'i
+   `info.path` (gerçek venv) ile tutarlı anahtarlanmalı, `item` (proje
+   dizini) ile değil — ikisi karışırsa invalidation hiç tetiklenmez.
+5. **Listeleme/kurulum** (`env_state.py` PkgLoader, `package_ops.py`):
+   mümkünse aracın CLI'ını (`X run pip ...`) hiç kullanma — çünkü çoğu
+   proje-dizini cwd'si gerektirir ve gerçek venv yolundan çağrılınca
+   sessizce başarısız olur. Bunun yerine doğrudan gerçek venv'in kendi
+   `bin/pip`'ini çağır (Windows: `Scripts\pip.exe`).
+
+Bu 5 maddeyi karşılamayan bir env tipi eklenirse, bugünkü hatch zinciri
+(rozet → boyut → liste/install → gerçek kök) aynen tekrarlanır.
+
 
 ---
 

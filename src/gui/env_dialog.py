@@ -2031,13 +2031,25 @@ class EnvCreateDialog(QDialog):
                         pass
                 elif _etype == "pdm":
                     os.makedirs(_path, exist_ok=True)
-                    cmd = [_shutil.which("pdm") or "pdm", "init", "--non-interactive"]
+                    _pdm_exe = _shutil.which("pdm") or "pdm"
+                    cmd = [_pdm_exe, "init", "--non-interactive"]
                     if _py:
                         cmd += ["--python", _py]
                     r = subprocess.run(cmd, capture_output=True, text=True,
                                        cwd=_path, **subprocess_args())
                     if r.returncode != 0:
                         raise RuntimeError(r.stderr or r.stdout or "pdm init failed")
+                    # `pdm init` only writes pyproject.toml -- like `hatch new`,
+                    # it does NOT build the virtualenv. PDM keeps its venv
+                    # inside the project dir (`.venv`), so unlike hatch this
+                    # needs no separate real-path resolution -- just force
+                    # materialization so listing/install don't find an empty
+                    # project dir with no pip in it.
+                    _rc = subprocess.run([_pdm_exe, "install"], capture_output=True,
+                                         text=True, cwd=_path, timeout=120,
+                                         **subprocess_args())
+                    if _rc.returncode != 0:
+                        raise RuntimeError(_rc.stderr or _rc.stdout or "pdm install failed")
                 elif _etype == "pixi":
                     _pixi_exe = _tool_exe or _shutil.which("pixi") or "pixi"
                     cmd = [_pixi_exe, "init", _path]
@@ -2054,6 +2066,16 @@ class EnvCreateDialog(QDialog):
                                                cwd=location, **subprocess_args())
                         if r.returncode != 0:
                             raise RuntimeError(r.stderr or r.stdout or "pixi init failed")
+                    # `pixi init` only writes the manifest (pixi.toml). Whether
+                    # this alone materializes `.pixi/envs/default` was never
+                    # confirmed, so force it explicitly rather than assume --
+                    # same defensive step as pdm/hatch. Harmless no-op if the
+                    # env already exists.
+                    _rc = subprocess.run([_pixi_exe, "install"], capture_output=True,
+                                         text=True, cwd=_path, timeout=180,
+                                         **subprocess_args())
+                    if _rc.returncode != 0:
+                        raise RuntimeError(_rc.stderr or _rc.stdout or "pixi install failed")
                 marker = os.path.join(_path, ".venvstudio_env")
 
                 # Detect actual Python version if not specified

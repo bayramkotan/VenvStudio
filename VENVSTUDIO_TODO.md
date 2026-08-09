@@ -1,5 +1,37 @@
 # VENVSTUDIO_TODO.md
 
+## 🔴 EN ÖNCELİKLİ — Test Bekliyor (2026-08-09, kod yazıldı, henüz PUSH/TEST EDİLMEDİ)
+
+- **N36 — PDM create akışı düzeltildi, gerçek ortamda TEST EDİLMELİ:**
+  `env_dialog.py`'nin pdm dalı sadece `pdm init --non-interactive`
+  çalıştırıyordu — bu SADECE `pyproject.toml` yazar, gerçek venv'i hiç
+  materyalize etmez (hatch'in v1.6.41 öncesi hatasının birebir aynısı,
+  2026-08-09'da doğrulandı, henüz raporlanmamıştı). PDM kendi venv'ini
+  proje dizininin İÇİNE kurduğu için (`.venv`, hatch gibi ayrı bir
+  cache konumu değil) hatch'teki gibi ayrı path-persist mantığına
+  gerek yok — tek eksik `pdm install` çağrısıydı.
+  **Yapılan:** `pdm init` sonrası `pdm install` eklendi, `.venv`'i
+  zorla materyalize ediyor. Sahte `pdm` CLI ile mock test edildi —
+  `.venv/bin/pip` doğru oluştuğu doğrulandı.
+  **Test edilmeli:** Yeni bir PDM env oluştur, Packages sekmesinde
+  paket sayısı/rozet/boyut doğru mu kontrol et.
+
+- **N37 — Pixi create akışına savunmacı `pixi install` eklendi, TEST EDİLMELİ:**
+  `pixi init` sonrası gerçek env'in (`.pixi/envs/default`) otomatik
+  oluşup oluşmadığı bu ortamda doğrulanamadı (pixi kurulu değil,
+  kurulum kaynağı erişim listesinde yok). Riski görmeden bırakmak
+  yerine savunmacı bir `pixi install` adımı eklendi — pixi zaten
+  otomatik kuruyorsa zararsız no-op, kurmuyorsa açığı kapatır.
+  Sahte `pixi` CLI ile mock test edildi — `.pixi/envs/default/bin/python`
+  doğru oluştuğu doğrulandı.
+  **Test edilmeli:** Yeni bir Pixi env oluştur, oluşturma süresi
+  makul mu (gereksiz ikinci bir `install` varsa yavaşlamış olabilir),
+  Packages sekmesi doğru mu kontrol et.
+
+  *(İkisi de `env_dialog.py`'nin aynı push'unda — dosyayı kopyaladıktan
+  sonra HEM hatch HEM pdm HEM pixi için sıfırdan env oluşturup test et.
+  Detay: Handoff'ta "ÖNLEME NOTU" bölümü, 2026-08-09.)*
+
 ## 📐 BÜYÜK DOSYA BÖLME REFACTOR — İLERLEME (güncel)
 
 **Kural:** dışa açık API + import yolu değişmez. Saf veri → ast auto-script. Mantık → mixin (+ dependency-free `*_common.py` ile döngüsel import önle). Her bölmeden sonra `python3 main.py` + GERÇEK fonksiyonel test (create/clone/rename/delete) BEFORE commit. Satır sonu tipini (CRLF/LF) koru.

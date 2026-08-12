@@ -817,6 +817,20 @@ def main():
             window.activateWindow()
         _single_instance_server.newConnection.connect(_on_new_connection)
 
+        # B18 diagnostic: the watchdog's job was to catch a hang BEFORE
+        # we ever reach the event loop (that's the actual CI failure mode
+        # -- startup never gets here at all). Once we're about to call
+        # app.exec(), sitting inside it is the correct, healthy state for
+        # as long as the app runs -- not a hang. Without cancelling here,
+        # the 25s timer fires unconditionally on every run, healthy or
+        # not, and always reports "stuck in app.exec()" (confirmed
+        # 2026-08-12: fired on a normal, responsive session where the
+        # user was actively switching pages).
+        try:
+            faulthandler.cancel_dump_traceback_later()
+        except Exception:
+            pass
+
         exit_code = app.exec()
         logger.info(f"Application exiting with code {exit_code}")
         sys.exit(exit_code)

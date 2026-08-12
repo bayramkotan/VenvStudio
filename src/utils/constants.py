@@ -3,7 +3,7 @@ VenvStudio - Constants and Popular Package Catalog
 """
 
 APP_NAME = "VenvStudio"
-APP_VERSION = "1.6.42"
+APP_VERSION = "1.6.43"
 
 # ─── Shared Package Cache ─────────────────────────────────────────────────────
 # Default path for pip/uv shared download cache.
@@ -1148,6 +1148,19 @@ CONFLICT_RULES = {
         "blocked_envs": [],
         "note": "QuTiP may not have binary wheels for Python 3.13+. Compilation from source may be needed.",
         "severity": "warning",
+    },
+
+    # ── pygame ────────────────────────────
+    "pygame": {
+        "max_python": "3.13",
+        "min_python": None,
+        "blocked_envs": [],
+        "note": "pygame 2.6.1 ships wheels through Python 3.13 only. On 3.14+ "
+                "pip/uv falls back to building from source, which fails because "
+                "pygame's legacy build script needs distutils.msvccompiler -- "
+                "removed from the standard library in Python 3.12+. Use Python "
+                "3.13 or earlier, or try pygame-ce (community fork).",
+        "severity": "error",
     },
 }
 

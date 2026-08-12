@@ -59,6 +59,12 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
                     PackageExportMixin, PackageMiscMixin, QWidget):
     """Package management panel with catalog browsing and pip operations."""
     env_refresh_requested = Signal(int)  # pkg_count (-1 = unknown, refresh from cache)
+    # N9: emitted when the user clicks "Create New Environment..." in
+    # package_ops.py's compatibility dialog. PackagePanel has no
+    # reference back to MainWindow (constructed with only config=...,
+    # no parent=), so it can't call _new_env() directly -- same reason
+    # env_refresh_requested exists as a signal instead of a direct call.
+    new_environment_requested = Signal()
 
     def __init__(self, parent=None, config=None):
         super().__init__(parent)

@@ -190,13 +190,13 @@ class EnvCreateDialog(QDialog):
         # ── Environment Type ──────────────────────────────────────────────
         from PySide6.QtWidgets import QComboBox as _QCB
         self.env_type_combo = _QCB()
-        self.env_type_combo.addItem("🐍 Python Virtual Environment", "venv")
         self.env_type_combo.addItem("🦎 Conda Environment (micromamba)", "conda")
         self.env_type_combo.addItem("🏗️ Hatch Environment", "hatch")
         self.env_type_combo.addItem("📦 PDM Environment", "pdm")
+        self.env_type_combo.addItem("🧰 pipx Environment", "pipx")
         self.env_type_combo.addItem("🌊 Pixi Environment", "pixi")
-        # pipx removed from Create dialog — auto-detected and managed automatically
         self.env_type_combo.addItem("📜 Poetry Environment", "poetry")
+        self.env_type_combo.addItem("🐍 Python Virtual Environment", "venv")
         self.env_type_combo.addItem("⚡ uv Environment", "uv")
         # Tool Environment removed — system apps accessible from all env types
         self.env_type_combo.setToolTip(
@@ -413,6 +413,23 @@ class EnvCreateDialog(QDialog):
 
     def _on_env_type_changed(self, index):
         """Show/hide rows based on env type."""
+        # Guard against firing before _build_ui() finishes constructing
+        # every widget this method touches (cmd_label in particular).
+        # The “pre-select default env type” block right after
+        # env_type_combo.currentIndexChanged is connected calls
+        # setCurrentIndex() to restore the user’s saved default -- if that
+        # index differs from whatever addItem() left selected, Qt fires
+        # this handler immediately, long before cmd_label exists (created
+        # much further down in _build_ui). This was always a latent bug:
+        # venv used to sit at index 0, so a "venv" default never actually
+        # changed the index and never fired early. Alphabetizing the
+        # dropdown moved venv to a non-zero index, so the same default
+        # now genuinely changes the index on that very first call --
+        # exposing it (AttributeError: no attribute ‘cmd_label’, reported
+        # 2026-08-12). The real, fully-built call happens later at the
+        # end of _build_ui anyway, so it is always safe to no-op here.
+        if not hasattr(self, "cmd_label"):
+            return
         env_type = self.env_type_combo.currentData()
         is_venv  = env_type == "venv"
         is_conda = env_type == "conda"
@@ -423,14 +440,30 @@ class EnvCreateDialog(QDialog):
         if is_pipx:
             if hasattr(self, "_name_form_label"):
                 self._name_form_label.setText("Name:")
-            self.name_input.setPlaceholderText("e.g., my-pipx-apps, cli-tools, dev-tools")
+            # pipx is a single global tool -- whatever name goes in the
+            # marker JSON is cosmetic and never affects where anything is
+            # created (see the pipx branch in _do_alt_create: it always
+            # writes to the real pipx home, never a folder named after
+            # this). The table always shows it as "pipx" regardless, so
+            # asking the user to type something here just invites a name
+            # that means nothing. Lock it to "pipx" and grey it out.
+            self.name_input.setText("pipx")
+            self.name_input.setEnabled(False)
+            self.name_input.setPlaceholderText("")
             self.name_input.setToolTip(
-                "Enter an environment name for managing pipx apps.\n"
-                "You can install CLI apps later from the Installed/Catalog tabs."
+                "pipx is a single global tool, not something you name --\n"
+                "it always shows up as \"pipx\" in the Environments table.\n"
+                "Install CLI apps later from the Installed/Catalog tabs."
             )
         else:
             if hasattr(self, "_name_form_label"):
                 self._name_form_label.setText("Name:")
+            self.name_input.setEnabled(True)
+            if self.name_input.text() == "pipx":
+                # Only clear it if it's still the auto-filled "pipx" value
+                # we set above -- don't clobber something the user actually
+                # typed themselves before switching type back and forth.
+                self.name_input.setText("")
             self.name_input.setPlaceholderText("e.g., my-project, data-science, web-api")
             self.name_input.setToolTip("")
 
@@ -1257,6 +1290,40 @@ class EnvCreateDialog(QDialog):
                     return
             # ── End pre-check ─────────────────────────────────────────
 
+            # ── pipx reset confirmation ─────────────────────────────────
+            # pipx is a single global tool, not a per-name environment --
+            # env_path above already resolves to the REAL pipx home (not
+            # a folder named after `name`), and _do_alt_create's pipx
+            # branch just overwrites the marker in place, harmlessly.
+            # Bayram asked for something stronger: if pipx is already set
+            # up, clicking Create here should behave exactly like the
+            # table's right-click Delete on the pipx row -- a full wipe
+            # of pipx (and every app installed through it) followed by a
+            # clean reinstall. That's genuinely destructive, and "Create"
+            # is the one action in this whole dialog that's never
+            # destructive anywhere else, so it gets its own explicit,
+            # named warning rather than reusing the generic confirm text.
+            _pipx_do_reset = False
+            if env_type == "pipx" and _tool_found:
+                _pipx_marker = env_path / ".venvstudio_env"
+                if _pipx_marker.exists():
+                    _reset_reply = QMessageBox.warning(
+                        self, "Reset pipx?",
+                        "pipx is already installed and set up.\n\n"
+                        "Creating it again will COMPLETELY WIPE pipx and "
+                        "every CLI app installed through it, then reinstall "
+                        "pipx fresh — the same as deleting it from the "
+                        "Environments table.\n\n"
+                        f"Location: {env_path}\n\n"
+                        "This cannot be undone. Continue?",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.No,
+                    )
+                    if _reset_reply != QMessageBox.Yes:
+                        return
+                    _pipx_do_reset = True
+            # ── End pipx reset confirmation ──────────────────────────────
+
             self.progress_bar.setVisible(True)
             self.create_btn.setEnabled(False)
             self.create_btn.setText("Creating...")
@@ -1279,6 +1346,7 @@ class EnvCreateDialog(QDialog):
             _python  = python_path
             _name    = name
             _etype   = env_type
+            _reset_pipx = _pipx_do_reset
 
             def _do_alt_create(callback=None):
                 import subprocess, shutil, sys, json, datetime, re
@@ -1636,6 +1704,21 @@ class EnvCreateDialog(QDialog):
                     # ── pipx ─────────────────────────────────────────────
                     # Just create a marker folder — pipx apps are managed
                     # from Installed/Catalog tabs after env creation.
+
+                    # Confirmed reset: user chose "Create" on an already-set-up
+                    # pipx (see the warning dialog before this worker started).
+                    # Route straight into the SAME delete_venv() the table's
+                    # right-click Delete calls -- wipes the pipx home and every
+                    # app in it, then re-seeds a clean marker via
+                    # ensure_pipx_env(). Skip the marker-overwrite path below
+                    # entirely; this IS the create result.
+                    if _reset_pipx:
+                        _ok, _msg = self.venv_manager.delete_venv(
+                            "pipx", callback=callback,
+                            env_path=str(_env_path), env_type="pipx",
+                        )
+                        return _ok, (_msg if _ok else _msg)
+
                     def _find_pipx():
                         # 1. shutil.which
                         found = shutil.which("pipx") or shutil.which("pipx.exe")

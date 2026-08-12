@@ -1,5 +1,97 @@
 # VENVSTUDIO_TODO.md
 
+## 🔴 TEST BEKLİYOR — N9 Canlı Kontrol Sistemi (v1.6.43, henüz gerçek ortamda test edilmedi)
+
+- **N9 — Canlı PyPI wheel-kontrolü + "Create New Environment" yönlendirmesi:**
+  `package_ops.py`'ye statik `CONFLICT_RULES` bulamazsa devreye giren
+  canlı bir PyPI kontrolü eklendi (`venv`/`uv`/`hatch`/`pdm`/`poetry`
+  tiplerinde). Hata dialogu artık 3 buton: Install Anyway / Create New
+  Environment… / Cancel. **Sadece mock test edildi** (gerçek PyPI
+  verisiyle, 4 senaryo) — gerçek uygulamada henüz denenmedi çünkü
+  sinyal yolu (aşağıdaki madde) test sırasında kırık çıktı, düzeltildi
+  ama sonrasında tekrar test edilmedi.
+  **Test:** Python 3.14'lü bir venv'de `pygame` kurmayı dene — kurulum
+  denenmeden önce net bir uyarı çıkmalı, "Create New Environment…"
+  tıklanınca gerçekten Create dialogu açılmalı.
+
+- **Bulunup düzeltilen 2 "olmayan metod" hatası (N9 testi sırasında ortaya çıktı):**
+  1. `package_ops.py`'nin `self`'i `PackagePanel`, `MainWindow` değil —
+     `hasattr(self, "_new_env")` sessizce `False` dönüyordu. Kod
+     tabanındaki `env_refresh_requested` sinyal deseni kopyalanarak
+     yeni `new_environment_requested` sinyali eklendi (package_panel.py,
+     package_ops.py, main_window.py — 2 bağlantı noktası).
+  2. `_new_env` diye bir metod **hiç yok** — gerçek adı `_create_env`
+     (env_operations.py). Bağlantıyı ekleyince uygulama AÇILIŞTA çöktü.
+     Düzeltirken fark edildi: **Learn sayfasının "yeni venv oluştur"
+     seçeneği de bu oturumdan önce hep aynı yanlış isimle çalışıyordu**
+     — yani bu özellik muhtemelen hiç çalışmamıştı. İkisi de
+     `_create_env` olarak düzeltildi.
+
+## ✅ ÇÖZÜLDÜ VE GERÇEK ORTAMDA DOĞRULANDI (v1.6.43, 2026-08-12)
+
+- **B18 — faulthandler yanlış alarmı:** `app.exec()` öncesi
+  `cancel_dump_traceback_later()` eklendi — sağlıklı çalışan bir oturumda
+  artık "Timeout" uyarısı çıkmıyor. **B18'in gerçek kök nedeni hâlâ
+  AÇIK** — bir sonraki CI run'ında (yanlış-alarmsız) gerçek stack trace
+  bekleniyor.
+
+- **B19 — GitHub Actions Node.js 20 deprecation:** `build.yml`'de 4 action
+  tipi Node24-native majorlara güncellendi. Push sonrası ilk CI run'ında
+  doğrulanmalı.
+
+- **N9 Aşama 4 — pip --dry-run pre-flight:** Windows'ta 3 env tipinde
+  (uv/hatch/venv) gerçek preset kurulumlarıyla test edildi, sorunsuz.
+
+- **Progress bar — iki erken-kapanma bug'ı:** pre-flight kontroller
+  sırasında + post-install cache yenilemesi sırasında artık açık
+  kalıyor. **Kapsam notu:** sadece Preset install kapsandı,
+  Catalog/Uninstall/Launcher akışları kontrol edilmedi.
+
+- **pipx — Create New Environment dialoguna eklendi:** dropdown'a geri
+  eklendi, kurulu değilse install soruyor, kuruluysa "Reset pipx?"
+  onayıyla tablodaki sağ-tık-sil ile birebir aynı işlemi çağırıyor
+  (TÜM CLI app'leri siler, geri alınamaz), Name alanı otomatik
+  kilitleniyor.
+
+- **Dropdown alfabetik sıralama → gizli bug keşfi → çökme fix'i:**
+  Sıralama venv'i index 0'dan taşıyınca, `.connect()` sonrası çalışan
+  "varsayılan env tipini seç" bloğu artık gerçekten sinyal ateşliyordu
+  — `_on_env_type_changed`, `cmd_label` henüz oluşmadan çağrılıp
+  "+ New Environment" HER TIKLAMADA çöküyordu. Bu bug'ın kendisi
+  ESKİDEN BERİ vardı (sadece venv index 0'dayken tetiklenmiyordu).
+  Fix: `if not hasattr(self, "cmd_label"): return` koruması eklendi.
+  Gerçek ortamda doğrulandı.
+
+- **Learn install akışı — imza uyuşmazlığı çökmesi:** `_on_env_selected(row)`
+  → `_on_env_selected()` (2 yerde). Gerçek ortamda doğrulandı
+  (PySide6 kurulumu, çökme yok).
+
+- **N9 — pygame CONFLICT_RULES'a eklendi:** `max_python: "3.13"`,
+  `severity: "error"`, gerçek nedeni (distutils kaldırılması) açıklayan
+  not + pygame-ce önerisi. İlk denemede `"3.11"` yazılmıştı, gerçek
+  PyPI verisiyle çelişince `"3.13"`e düzeltildi.
+
+## 🟡 Kapsam Dışı Bırakılanlar (bir sonraki oturum için not)
+
+- pipx için ayrı bir "uyumsuzsa ne yapılsın" çözümü yok (pipx kendi
+  Python'unu değiştiremiyor) — ayrı bir tasarım konuşması gerekir
+- "Mevcut env'lerden seç" picker'ı (N9'un ikinci yönlendirme seçeneği)
+  — Toolchain Manager'dan Python listesi çekmek cross-mixin plumbing
+  gerektiriyor, bu turda kapsam dışı bırakıldı
+- Progress bar fix'i Catalog/Uninstall/Launcher akışlarına henüz
+  yayılmadı
+
+## ⚠️ Süreç Dersi (3. kez tekrarlandı bu oturumda) — CRLF kaybı
+
+`env_dialog.py`/`package_ops.py`/`main_window.py` gibi CRLF dosyalarını
+düzenlerken birkaç kez daha (farkında olmadan) text-mode dosya I/O
+kullanıldı, CRLF sessizce LF'ye döndü, her seferinde sonradan fark
+edilip normalize edildi. **Kalıcı kural hâlâ ihlal ediliyor** — CRLF
+dosyalarında HER ZAMAN `io.open(p, 'rb')`/`'wb'` (binary mode).
+
+
+---
+
 ## ✅ ÇÖZÜLDÜ VE GERÇEK ORTAMDA DOĞRULANDI (v1.6.42, 2026-08-12)
 
 - **N36 — PDM create akışı ✅ DOĞRULANDI:** `pdm init` sonrası `pdm install`

@@ -140,6 +140,87 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
             from src.utils.platform_utils import open_url
             open_url(result["release_url"])
 
+    def _find_pipx_exe(self):
+        """Same lookup order as env_dialog.py’s _find_pipx: PATH, then the
+        Scripts/bin dir next to the running interpreter, then user site.
+        Kept as a small standalone check here since this button doesn’t
+        need the rest of that dialog’s machinery.
+        """
+        import shutil, os
+        found = shutil.which("pipx") or shutil.which("pipx.exe")
+        if found:
+            return found
+        scripts = os.path.join(os.path.dirname(sys.executable),
+                                "Scripts" if sys.platform == "win32" else "bin")
+        for name_ in ("pipx", "pipx.exe"):
+            cand = os.path.join(scripts, name_)
+            if os.path.isfile(cand):
+                return cand
+        try:
+            import site
+            user_scripts = os.path.join(
+                site.getusersitepackages(), "..", "..",
+                "Scripts" if sys.platform == "win32" else "bin")
+            for name_ in ("pipx", "pipx.exe"):
+                cand = os.path.normpath(os.path.join(user_scripts, name_))
+                if os.path.isfile(cand):
+                    return cand
+        except Exception:
+            pass
+        return None
+
+    def _update_install_pipx_visibility(self):
+        """Show the button only when pipx genuinely isn’t on the system --
+        hidden once found, so it doesn’t sit next to a pipx row that’s
+        already there."""
+        btn = getattr(self, "install_pipx_btn", None)
+        if btn is None:
+            return
+        btn.setVisible(self._find_pipx_exe() is None)
+
+    def _install_pipx(self):
+        """Install pipx system-wide via pip, then let the normal env-list
+        refresh auto-detect it -- no name, no location, no marker folder,
+        matching how an already-installed pipx already shows up on its own."""
+        class _PipxInstallWorker(QThread):
+            finished_ok = Signal(bool, str)
+            def run(self):
+                import subprocess
+                try:
+                    from src.utils.platform_utils import subprocess_args
+                    r = subprocess.run(
+                        [sys.executable, "-m", "pip", "install", "--user", "pipx", "-q"],
+                        capture_output=True, text=True, timeout=120,
+                        **subprocess_args()
+                    )
+                    if r.returncode == 0:
+                        self.finished_ok.emit(True, "pipx installed")
+                    else:
+                        self.finished_ok.emit(False, (r.stderr or r.stdout or "pip install failed").strip()[:400])
+                except Exception as e:
+                    self.finished_ok.emit(False, str(e))
+
+        self.install_pipx_btn.setEnabled(False)
+        self.install_pipx_btn.setText("⏳ Installing pipx...")
+        # B186 pattern (see _auto_check_update above): parent=self so
+        # closeEvent’s findChildren(QThread) can find and wait for it.
+        self._pipx_install_worker = _PipxInstallWorker(self)
+        self._pipx_install_worker.finished_ok.connect(self._on_pipx_install_finished)
+        self._pipx_install_worker.start()
+
+    def _on_pipx_install_finished(self, success: bool, message: str):
+        self.install_pipx_btn.setEnabled(True)
+        self.install_pipx_btn.setText("📦 Install pipx")
+        if success:
+            self._update_install_pipx_visibility()
+            self._refresh_env_list(force=True)
+        else:
+            QMessageBox.warning(
+                self, "Could not install pipx",
+                "pipx installation failed:\n\n" + message +
+                "\n\nYou can also install it manually:\n  pip install --user pipx"
+            )
+
     def _c(self) -> dict:
         """Return current theme color palette with font hierarchy."""
         from src.gui.styles import get_colors
@@ -329,6 +410,11 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         # disk. The full _refresh_env_list shows a "Refreshing..." banner
         # for several seconds because it re-runs subprocess scans.
         self.package_panel.env_refresh_requested.connect(self._refresh_current_env_row)
+        # N9: "Create New Environment..." in the compatibility-check
+        # dialog (package_ops.py) -- PackagePanel has no way to call
+        # _create_env() directly, same reasoning as env_refresh_requested
+        # just above.
+        self.package_panel.new_environment_requested.connect(self._create_env)
         self.package_panel._ql_update_callback = self._update_ql_buttons
         self.package_panel._ql_env_changed_callback = self._sync_ql_selector
         self.stack.addWidget(self.package_panel)             # Page 0
@@ -377,6 +463,25 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         refresh_btn.clicked.connect(lambda: self._refresh_env_list(force=True))
         self._refresh_btn = refresh_btn
         header_layout.addWidget(refresh_btn)
+
+        # pipx is a single global tool, not something you "create" with a
+        # name/location like venv/hatch/pdm/etc -- it was deliberately kept
+        # out of the Create New Environment Type dropdown for that reason
+        # (a named pipx entry there would be disconnected from the real
+        # pipx install and show 0 apps, forever). This button covers the
+        # other half: if pipx isn’t on the system at all, there was no way
+        # to get it without leaving the app. Installs it in place and lets
+        # the normal env-list refresh auto-detect it afterward -- no name,
+        # no location, no marker folder. Hidden once pipx is found.
+        self.install_pipx_btn = QPushButton("📦 Install pipx")
+        self.install_pipx_btn.setObjectName("secondary")
+        self.install_pipx_btn.setFixedHeight(40)
+        self.install_pipx_btn.setToolTip(
+            "pipx installs and runs Python CLI tools, each in its own "
+            "isolated environment.")
+        self.install_pipx_btn.clicked.connect(self._install_pipx)
+        header_layout.addWidget(self.install_pipx_btn)
+        self._update_install_pipx_visibility()
 
         create_btn = QPushButton(f"  + {tr('new_environment')}  ")
         create_btn.setToolTip(UI_TOOLTIPS.get("btn_new_env", ""))
@@ -907,6 +1012,7 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
             from src.gui.package_panel import PackagePanel
             self.package_panel = PackagePanel(config=self.config)
             self.package_panel.env_refresh_requested.connect(self._refresh_current_env_row)
+            self.package_panel.new_environment_requested.connect(self._create_env)
             self.package_panel._ql_update_callback = self._update_ql_buttons
             self.package_panel._ql_env_changed_callback = self._sync_ql_selector
             self.stack.removeWidget(self._packages_placeholder)
@@ -1016,9 +1122,12 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         d = dlg.decision
 
         if d.mode == LearnInstallDecision.MODE_NEW_VENV:
-            # Open create env dialog pre-filled, then install after creation
-            if hasattr(self, "_new_env"):
-                self._new_env()
+            # Same wrong-name bug as new_environment_requested below --
+            # _new_env doesn't exist, the real method is _create_env
+            # (env_operations.py). hasattr() silently swallowed this,
+            # so "New environment" from Learn's install picker never
+            # opened anything either.
+            self._create_env()
             return
 
         if d.mode == LearnInstallDecision.MODE_PIPX:
@@ -1027,7 +1136,7 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
                 _ti = self.env_table.item(row, 1)
                 if _ti and (_ti.data(Qt.UserRole) or _ti.text()).strip() == "pipx":
                     self.env_table.selectRow(row)
-                    self._on_env_selected(row)
+                    self._on_env_selected()
                     break
             if d.switch_after:
                 self._switch_page(0)
@@ -1041,7 +1150,7 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
             _ni = self.env_table.item(row, 0)
             if _ni and _ni.text().strip() == target:
                 self.env_table.selectRow(row)
-                self._on_env_selected(row)
+                self._on_env_selected()
                 break
 
         if d.switch_after:

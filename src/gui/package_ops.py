@@ -118,6 +118,82 @@ _PACKAGE_DOCS = {
 }
 
 
+def _check_pypi_wheel_availability(pkg_name, py_major, py_minor, platform_tag, timeout=5):
+    """
+    N9 live compatibility check (2026-08-12): query PyPI's JSON API for the
+    package's latest release and check whether a wheel exists for
+    (py_major, py_minor) on platform_tag ("win"/"linux"/"macos"). This is
+    the fallback tier -- CONFLICT_RULES (the manual list) is always checked
+    FIRST by the caller; this only runs for packages that list has no entry
+    for, so a maintained manual note always wins over a live guess.
+
+    Returns a dict, never raises:
+      {"checked": bool,             # did the query succeed at all?
+       "compatible": bool | None,   # True/False if determinable, else None
+       "available_pyvers": [str],   # e.g. ["3.9", "3.10", "3.11"]
+       "has_sdist_only": bool,      # no wheels at all for ANY python/platform
+       "error": str | None}
+
+    Ground-truth tested against real PyPI (2026-08-12): pygame/3.14/win ->
+    compatible=False, available_pyvers up to 3.13; requests/3.14/win ->
+    compatible=True (pure-python wheel); nonexistent package -> checked=False.
+    """
+    result = {"checked": False, "compatible": None, "available_pyvers": [],
+              "has_sdist_only": False, "error": None}
+    try:
+        import urllib.request, json, re
+        url = f"https://pypi.org/pypi/{pkg_name}/json"
+        req = urllib.request.Request(url, headers={"User-Agent": "VenvStudio/1.0"})
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            data = json.load(r)
+        latest = data["info"]["version"]
+        files = data["releases"].get(latest, [])
+        if not files:
+            return result
+
+        plat_markers = {
+            "win":   ("win32", "win_amd64", "win_arm64"),
+            "linux": ("manylinux", "linux_"),
+            "macos": ("macosx",),
+        }.get(platform_tag, ())
+
+        target_cp = f"cp{py_major}{py_minor}"
+        found_wheels = []
+        pure_py_wheel = False
+        has_wheel_at_all = False
+        cp_minors_seen = set()
+
+        for f in files:
+            fn = f["filename"]
+            if f["packagetype"] != "bdist_wheel":
+                continue
+            has_wheel_at_all = True
+            if "-none-any.whl" in fn:
+                pure_py_wheel = True
+            m = re.search(r'-cp3(\d{1,2})-', fn)
+            if m:
+                cp_minors_seen.add(int(m.group(1)))
+            if target_cp in fn and any(pm in fn for pm in plat_markers):
+                found_wheels.append(fn)
+
+        result["checked"] = True
+        result["available_pyvers"] = [f"3.{m}" for m in sorted(cp_minors_seen)]
+        result["has_sdist_only"] = not has_wheel_at_all
+
+        if pure_py_wheel or found_wheels:
+            result["compatible"] = True
+        elif has_wheel_at_all:
+            result["compatible"] = False
+        else:
+            result["compatible"] = None
+
+        return result
+    except Exception as e:
+        result["error"] = str(e)
+        return result
+
+
+
 class PackageOpsMixin:
     """Mixin for PackagePanel: catalog population, install/uninstall, apply changes."""
 
@@ -631,10 +707,47 @@ class PackageOpsMixin:
                 # Check alias map first
                 _rule_key = CONFLICT_RULES_ALIASES.get(_pkg_raw, CONFLICT_RULES_ALIASES.get(_pkg_key, _pkg_key))
                 _rule     = CONFLICT_RULES.get(_rule_key)
+
+                # ── N9 Aşama 5+: manual list first, then live PyPI check ──
+                # Only for packages the manual list has NOTHING on (manual
+                # always wins -- a maintained note beats a live guess), and
+                # only for env types where PyPI wheels are actually what
+                # gets installed (conda/pixi pull from conda-forge by
+                # default, and pipx never resolves _py_ver at all).
+                if not _rule and _py_ver and _env_type in ("venv", "uv", "hatch", "pdm", "poetry"):
+                    import sys as _sys_cf
+                    _plat = {"win32": "win", "linux": "linux", "darwin": "macos"}.get(_sys_cf.platform, "")
+                    if _plat:
+                        _live = _check_pypi_wheel_availability(_pkg_key, _py_ver[0], _py_ver[1], _plat)
+                        if _live["checked"] and _live["compatible"] is False:
+                            _avail = _live["available_pyvers"]
+                            _avail_str = (
+                                f"Python {_avail[0]}–{_avail[-1]}" if len(_avail) > 1
+                                else (f"Python {_avail[0]}" if _avail else "an older Python")
+                            )
+                            _rule = {
+                                "max_python": None, "min_python": None, "blocked_envs": [],
+                                "severity": "error",
+                                "note": (
+                                    f"No prebuilt wheel on PyPI for Python {_py_ver[0]}.{_py_ver[1]} "
+                                    f"({_plat}). Available for {_avail_str}. Create a new "
+                                    f"environment with a compatible Python version, or install "
+                                    f"anyway if you know it builds from source on your system."
+                                ),
+                                "_live_check": True,
+                            }
+
                 if not _rule:
                     continue
 
                 _msgs = []
+
+                # A live-PyPI-derived rule only exists because we already
+                # determined it's incompatible (see the gate above) -- its
+                # note carries the whole finding, there's no separate
+                # min/max/blocked_envs condition left to re-check.
+                if _rule.get("_live_check"):
+                    _msgs.append("no compatible wheel on PyPI for this Python/platform")
 
                 # Python version checks
                 if _py_ver:
@@ -674,15 +787,37 @@ class PackageOpsMixin:
             _err_text = (
                 "⛔ The following packages are known to be incompatible with this environment:\n\n"
                 + "\n\n".join(_conflict_errors)
-                + "\n\nThese packages will likely fail to install. Proceed anyway?"
+                + "\n\nThese packages will likely fail to install."
             )
-            _err_reply = QMessageBox.warning(
-                self, "Compatibility Issues Detected",
-                _err_text,
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.No,
-            )
-            if _err_reply != QMessageBox.Yes:
+            # Third option beyond proceed/cancel: offer to open the Create
+            # New Environment dialog directly, since the note text above
+            # (static or live-PyPI-derived) already names a compatible
+            # Python range -- the user can pick one right there instead of
+            # having to go find that information themselves.
+            _err_box = QMessageBox(self)
+            _err_box.setWindowTitle("Compatibility Issues Detected")
+            _err_box.setIcon(QMessageBox.Warning)
+            _err_box.setText(_err_text)
+            _install_anyway_btn = _err_box.addButton("Install Anyway", QMessageBox.AcceptRole)
+            _create_env_btn = _err_box.addButton("Create New Environment…", QMessageBox.ActionRole)
+            _cancel_btn = _err_box.addButton("Cancel", QMessageBox.RejectRole)
+            _err_box.setDefaultButton(_cancel_btn)
+            _err_box.exec()
+            _clicked = _err_box.clickedButton()
+
+            if _clicked is _create_env_btn:
+                self._set_busy(False)
+                # self here is PackagePanel, not MainWindow -- it has no
+                # direct reference back (constructed with only config=,
+                # no parent=), so _new_env() (a MainWindow method) can't
+                # be called directly. hasattr(self, "_new_env") silently
+                # returned False here and did nothing (found 2026-08-12).
+                # Route through the same signal pattern already used for
+                # env_refresh_requested -- MainWindow connects it to
+                # self._new_env in main_window.py.
+                self.new_environment_requested.emit()
+                return
+            if _clicked is not _install_anyway_btn:
                 self._set_busy(False)
                 return
 

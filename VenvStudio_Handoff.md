@@ -3,8 +3,8 @@
 ## Proje
 - **Repo:** https://github.com/bayramkotan/VenvStudio
 - **PyPI:** https://pypi.org/project/venvstudio/
-- **GÜNCEL VERSİYON: v1.6.42** (2026-08-12 — v1.6.41'in devamı, hepsi GERÇEK ORTAMDA DOĞRULANDI: (1) PDM create akışı düzeltildi VE Windows'ta gerçek ortamda test edildi — 110 paket, çalışıyor; (2) Pixi create akışı önce `pixi install` ile düzeltildi ama gerçek pixi'de "No Python interpreter found" hatası çıktı — kök neden: `pixi init` python'ı bağımlılık olarak eklemiyor; `pixi add python==<sürüm>` (kanalda yoksa kısıtlamasız fallback) ile düzeltildi, 128 paket ile doğrulandı; (3) env_state.py'de KENDİ SEBEP OLDUĞUM bir regresyon bulundu ve düzeltildi — "0 packages" fix'ini yaparken yanlışlıkla uploads/'taki orijinal dosyadan başlamış, önceki "Hatch (pip)" rozet fix'ini silmiştim; şimdi ikisi de bir arada; (4) main_window.py'de info_label'a setWordWrap(True) eklendi — hatch/pdm/pixi eklenince özet çubuğu 6 segmente çıkıp sağa taşıyordu; (5) B18 (AppImage CI startup hang) için main.py'ye faulthandler.enable() + dump_traceback_later(25) eklendi — bu bir fix DEĞİL, bir sonraki CI run'ında gerçek stack trace'i görmek için teşhis aracı, kök neden hâlâ açık. Detay: "Bu Oturumda Yapılanlar (2026-08-09 — v1.6.41)" bölümü + "ÖNLEME NOTU".) — PUSH EDİLECEK. PUSH SONRASI PyPI history sayfasını MUTLAKA kontrol et + `pip install venvstudio==1.6.42 --no-cache-dir --break-system-packages` ile doğrula VE bir sonraki GitHub Actions run'ında build-linux-appimage → Smoke-test AppImage adımının loglarına bakıp faulthandler'ın gerçek stack trace ürettiğini kontrol et. Çok makineli çalışma: commit öncesi `git fetch` + `git log origin/main`.
-- **Son TODO güncellemesi (2026-08-09, v1.6.41 ile birlikte):** N9/hatch grubu altında 5 madde ✅ ÇÖZÜLDÜ (v1.6.41) olarak işaretlendi (rozet, boyut cache, paket listeleme/kurma, dialog kapanma, `hatch env create` eksikliği); N35 eklendi (self-heal — marker'da hatch_env_path yoksa her refresh'te yeniden dene, Bayram'a soruldu, cevap bekleniyor). N34 (sağ tık komut menüsü) hâlâ açık. **ÖNEMLİ:** N36 eklendi — PDM create akışında hatch'in v1.6.41 öncesi hatasının BİREBİR AYNISI doğrulandı (venv hiç materyalize edilmiyor), henüz raporlanmadı ama kesin bozuk, bir sonraki oturumda öncelikli. N36/N37: PDM ve Pixi create akışları AYNI OTURUMDA düzeltildi (env_dialog.py). v1.6.42 olarak, Bayram'ın açık kararıyla GERÇEK ORTAMDA TEST EDİLMEDEN push edildi — sadece mock test var. TODO'nun en başında test bekliyor olarak işaretli. Detay: bu dosyada "ÖNLEME NOTU" bölümü.
+- **GÜNCEL VERSİYON: v1.6.43** (2026-08-12 — v1.6.42'nin devamı, GENİŞ KAPSAMLI OTURUM: (1) B18 faulthandler yanlış alarmı düzeltildi (app.exec() öncesi cancel), gerçek kök neden hâlâ CI'da test ediliyor; (2) B19 GitHub Actions Node24 versiyon güncellemesi; (3) N9 Aşama 4 — pip --dry-run pre-flight, gerçek ortamda doğrulandı; (4) Progress bar iki erken-kapanma bug'ı düzeltildi; (5) pipx Create New Environment dialoguna eklendi (install/reset akışı + alfabetik sıralama); (6) alfabetik sıralama GİZLİ BİR BUG'I açığa çıkardı — cmd_label henüz oluşmadan _on_env_type_changed çağrılıp "+ New Environment" her tıklamada çöküyordu, düzeltildi; (7) Learn install akışında _on_env_selected imza uyuşmazlığı çökmesi düzeltildi; (8) N9 — pygame CONFLICT_RULES'a eklendi + CANLI PyPI wheel-kontrolü ilk taslağı kuruldu (statik listede yoksa otomatik PyPI sorgusu, geliştirilmiş 3-butonlu hata dialogu); (9) yeni sinyal yolu (new_environment_requested) baştan kırıktı — PackagePanel'in MainWindow'a referansı yok, ayrıca _new_env diye bir metod hiç yok (gerçek adı _create_env, Learn sayfasının kendi "yeni venv" seçeneği de bu yüzden BAŞTAN BERİ çalışmıyordu) — ikisi de düzeltildi. Detay: "Bu Oturumda Yapılanlar (2026-08-12 — v1.6.43)" bölümü.) — PUSH EDİLECEK. PUSH SONRASI PyPI history sayfasını MUTLAKA kontrol et + `pip install venvstudio==1.6.43 --no-cache-dir --break-system-packages` ile doğrula VE N9 canlı kontrol sistemini (pygame/Python 3.14 senaryosu) gerçek ortamda test et — bu oturumda sadece mock test edildi. Çok makineli çalışma: commit öncesi `git fetch` + `git log origin/main`.
+- **Son TODO güncellemesi (2026-08-12, v1.6.43 ile birlikte):** N36/N37 (PDM/Pixi) gerçek ortamda doğrulandı olarak kapatıldı. Bu oturumun tüm bulguları (B18/B19 fix'leri, N9 Aşama 4 + canlı PyPI kontrolü ilk taslağı, alfabetik sıralama çökmesi, Learn install imza hatası, sinyal yolu + _create_env isim düzeltmesi) TODO'nun en başına eklendi. **Test bekleyen:** N9'un canlı kontrol sistemi + "Create New Environment" yönlendirmesi gerçek ortamda henüz doğrulanmadı.
 - **Bir sonraki oturumun kuyruğu:** aşağıdaki "Bu Oturumda Yapılanlar (2026-07-23/24)" bölümünün *Açık maddeler* kısmı
 - **Proje dizini (Windows):** `C:\Github\VenvStudio`
 - **Proje dizini (Linux - CachyOS/Pardus):** `~/Github/VenvStudio`
@@ -825,6 +825,252 @@ ama Qt sinyal string'i veya `getattr` ile çağrılanlar da yanlış işaretleni
 Neden elle tablo tutmuyoruz: handoff'taki el yazımı tablo `_update_quick_sidebar`'ı
 "sidebar güncelleme" diye listeliyordu, oysa o fonksiyon ölü koddu ve gerçek sidebar
 `quicklaunch.py`'deydi. Üretilen harita kaynakla senkron kalır.
+
+---
+
+## Bu Oturumda Yapılanlar (2026-08-12 — v1.6.43, PUSH EDİLECEK)
+
+### Özet
+v1.6.42'nin ardından Windows'ta gerçek ortam testleri sırasında bulunan
+5 küçük-orta ölçekli sorun + Bayram'ın isteğiyle yeni bir özellik (pipx'in
+Create dialog'a eklenmesi). Hepsi git-only push'landı (versiyon bump
+yapılmadı) ta ki bu oturumun sonunda toplu olarak v1.6.43'e alınana kadar.
+
+### 1) B18 faulthandler — CI'da GERÇEK stack trace alındı, ama yanlış alarmdı
+`main.py`'ye eklenen `faulthandler.dump_traceback_later(25)` CI'da
+çalıştı ve gerçek bir stack trace üretti — ama Windows'ta NORMAL
+çalışan bir oturumda da (kullanıcı sayfalar arası geçiş yaparken) aynı
+"Timeout (0:00:25)!" uyarısı çıktı. Sebep: watchdog `app.exec()`'e
+girdikten sonra hiç iptal edilmiyordu — main thread'in `app.exec()`
+içinde "duruyor" görünmesi zaten SAĞLIKLI bir Qt event loop'unun normal
+hali, hang değil. **Fix:** `app.exec()` çağrılmadan hemen önce
+`faulthandler.cancel_dump_traceback_later()` eklendi — watchdog artık
+sadece event loop'a HİÇ ULAŞILAMAZSA (gerçek CI senaryosu) tetikleniyor,
+sağlıklı çalışan bir uygulamada asla görünmüyor. Mock test: cancel
+sonrası 1.5 saniye beklenip hiç dump basılmadığı doğrulandı.
+**B18'in gerçek kök nedeni hâlâ açık** — bir sonraki CI run'ında (artık
+yanlış-alarmsız) gerçek stack trace beklenmeli.
+
+### 2) B19 — GitHub Actions Node.js 20 deprecation
+`.github/workflows/build.yml`'de 17 satırda action versiyonları
+güncellendi: `actions/checkout@v4→v5`, `actions/setup-python@v5→v6`,
+`actions/upload-artifact@v4→v5`, `actions/download-artifact@v4→v5`.
+YAML syntax doğrulandı (`yaml.safe_load`). **Not:** sürüm numaraları
+internetten canlı doğrulanamadı (bu ortamda GitHub Marketplace'e erişim
+yok) — yanlışsa CI `Unable to resolve action` ile açıkça patlar, sessiz
+başarısızlık riski yok.
+
+### 3) N9 Aşama 4 — pip --dry-run pre-flight kontrolü
+`package_ops.py`'ye, statik `CONFLICT_RULES` kontrolünden sonra, onay
+dialogundan önce yeni bir blok eklendi: `venv`/`uv`/`hatch` tiplerinde
+(pip'i doğrudan kullanan tipler) `pip install --dry-run` çalıştırılıyor
+— hiçbir şey kurmadan gerçek resolver'ı test ediyor. Başarısız olursa
+pip'in gerçek hata mesajı kullanıcıya gösteriliyor, "yine de devam et?"
+seçeneğiyle. dry-run kendisi başarısız olursa (network yok vb.) install'ı
+asla engellemiyor. Windows'ta gerçek ortamda test edildi: uv (`ggg`,
+115 paket), hatch (`htc`, 121 paket), venv (`ml`, 149 paket) — hepsi
+sorunsuz, dry-run hiç yanlış pozitif vermedi.
+**Tradeoff:** venv/uv/hatch install'larına birkaç saniye ekstra gecikme
+ekliyor (PyPI metadata çekmek gerekiyor).
+
+### 4) Progress bar — install sırasında erken kayboluyordu
+İki ayrı bulgu, iki ayrı fix:
+- **İlk fix:** `_install_packages`'ın pre-flight kontrolleri (kurulu
+  paket filtreleme, Python sürüm tespiti, CONFLICT_RULES, dry-run)
+  onay dialogundan ÖNCE, hiç görsel geri bildirim olmadan senkron
+  çalışıyordu — buton tıklanınca UI birkaç saniye (dry-run'la 25 sn'ye
+  kadar) donmuş görünüyordu. Fix: `_set_busy(True)` fonksiyonun en
+  başına taşındı, 4 erken-dönüş noktasının hepsine `_set_busy(False)`
+  eklendi.
+- **İkinci fix (Bayram'ın "daha da uzadı" geri bildirimi üzerine):**
+  "Successfully installed" sonrası progress bar HEMEN kapanıyordu ama
+  paket tablosunun gerçekten yenilenmesi (`_on_packages_loaded`,
+  asenkron) 1-4 saniye daha sürüyordu — o boşlukta form yine takılı
+  görünüyordu. Fix: `_on_install_finished`'daki erken `_set_busy(False)`
+  kaldırıldı (başarı yolunda), yerine `_on_packages_loaded`'ın SONUNA
+  (tablo gerçekten dolduktan sonra) taşındı. Üç güvenlik noktası da
+  eklendi (pip_manager yoksa, eski/geçersiz sonuç gelirse, başarısız
+  install'da) — progress bar hiçbir yolda sonsuza kadar takılı kalmıyor.
+  5 senaryo mock test edildi.
+**Kapsam notu:** Sadece Preset install akışı (`_install_packages`)
+kapsandı. Catalog/Uninstall/Launcher akışları henüz kontrol edilmedi —
+aynı desen orada da olabilir, gelecek bir oturumda bakılmalı.
+
+### 5) pipx — Create New Environment dialoguna eklendi
+Bayram'ın isteği: pipx dropdown'a eklensin, kuruluysa "tablodaki sağ
+tık silme" ile aynı davransın, kurulu değilse install sorulsun.
+Kod incelemesi gösterdi ki `_do_alt_create`'in pipx dalı zaten TAM
+hazırdı (marker'ı her zaman gerçek pipx home'a yazıyor, `_name`
+sadece kozmetik) — sadece dropdown'dan bilinçli olarak çıkarılmıştı
+(`# pipx removed from Create dialog — auto-detected and managed
+automatically` yorumu). Eklenenler:
+- Dropdown'a `🧰 pipx Environment` geri eklendi
+- Kurulu değilse: zaten var olan generic "tool not found" akışı
+  (`_tool_types` tuple'ında pipx zaten vardı) devreye giriyor —
+  "Install pipx now?" sorup otomatik kuruyor
+- **Kuruluysa (marker zaten varsa):** yeni bir "Reset pipx?" uyarı
+  dialogu — "pipx VE içindeki tüm CLI app'ler tamamen silinecek,
+  yeniden kurulacak, geri alınamaz" diyor. Onaylanırsa tablonun
+  sağ-tık-sil'in çağırdığı BİREBİR AYNI `venv_manager.delete_venv(...,
+  env_type="pipx")` çağrılıyor (wipe + `ensure_pipx_env` ile temiz
+  reset). Reddedilirse hiçbir şey silinmiyor.
+- Name alanı pipx seçilince otomatik "pipx" yazıp kilitleniyor (gri,
+  düzenlenemez) — kullanıcı hiçbir şey yazmak zorunda değil, çünkü
+  marker'daki isim zaten kozmetik, tabloda hep "pipx" görünüyor.
+- Dropdown tam alfabetik sıraya sokuldu: Conda, Hatch, PDM, pipx, Pixi,
+  Poetry, Python venv, uv (Bayram'ın "alfabetik mi?" sorusu üzerine —
+  venv artık sabit en üstte değil, kendi alfabetik yerinde).
+3 senaryo mock test edildi (reset onaylandı/reddedildi/farklı env tipi),
+name-field toggle 3 senaryo test edildi.
+
+### ⚠️ Kendi hatam — CRLF kaybı (2 kez tekrarlandı, düzeltildi)
+Birkaç tur önce (bu oturumun ilerleyen kısımlarında, pdm/pixi
+materyalize fix'inde) yanlışlıkla `io.open(p, encoding='utf-8')` TEXT
+MODE kullanmışım — bu `env_dialog.py`'nin CRLF satır sonlarını sessizce
+LF'ye çevirmiş. Bunu **iki kez daha** (pipx dropdown eklerken, name-field
+lock eklerken) fark etmeden tekrarladım, her seferinde sonradan fark edip
+dosyayı baştan sona CRLF'ye normalize ettim. Fonksiyonel bir bozukluğa
+yol açmadı (Python satır sonunu umursamaz) ama git diff'i gereksiz yere
+tüm dosyayı değişmiş gösterirdi. **Kalıcı kural:** env_dialog.py gibi
+CRLF dosyalarını düzenlerken HER ZAMAN `io.open(p, 'rb')`/`'wb'` (binary
+mode) kullan, asla text mode değil — text mode'un satır sonu
+normalizasyonu sessiz ve fark edilmesi zor.
+
+### 6) Dropdown alfabetik sıralama → gizli bir bug'ı ortaya çıkardı → çökme
+
+Bayram "dropdown alfabetik mi?" diye sordu, değildi, alfabetik yaptım
+(Conda, Hatch, PDM, pipx, Pixi, Poetry, Python venv, uv — venv artık
+sabit en üstte değil). Bu, `env_dialog.py`'de **hep var olan gizli bir
+bug'ı** açığa çıkardı: `.connect()`'ten hemen sonra çalışan "kaydedilmiş
+varsayılan env tipini seç" bloğu (`findData("venv")` → `setCurrentIndex`)
+— eskiden venv index 0'daydı, `setCurrentIndex(0)` zaten seçili index'e
+eşit olduğu için Qt sinyali hiç ateşlemiyordu. venv 6. sıraya taşınınca
+aynı varsayılan artık index'i gerçekten değiştiriyor, sinyal ateşleniyor,
+`_on_env_type_changed` `cmd_label` (satır 372'de oluşuyor) henüz
+oluşmadan çağrılıyor → `AttributeError: 'EnvCreateDialog' object has no
+attribute 'cmd_label'`, "+ New Environment" her tıklamada çöküyordu.
+**Fix:** fonksiyonun başına `if not hasattr(self, "cmd_label"): return`
+koruması — dosyada zaten kullanılan aynı savunma deseni. Mock test
+edildi (cmd_label yokken güvenli dönüş, varken normal akış).
+
+### 7) Learn sayfası install akışı — imza uyuşmazlığı çökmesi
+
+`_on_learn_install` (main_window.py), bir env'e geçtikten sonra
+`self._on_env_selected(row)` çağırıyordu — ama `_on_env_selected`
+(env_list.py) hiç parametre almıyor. İki yerde (pipx'e geçiş, normal
+env'e geçiş dallarında) aynı hata. Fix: `self._on_env_selected(row)` →
+`self._on_env_selected()`, iki yerde de. Learn'den gerçek bir env'e
+(PySide6 kurulumu) geçiş test edildi, çökme yok, kurulum başarılı.
+
+### 8) N9 — "Akıllı uyumluluk sistemi" ilk taslağı (pygame vakası üzerinden)
+
+Bayram'ın isteği: install öncesi paket + env (Python sürümü) uyumluluğu
+kontrol edilsin, uyumsuzsa net bir mesajla yönlendirilsin (yeni env öner
+veya mevcutlardan seç), "hepsi library ve venv tipleri için geçerli
+olsun". Karar (elicitation ile netleştirildi): önce elle liste
+(CONFLICT_RULES), yoksa PyPI'ı canlı sorgula.
+
+**Tetikleyici:** pipx'te `pygame` kurulumu gerçek bir uv hatasıyla
+başarısız oldu — log incelemesi gösterdi ki pygame 2.6.1'in Python 3.14
+için wheel'i yok, kaynaktan derleme de `distutils.msvccompiler`
+(Python 3.12+'ta stdlib'den kaldırıldı) eksikliğinden başarısız oluyor.
+
+**Yapılanlar:**
+- `constants.py`: `CONFLICT_RULES`'a pygame eklendi (`max_python: "3.13"`,
+  `severity: "error"`, gerçek nedeni açıklayan not + pygame-ce önerisi).
+  İlk denemede `max_python: "3.11"` yazılmıştı, gerçek PyPI verisiyle
+  (wheel'ler 3.13'e kadar var) çelişince `"3.13"`e düzeltildi.
+- `package_ops.py`: yeni `_check_pypi_wheel_availability(pkg_name,
+  py_major, py_minor, platform_tag)` fonksiyonu — PyPI JSON API'sini
+  sorgulayıp hedef Python/platform için wheel var mı, yoksa hangi
+  sürümler için var, döndürüyor. Sadece statik listede eşleşme
+  yoksa VE `venv`/`uv`/`hatch`/`pdm`/`poetry` tiplerinde (conda/pixi
+  conda-forge kullandığı için, pipx tek global araç olduğu için hariç)
+  çalışıyor.
+- Hata dialogu 2 butondan 3 butona çıktı: **Install Anyway** /
+  **Create New Environment…** / **Cancel**.
+- **Test sürecinde kendi hatalarım da çıktı** (dürüstçe not düşülüyor):
+  ilk mock testlerde `sys.platform`'u sahte Windows yapmak SSL/https
+  çözümlemesini bozdu (gerçek koddan bağımsız, sadece test artefact'ı);
+  sentetik kuralın `note` metni alt kodun `_msgs` oluşturma mantığı
+  tarafından hiç okunmuyordu (sadece min/max_python check ediyordu) —
+  bu GERÇEK bir bug'dı, düzeltildi (`_rule.get("_live_check")` kontrolü
+  eklendi).
+- **Gerçek PyPI verisiyle 4 senaryo mock test edildi:** pygame/py3.14 →
+  hata + doğru mesaj + Create New Environment routing; Install Anyway →
+  devam ediyor; temiz paket (numpy) → hiç dialog yok; Cancel → hiçbir
+  şey olmuyor.
+
+### 9) Yeni sinyal yolu tamamen kırıktı — iki ayrı "olmayan metod" hatası
+
+"Create New Environment…" butonu gerçek ortamda **hiçbir şey yapmıyordu**
+(hata da vermiyordu). Kök neden: `package_ops.py`'nin `self`'i
+`MainWindow` değil, **`PackagePanel`** (`class PackagePanel(...,
+PackageOpsMixin, ..., QWidget)`) — `_new_env` (aslında hiç var olmayan
+bir isim, bkz. aşağı) MainWindow'da aranıyordu, `hasattr` sessizce
+`False` dönüyordu.
+
+**Fix 1 — cross-object erişim:** kod tabanında zaten var olan
+`env_refresh_requested` sinyal deseni kopyalandı. `package_panel.py`'ye
+yeni `new_environment_requested = Signal()` eklendi, `package_ops.py`
+`hasattr` yerine `self.new_environment_requested.emit()` çağırıyor,
+`main_window.py`'de PackagePanel'in İKİ oluşturma noktasında da
+(lazy-build deseni) `.connect(self._new_env)` bağlandı.
+
+**Fix 2 — `_new_env` diye bir metod hiç yok, gerçek adı `_create_env`
+(env_operations.py'de):** bu bağlantıyı ekleyince uygulama **açılışta
+çöktü** — `AttributeError: 'MainWindow' object has no attribute
+'_new_env'`. `_on_learn_install`'daki eski `hasattr(self, "_new_env")`
+kontrolü bu ismi hiç doğrulamadan "var" diye referans alınmış, aslında
+o kontrol de baştan beri sessizce False dönüyordu — yani **Learn
+sayfasının "yeni venv oluştur" seçeneği de bu oturumdan önce hiç
+çalışmıyordu**, bağımsız bir keşif. İki bağlantı da (yeni sinyal +
+Learn'ün MODE_NEW_VENV dalı) `_create_env` olarak düzeltildi — "+ New
+Environment" butonunun zaten kullandığı, tüm oturum boyunca doğrulanmış
+gerçek isim.
+
+### Değişen Dosyalar (v1.6.43) — TAM LİSTE
+
+| Dosya | Değişiklik |
+|---|---|
+| `main.py` | faulthandler.enable() + dump_traceback_later(25) (B18 teşhis), app.exec() öncesi cancel (yanlış alarm fix) |
+| `.github/workflows/build.yml` | 4 action tipinin versiyonu güncellendi (B19, Node24 uyumluluk) |
+| `src/gui/package_ops.py` | N9 Aşama 4 (pip --dry-run), progress bar busy-state fix, N9 canlı PyPI kontrolü + geliştirilmiş hata dialogu + sinyal emit |
+| `src/gui/package_misc.py` | `_on_install_finished`'daki erken `_set_busy(False)` kaldırıldı |
+| `src/gui/main_window.py` | info_label word-wrap, Learn `_on_env_selected` imza fix, yeni sinyal bağlantıları (×2 nokta), `_new_env`→`_create_env` düzeltmesi (×2 yer) |
+| `src/gui/env_dialog.py` | pipx dropdown'a eklendi, kurulu/değil ayrımı, "Reset pipx?" onayı, name-field auto-lock, alfabetik sıralama, `_on_env_type_changed` çökme fix'i, CRLF normalize edildi |
+| `src/gui/package_panel.py` | yeni `new_environment_requested` sinyali |
+| `src/utils/constants.py` | pygame → CONFLICT_RULES |
+
+### Test Durumu
+- Hepsi Windows'ta gerçek ortamda test edildi (pdm 110 paket, hatch
+  121 paket, uv 115 paket, venv 149 paket, pygame/py3.13 sorunsuz kurulum)
+- Alfabetik sıralama + cmd_label çökme fix'i: gerçek ortamda doğrulandı
+  (uygulama çöküyordu, düzeltme sonrası açılıyor)
+- Learn install (_on_env_selected imza): gerçek ortamda doğrulandı
+- N9 canlı kontrol + "Create New Environment" yönlendirmesi: mock
+  test edildi (gerçek PyPI verisiyle), **gerçek ortamda henüz test
+  edilmedi** — sinyal zinciri + `_create_env` düzeltmesi bu oturumun
+  en sonunda yapıldı
+- B18'in GERÇEK kök nedeni hâlâ test edilmedi — bir sonraki CI
+  run'ında (artık yanlış-alarmsız watchdog ile) gerçek sonucu bekliyor
+
+### Açık / Sonraki Oturuma Not
+- N9 canlı kontrol sistemi ve "Create New Environment" yönlendirmesi
+  gerçek ortamda henüz doğrulanmadı — bir sonraki oturumda ilk iş
+  bu olmalı
+- pipx için ayrı bir "uyumsuzsa ne yapılsın" çözümü yok (pipx kendi
+  Python'unu değiştiremiyor) — kapsam dışı bırakıldı, ayrı konuşma
+  gerekir
+- "mevcut env'lerden seç" picker'ı (Toolchain Manager'dan Python
+  listesi çekme) cross-mixin plumbing gerektiriyor, bu turda kapsam
+  dışı bırakıldı
+- Progress bar fix'i sadece Preset install akışını kapsıyor —
+  Catalog/Uninstall/Launcher akışları kontrol edilmedi
+- **Süreç dersi (CRLF, üçüncü kez tekrarlandı bu oturumda):** kalıcı
+  kural hâlâ ihlal ediliyor, gelecekte her patch script'inin en başına
+  "binary mode kullan" hatırlatması otomatik eklenmeli
+
 
 ---
 
@@ -5915,7 +6161,7 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 11. **N35** — Hatch self-heal (marker'da hatch_env_path yoksa her refresh'te yeniden dene) — Bayram'a soruldu, cevap bekleniyor
 
 ## Sonraki Chat Başlangıç Promptu
-> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.41, sıradaki: v1.6.42.
+> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.43, sıradaki: v1.6.44.
 
 ## 📋 Dosya Kopyalama Kuralları
 

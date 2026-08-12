@@ -66,11 +66,17 @@ class EnvStateMixin:
                 self._current_env_type = "system_tools"
         else:
             # No marker — check if this is a poetry venv (inside pypoetry cache)
-            _vp_str = str(venv_path)
+            _vp_str = str(venv_path).replace("\\", "/")
             if "pypoetry" in _vp_str and "virtualenvs" in _vp_str:
                 self._current_env_type = "poetry"
             elif "pipx" in _vp_str:
                 self._current_env_type = "pipx"
+            elif "hatch/env/virtual" in _vp_str:
+                # Hatch keeps the real venv outside the project dir and
+                # only the PROJECT dir carries .venvstudio_env, so the
+                # marker lookup above misses and the type fell back to
+                # "venv" -- which is why the badge read PIP.
+                self._current_env_type = "hatch"
 
         try:
             self._update_terminal_tooltip()
@@ -412,11 +418,14 @@ class EnvStateMixin:
                 except Exception:
                     self._current_env_type = "system_tools"
             else:
-                _vp_str = str(venv_path)
+                _vp_str = str(venv_path).replace("\\", "/")
                 if "pypoetry" in _vp_str and "virtualenvs" in _vp_str:
                     self._current_env_type = "poetry"
                 elif "pipx" in _vp_str:
                     self._current_env_type = "pipx"
+                elif "hatch/env/virtual" in _vp_str:
+                    # See _set_venv: hatch's real venv has no marker.
+                    self._current_env_type = "hatch"
 
             # Override backend based on env type
             if self._current_env_type == "uv":
@@ -561,7 +570,10 @@ class EnvStateMixin:
             "poetry": "Poetry",
             "pipx": "pipx",
             "conda": "Conda",
-            "hatch": "Hatch",
+            # Hatch installs through pip under the hood (it just reads
+            # pyproject.toml and delegates), so name both -- the type and
+            # the actual installer.
+            "hatch": "Hatch (pip)",
             "pdm": "PDM",
             "pixi": "Pixi",
         }

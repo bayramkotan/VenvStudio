@@ -387,6 +387,14 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
 
         self.info_label = QLabel()
         self.info_label.setObjectName("subheader")
+        # Wrap instead of overflow: with hatch/pdm/pixi added to the
+        # env-type summary, this line can now have 6+ segments
+        # (base dir, poetry, pipx, hatch, pdm, pixi, total) which no
+        # longer fit on one line at normal window widths -- without
+        # word wrap the tail (pixi + total) silently ran off the
+        # right edge instead of dropping to a second line. Same fix
+        # already used for manual_info_label in tab_builders.py.
+        self.info_label.setWordWrap(True)
         self.info_label.setText(f"\U0001f4c2 {self.config.get_venv_base_dir()}")
         layout.addWidget(self.info_label)
 

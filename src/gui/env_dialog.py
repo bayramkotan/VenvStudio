@@ -2066,16 +2066,38 @@ class EnvCreateDialog(QDialog):
                                                cwd=location, **subprocess_args())
                         if r.returncode != 0:
                             raise RuntimeError(r.stderr or r.stdout or "pixi init failed")
-                    # `pixi init` only writes the manifest (pixi.toml). Whether
-                    # this alone materializes `.pixi/envs/default` was never
-                    # confirmed, so force it explicitly rather than assume --
-                    # same defensive step as pdm/hatch. Harmless no-op if the
-                    # env already exists.
-                    _rc = subprocess.run([_pixi_exe, "install"], capture_output=True,
+                    # `pixi init` only writes the manifest (pixi.toml) -- with
+                    # NO python dependency in it. `pixi install` on that empty
+                    # manifest materializes an env with no interpreter at all
+                    # (confirmed 2026-08-10: real pixi errored "No Python
+                    # interpreter found in the dependencies" on first install
+                    # attempt). `pixi add python` is what's actually needed --
+                    # it both declares the dependency AND installs it,
+                    # matching what package_ops.py's install flow already
+                    # does before adding pypi packages.
+                    _pixi_py_spec = "python"
+                    if _py:
+                        try:
+                            _pv = subprocess.run([_py, "--version"], capture_output=True,
+                                                 text=True, timeout=5)
+                            _pv_str = (_pv.stdout.strip() or _pv.stderr.strip()).replace("Python ", "")
+                            if _pv_str:
+                                _parts = _pv_str.split(".")
+                                if len(_parts) >= 2:
+                                    _pixi_py_spec = f"python=={_parts[0]}.{_parts[1]}.{_parts[2] if len(_parts) > 2 else '*'}"
+                        except Exception:
+                            pass
+                    _rc = subprocess.run([_pixi_exe, "add", _pixi_py_spec], capture_output=True,
                                          text=True, cwd=_path, timeout=180,
                                          **subprocess_args())
                     if _rc.returncode != 0:
-                        raise RuntimeError(_rc.stderr or _rc.stdout or "pixi install failed")
+                        # Version-specific add can fail if that exact patch isn't
+                        # in the conda channel yet -- fall back to unconstrained.
+                        _rc = subprocess.run([_pixi_exe, "add", "python"], capture_output=True,
+                                             text=True, cwd=_path, timeout=180,
+                                             **subprocess_args())
+                        if _rc.returncode != 0:
+                            raise RuntimeError(_rc.stderr or _rc.stdout or "pixi add python failed")
                 marker = os.path.join(_path, ".venvstudio_env")
 
                 # Detect actual Python version if not specified

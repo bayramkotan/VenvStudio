@@ -388,7 +388,15 @@ class PackageMiscMixin:
                 _btn.setEnabled(True)
 
     def _on_install_finished(self, success: bool, message: str):
-        self._set_busy(False)
+        # _set_busy(False) intentionally NOT called here on the success
+        # path -- the progress bar used to vanish the instant the worker
+        # finished, while the packages table was still empty/stale for
+        # another 1-4s while refresh_packages() reloads it asynchronously
+        # (Bayram: "successfully installed diyor, progress bar kayboluyor
+        # ama form hala takili"). It now stays visible through that reload
+        # and is cleared in _on_packages_loaded() once the table is
+        # actually populated. The failure path below has no reload to wait
+        # for, so it still clears busy immediately, right where it is.
         self._append_log(f"\n{'✅ Success' if success else '❌ Failed'}: {message[:500]}")
 
         # Log for debugging (especially EXE/AppImage builds)
@@ -427,6 +435,7 @@ class PackageMiscMixin:
             self._emit_env_refresh_after_load = True
             self.refresh_packages()
         else:
+            self._set_busy(False)
             if "cancelled" not in message.lower():
                 # Friendly log message instead of popup
                 if "no matching distribution" in message.lower() or "could not find" in message.lower():

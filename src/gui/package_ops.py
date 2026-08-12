@@ -160,6 +160,7 @@ class PackageOpsMixin:
         except Exception:
             pass
         if not self.pip_manager:
+            self._set_busy(False)
             return
 
         # Stale-result check (B187 race fix): if the worker emitted for a
@@ -173,6 +174,7 @@ class PackageOpsMixin:
                     f"🗑️ [PkgCache] discarding stale result: was for {_fmt_path(loaded_for_path)}, "
                     f"now on {_fmt_path(_current)}"
                 )
+                self._set_busy(False)
                 return
         except Exception:
             pass
@@ -231,6 +233,13 @@ class PackageOpsMixin:
                 self.env_refresh_requested.emit(len(packages))
             except Exception:
                 pass
+
+        # This is the real end of the post-install "loading" the user
+        # sees -- the packages table above is now actually populated, so
+        # only now is it safe to hide the progress bar / re-enable tabs.
+        # Harmless no-op if busy was never on (e.g. a plain env-switch
+        # load, not an install).
+        self._set_busy(False)
 
     def refresh_packages(self):
         """Refresh installed packages list - invalidates cache and async reloads."""
@@ -517,6 +526,20 @@ class PackageOpsMixin:
             QMessageBox.warning(self, "Warning", "No environment selected.\nPlease select an environment first.")
             return
 
+        # Show busy state IMMEDIATELY, before any of the pre-flight checks
+        # below (installed-filter, Python version probe, CONFLICT_RULES,
+        # pip --dry-run) run. Those are synchronous subprocess calls on the
+        # main thread -- without this, the UI looked frozen for however long
+        # they took (up to several seconds, worse with dry-run’s 25s cap)
+        # with zero visual feedback until the confirm dialog suddenly
+        # appeared. _set_busy(False) is called at every early-return path
+        # below; _do_install() re-asserts True on the success path (harmless
+        # -- it’s already True), and its own worker-finished handler is what
+        # turns it back off for real.
+        self._set_busy(True)
+        if hasattr(self, "status_label"):
+            self.status_label.setText("🔍 Checking compatibility...")
+
         # Pipx envs have no central <env>/bin/python, so the pre-flight checks
         # below (list_packages and `python --version`) raise FileNotFoundError
         # and surface as "Install FAILED: [Errno 2] No such file or directory:
@@ -540,6 +563,7 @@ class PackageOpsMixin:
                     else:
                         not_installed.append(pkg)
                 if not not_installed:
+                    self._set_busy(False)
                     QMessageBox.information(self, "Info", "All packages are already installed.")
                     return
                 packages = not_installed
@@ -659,6 +683,7 @@ class PackageOpsMixin:
                 QMessageBox.No,
             )
             if _err_reply != QMessageBox.Yes:
+                self._set_busy(False)
                 return
 
         # Append warnings to the existing py_warning string
@@ -678,6 +703,8 @@ class PackageOpsMixin:
         # için anlamlı değil (hatch pip'e devrettiği için dahil).
         _dry_run_error = None
         if _env_type in ("venv", "uv", "hatch") and self.pip_manager:
+            if hasattr(self, "status_label"):
+                self.status_label.setText("🐍 Verifying with pip’s dependency resolver...")
             try:
                 _dr_python = get_python_executable(self.pip_manager.venv_path)
                 _dr = subprocess.run(
@@ -702,6 +729,7 @@ class PackageOpsMixin:
                 QMessageBox.No,
             )
             if _dr_reply != QMessageBox.Yes:
+                self._set_busy(False)
                 return
 
         # Show ALL package names in confirm dialog
@@ -711,6 +739,7 @@ class PackageOpsMixin:
             QMessageBox.Yes | QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
+            self._set_busy(False)
             return
 
         # Show command hint based on env type

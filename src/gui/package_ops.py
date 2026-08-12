@@ -668,6 +668,42 @@ class PackageOpsMixin:
                 + "\n\n".join(_conflict_warnings)
             )
 
+        # ── N9 Aşama 4: pip --dry-run — gerçek resolver kontrolü ──────
+        # CONFLICT_RULES yukarıda sadece elle girilmiş statik tabloyu kontrol
+        # etti. Bu blok pip'in GERÇEK resolver'ını (indirme/kurulum yok,
+        # sadece çözümleme) çalıştırır — tabloda hiç olmayan gerçek çakışmaları
+        # (örn. iki paketin birbirine zıt sürüm istemesi) yakalar. Sadece pip’in
+        # gerçekten doğrudan kurulum aracı olduğu tiplerde çalışır — uv/poetry/
+        # conda/pdm/pixi/pipx kendi resolver’larını kullanır, bu kontrol onlar
+        # için anlamlı değil (hatch pip'e devrettiği için dahil).
+        _dry_run_error = None
+        if _env_type in ("venv", "uv", "hatch") and self.pip_manager:
+            try:
+                _dr_python = get_python_executable(self.pip_manager.venv_path)
+                _dr = subprocess.run(
+                    [str(_dr_python), "-m", "pip", "install", "--dry-run"] + packages,
+                    **subprocess_args(capture_output=True, text=True, timeout=25)
+                )
+                if _dr.returncode != 0:
+                    _dr_tail = (_dr.stderr or _dr.stdout or "").strip()
+                    # Son ~15 satır yeterli — pip resolver hataları uzun
+                    # olabilir, gerçek özet genelde en sonda.
+                    _dry_run_error = "\n".join(_dr_tail.splitlines()[-15:])
+            except Exception:
+                pass  # dry-run kendisi başarısız olursa install'ı asla engelleme
+
+        if _dry_run_error:
+            _dr_reply = QMessageBox.warning(
+                self, "pip Dependency Check Failed",
+                "⛔ pip’s real dependency resolver reports these packages "
+                "cannot be installed together:\n\n" + _dry_run_error +
+                "\n\nProceed anyway?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No,
+            )
+            if _dr_reply != QMessageBox.Yes:
+                return
+
         # Show ALL package names in confirm dialog
         reply = QMessageBox.question(
             self, "Confirm Installation",

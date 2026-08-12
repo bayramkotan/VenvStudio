@@ -1,36 +1,52 @@
 # VENVSTUDIO_TODO.md
 
-## 🔴 EN ÖNCELİKLİ — Test Bekliyor (2026-08-09, kod yazıldı, henüz PUSH/TEST EDİLMEDİ)
+## ✅ ÇÖZÜLDÜ VE GERÇEK ORTAMDA DOĞRULANDI (v1.6.42, 2026-08-12)
 
-- **N36 — PDM create akışı düzeltildi, gerçek ortamda TEST EDİLMELİ:**
-  `env_dialog.py`'nin pdm dalı sadece `pdm init --non-interactive`
-  çalıştırıyordu — bu SADECE `pyproject.toml` yazar, gerçek venv'i hiç
-  materyalize etmez (hatch'in v1.6.41 öncesi hatasının birebir aynısı,
-  2026-08-09'da doğrulandı, henüz raporlanmamıştı). PDM kendi venv'ini
-  proje dizininin İÇİNE kurduğu için (`.venv`, hatch gibi ayrı bir
-  cache konumu değil) hatch'teki gibi ayrı path-persist mantığına
-  gerek yok — tek eksik `pdm install` çağrısıydı.
-  **Yapılan:** `pdm init` sonrası `pdm install` eklendi, `.venv`'i
-  zorla materyalize ediyor. Sahte `pdm` CLI ile mock test edildi —
-  `.venv/bin/pip` doğru oluştuğu doğrulandı.
-  **Test edilmeli:** Yeni bir PDM env oluştur, Packages sekmesinde
-  paket sayısı/rozet/boyut doğru mu kontrol et.
+- **N36 — PDM create akışı ✅ DOĞRULANDI:** `pdm init` sonrası `pdm install`
+  eklendi. Windows'ta sıfırdan env oluşturuldu (`pdm2`), preset kuruldu
+  (Data Science Starter) → 110 paket, `pdm.EXE list --json` gerçek
+  ortamda başarılı çalıştı. Kapandı.
 
-- **N37 — Pixi create akışına savunmacı `pixi install` eklendi, TEST EDİLMELİ:**
-  `pixi init` sonrası gerçek env'in (`.pixi/envs/default`) otomatik
-  oluşup oluşmadığı bu ortamda doğrulanamadı (pixi kurulu değil,
-  kurulum kaynağı erişim listesinde yok). Riski görmeden bırakmak
-  yerine savunmacı bir `pixi install` adımı eklendi — pixi zaten
-  otomatik kuruyorsa zararsız no-op, kurmuyorsa açığı kapatır.
-  Sahte `pixi` CLI ile mock test edildi — `.pixi/envs/default/bin/python`
-  doğru oluştuğu doğrulandı.
-  **Test edilmeli:** Yeni bir Pixi env oluştur, oluşturma süresi
-  makul mu (gereksiz ikinci bir `install` varsa yavaşlamış olabilir),
-  Packages sekmesi doğru mu kontrol et.
+- **N37 — Pixi create akışı ✅ DOĞRULANDI (2 turlu düzeltme):**
+  İlk düzeltme (`pixi install`) yetersiz çıktı — gerçek pixi'de
+  "No Python interpreter found in the dependencies" hatası verdi, çünkü
+  `pixi init`'in yazdığı manifest'te python bağımlılığı hiç yok.
+  Asıl fix: `pixi add python==<tespit edilen sürüm>` (kanalda o exact
+  patch yoksa kısıtlamasız `pixi add python`'a fallback). Windows'ta
+  sıfırdan env oluşturuldu (`pixi2`), preset kuruldu → 128 paket,
+  `pixi.EXE list --json` gerçek ortamda başarılı çalıştı. Kapandı.
 
-  *(İkisi de `env_dialog.py`'nin aynı push'unda — dosyayı kopyaladıktan
-  sonra HEM hatch HEM pdm HEM pixi için sıfırdan env oluşturup test et.
-  Detay: Handoff'ta "ÖNLEME NOTU" bölümü, 2026-08-09.)*
+- **Ayrıca bu turda bulunup düzeltilen (N36/N37 testi sırasında ortaya çıktı):**
+  - env_state.py'de KENDİ SEBEP OLUNAN bir regresyon: "0 packages" fix'i
+    yapılırken yanlışlıkla `uploads/`'taki orijinal dosyadan başlanmış,
+    önceki "Hatch (pip)" rozet fix'i silinmişti. Ekran görüntüsüyle
+    yakalandı, düzeltildi — ikisi artık bir arada. **Süreç dersi:**
+    dosya tekrar düzenlenirken her zaman kendi son `outputs/` kopyasından
+    başla, `uploads/`'tan değil.
+  - main_window.py: `info_label`'a `setWordWrap(True)` eklendi — hatch/pdm/
+    pixi eklenince özet çubuğu 6 segmente çıkıp sağa taşıyor, "pixi" ve
+    "total" görünmez oluyordu.
+
+  Detay: Handoff'ta "ÖNLEME NOTU" bölümü, 2026-08-09/12.
+
+## 🔴 AÇIK — B18 AppImage CI Startup Hang (teşhis aracı eklendi, kök neden hâlâ açık)
+
+main.py'ye `faulthandler.enable()` + `dump_traceback_later(25)` eklendi
+(2026-08-12) — bu bir FIX DEĞİL, CI'ın kendi smoke-test'i zaten hang'i
+tespit ediyordu ama `PYTHONFAULTHANDLER=1` env değişkeni frozen build'de
+hiç stack trace üretmiyordu (sadece "dumped core" görünüyordu). Artık
+kodda açıkça enable edildiği + zaman-tabanlı bir watchdog eklendiği için
+bir sonraki CI run'ında gerçek stack trace gelmeli.
+
+strace kanıtı (önceki CI run'ından): tek PID, sürekli `write(6, ..., 8)` —
+eventfd'ye art arda yazma, aralarda `poll`/`epoll_wait` yok → periyodik
+200ms sinyal-timer'ı değil, gerçek bir sıkı döngü (tight spin) izlenimi.
+Şüpheli ama DOĞRULANMAMIŞ: main.py'deki `_sigtimer` (200ms no-op QTimer,
+Ctrl+C işlemek için).
+
+**Sıradaki adım:** v1.6.42 push sonrası CI run'ını bekle, Smoke-test
+adımının loglarında `Timeout (0:00:25)!` ile başlayan stack trace'i bul,
+buraya yapıştır — o zaman gerçek kök nedene inilebilir.
 
 ## 📐 BÜYÜK DOSYA BÖLME REFACTOR — İLERLEME (güncel)
 

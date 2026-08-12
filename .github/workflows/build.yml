@@ -12,8 +12,8 @@ jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Install deps
@@ -27,7 +27,7 @@ jobs:
       - name: Retry without windowed
         if: steps.build1.outcome == 'failure'
         run: python build.py --debug
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: VenvStudio-Windows
           path: dist/VenvStudio.exe
@@ -36,8 +36,8 @@ jobs:
   build-macos-arm:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Install deps
@@ -46,7 +46,7 @@ jobs:
           pip install PySide6 pyinstaller Pillow
       - name: Build (ARM64)
         run: python build.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: VenvStudio-macOS-arm64
           path: dist/VenvStudio
@@ -55,8 +55,8 @@ jobs:
   build-macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
       - name: Install deps
@@ -65,7 +65,7 @@ jobs:
           pip install PySide6 pyinstaller Pillow
       - name: Build
         run: python build.py
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: VenvStudio-macOS
           path: dist/VenvStudio
@@ -74,8 +74,8 @@ jobs:
   build-linux-appimage:
     runs-on: ubuntu-22.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -381,13 +381,13 @@ jobs:
             echo "::warning::startup hang reproduced in CI (see logs above)"
           fi
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: VenvStudio-Linux-AppImage
           path: VenvStudio*.AppImage
           if-no-files-found: warn
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: VenvStudio-Linux
           path: dist/VenvStudio/VenvStudio
@@ -399,7 +399,7 @@ jobs:
     if: always() && startsWith(github.ref, 'refs/tags/v') && needs.build-windows.result == 'success'
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
           fetch-tags: true
@@ -452,7 +452,7 @@ jobs:
           echo -e "$BODY" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         continue-on-error: true
 
       - name: Prepare files & sizes
@@ -528,9 +528,9 @@ jobs:
       id-token: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 

@@ -12,6 +12,25 @@ import os
 import traceback
 import multiprocessing
 
+# ── B18 diagnostic: faulthandler for the CI AppImage startup hang ──
+# CI's smoke-test already sets PYTHONFAULTHANDLER=1, but that env var did
+# NOT produce a stack trace on the frozen (PyInstaller) build's SIGABRT --
+# only "the monitored command dumped core" showed up, no Python frames.
+# faulthandler.enable() called explicitly in code (rather than relying on
+# the env var being honoured by the embedded runtime) is more reliable in
+# frozen builds. dump_traceback_later() is a second, independent safety
+# net: it fires from its own watchdog thread on a plain timer, so it dumps
+# every thread's current frame even if the hang is inside a C-level Qt/
+# glib loop that never lets a signal (SIGABRT included) get delivered.
+# 25s is chosen to land just before the smoke-test's own 30s `timeout`,
+# so the dump appears in the log before the process gets killed.
+import faulthandler
+faulthandler.enable()
+try:
+    faulthandler.dump_traceback_later(25, exit=False)
+except Exception:
+    pass
+
 # ── Frozen-mode multiprocessing safety (fixes AppImage startup hang) ──
 # In a PyInstaller --onedir/AppImage build, sys.executable is VenvStudio
 # itself, not a python interpreter. With the default Linux "fork" start

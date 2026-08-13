@@ -5,8 +5,11 @@ menu (moved from main_window.py).
 import sys
 from pathlib import Path
 
-from PySide6.QtWidgets import QMenu, QMessageBox, QProgressDialog, QApplication
-from PySide6.QtCore import Qt
+from PySide6.QtWidgets import (
+    QMenu, QMessageBox, QProgressDialog, QApplication,
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QPushButton,
+)
+from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction
 
 from src.utils.i18n import tr
@@ -23,6 +26,16 @@ class WindowMenuMixin:
         new_env_action.setShortcut("Ctrl+N")
         new_env_action.triggered.connect(self._create_env)
         file_menu.addAction(new_env_action)
+        file_menu.addSeparator()
+        # N11: File -> Install Launcher... -- pick an app, get a
+        # recommended env type/Python version, install into a matching
+        # existing env or create a new one. Scoped to pip-installable
+        # apps for now (system_app / conda-only tools like RStudio/
+        # Ollama/DBeaver use a different install path -- system package
+        # manager, not pip/venv -- and need separate handling later).
+        install_launcher_action = QAction("🚀 Install Launcher…", self)
+        install_launcher_action.triggered.connect(self._show_install_launcher)
+        file_menu.addAction(install_launcher_action)
         file_menu.addSeparator()
 
         # ── Recent Environments submenu ───────────────────────────────────
@@ -353,6 +366,169 @@ class WindowMenuMixin:
         except Exception as _e:
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.critical(self, "Error", f"Could not open Conflict Manager:\n{_e}")
+
+
+    def _install_launcher_env_status(self, app_def):
+        """N11: for a pip-based app_def, find every compatible existing env
+        (matching env_types[0] and, if set, min/max_python).
+        Returns (list[VenvInfo], recommended_type, min_py, max_py) -- the
+        list may be empty, have one entry, or several (Bayram: "birden
+        fazla varsa dropdown yap" -- let the user pick when there's more
+        than one, don't just silently take the first)."""
+        rec_type = (app_def.get("env_types") or ["venv"])[0]
+        min_py = app_def.get("min_python")
+        max_py = app_def.get("max_python")
+
+        def _in_range(py_ver_str):
+            try:
+                parts = py_ver_str.split(".")
+                major, minor = int(parts[0]), int(parts[1])
+            except Exception:
+                return True  # unknown version string -- don't block on it
+            if min_py:
+                mn = tuple(int(x) for x in min_py.split("."))
+                if (major, minor) < mn:
+                    return False
+            if max_py:
+                mx = tuple(int(x) for x in max_py.split("."))
+                if (major, minor) > mx:
+                    return False
+            return True
+
+        try:
+            envs = self.venv_manager.list_venvs_fast()
+        except Exception:
+            envs = []
+        matches = [info for info in envs
+                   if info.env_type == rec_type and _in_range(info.python_version)]
+        return matches, rec_type, min_py, max_py
+
+    def _show_install_launcher(self):
+        """N11: File -> Install Launcher... -- pick an app, get a
+        recommended env type/Python version, install into a matching
+        existing env or create a new one."""
+        apps = getattr(self.package_panel, "app_definitions", []) if hasattr(self, "package_panel") else []
+        # Scoped to pip-installable apps for now -- system_app entries
+        # (RStudio, Ollama, DBeaver, R Console, jamovi, JASP) install via
+        # a system package manager, not pip/venv, and need a separate flow.
+        apps = [a for a in apps if not a.get("system_app")]
+        if not apps:
+            QMessageBox.information(self, "Install Launcher", "No installable apps found.")
+            return
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Install Launcher")
+        dlg.setMinimumWidth(420)
+        layout = QVBoxLayout(dlg)
+
+        layout.addWidget(QLabel("Choose an app to install:"))
+        combo = QComboBox()
+        for a in apps:
+            combo.addItem(f"{a.get('icon', '')} {a['name']}", a)
+        layout.addWidget(combo)
+
+        status_label = QLabel()
+        status_label.setWordWrap(True)
+        layout.addWidget(status_label)
+
+        # Shown only when there's more than one compatible existing env --
+        # Bayram: "recommended kisminda birden fazla varsa onlari da
+        # dropdown yap" (2026-08-13). One match: install button already
+        # names it, no extra picker needed. Zero matches: hidden, nothing
+        # to pick from.
+        env_pick_label = QLabel("Install into:")
+        env_pick_combo = QComboBox()
+        layout.addWidget(env_pick_label)
+        layout.addWidget(env_pick_combo)
+        env_pick_label.setVisible(False)
+        env_pick_combo.setVisible(False)
+
+        btn_row = QHBoxLayout()
+        install_btn = QPushButton("Install")
+        create_btn = QPushButton("Create New Environment…")
+        cancel_btn = QPushButton("Cancel")
+        btn_row.addWidget(install_btn)
+        btn_row.addWidget(create_btn)
+        btn_row.addWidget(cancel_btn)
+        layout.addLayout(btn_row)
+
+        state = {"matches": [], "app": None}
+
+        def _refresh():
+            app_def = combo.currentData()
+            state["app"] = app_def
+            matches, rec_type, min_py, max_py = self._install_launcher_env_status(app_def)
+            state["matches"] = matches
+            py_txt = ""
+            if min_py or max_py:
+                py_txt = f" • Python {min_py or '?'}–{max_py or 'latest'}"
+
+            env_pick_combo.clear()
+            if len(matches) > 1:
+                for info in matches:
+                    env_pick_combo.addItem(f"{info.name} (Python {info.python_version})", info)
+                env_pick_label.setVisible(True)
+                env_pick_combo.setVisible(True)
+                status_label.setText(
+                    f"Recommended: {rec_type}{py_txt}\n"
+                    f"✅ Found {len(matches)} compatible environments — pick one below."
+                )
+                install_btn.setEnabled(True)
+                install_btn.setText("Install")
+            elif len(matches) == 1:
+                env_pick_label.setVisible(False)
+                env_pick_combo.setVisible(False)
+                status_label.setText(
+                    f"Recommended: {rec_type}{py_txt}\n"
+                    f"✅ Found compatible environment: {matches[0].name} (Python {matches[0].python_version})"
+                )
+                install_btn.setEnabled(True)
+                install_btn.setText(f"Install into '{matches[0].name}'")
+            else:
+                env_pick_label.setVisible(False)
+                env_pick_combo.setVisible(False)
+                status_label.setText(
+                    f"Recommended: {rec_type}{py_txt}\n"
+                    f"⚠️ No compatible existing environment found."
+                )
+                install_btn.setEnabled(False)
+                install_btn.setText("Install")
+
+        combo.currentIndexChanged.connect(_refresh)
+        _refresh()
+
+        def _do_install():
+            app_def = state["app"]
+            matches = state["matches"]
+            if not matches or not app_def:
+                return
+            # One match -> that one. Several -> whichever the dropdown has
+            # selected (defaults to the first, same as before this change
+            # if the user never touches it).
+            target_info = env_pick_combo.currentData() if len(matches) > 1 else matches[0]
+            if target_info is None:
+                return
+            packages = app_def.get("install_packages", [app_def.get("package")])
+            target = target_info.name
+            for row in range(self.env_table.rowCount()):
+                _ni = self.env_table.item(row, 0)
+                if _ni and _ni.text().strip() == target:
+                    self.env_table.selectRow(row)
+                    self._on_env_selected()
+                    break
+            self._switch_page(0)
+            if hasattr(self, "package_panel"):
+                QTimer.singleShot(400, lambda: self.package_panel._install_packages(packages, hint_name=app_def["name"]) if self.package_panel else None)
+            dlg.accept()
+
+        def _do_create():
+            dlg.accept()
+            self._create_env()
+
+        install_btn.clicked.connect(_do_install)
+        create_btn.clicked.connect(_do_create)
+        cancel_btn.clicked.connect(dlg.reject)
+        dlg.exec()
 
     def _populate_recent_menu(self):
         """Rebuild the Recent Environments submenu from recent_envs.json."""

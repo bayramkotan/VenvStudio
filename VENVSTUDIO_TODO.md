@@ -1,18 +1,92 @@
 # VENVSTUDIO_TODO.md
 
-## 🔴 TEST BEKLİYOR — N9 Canlı Kontrol Sistemi (v1.6.43, henüz gerçek ortamda test edilmedi)
+## 🆕 Yeni İstek (2026-08-12) — Presets → Learn Bağlantıları
 
-- **N9 — Canlı PyPI wheel-kontrolü + "Create New Environment" yönlendirmesi:**
-  `package_ops.py`'ye statik `CONFLICT_RULES` bulamazsa devreye giren
-  canlı bir PyPI kontrolü eklendi (`venv`/`uv`/`hatch`/`pdm`/`poetry`
-  tiplerinde). Hata dialogu artık 3 buton: Install Anyway / Create New
-  Environment… / Cancel. **Sadece mock test edildi** (gerçek PyPI
-  verisiyle, 4 senaryo) — gerçek uygulamada henüz denenmedi çünkü
-  sinyal yolu (aşağıdaki madde) test sırasında kırık çıktı, düzeltildi
-  ama sonrasında tekrar test edilmedi.
-  **Test:** Python 3.14'lü bir venv'de `pygame` kurmayı dene — kurulum
-  denenmeden önce net bir uyarı çıkmalı, "Create New Environment…"
-  tıklanınca gerçekten Create dialogu açılmalı.
+- **N38 — Preset kartlarından Learn sayfasına konu/kütüphane linkleri:**
+  Packages → Presets sekmesindeki her preset kartına (Data Science
+  Starter, Web API/FastAPI, ML Starter, vb.), o preset'in içerdiği
+  kütüphanelerle veya konuyla ilgili Learn sayfasındaki bölüme
+  götüren link(ler) eklensin. Tıklanınca Learn sekmesine geçip
+  doğrudan ilgili konuya/kütüphaneye scroll etsin ya da o bölümü
+  açsın. Amaç: preset'i görürken "bu ne işe yarıyor, nasıl
+  kullanılır" sorusunun cevabına tek tıkla ulaşmak.
+  **Netleşmesi gerekenler (bir sonraki oturumda):** Learn sayfasının
+  içeriği preset'lerdeki her kütüphaneyi zaten kapsıyor mu (yoksa
+  önce Learn içeriği mi genişletilmeli); link preset kartının neresinde
+  görünecek (başlığın yanında bir ikon mu, ayrı bir "Learn More" satırı
+  mı); birden fazla kütüphane varsa (örn. Data Science Starter →
+  numpy+pandas+matplotlib+scikit-learn+jupyter) hepsi ayrı link mi
+  olacak yoksa tek bir genel link mi.
+
+---
+
+## 🌟 BÜYÜK GİRİŞİM — N9'u Conflict Manager'ın Tam Uyumluluk Sistemine Dönüştür (Bayram'ın talebi, 2026-08-12)
+
+**Bu, bugünkü küçük pygame düzeltmesiyle karıştırılmamalı — çok daha
+büyük ve kasıtlı olarak detaylandırılacak bir proje.** Bayram'ın
+kendi sözleriyle: "bunu çok geliştirmemiz lazım... tüm library,
+launcher, presets... için uyumluluk tabloları/matriksleri yapacağız."
+
+**Kapsam (bugünkü ilk taslaktan çok daha geniş):**
+- Sadece tek tek paket kurulumu değil — **Launcher app'leri**
+  (JupyterLab, Spyder IDE, Orange Data Mining, Streamlit, Gradio,
+  Dash, Panel, vb.) ve **Presets** (Data Science Starter, Web API,
+  ML Starter, vb.) için de uyumluluk kontrolü/matriksi
+- Conflict Manager'ın (Tools → 🧩 Conflict Manager) mevcut statik
+  tablo + pre-flight kontrol yapısının üzerine inşa edilecek, ayrı
+  bir sistem olarak kalmayacak — birleşecek
+- Bugün atılan temeller (CONFLICT_RULES statik liste, canlı PyPI
+  wheel-kontrolü, "Create New Environment" yönlendirmesi) bu büyük
+  sistemin sadece paket-kurulumu köşesi — launcher/preset tarafı
+  henüz hiç yok
+- Muhtemelen: her env tipi × her Python sürümü × her library/app
+  için bir uyumluluk matriksi/tablosu görselleştirmesi (Conflict
+  Manager dialogunun kendisinde, arama/filtreleme ile)
+
+**Şimdilik yapılmayacak, sadece not düşülüyor** — Bayram bu oturumda
+detaylandırmadı, "çok detaylandıracağız" dedi, ayrı ve kapsamlı bir
+tasarım oturumu gerektirecek. Bir sonraki oturumda bu konuya
+girilirse, önce kapsamı (hangi launcher/preset'ler, matriks nasıl
+görselleştirilecek, mevcut Conflict Manager dialoguyla nasıl
+birleşecek) netleştirmek gerekir — büyük bir mimari genişleme.
+
+---
+
+## ✅ N11 — Install Launcher SIFIRDAN KURULDU (v1.6.44, 2026-08-13)
+
+- **N11 — File → Install Launcher… ✅ TEMEL AKIŞ GERÇEK ORTAMDA DOĞRULANDI:**
+  App seç → önerilen env tipi + Python sürüm aralığı otomatik gösterilir
+  → uyumlu env taranır → tek eşleşme: "Install into '<isim>'" direkt
+  buton; hiç eşleşme yok: "Create New Environment…" yönlendirmesi.
+  Bayram gerçek ortamda test etti, onayladı ("harikasın").
+  **Veri:** 19 pip-tabanlı app'e PyPI'ın resmi `requires_python`
+  alanından gerçek min_python/max_python eklendi (launcher_ui.py).
+  Chainlit Python 3.14'ü resmi olarak desteklemiyor (`<3.14.0`) —
+  pygame'deki desenin bir başka örneği, gerçek veriyle doğrulandı.
+  **Kapsam dışı (bilinçli):** 6 conda-sistem app'i (R Console, RStudio,
+  Ollama, DBeaver, jamovi, JASP) — pip paketi değiller, farklı bir
+  kurulum akışı (conda kanalından sistem aracı) gerektiriyorlar, ayrı
+  bir tasarım konuşması lazım.
+  **Henüz test edilmeyen:** çok-eşleşme dropdown'u (bkz. yukarıdaki
+  "TEST BEKLİYOR" bölümü).
+  Detay: Handoff'ta "Bu Oturumda Yapılanlar (2026-08-13 — v1.6.44)"
+  bölümünde uzun açıklama var.
+
+---
+
+## 🔴 TEST BEKLİYOR — N11 Çok-Eşleşme Dropdown'u (v1.6.44)
+
+- **N11 — Install Launcher'da birden fazla uyumlu env varsa seçim
+  dropdown'u:** Mock test edildi (0/1/2/3 eşleşme senaryoları, gerçek
+  env verisiyle), gerçek ortamda henüz denenmedi.
+  **Test:** Aynı Python aralığına uyan 2+ venv'in olduğu bir senaryo
+  kur (örn. min_python 3.10 olan bir app + 2 farklı 3.1x'li venv),
+  File → Install Launcher…'da o app'i seçince "Install into:" ikinci
+  dropdown'unun çıkıp ikisini de listelediğini doğrula.
+
+- **N9 — Canlı PyPI wheel-kontrolü ✅ GERÇEK ORTAMDA DOĞRULANDI (2026-08-13):**
+  `aaa` env'inde (Python 3.13.13) pygame kurulumu sorunsuz tamamlandı —
+  sistem doğru şekilde engellemedi, wheel gerçekten var. Kapandı.
 
 - **Bulunup düzeltilen 2 "olmayan metod" hatası (N9 testi sırasında ortaya çıktı):**
   1. `package_ops.py`'nin `self`'i `PackagePanel`, `MainWindow` değil —
@@ -290,13 +364,22 @@ düzeltilebilir; VenvStudio'da "requires-python onar" düğmesi düşünülebili
   - [ ] Aşama 6: Scan Env sonuçlarını export et (JSON/CSV)
   - [ ] Aşama 7: Otomatik öneri — "Bu paket Python 3.12 ile çalışır, yeni env oluşturalım mı?"
 
-- **N11 — Apps → Kurulum Rehberi (File menüsü altına):**
+- **N11 — File → Install Launcher (genişletildi, 2026-08-12):**
   Launcher/Apps kartlarına tıklanınca hangi env tipiyle kurulacağını gösteren dialog.
-  - File menüsü → "Install Apps…" menü öğesi
+  - File menüsü → "Install Launcher…" menü öğesi
   - Dialog: sol taraf app listesi, sağ taraf env tipi seçici
   - Her app için uyumlu env tipleri gösterilir (RStudio → sadece conda; Orange3 → venv/conda; Gradio → hepsi)
   - conda gereken applar için mamba/micromamba/conda-forge seçeneği
   - Default env tipi: en uygun olanı önceden seçili gelir
+  - **YENİ:** sadece env tipi değil, **en uygun Python sürümü** de
+    önerilsin (N9'daki CONFLICT_RULES/canlı PyPI kontrolü altyapısı
+    burada da kullanılabilir — hangi Python sürümlerinde hangi
+    launcher'ın wheel'i/desteği var)
+  - **YENİ:** launcher seçilince otomatik aksiyon akışı — uygun bir
+    env **zaten varsa** oraya kursun; yoksa N9'un "Create New
+    Environment" yönlendirmesiyle aynı desende yeni bir env
+    oluşturup içine kursun. Kullanıcıya "hangi env'e kuracağım"
+    sormaktan çok, doğrudan en uygun olanı bulup öneren/yapan bir akış.
 
 - **N12 — Farklı Lokasyona Env Kurma + Recent Envs:**
   Proje içlerine env kurma desteği (şu an sadece base_dir).

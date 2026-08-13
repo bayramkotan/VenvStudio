@@ -3,8 +3,8 @@
 ## Proje
 - **Repo:** https://github.com/bayramkotan/VenvStudio
 - **PyPI:** https://pypi.org/project/venvstudio/
-- **GÜNCEL VERSİYON: v1.6.43** (2026-08-12 — v1.6.42'nin devamı, GENİŞ KAPSAMLI OTURUM: (1) B18 faulthandler yanlış alarmı düzeltildi (app.exec() öncesi cancel), gerçek kök neden hâlâ CI'da test ediliyor; (2) B19 GitHub Actions Node24 versiyon güncellemesi; (3) N9 Aşama 4 — pip --dry-run pre-flight, gerçek ortamda doğrulandı; (4) Progress bar iki erken-kapanma bug'ı düzeltildi; (5) pipx Create New Environment dialoguna eklendi (install/reset akışı + alfabetik sıralama); (6) alfabetik sıralama GİZLİ BİR BUG'I açığa çıkardı — cmd_label henüz oluşmadan _on_env_type_changed çağrılıp "+ New Environment" her tıklamada çöküyordu, düzeltildi; (7) Learn install akışında _on_env_selected imza uyuşmazlığı çökmesi düzeltildi; (8) N9 — pygame CONFLICT_RULES'a eklendi + CANLI PyPI wheel-kontrolü ilk taslağı kuruldu (statik listede yoksa otomatik PyPI sorgusu, geliştirilmiş 3-butonlu hata dialogu); (9) yeni sinyal yolu (new_environment_requested) baştan kırıktı — PackagePanel'in MainWindow'a referansı yok, ayrıca _new_env diye bir metod hiç yok (gerçek adı _create_env, Learn sayfasının kendi "yeni venv" seçeneği de bu yüzden BAŞTAN BERİ çalışmıyordu) — ikisi de düzeltildi. Detay: "Bu Oturumda Yapılanlar (2026-08-12 — v1.6.43)" bölümü.) — PUSH EDİLECEK. PUSH SONRASI PyPI history sayfasını MUTLAKA kontrol et + `pip install venvstudio==1.6.43 --no-cache-dir --break-system-packages` ile doğrula VE N9 canlı kontrol sistemini (pygame/Python 3.14 senaryosu) gerçek ortamda test et — bu oturumda sadece mock test edildi. Çok makineli çalışma: commit öncesi `git fetch` + `git log origin/main`.
-- **Son TODO güncellemesi (2026-08-12, v1.6.43 ile birlikte):** N36/N37 (PDM/Pixi) gerçek ortamda doğrulandı olarak kapatıldı. Bu oturumun tüm bulguları (B18/B19 fix'leri, N9 Aşama 4 + canlı PyPI kontrolü ilk taslağı, alfabetik sıralama çökmesi, Learn install imza hatası, sinyal yolu + _create_env isim düzeltmesi) TODO'nun en başına eklendi. **Test bekleyen:** N9'un canlı kontrol sistemi + "Create New Environment" yönlendirmesi gerçek ortamda henüz doğrulanmadı.
+- **GÜNCEL VERSİYON: v1.6.44** (2026-08-13 — v1.6.43'ün gerçek ortam testi (N9 canlı PyPI kontrolü + sinyal fix'i doğrulandı, pygame/py3.13 sorunsuz) + tamamen yeni bir özellik: **N11 — Install Launcher** (File → "Install Launcher…"). App seç → önerilen env tipi + Python sürüm aralığı gösterilir → uyumlu env(ler) taranır → tek eşleşme: direkt kur butonu; çok eşleşme: seçim dropdown'u; hiç eşleşme yok: "Create New Environment" yönlendirmesi. 19 app'e PyPI'ın resmi requires_python verisiyle min/max_python eklendi (Chainlit Python 3.14'ü resmi olarak desteklemiyor, pygame'deki desenin bir başka örneği). Detay: "Bu Oturumda Yapılanlar (2026-08-13 — v1.6.44)" bölümü — Install Launcher'ın tasarım mantığı orada uzun uzun anlatılıyor.) — PUSH EDİLECEK. PUSH SONRASI PyPI history sayfasını MUTLAKA kontrol et + `pip install venvstudio==1.6.44 --no-cache-dir --break-system-packages` ile doğrula VE N11'in çok-eşleşme dropdown'unu gerçek ortamda test et (bu oturumda sadece mock test edildi). Çok makineli çalışma: commit öncesi `git fetch` + `git log origin/main`.
+- **Son TODO güncellemesi (2026-08-13, v1.6.44 ile birlikte):** N9 gerçek ortamda doğrulandı olarak kapatıldı. N11 (Install Launcher) sıfırdan eklendi, TODO'ya detaylı işlendi — çok-eşleşme dropdown'u gerçek ortamda test bekliyor, conda-sistem app'leri kapsam dışı not edildi.
 - **Bir sonraki oturumun kuyruğu:** aşağıdaki "Bu Oturumda Yapılanlar (2026-07-23/24)" bölümünün *Açık maddeler* kısmı
 - **Proje dizini (Windows):** `C:\Github\VenvStudio`
 - **Proje dizini (Linux - CachyOS/Pardus):** `~/Github/VenvStudio`
@@ -825,6 +825,134 @@ ama Qt sinyal string'i veya `getattr` ile çağrılanlar da yanlış işaretleni
 Neden elle tablo tutmuyoruz: handoff'taki el yazımı tablo `_update_quick_sidebar`'ı
 "sidebar güncelleme" diye listeliyordu, oysa o fonksiyon ölü koddu ve gerçek sidebar
 `quicklaunch.py`'deydi. Üretilen harita kaynakla senkron kalır.
+
+---
+
+## Bu Oturumda Yapılanlar (2026-08-13 — v1.6.44, PUSH EDİLECEK)
+
+### Özet
+v1.6.43'ün gerçek ortamda test edilmesi (N9 canlı PyPI kontrolü + sinyal
+yolu fix'i doğrulandı, pygame senaryosu sorunsuz çalıştı) + tamamen yeni
+bir özellik: **N11 — Install Launcher**, sıfırdan tasarlanıp kuruldu.
+
+### 1) v1.6.43'ün gerçek ortam testi — doğrulandı
+Önceki oturumun sonunda mock test edilmiş olan N9 canlı kontrol sistemi +
+"Create New Environment" yönlendirmesi + sinyal yolu fix'i (`new_environment_
+requested`) gerçek ortamda test edildi: `aaa` env'inde (Python 3.13.13)
+`pygame` kurulumu sorunsuz tamamlandı — sistem doğru şekilde ENGELLEMEDİ
+çünkü pygame'in gerçekten o Python sürümü için wheel'i var. Yanlış pozitif
+yok, tam istenen davranış.
+
+### 2) N11 — Install Launcher (SIFIRDAN, DETAYLI AÇIKLAMA — Bayram özellikle istedi)
+
+**Ne yapıyor, kullanıcı gözünden:**
+File menüsüne **"🚀 Install Launcher…"** diye yeni bir seçenek eklendi.
+Tıklanınca açılan dialog:
+1. Üstte bir dropdown — hangi uygulamayı kurmak istediğini seçiyorsun
+   (JupyterLab, Streamlit, Chainlit, Orange Data Mining, vb. — Launch
+   sekmesindeki kartlarla AYNI listeden geliyor, ayrı bir kopya değil)
+2. Seçtiğin anda altta otomatik olarak: "Recommended: venv • Python
+   3.10–3.13" gibi bir öneri metni çıkıyor
+3. Sistemde bu öneriye uyan **mevcut bir env varsa** direkt "Install
+   into 'ml'" gibi bir buton çıkıyor — tek tıkla oraya kurulum yapılıyor
+4. **Birden fazla uygun env varsa** (Bayram'ın ikinci isteği üzerine
+   eklendi), ikinci bir "Install into:" dropdown'u beliriyor, hangisini
+   istediğini seçebiliyorsun
+5. **Hiç uygun env yoksa** "Create New Environment…" butonuyla doğrudan
+   env oluşturma dialoguna yönlendiriliyorsun
+
+**Neden bu şekilde tasarlandı — arka plandaki mantık:**
+
+Launch sekmesindeki her app kartının arkasında zaten bir `app_def`
+sözlüğü var (`launcher_ui.py`, `self.app_definitions` listesi) — bu
+sözlükte `name`, `package`, `env_types` (o app'in hangi env tipiyle
+çalıştığı — venv mi conda mı) gibi alanlar zaten vardı. Bu veriyi
+KOPYALAMADIK, doğrudan aynı listeyi okuyoruz — Launch sekmesindeki
+kartlarla Install Launcher dialogu arasında hiçbir tutarsızlık riski
+yok, ikisi de aynı kaynaktan besleniyor.
+
+Eksik olan tek şey: **hangi Python sürümleriyle çalıştığı bilgisi**
+(`min_python`/`max_python`) — bu hiçbir app'te yoktu. 19 pip-tabanlı
+app için (Chainlit, JupyterLab, Streamlit, Orange3, Spyder, IPython,
+Gradio, Dash, Panel, Voilà, MLflow, TensorBoard, FastAPI, Datasette,
+Marimo, Shiny, NiceGUI, Bokeh + quarto-cli hariç çünkü PyPI'da
+requires_python tanımlı değil) **PyPI'ın kendi resmi `requires_python`
+metadata alanı** toplu sorgulanıp gerçek veriyle dolduruldu — tahmin
+edilmedi. En dikkat çekici bulgu: **Chainlit** PyPI'da açıkça
+`<3.14.0,>=3.10` diyor — yani Python 3.14'ü (VenvStudio'nun kendi
+kullandığı sürüm!) resmi olarak desteklemiyor. pygame'deki "çok yeni
+Python sürümü henüz desteklenmiyor" deseninin bir başka örneği.
+
+**Kapsam dışında bilinçli olarak bırakılan:** 6 app (R Console, RStudio,
+Ollama, DBeaver, jamovi, JASP) `"system_app": True` ve `env_types:
+["conda"]` ile işaretli — bunlar pip paketi değil, conda kanalından
+sistem aracı olarak kuruluyor (`conda_packages` alanı var). Bunlar için
+Python sürüm uyumluluğu kavramı aynı şekilde uygulanamıyor (R'ın kendi
+sürümü var, Python'la ilgisi dolaylı) — bu yüzden Install Launcher'ın
+ilk sürümü bunları dialog listesinden filtreliyor. Ayrı bir akış
+gerektirir, TODO'ya not düşüldü.
+
+**Kod tarafı — hangi dosyalar, ne değişti:**
+- `launcher_ui.py`: 19 app'e `min_python`/`max_python` eklendi (veri
+  girişi, kod mantığı değişmedi)
+- `window_menu.py`:
+  - `_install_launcher_env_status(app_def)`: yeni fonksiyon. Bir app_def
+    alıp, `self.venv_manager.list_venvs_fast()` ile TÜM mevcut env'leri
+    tarıyor, `env_types[0]`'a ve (varsa) min/max_python aralığına uyan
+    HEPSİNİ bir liste olarak döndürüyor (ilk sürümde sadece ilkini
+    döndürüyordu, Bayram'ın "birden fazla varsa dropdown yap" isteği
+    üzerine listeye çevrildi)
+  - `_show_install_launcher()`: dialogun kendisi. "Mevcut env'e kur"
+    akışı, `_on_learn_install`'ın (Learn sayfası install akışı,
+    önceki oturumda düzeltilmişti) KANITLANMIŞ aynı deseniyle çalışıyor:
+    `env_table`'da satırı bul → `selectRow` → `_on_env_selected()` →
+    sayfayı Packages'a çevir → 400ms sonra `package_panel._install_
+    packages(...)` çağır. Yeni bir kurulum mekanizması icat edilmedi,
+    var olan güvenilir yol kullanıldı.
+
+**Geliştirme sırasında kendi hatalarım (dürüstçe not, 2 tane, ikisi de
+aynı turda yakalanıp düzeltildi):**
+1. İlk patch denemesinde `\u2705` gibi unicode kaçışlarını BYTES
+   literal içine yazmışım — Python'da bytes literal'de `\u` geçerli
+   değil, str'de geçerli. Str olarak yazıp sonradan `.encode('utf-8')`
+   ederek düzeltildi.
+2. Dialog metodunu eklerken kullandığım `str.replace(anchor, yeni_
+   içerik)` çağrısı, `anchor`'ın TAMAMININ (yani `dlg.exec()` +
+   `except` bloğu dahil, komşu `_show_conflict_manager` metodunun
+   sonu) yerine geçmiş — az kalsın o metodun gövdesini silecektim.
+   `py_compile` hemen `SyntaxError` verdi, fark edildi, düzeltmede
+   sadece EKLEME yapıldı (var olan hiçbir satır silinmeden).
+
+**Test durumu:** Bayram gerçek ortamda test etti — hem tek-eşleşme hem
+Create New Environment yolu çalıştı ("harikasın" onayı alındı). Çok-
+eşleşme dropdown'u (2. tur) henüz gerçek ortamda test edilmedi, sadece
+mock test edildi (4 senaryo: 0/1/2/3 eşleşme, hepsi gerçek env verisiyle
+doğru sonuç verdi).
+
+### Değişen Dosyalar (v1.6.44)
+
+| Dosya | Değişiklik |
+|---|---|
+| `src/gui/launcher_ui.py` | 19 app'e gerçek PyPI verisiyle min_python/max_python eklendi |
+| `src/gui/window_menu.py` | N11 — File → "Install Launcher…" tamamen yeni özellik: dialog, uyumluluk taraması, çoklu-env dropdown'u, mevcut kur/yeni oluştur yönlendirmesi |
+
+### Test Durumu
+- N9 (v1.6.43'ten) — gerçek ortamda doğrulandı (pygame/py3.13, sorunsuz)
+- N11 tek-eşleşme + Create New Environment yolu — gerçek ortamda
+  doğrulandı, Bayram onayladı
+- N11 çok-eşleşme dropdown'u — sadece mock test edildi, gerçek ortamda
+  HENÜZ denenmedi (bir sonraki oturumda: aynı Python aralığına uyan
+  2+ venv olan bir senaryo kur, dropdown'un çıktığını doğrula)
+
+### Açık / Sonraki Oturuma Not
+- N11'in conda-sistem app'leri (R/RStudio/Ollama/DBeaver/jamovi/JASP)
+  kapsam dışı — ayrı bir kurulum akışı (conda kanalından sistem aracı)
+  gerektiriyor, henüz tasarlanmadı
+- N11 çok-eşleşme dropdown'u gerçek ortamda test edilmeli
+- 🌟 Büyük girişim (Conflict Manager'ı tam uyumluluk matriksine
+  dönüştürme, tüm library/launcher/preset'ler için) hâlâ TODO'nun en
+  başında bekliyor, bu oturumda dokunulmadı
+
 
 ---
 
@@ -6161,7 +6289,7 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 11. **N35** — Hatch self-heal (marker'da hatch_env_path yoksa her refresh'te yeniden dene) — Bayram'a soruldu, cevap bekleniyor
 
 ## Sonraki Chat Başlangıç Promptu
-> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.43, sıradaki: v1.6.44.
+> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.44, sıradaki: v1.6.45.
 
 ## 📋 Dosya Kopyalama Kuralları
 

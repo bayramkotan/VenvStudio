@@ -1,6 +1,61 @@
 # VENVSTUDIO_TODO.md
 
 ## 🆕 Yeni İstek (2026-08-12) — Presets → Learn Bağlantıları
+<<<<<<< Updated upstream
+=======
+
+- **N38 — Preset kartlarından Learn sayfasına konu/kütüphane linkleri:**
+  Packages → Presets sekmesindeki her preset kartına (Data Science
+  Starter, Web API/FastAPI, ML Starter, vb.), o preset'in içerdiği
+  kütüphanelerle veya konuyla ilgili Learn sayfasındaki bölüme
+  götüren link(ler) eklensin. Tıklanınca Learn sekmesine geçip
+  doğrudan ilgili konuya/kütüphaneye scroll etsin ya da o bölümü
+  açsın. Amaç: preset'i görürken "bu ne işe yarıyor, nasıl
+  kullanılır" sorusunun cevabına tek tıkla ulaşmak.
+  **Netleşmesi gerekenler (bir sonraki oturumda):** Learn sayfasının
+  içeriği preset'lerdeki her kütüphaneyi zaten kapsıyor mu (yoksa
+  önce Learn içeriği mi genişletilmeli); link preset kartının neresinde
+  görünecek (başlığın yanında bir ikon mu, ayrı bir "Learn More" satırı
+  mı); birden fazla kütüphane varsa (örn. Data Science Starter →
+  numpy+pandas+matplotlib+scikit-learn+jupyter) hepsi ayrı link mi
+  olacak yoksa tek bir genel link mi.
+
+---
+
+## 🌟 BÜYÜK GİRİŞİM — N9'u Conflict Manager'ın Tam Uyumluluk Sistemine Dönüştür (Bayram'ın talebi, 2026-08-12)
+
+**Bu, bugünkü küçük pygame düzeltmesiyle karıştırılmamalı — çok daha
+büyük ve kasıtlı olarak detaylandırılacak bir proje.** Bayram'ın
+kendi sözleriyle: "bunu çok geliştirmemiz lazım... tüm library,
+launcher, presets... için uyumluluk tabloları/matriksleri yapacağız."
+
+**Kapsam (bugünkü ilk taslaktan çok daha geniş):**
+- Sadece tek tek paket kurulumu değil — **Launcher app'leri**
+  (JupyterLab, Spyder IDE, Orange Data Mining, Streamlit, Gradio,
+  Dash, Panel, vb.) ve **Presets** (Data Science Starter, Web API,
+  ML Starter, vb.) için de uyumluluk kontrolü/matriksi
+- Conflict Manager'ın (Tools → 🧩 Conflict Manager) mevcut statik
+  tablo + pre-flight kontrol yapısının üzerine inşa edilecek, ayrı
+  bir sistem olarak kalmayacak — birleşecek
+- Bugün atılan temeller (CONFLICT_RULES statik liste, canlı PyPI
+  wheel-kontrolü, "Create New Environment" yönlendirmesi) bu büyük
+  sistemin sadece paket-kurulumu köşesi — launcher/preset tarafı
+  henüz hiç yok
+- Muhtemelen: her env tipi × her Python sürümü × her library/app
+  için bir uyumluluk matriksi/tablosu görselleştirmesi (Conflict
+  Manager dialogunun kendisinde, arama/filtreleme ile)
+
+**Şimdilik yapılmayacak, sadece not düşülüyor** — Bayram bu oturumda
+detaylandırmadı, "çok detaylandıracağız" dedi, ayrı ve kapsamlı bir
+tasarım oturumu gerektirecek. Bir sonraki oturumda bu konuya
+girilirse, önce kapsamı (hangi launcher/preset'ler, matriks nasıl
+görselleştirilecek, mevcut Conflict Manager dialoguyla nasıl
+birleşecek) netleştirmek gerekir — büyük bir mimari genişleme.
+
+---
+
+## 🔴 TEST BEKLİYOR — N9 Canlı Kontrol Sistemi (v1.6.43, henüz gerçek ortamda test edilmedi)
+>>>>>>> Stashed changes
 
 - **N38 — Preset kartlarından Learn sayfasına konu/kütüphane linkleri:**
   Packages → Presets sekmesindeki her preset kartına (Data Science

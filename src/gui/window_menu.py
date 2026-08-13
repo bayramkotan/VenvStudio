@@ -13,6 +13,11 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QAction
 
 from src.utils.i18n import tr
+# N11: shared with N9's pre-flight (package_ops.py) so Install
+# Launcher consults the SAME compatibility data instead of only its
+# own env_types/min_python fields -- Bayram (2026-08-13) wants every
+# install path to go through the same conflict-check source.
+from src.gui.package_ops import _check_pypi_wheel_availability
 
 
 class WindowMenuMixin:
@@ -370,14 +375,67 @@ class WindowMenuMixin:
 
     def _install_launcher_env_status(self, app_def):
         """N11: for a pip-based app_def, find every compatible existing env
-        (matching env_types[0] and, if set, min/max_python).
-        Returns (list[VenvInfo], recommended_type, min_py, max_py) -- the
-        list may be empty, have one entry, or several (Bayram: "birden
-        fazla varsa dropdown yap" -- let the user pick when there's more
-        than one, don't just silently take the first)."""
-        rec_type = (app_def.get("env_types") or ["venv"])[0]
+        across ALL of app_def["env_types"] (not just the first one --
+        Bayram, 2026-08-13: "neden sadece venv'i oneriyor? neden uv,
+        hatch... bunlari oner miyor?" -- venv/uv/hatch/pdm/poetry all
+        ultimately install via pip, so an app good for one is good for
+        all of them; only conda/pixi/pipx genuinely differ) and, if set,
+        min/max_python. Returns (list[VenvInfo], recommended_types,
+        min_py, max_py, note) -- matches may span several env types at
+        once, list may be empty/one/several (Bayram: "birden fazla varsa
+        dropdown yap" -- let the user pick, don't silently take the first).
+
+        Compatibility source priority -- SAME order as N9's pre-flight
+        check in package_ops.py (Bayram, 2026-08-13: every install path
+        should go through the same conflict-check source):
+          1. CONFLICT_RULES (constants.py) -- the shared, maintained list.
+             If it has an entry for this app's package, ITS min/max_python
+             wins over whatever launcher_ui.py has for this app -- one
+             source of truth instead of two that could quietly disagree.
+          2. launcher_ui.py's own min_python/max_python (already researched
+             from PyPI's requires_python per app, see v1.6.44 session notes)
+             -- used when CONFLICT_RULES has nothing for this package.
+          3. Live PyPI wheel check (_check_pypi_wheel_availability, the
+             same function N9 falls back to) -- only when NEITHER of the
+             above has any data at all, i.e. a package nobody has entered
+             constraints for anywhere yet.
+        """
+        rec_types = app_def.get("env_types") or ["venv"]
         min_py = app_def.get("min_python")
         max_py = app_def.get("max_python")
+        note = None
+
+        pkg_name = app_def.get("package", "")
+        if pkg_name and pkg_name != "__system__":
+            try:
+                from src.utils.constants import CONFLICT_RULES, CONFLICT_RULES_ALIASES
+                _pkg_key = pkg_name.lower().replace("_", "-")
+                _rule_key = CONFLICT_RULES_ALIASES.get(pkg_name, CONFLICT_RULES_ALIASES.get(_pkg_key, _pkg_key))
+                _rule = CONFLICT_RULES.get(_rule_key)
+                if _rule:
+                    if _rule.get("min_python"):
+                        min_py = _rule["min_python"]
+                    if _rule.get("max_python"):
+                        max_py = _rule["max_python"]
+                    note = _rule.get("note")
+            except Exception:
+                pass
+
+            # Nothing in CONFLICT_RULES AND nothing in launcher_ui.py's own
+            # data either -- last resort, ask PyPI directly (same function,
+            # same platform-tag mapping N9 uses).
+            if not min_py and not max_py and not note:
+                try:
+                    import sys as _sys_il
+                    _plat = {"win32": "win", "linux": "linux", "darwin": "macos"}.get(_sys_il.platform, "")
+                    if _plat:
+                        _cur = sys.version_info
+                        _live = _check_pypi_wheel_availability(pkg_name, _cur.major, _cur.minor, _plat)
+                        if _live.get("checked") and _live.get("available_pyvers"):
+                            _avail = _live["available_pyvers"]
+                            min_py, max_py = _avail[0], _avail[-1]
+                except Exception:
+                    pass
 
         def _in_range(py_ver_str):
             try:
@@ -400,8 +458,8 @@ class WindowMenuMixin:
         except Exception:
             envs = []
         matches = [info for info in envs
-                   if info.env_type == rec_type and _in_range(info.python_version)]
-        return matches, rec_type, min_py, max_py
+                   if info.env_type in rec_types and _in_range(info.python_version)]
+        return matches, rec_types, min_py, max_py, note
 
     def _show_install_launcher(self):
         """N11: File -> Install Launcher... -- pick an app, get a
@@ -457,20 +515,29 @@ class WindowMenuMixin:
         def _refresh():
             app_def = combo.currentData()
             state["app"] = app_def
-            matches, rec_type, min_py, max_py = self._install_launcher_env_status(app_def)
+            matches, rec_types, min_py, max_py, note = self._install_launcher_env_status(app_def)
             state["matches"] = matches
+            rec_txt = ", ".join(rec_types)
             py_txt = ""
             if min_py or max_py:
                 py_txt = f" • Python {min_py or '?'}–{max_py or 'latest'}"
+            # note comes from CONFLICT_RULES when that shared list has an
+            # entry for this app's package (e.g. a distutils/build-from-
+            # source warning like pygame's) -- surface it, it's exactly
+            # the kind of thing the central conflict list exists to say.
+            note_txt = f"\nℹ️ {note}" if note else ""
 
             env_pick_combo.clear()
             if len(matches) > 1:
+                # Matches can now span several env types at once (venv AND
+                # uv AND hatch...) -- show which type each one is, not just
+                # its name, so the choice is meaningful.
                 for info in matches:
-                    env_pick_combo.addItem(f"{info.name} (Python {info.python_version})", info)
+                    env_pick_combo.addItem(f"{info.name} ({info.env_type}, Python {info.python_version})", info)
                 env_pick_label.setVisible(True)
                 env_pick_combo.setVisible(True)
                 status_label.setText(
-                    f"Recommended: {rec_type}{py_txt}\n"
+                    f"Compatible with: {rec_txt}{py_txt}{note_txt}\n"
                     f"✅ Found {len(matches)} compatible environments — pick one below."
                 )
                 install_btn.setEnabled(True)
@@ -479,8 +546,8 @@ class WindowMenuMixin:
                 env_pick_label.setVisible(False)
                 env_pick_combo.setVisible(False)
                 status_label.setText(
-                    f"Recommended: {rec_type}{py_txt}\n"
-                    f"✅ Found compatible environment: {matches[0].name} (Python {matches[0].python_version})"
+                    f"Compatible with: {rec_txt}{py_txt}{note_txt}\n"
+                    f"✅ Found compatible environment: {matches[0].name} ({matches[0].env_type}, Python {matches[0].python_version})"
                 )
                 install_btn.setEnabled(True)
                 install_btn.setText(f"Install into '{matches[0].name}'")
@@ -488,7 +555,7 @@ class WindowMenuMixin:
                 env_pick_label.setVisible(False)
                 env_pick_combo.setVisible(False)
                 status_label.setText(
-                    f"Recommended: {rec_type}{py_txt}\n"
+                    f"Compatible with: {rec_txt}{py_txt}{note_txt}\n"
                     f"⚠️ No compatible existing environment found."
                 )
                 install_btn.setEnabled(False)

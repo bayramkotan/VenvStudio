@@ -79,6 +79,22 @@ class ConflictManagerDialog(QDialog):
                  pip_manager=None):
         super().__init__(parent)
         self.setWindowTitle("🧩 Conflict Manager")
+        # QDialog's default flags show only a close button on most
+        # platforms. Just OR-ing in the minimize/maximize hints on top
+        # of the default Dialog flags (first attempt) made this an
+        # "owned" child window of MainWindow -- Windows then minimizes
+        # the OWNER along with an owned window to keep them together,
+        # so clicking minimize here took VenvStudio down with it
+        # (Bayram, 2026-08-13). Setting Qt.Window as the base flag
+        # instead of Qt.Dialog makes this a genuinely independent
+        # top-level window with its own taskbar entry, so minimize/
+        # maximize behave independently of MainWindow.
+        self.setWindowFlags(
+            Qt.Window
+            | Qt.WindowMinimizeButtonHint
+            | Qt.WindowMaximizeButtonHint
+            | Qt.WindowCloseButtonHint
+        )
         self.resize(860, 600)
         self._env_type         = env_type
         self._py_ver           = py_version      # (major, minor) or None

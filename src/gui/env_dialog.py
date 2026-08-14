@@ -11,6 +11,7 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QComboBox, QCheckBox, QPushButton, QFileDialog, QMessageBox,
     QGroupBox, QFormLayout, QProgressBar, QSizePolicy, QWidget, QTextEdit,
+    QMenu,
 )
 from PySide6.QtCore import Qt, Signal, QThread
 
@@ -185,6 +186,22 @@ class EnvCreateDialog(QDialog):
         change_btn.setAutoDefault(False)
         change_btn.clicked.connect(self._change_location)
         loc_layout.addWidget(change_btn)
+
+        # N12 (2026-08-14): pick a custom location for just THIS
+        # environment, without permanently changing the default
+        # base_dir the way the Browse button above does. Recent
+        # locations accumulate automatically (see _change_location)
+        # so repeat custom locations are one click away.
+        self.recent_loc_btn = QPushButton("🕐 Recent")
+        self.recent_loc_btn.setObjectName("secondary")
+        self.recent_loc_btn.setFixedHeight(28)
+        self.recent_loc_btn.setToolTip("Use a recently-used custom location for just this environment")
+        self.recent_loc_btn.setFocusPolicy(Qt.NoFocus)
+        self.recent_loc_btn.setDefault(False)
+        self.recent_loc_btn.setAutoDefault(False)
+        self.recent_loc_btn.clicked.connect(self._show_recent_locations_menu)
+        self._update_recent_loc_btn_visibility()
+        loc_layout.addWidget(self.recent_loc_btn)
         form_layout.addRow("Location:", loc_layout)
 
         # ── Environment Type ──────────────────────────────────────────────
@@ -1061,6 +1078,37 @@ class EnvCreateDialog(QDialog):
             self.config.set_venv_base_dir(directory)
             self.venv_manager.set_base_dir(Path(directory))
             self.location_label.setText(directory)
+            self._remember_recent_location(directory)
+
+    def _remember_recent_location(self, directory: str):
+        """N12: track recently-used custom locations (MRU, capped at 6,
+        deduplicated) so the user can quickly reuse one later without
+        permanently changing the default base_dir."""
+        recents = list(self.config.get("recent_env_locations", []))
+        recents = [r for r in recents if r != directory]
+        recents.insert(0, directory)
+        recents = recents[:6]
+        self.config.set("recent_env_locations", recents)
+        self._update_recent_loc_btn_visibility()
+
+    def _update_recent_loc_btn_visibility(self):
+        recents = self.config.get("recent_env_locations", []) if hasattr(self, "config") else []
+        if hasattr(self, "recent_loc_btn"):
+            self.recent_loc_btn.setVisible(bool(recents))
+
+    def _show_recent_locations_menu(self):
+        """N12: pick a recent custom location for just THIS environment --
+        unlike Browse/_change_location, this does NOT touch the
+        persistent default base_dir, only self.location_label (which
+        _create() reads from for this one creation)."""
+        recents = self.config.get("recent_env_locations", [])
+        if not recents:
+            return
+        menu = QMenu(self)
+        for loc in recents:
+            action = menu.addAction(loc)
+            action.triggered.connect(lambda checked=False, l=loc: self.location_label.setText(l))
+        menu.exec(self.recent_loc_btn.mapToGlobal(self.recent_loc_btn.rect().bottomLeft()))
 
     def _create(self):
         name = self.name_input.text().strip()

@@ -3,8 +3,8 @@
 ## Proje
 - **Repo:** https://github.com/bayramkotan/VenvStudio
 - **PyPI:** https://pypi.org/project/venvstudio/
-- **GÜNCEL VERSİYON: v1.6.46** (2026-08-14 — v1.6.45 push'u sonrası gerçek bir git merge çakışması çözüldü (constants.py + conflict_manager.py, ikisinde de Bayram'ın lokali/HEAD korunarak). Sonra **N12 — özel konuma environment kurma + son kullanılanları takip etme** hayata geçirildi: C:\venv sabit varsayılan kalıyor (sadece Settings değiştirebilir), özel konumdaki env'ler custom_env_locations.json'da ayrıca izleniyor. Bu süreçte 4 gerçek hata art arda bulunup düzeltildi: (1) Qt'nin forward-slash path döndürmesinden kaynaklanan / \ karışıklığı, (2) zaten bozulmuş kalıcı varsayılanın elle düzeltilmesi gerekmesi, (3) bellek önbelleğinin invalidate_memory_cache() ile geçersiz kılınmaması, (4) Recent Environments'ın path'i hiç var olmayan Qt.UserRole verisinden okumaya çalışması (gerçek yer: Path sütununun tooltip'i) + altında yatan, hiç tetiklenmemiş bir _on_env_selected argüman hatası. Recent Environments artık Gezgin'i de o konumda açıyor. Son olarak **JupyterLab/Jupyter Notebook'un "Launch" hiçbir şey yapmıyordu** sorunu, ikisinde de eksik olan open_browser alanının eklenmesiyle çözüldü (henüz test edilmedi). Detay: "Bu Oturumda Yapılanlar (2026-08-14 — v1.6.46)" bölümü.) — PUSH EDİLECEK. **Jupyter fix'i test edilmeli.** PUSH SONRASI PyPI history sayfasını kontrol et + `pip install venvstudio==1.6.46 --no-cache-dir --break-system-packages` ile doğrula. Çok makineli çalışma: commit öncesi `git fetch` + `git log origin/main` — bu oturumda tam da bunu atlayınca merge çakışması yaşandı.
-- **Son TODO güncellemesi (2026-08-14, v1.6.46 ile birlikte):** N12 (özel konum + son kullanılanlar) kapatıldı, 4 alt-hatası ayrı ayrı işlendi. Jupyter open_browser fix'i "test bekliyor" olarak eklendi. Merge çakışması çözümü not edildi (kod tarafında bir şey değişmedi, sadece git geçmişi düzeldi).
+- **GÜNCEL VERSİYON: v1.6.47** (2026-08-14 — İki ana iş: (1) **Conflict Manager eğitici/yönlendirici detay paneli** eklendi (satıra tıkla → açıklama + gerçek komut + Install/Create New Environment/Open in Learn butonları, Learn eşleştirmesi learn_content.py'nin başlık kalıbından otomatik). (2) v1.6.46'nın "henüz test edilmedi" bıraktığı JupyterLab/Notebook open_browser fix'i test edildi — **iki tarayıcı sekmesi açtığı** ortaya çıktı. İlk düzeltme denemesi (--no-browser eklemek) BAŞARISIZ oldu çünkü kod, `cmd` listesi zaten inşa edildikten SONRA `app_def["command"]`'i değiştiriyordu — ölü kod, hiçbir hata vermeden hiçbir etkisi yoktu, sadece gerçek başlatma logunu okuyunca fark edildi. Asıl düzeltme: mutasyon `_launch_app`'in en başına taşındı, herhangi bir `cmd` inşasından önce. **Detaylı ders (tekrar düşmemek için) "Bu Oturumda Yapılanlar (2026-08-14 — v1.6.47)" bölümünde.**) — PUSH EDİLECEK. **JupyterLab fix'i temiz durumda (eski süreçler kapatılmış) yeniden test edilmeli.** PUSH SONRASI PyPI history sayfasını kontrol et + `pip install venvstudio==1.6.47 --no-cache-dir --break-system-packages` ile doğrula. Çok makineli çalışma: commit öncesi HER ZAMAN `git fetch` + `git log origin/main` (v1.6.46'da bunu atlayınca gerçek bir merge çakışması yaşanmıştı).
+- **Son TODO güncellemesi (2026-08-14, v1.6.47 ile birlikte):** Conflict Manager detay paneli eklendi olarak işlendi. Jupyter çift-sekme bug'ı + kök nedeni (sıralama hatası) + düzeltmesi + genel ders detaylı yazıldı. "Temiz durumda yeniden test et" notu öne çıkarıldı.
 - **Bir sonraki oturumun kuyruğu:** aşağıdaki "Bu Oturumda Yapılanlar (2026-07-23/24)" bölümünün *Açık maddeler* kısmı
 - **Proje dizini (Windows):** `C:\Github\VenvStudio`
 - **Proje dizini (Linux - CachyOS/Pardus):** `~/Github/VenvStudio`
@@ -825,6 +825,181 @@ ama Qt sinyal string'i veya `getattr` ile çağrılanlar da yanlış işaretleni
 Neden elle tablo tutmuyoruz: handoff'taki el yazımı tablo `_update_quick_sidebar`'ı
 "sidebar güncelleme" diye listeliyordu, oysa o fonksiyon ölü koddu ve gerçek sidebar
 `quicklaunch.py`'deydi. Üretilen harita kaynakla senkron kalır.
+
+---
+
+## Bu Oturumda Yapılanlar (2026-08-14 — v1.6.47, PUSH EDİLECEK)
+
+### Özet
+İki ana iş: (1) Conflict Manager'ın eğitici/yönlendirici detay paneli
+eklendi (vizyonun 1+5 numaralı maddeleri). (2) v1.6.46'da "henüz test
+edilmedi" notuyla bırakılan JupyterLab/Notebook open_browser fix'i test
+edildi — **iki tarayıcı sekmesi** açtığı ortaya çıktı, düzeltilirken
+**kendi attığım bir sıralama hatası** bulunup düzeltildi. Bu ikinci kısım
+özellikle detaylı yazılıyor çünkü aynı hata deseni ileride tekrar
+edebilir.
+
+### 1) Conflict Manager — Eğitici/Yönlendirici Detay Paneli (YENİ)
+
+Bayram'ın 7 maddelik VenvStudio vizyonundan (bkz. v1.6.44 sonrası not)
+madde 1 ("Educational — hem eğitici hem komutların canlı nasıl
+kullanıldığını görme") ve madde 5'in ("Conflict Manager çok detaylı,
+eğitici, önleyici, hatta yönlendirici olmalı") somut ilk uygulaması.
+
+**Ne yapıyor:** Conflict Manager tablosunda (Tools → 🧩 Conflict
+Manager) bir satıra (pakete) tıklayınca, tablonun altında (varsayılan
+gizli, sade görünüm bozulmuyor) bir detay paneli açılıyor:
+- Tam açıklama (severity ikonu + `note` alanı)
+- **Gerçek komut** — o an seçili env tipine göre doğru komut
+  (`pip install X`, `conda install X`, `pixi add X`, `hatch run pip
+  install X`, `pdm add X`, `poetry add X`, `pipx install X`, `uv pip
+  install X` — 8 env tipi de destekleniyor)
+- **3 yönlendirici buton:**
+  - **🚀 Install** — sadece mevcut env uyumluysa görünür, N9'un gerçek
+    kurulum hattını kullanır (`package_panel._install_packages`)
+  - **🌱 Create New Environment…** — sadece uyumsuzsa görünür,
+    N9/N11'deki aynı yönlendirme (`_create_env`)
+  - **📚 Open in Learn** — eşleşen bir Learn konusu varsa görünür
+
+**Learn eşleştirmesi nasıl çalışıyor:** 209 paket için elle konu
+eşleştirmesi YAPILMADI. Bunun yerine `learn_content.py`'deki mevcut
+"KütüphaneAdı — Açıklama" başlık kalıbından (örn. "NumPy — Fast
+N-Dimensional Arrays") otomatik eşleştirme kuruldu — paket adı,
+başlığın em-dash'ten önceki kısmında geçiyorsa eşleşir. Artı birkaç
+yaygın takma ad (torch↔PyTorch, sklearn↔scikit-learn,
+transformers↔Hugging Face Transformers). Eşleşme yoksa buton sessizce
+gizleniyor — zorlama yok, "graceful degradation".
+
+**Erişim yolu:** `ConflictManagerDialog`'un `parent()`'ı zaten
+MainWindow (constructor'da `parent=self` ile veriliyor) — bu yüzden
+`self.parent().package_panel` ve `self.parent()._create_env()` ve
+`self.parent().learn_page` doğrudan erişilebiliyor, yeni bir Signal
+kurmaya gerek kalmadı (N11'deki PackagePanel/MainWindow ayrı sınıf
+sorunundan farklı — burada dialog zaten MainWindow'un çocuğu).
+
+**Dosya:** `src/gui/conflict_manager.py` — yeni metodlar:
+`_install_command_for`, `_find_learn_topic`, `_on_row_selected`,
+`_on_detail_install`, `_on_detail_create_env`, `_on_detail_open_learn`.
+
+**Test durumu:** Mock test edildi (`_install_command_for` 4 env
+tipinde, `_find_learn_topic` hem direkt hem alias eşleşmelerinde hem
+"eşleşme yok" senaryosunda) — gerçek ortamda henüz denenmedi.
+
+### 2) JupyterLab/Notebook Çift Tarayıcı Sekmesi — DETAYLI ANLATIM (Bayram özellikle istedi)
+
+**Önceki durum (v1.6.46):** JupyterLab/Notebook'ta "Launch" hiçbir şey
+yapmıyormuş gibi görünüyordu çünkü `app_def`'lerinde `open_browser`
+alanı hiç yoktu — `launcher_run.py`'nin genel tarayıcı-açma mekanizması
+(diğer server-tipi app'lerde, Streamlit/Gradio/Dash gibi, zaten
+çalışan) hiç tetiklenmiyordu. v1.6.46'da her ikisine de statik bir
+tahmin URL'si eklendi (`http://localhost:8888/lab`,
+`http://localhost:8888/tree`) — ama bu fix "henüz test edilmedi"
+notuyla bırakılmıştı.
+
+**Bu oturumda test edilince ortaya çıkan gerçek sorun:** İki tarayıcı
+sekmesi açılıyordu. Sebep: Jupyter, komut satırından hiçbir bayrak
+verilmezse **kendi kendine** varsayılan olarak bir tarayıcı sekmesi
+açar. v1.6.46'nın eklediği `open_browser` alanı ise VenvStudio'nun
+**kendi ayrı** `open_url()` mekanizmasını da tetikliyordu. İki
+mekanizma da aktifti, üst üste biniyordu.
+
+**İlk düzeltme denemesi (BAŞARISIZ — kendi hatam):** `is_jupyter`
+bloğuna `app_def["command"]`'e `--no-browser` ekleyen bir satır
+eklendi. Kod derlendi, pyflakes temiz çıktı, mantık "doğru yerde"
+görünüyordu. **Ama gerçek ortamda test edilince hâlâ iki sekme
+açıldı.** Bayram'ın attığı gerçek başlatma logunda komut satırı
+açıkça şunu gösteriyordu:
+```
+command: /home/bayram/venv/ml/bin/python -m jupyter lab
+```
+— **ne `--notebook-dir` ne `--no-browser` orada yoktu.** v1.6.46'nın
+kendi `--notebook-dir` eklentisi de, benim `--no-browser` eklentim de,
+hiçbir zaman gerçek subprocess çağrısına ulaşmamıştı.
+
+**Kök neden (sıralama hatası):** `_launch_app` fonksiyonunda gerçek
+komut listesi (`cmd`) şu satırla inşa ediliyor:
+```python
+cmd = [str(python_exe)] + app_def["command"]
+```
+`is_jupyter` bloğu ise bu satırdan **SONRA** çalışıyordu ve
+`app_def["command"]`'i (bir kopyasını, `app_def = dict(app_def)` ile)
+değiştiriyordu. Ama `cmd` zaten o satırda **eski, değiştirilmemiş**
+`app_def["command"]`'den inşa edilmişti — sonradan `app_def`'i
+değiştirmek `cmd`'yi geriye dönük etkilemiyor, çünkü Python'da liste
+birleştirme (`+`) yeni bir liste üretir, referans değil. Yani hem
+v1.6.46'nın `--notebook-dir`'i hem benim `--no-browser`'ım baştan beri
+**ölü kod** olarak çalışıyordu — hiçbir hata vermiyordu (derleniyordu,
+mantıksal olarak "doğru" görünüyordu) ama pratikte hiçbir etkisi
+yoktu. Bunu sadece gerçek başlatma logundaki **birebir komut satırını
+okuyarak** yakaladık.
+
+**Asıl düzeltme:** `is_jupyter` mantığının tamamı, `_launch_app`
+fonksiyonunun **en başına**, `venv_path`/`python_exe` belirlendiği
+yere taşındı — yani **herhangi bir `cmd` listesi inşa edilmeden önce**.
+Ayrıca pipx dalının **kendi ayrı, daha da erken** bir
+`_app_cmd = app_def.get("command", [])` snapshot'ı olduğu fark
+edildi — mutasyonun bundan da önce olması gerekiyordu. Yeni sıra
+programatik olarak doğrulandı (byte offset karşılaştırmasıyla):
+mutasyon noktası hem pipx'in erken snapshot'ından hem normal `cmd`
+inşasından önce geliyor. `work_dir` hesaplaması da tekilleştirildi —
+aynı `notebook_dir` değeri `self._jupyter_notebook_dir`'de saklanıp
+fonksiyonun ilerisinde tekrar hesaplanmadan kullanılıyor.
+
+**⚠️ GENEL DERS — İleride aynı hataya düşmemek için:** Bir düzeltme,
+bir sözlüğü/listeyi değiştirdiğinde (`app_def["command"] = ...` gibi),
+ve o sözlük/liste **fonksiyonun başka bir yerinde zaten bir değişkene
+kopyalanmışsa** (`cmd = [...] + app_def["command"]` gibi), **kod
+mantıksal olarak doğru görünse bile o kopyalama noktasından SONRA
+yapılan bir değişiklik hiçbir zaman o kopyaya yansımaz.** Bunu
+yakalamanın tek güvenilir yolu: (1) değişikliği yaptıktan sonra
+gerçek ortamda test etmek ve **birebir çalışan komutu/logu okumak**
+(sadece "derleniyor, mantıklı görünüyor" yeterli değil), veya (2)
+patch yazmadan önce fonksiyonun tamamını okuyup, değiştirmek
+istediğim değişkenin/sözlüğün **başka nerede okunduğunu/kopyalandığını**
+önce bulmak. Bu oturumda hatayı ancak Bayram'ın gerçek log çıktısını
+paylaşması sayesinde yakaladık — "kod doğru görünüyor" hiçbir zaman
+"gerçekten çalışıyor" anlamına gelmiyor.
+
+**Ayrıca not edilmesi gereken bir çevresel faktör:** Bayram'ın
+paylaştığı logda `pipx/venvs/jupyter` yolundan bahseden satırlar
+vardı — bu, VenvStudio'nun bu oturumda başlattığı `ml` venv'inden
+BAĞIMSIZ, önceden zaten çalışıyor olabilecek bir Jupyter sunucusuna
+işaret ediyor olabilir. Eğer öyleyse, port 8888 zaten dolu olduğu
+için VenvStudio'nun her yeni "Launch" tıklaması farklı bir portta
+yeni bir sunucu başlatıyor ama statik `open_browser` adresi
+(`http://localhost:8888/...`) hep o **eski, ilgisiz** sunucuya
+açılıyor olabilir. Bu, sıralama hatasından bağımsız, ayrı bir
+olası karışıklık kaynağı — kesin teşhis için test öncesi tüm eski
+Jupyter süreçlerinin (`pkill -f jupyter`) ve eski tarayıcı
+sekmelerinin kapatılması gerekiyor.
+
+**Dosya:** `src/gui/launcher_run.py` — `_launch_app` fonksiyonunun
+başına taşınan blok, sondaki artık gereksiz/silinen tekrar.
+
+**Test durumu:** Sıralama düzeltmesi programatik olarak (byte offset)
+doğrulandı, ama **gerçek ortamda temiz durumla (eski süreçler
+kapatılmış) henüz test edilmedi.**
+
+### Değişen Dosyalar (v1.6.47)
+
+| Dosya | Değişiklik |
+|---|---|
+| `src/gui/conflict_manager.py` | Detay paneli: açıklama + gerçek komut + Install/Create Env/Open in Learn butonları |
+| `src/gui/launcher_run.py` | Jupyter `--notebook-dir`/`--no-browser` mutasyonu fonksiyonun başına taşındı (sıralama hatası düzeltmesi) |
+
+### Test Durumu / Sonraki Oturuma Not
+- Conflict Manager detay paneli — mock test edildi, gerçek ortamda
+  henüz denenmedi
+- JupyterLab/Notebook `--no-browser` fix'i — **önce eski Jupyter
+  süreçlerini (`pkill -f jupyter`) ve eski tarayıcı sekmelerini
+  kapatıp temiz durumda test et.** Tek sekme açılmalı.
+- Eğer temiz durumda hâlâ iki sekme açılıyorsa: VenvStudio'nun
+  yeni başlattığı sunucunun GERÇEK portunu log'dan oku (statik
+  8888 varsayımı yanlış olabilir), ve/veya `open_browser` mekanizmasını
+  statik URL yerine log çıktısından gerçek URL'yi (token dahil)
+  yakalayacak şekilde geliştirmeyi değerlendir (N9/N11'in zaten
+  yaptığı gibi "gerçek veriye göre hareket et" prensibi)
+
 
 ---
 
@@ -6796,7 +6971,7 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 11. **N35** — Hatch self-heal (marker'da hatch_env_path yoksa her refresh'te yeniden dene) — Bayram'a soruldu, cevap bekleniyor
 
 ## Sonraki Chat Başlangıç Promptu
-> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.46, sıradaki: v1.6.47.
+> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.47, sıradaki: v1.6.48.
 
 ## 📋 Dosya Kopyalama Kuralları
 

@@ -5,7 +5,7 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
     QComboBox, QFrame, QSizePolicy, QAbstractItemView, QProgressBar,
-    QGroupBox, QFileDialog, QMessageBox,
+    QGroupBox,
 )
 from PySide6.QtCore import Qt, QTimer, QThread, Signal
 from PySide6.QtGui import QColor
@@ -175,14 +175,10 @@ class ConflictManagerDialog(QDialog):
         self._filter_edit.setPlaceholderText("Filter by package name…")
         filter_row.addWidget(self._filter_edit, 1)
         self._show_all_btn = QPushButton("Show All")
-        self._show_all_btn.setMinimumWidth(90)
+        self._show_all_btn.setFixedWidth(80)
         self._show_all_btn.setCheckable(True)
         self._show_all_btn.setChecked(True)
         filter_row.addWidget(self._show_all_btn)
-        self._export_btn = QPushButton("📄 Export…")
-        self._export_btn.setMinimumWidth(100)
-        self._export_btn.setToolTip("Save the table currently shown (Scan Results or All Rules) as CSV or JSON")
-        filter_row.addWidget(self._export_btn)
         root.addLayout(filter_row)
 
         self._progress = QProgressBar()
@@ -223,11 +219,9 @@ class ConflictManagerDialog(QDialog):
         detail_btn_row = QHBoxLayout()
         self._detail_install_btn = QPushButton("🚀 Install")
         self._detail_create_env_btn = QPushButton("🌱 Create New Environment…")
-        self._detail_alt_btn = QPushButton("🔄 Try alternative…")
         self._detail_learn_btn = QPushButton("📚 Open in Learn")
         detail_btn_row.addWidget(self._detail_install_btn)
         detail_btn_row.addWidget(self._detail_create_env_btn)
-        detail_btn_row.addWidget(self._detail_alt_btn)
         detail_btn_row.addWidget(self._detail_learn_btn)
         detail_btn_row.addStretch()
         detail_layout.addLayout(detail_btn_row)
@@ -253,8 +247,6 @@ class ConflictManagerDialog(QDialog):
         self._detail_install_btn.clicked.connect(self._on_detail_install)
         self._detail_create_env_btn.clicked.connect(self._on_detail_create_env)
         self._detail_learn_btn.clicked.connect(self._on_detail_open_learn)
-        self._detail_alt_btn.clicked.connect(self._on_detail_try_alternative)
-        self._export_btn.clicked.connect(self._on_export)
 
         self._filter_timer = QTimer(self)
         self._filter_timer.setSingleShot(True)
@@ -430,53 +422,6 @@ class ConflictManagerDialog(QDialog):
 
     # ── detail panel (2026-08-13, educational/directive Conflict Manager) ──
 
-    def _on_export(self):
-        """Save whatever is CURRENTLY shown in the table (Scan Results or
-        All Rules, whichever the user is looking at -- reads straight from
-        self._table's actual cells, not the underlying data source, so the
-        export always matches what's on screen) to CSV or JSON."""
-        row_count = self._table.rowCount()
-        if row_count == 0:
-            QMessageBox.information(self, "Nothing to Export", "The table is empty -- scan an environment or show the full rules list first.")
-            return
-
-        path, chosen_filter = QFileDialog.getSaveFileName(
-            self, "Export Conflict Manager Results", "conflict_manager_export.csv",
-            "CSV Files (*.csv);;JSON Files (*.json)"
-        )
-        if not path:
-            return
-
-        headers = ["Package", "Min Python", "Max Python", "Blocked Envs", "Note"]
-        rows = []
-        for r in range(row_count):
-            row = []
-            for c in range(5):
-                item = self._table.item(r, c)
-                row.append(item.text() if item else "")
-            rows.append(row)
-
-        is_json = path.lower().endswith(".json") or "JSON" in chosen_filter
-        try:
-            if is_json:
-                import json as _json
-                data = [dict(zip(headers, row)) for row in rows]
-                with open(path, "w", encoding="utf-8") as f:
-                    _json.dump(data, f, indent=2, ensure_ascii=False)
-            else:
-                import csv as _csv
-                if not path.lower().endswith(".csv"):
-                    path += ".csv"
-                with open(path, "w", encoding="utf-8", newline="") as f:
-                    writer = _csv.writer(f)
-                    writer.writerow(headers)
-                    writer.writerows(rows)
-        except Exception as e:
-            QMessageBox.critical(self, "Export Failed", f"Could not save the file:\n{e}")
-            return
-
-        QMessageBox.information(self, "Exported", f"Saved {len(rows)} row(s) to:\n{path}")
-
     def _install_command_for(self, pkg_name, env_type):
         """Real, literal command a user would type -- the 'live demonstration'
         part of the educational pillar. Not run automatically; shown as text
@@ -568,20 +513,6 @@ class ConflictManagerDialog(QDialog):
         self._detail_learn_title = learn_title
         self._detail_learn_btn.setVisible(learn_title is not None)
 
-        # Bayram (2026-08-13): auto-suggest a known-good replacement
-        # when one exists in CONFLICT_RULES' "alternative" field (e.g.
-        # PyQt5 -> PySide6, pycrypto -> pycryptodome). Only curated,
-        # genuinely-recommended substitutes have this field -- most
-        # problem packages don't (no real drop-in replacement exists),
-        # and the button just stays hidden for those, same graceful-
-        # degradation approach as the Learn-topic button above.
-        _, _rule = _lookup(pkg_name)
-        alt_pkg = _rule.get("alternative") if _rule else None
-        self._detail_alt_pkg = alt_pkg
-        if alt_pkg:
-            self._detail_alt_btn.setText(f"🔄 Try {alt_pkg} instead")
-        self._detail_alt_btn.setVisible(alt_pkg is not None)
-
         self._detail_box.setVisible(True)
 
     def _on_detail_install(self):
@@ -591,17 +522,6 @@ class ConflictManagerDialog(QDialog):
         parent = self.parent()
         if parent is not None and hasattr(parent, "package_panel") and parent.package_panel:
             parent.package_panel._install_packages([pkg_name], hint_name="Conflict Manager")
-
-    def _on_detail_try_alternative(self):
-        """Look up the suggested alternative in the search box instead of
-        jumping straight to install -- lets the user read its own
-        compatibility info first (it might have its own caveats) rather
-        than silently swapping one package for another."""
-        alt_pkg = getattr(self, "_detail_alt_pkg", None)
-        if not alt_pkg:
-            return
-        self._search_edit.setText(alt_pkg)
-        self._do_search()
 
     def _on_detail_create_env(self):
         parent = self.parent()

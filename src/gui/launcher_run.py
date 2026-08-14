@@ -612,6 +612,29 @@ class LauncherRunMixin:
         venv_path = self.pip_manager.venv_path
         python_exe = get_python_executable(venv_path)
 
+        # Jupyter: work out --notebook-dir/--no-browser and mutate
+        # app_def["command"] HERE, before ANY cmd list gets built from
+        # it below (the pipx branch snapshots app_def["command"] into
+        # _app_cmd even earlier than the plain-venv branch does) --
+        # doing this later (as a previous attempt did) mutated a dict
+        # that had already been copied into `cmd`, so --no-browser
+        # never actually reached the real subprocess (Bayram,
+        # 2026-08-14, caught via the launch log showing the bare
+        # "python -m jupyter lab" with neither flag present).
+        self._jupyter_notebook_dir = None
+        if any("jupyter" in str(c).lower() for c in app_def.get("command", [])):
+            jwd = self.config.get("jupyter_workdir", "home") if hasattr(self, "config") and self.config else "home"
+            jwd_custom = self.config.get("jupyter_workdir_custom", "") if hasattr(self, "config") and self.config else ""
+            if jwd == "custom" and jwd_custom and os.path.isdir(jwd_custom):
+                notebook_dir = jwd_custom
+            elif jwd == "env":
+                notebook_dir = str(venv_path)
+            else:
+                notebook_dir = os.path.expanduser("~")
+            self._jupyter_notebook_dir = notebook_dir
+            app_def = dict(app_def)
+            app_def["command"] = list(app_def["command"]) + ["--notebook-dir", notebook_dir, "--no-browser"]
+
         pkg_name = app_def["package"].lower()
         # pip normalizes package names: quarto-cli ↔ quarto_cli — check both
         pkg_name_alt = pkg_name.replace("-", "_") if "-" in pkg_name else pkg_name.replace("_", "-")
@@ -967,21 +990,10 @@ class LauncherRunMixin:
         # Check if app needs console (e.g. IPython)
         show_console = app_def.get("needs_console", False)
 
-        # Working directory — Jupyter uses config setting, others use home
-        is_jupyter = any("jupyter" in str(c).lower() for c in app_def.get("command", []))
-        if is_jupyter:
-            jwd = self.config.get("jupyter_workdir", "home") if hasattr(self, "config") and self.config else "home"
-            jwd_custom = self.config.get("jupyter_workdir_custom", "") if hasattr(self, "config") and self.config else ""
-            if jwd == "custom" and jwd_custom and os.path.isdir(jwd_custom):
-                notebook_dir = jwd_custom
-            elif jwd == "env":
-                notebook_dir = str(venv_path)
-            else:
-                notebook_dir = os.path.expanduser("~")
-            work_dir = notebook_dir
-            # Pass --notebook-dir so Jupyter actually opens in the chosen folder
-            app_def = dict(app_def)
-            app_def["command"] = list(app_def["command"]) + ["--notebook-dir", notebook_dir]
+        # Working directory — Jupyter uses config setting (already computed
+        # above, before cmd was built, and reused here), others use home
+        if self._jupyter_notebook_dir is not None:
+            work_dir = self._jupyter_notebook_dir
         elif getattr(self, "_current_env_type", "venv") == "pixi":
             # pixi run must be executed from the project dir (where pixi.toml lives)
             work_dir = str(venv_path)

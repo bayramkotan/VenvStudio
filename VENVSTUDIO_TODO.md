@@ -125,6 +125,50 @@ birleşecek) netleştirmek gerekir — büyük bir mimari genişleme.
 
 ---
 
+## ✅ v1.6.47 (2026-08-14) — Conflict Manager Detay Paneli + Jupyter Çift-Sekme Düzeltmesi
+
+- **✅ Conflict Manager eğitici/yönlendirici detay paneli (vizyon
+  madde 1+5):** Tabloda bir satıra tıklayınca (varsayılan gizli, sade
+  görünüm bozulmuyor) açılan panel: tam açıklama, o an seçili env
+  tipine göre gerçek komut (8 env tipi destekleniyor), ve 3 yönlendirici
+  buton — 🚀 Install (uyumluysa, N9'un gerçek kurulum hattı), 🌱 Create
+  New Environment… (uyumsuzsa), 📚 Open in Learn (eşleşme varsa).
+  Learn eşleştirmesi elle yapılmadı — learn_content.py'nin "KütüphaneAdı
+  — Açıklama" başlık kalıbından otomatik + birkaç takma ad
+  (torch↔PyTorch, sklearn↔scikit-learn, transformers↔Hugging Face).
+  **Mock test edildi, gerçek ortamda henüz denenmedi.**
+
+- **✅ JupyterLab/Notebook çift tarayıcı sekmesi — kök neden bulundu ve
+  düzeltildi:** v1.6.46'nın open_browser fix'i test edilince iki sekme
+  açtığı ortaya çıktı (Jupyter kendi sekmesini + VenvStudio kendi
+  sekmesini açıyordu). İlk düzeltme denemesi (`--no-browser` eklemek)
+  **BAŞARISIZ oldu** — kod `cmd` listesi zaten inşa edildikten SONRA
+  `app_def["command"]`'i değiştiriyordu, yani hem bu eklenti hem
+  v1.6.46'nın `--notebook-dir`'i baştan beri **ölü kod**du, hiçbir hata
+  vermeden hiçbir etkisi yoktu. Sadece Bayram'ın paylaştığı gerçek
+  başlatma logundaki birebir komut satırını okuyunca fark edildi.
+  **Asıl düzeltme:** mutasyon `_launch_app`'in en başına taşındı,
+  herhangi bir `cmd` inşasından (pipx dalının kendi ayrı, daha da erken
+  snapshot'ı dahil) önce. Byte-offset karşılaştırmasıyla programatik
+  doğrulandı. **Detaylı "ileride tekrar düşmemek için" ders Handoff'ta
+  yazılı — özetle: bir sözlüğü/listeyi değiştiren kod, o sözlük/liste
+  BAŞKA BİR YERDE ZATEN BİR DEĞİŞKENE KOPYALANDIKTAN SONRA çalışıyorsa,
+  değişiklik o kopyaya hiç yansımaz; kod "doğru görünmesi" yetmez,
+  gerçek ortamda birebir çalışan komutu/logu okumak gerekir.**
+
+- **🔴 TEST BEKLİYOR — Jupyter fix'i temiz durumda yeniden test
+  edilmeli:** Sıralama düzeltmesi doğrulandı ama gerçek ortamda henüz
+  denenmedi. **Önce eski Jupyter süreçlerini (`pkill -f jupyter`) ve
+  eski tarayıcı sekmelerini kapat**, sonra tek tıkla test et — tek
+  sekme açılmalı. Eğer hâlâ ikiye çıkıyorsa: log'da başka bir Jupyter
+  sunucusunun (örn. pipx'ten, VenvStudio'dan bağımsız) zaten port
+  8888'i tuttuğu ihtimaline bak — bu durumda statik `open_browser`
+  URL'si yanlış (eski, ilgisiz) sunucuya açılıyor olabilir; çözüm
+  muhtemelen log çıktısından gerçek URL'yi (token dahil) yakalamak
+  olacaktır, statik tahmin yerine.
+
+---
+
 ## ✅ v1.6.46 (2026-08-14) — N12 Özel Konum + Recent Environments Fix Zinciri + Jupyter
 
 - **✅ Git merge çakışması çözüldü:** v1.6.45 push'u sonrası origin'de
@@ -161,13 +205,10 @@ birleşecek) netleştirmek gerekir — büyük bir mimari genişleme.
 
   Bayram gerçek ortamda doğruladı, hepsi çalışıyor.
 
-- **🔴 TEST BEKLİYOR — JupyterLab / Jupyter Notebook "Launch" fix'i:**
-  İkisinde de `open_browser` alanı hiç tanımlanmamıştı (diğer tüm
-  benzer app'lerde vardı) — bu yüzden "Launch" tıklanınca tarayıcı hiç
-  açılmıyordu, "hiçbir şey olmuyor" hissi. İkisine de gerçek Jupyter
-  URL kalıbı eklendi. **Kod incelemesiyle yapıldı, log ile
-  doğrulanmadı — bir sonraki oturumda venv/uv'de Launch deneyip
-  konsol + tarayıcının açıldığını kontrol et.**
+- **✅ JupyterLab / Jupyter Notebook "Launch" fix'i — test edildi,
+  YENİ bir bug bulundu ve düzeltildi (v1.6.47'de detay var):** open_browser
+  alanı eklemek "Launch hiçbir şey yapmıyor" sorununu çözdü ama YENİ bir
+  sorun açtı — çift tarayıcı sekmesi. Bkz. v1.6.47 bölümü.
 
 ---
 

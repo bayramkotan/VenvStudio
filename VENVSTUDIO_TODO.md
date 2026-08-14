@@ -1,5 +1,26 @@
 # VENVSTUDIO_TODO.md
 
+## 🎯 VİZYON — VenvStudio'nun 7 Temel Sütunu (Bayram, 2026-08-13)
+
+**Her yeni özellik/karar bu 7 maddeye göre değerlendirilmeli — bunlar
+VenvStudio'yu tanımlayan çarpıcı özellikler olmalı:**
+
+1. **Educational olacak** — hem eğitici içerik hem de komutların
+   gerçekte nasıl kullanıldığını CANLI görebilme. Çok farklı eğitici
+   fikirler sunulmalı (tek bir yöntemle sınırlı kalınmayacak).
+2. **Çok fazla venv tipi desteklenmeli** — geniş env-tipi kapsamı.
+3. **Çok fazla Launcher/Presets/Library desteklenmeli.**
+4. **Çok pratik olmalı.**
+5. **Conflict Manager çok detaylı, eğitici ve önleyici olmalı — hatta
+   yönlendirici.** Sadece sorunu işaretlemek yetmez, kullanıcıyı
+   çözüme aktif olarak yönlendirmeli (N9/N11'in "Create New
+   Environment" yönlendirmesi bu felsefenin ilk örneği).
+6. **Hızlı olmalı.**
+7. **Çok platform desteklemeli, mümkün olduğunca tüm store'larda
+   olmalı** — flatpak, scoop, vb. — hızlı ve kolay kurulum için.
+
+---
+
 ## 🆕 Yeni İstek (2026-08-12) — Presets → Learn Bağlantıları
 
 - **N38 — Preset kartlarından Learn sayfasına konu/kütüphane linkleri:**
@@ -49,6 +70,58 @@ tasarım oturumu gerektirecek. Bir sonraki oturumda bu konuya
 girilirse, önce kapsamı (hangi launcher/preset'ler, matriks nasıl
 görselleştirilecek, mevcut Conflict Manager dialoguyla nasıl
 birleşecek) netleştirmek gerekir — büyük bir mimari genişleme.
+
+---
+
+## ✅ v1.6.45 (2026-08-14) — Conflict Manager Tam Dönüşüm + N34 + N11 Fix
+
+- **N11 fix — artık sadece venv değil, uv/hatch/pdm/poetry de öneriyor:**
+  20 pip-tabanlı app'in `env_types`'ı genişletildi + tarama mantığı
+  listenin TÜMÜNE bakacak şekilde düzeltildi (önceden sadece
+  `env_types[0]`'a bakıyordu). Mock test edildi, gerçek ortamda henüz
+  denenmedi.
+
+- **✅ Conflict Manager — CONFLICT_RULES 24→218 kural:** kategori sistemi
+  (17 kategori, 30 parçalanmış tekilden toplandı), yeni Computer Vision
+  kategorisi (10 paket), pipx/conda/pixi `blocked_envs` gerçek şekilde
+  dolduruldu (2→196 pipx + 19 conda/pixi — **conda/pixi listesi
+  DOĞRULANMADI, kendi bilgime dayanıyor, gerçek ortamda test edilmeli**),
+  16 pakete `alternative` (öneri) alanı eklendi.
+
+- **✅ Conflict Manager — eğitici + yönlendirici detay paneli (YENİ):**
+  Tabloda bir pakete tıklayınca: tam açıklama + gerçek komut + 3-4 buton
+  (Install / Create New Environment / Try Alternative / Open in Learn).
+  Learn eşleştirmesi otomatik (öğrenme sayfasının mevcut başlık
+  deseninden), elle 218 paket işlenmedi.
+
+- **✅ Conflict Manager — Export (CSV/JSON):** Bayram gerçek ortamda test
+  etti (168 satırlık gerçek export), sorunsuz.
+
+- **✅ Conflict Manager — scan sonuçlarında artık TÜM paketler görünüyor:**
+  önceden sadece sorunlu paketler gösteriliyordu (worker'da sessiz bir
+  filtre vardı) + gizli bir severity bug'ı da düzeltildi (uyumlu
+  paketler yanlışlıkla sarı "warning" renginde görünüyordu).
+
+- **✅ Conflict Manager — pencere davranışı düzeltmeleri:** minimize
+  artık VenvStudio'nun ana penceresini kilitlemiyor/küçültmüyor
+  (Qt.Window flag + `.show()` non-modal fix), buton metinleri artık
+  kırpılmıyor.
+
+- **✅ N34 — Environments tablosunda sağ tık "⚡ Run Command" menüsü:**
+  env tipine özel komutlar (pip list, conda list, pdm list, vb.),
+  tıklanınca terminal açılıp env aktive olduktan sonra komut otomatik
+  çalışıyor. `platform_utils.py`'ye `run_after` parametresi eklendi.
+  **Bulunan 2 gerçek hata:** (1) Windows Terminal (`wt`)'nin iç içe
+  tırnak ayrıştırması `run_after`'ı ayrı bir sekme komutu sanıyordu —
+  düzeltme: Run Command özelliği artık her zaman düz `cmd.exe`
+  kullanıyor. (2) `hatch`/`pdm`/`pixi` interaktif alt-kabuğa girip
+  bekliyordu, `run_after` hiç çalışmazdı — düzeltme: bu üç tip için
+  "kabuğa gir" yerine "tek komut çalıştır" moduna geçildi.
+  **Test durumu:** uv/venv için Bayram gerçek ortamda doğruladı
+  (çalışıyor). **pipx için sonuç belirsiz** — Bayram "çalışmadı" dedi
+  ama gönderdiği ekran görüntüsünde çıktı doğru görünüyordu, netleştirme
+  sorusu cevaplanmadı, **sonraki oturumda takip edilmeli.**
+  hatch/pdm/pixi fix'i hiç gerçek ortamda denenmedi.
 
 ---
 

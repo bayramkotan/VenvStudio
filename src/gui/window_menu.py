@@ -367,7 +367,21 @@ class WindowMenuMixin:
                 installed_packages=_installed,
                 pip_manager=_pip_mgr,
             )
-            dlg.exec()
+            # .exec() keeps MainWindow modally blocked even while the
+            # dialog is minimized -- minimize only affects the window's
+            # visual state, not Qt's modal event loop, so Bayram
+            # (2026-08-13) could not get back to VenvStudio after
+            # minimizing Conflict Manager. .show() makes it non-modal --
+            # matches the intent of adding minimize/maximize in the
+            # first place (an independent window, not a blocking
+            # popup). Keep a reference on self so Python doesn't
+            # garbage-collect it the moment this method returns (exec()
+            # didn't need this since it blocked until closed; show()
+            # returns immediately).
+            self._conflict_mgr_dlg = dlg
+            dlg.show()
+            dlg.raise_()
+            dlg.activateWindow()
         except Exception as _e:
             from PySide6.QtWidgets import QMessageBox
             QMessageBox.critical(self, "Error", f"Could not open Conflict Manager:\n{_e}")

@@ -13,6 +13,48 @@ from PySide6.QtGui import QFont, QColor, QAction
 from src.gui.workers import EnvDetailWorker
 from src.utils.i18n import tr
 
+# N34 (2026-08-14): env-type-specific commands for the Environments
+# table's right-click menu -- each (label, command) pair runs, in a
+# real terminal, AFTER the env is activated the normal way (reuses
+# open_terminal_at's run_after param, which already knows how to chain
+# a command onto every terminal/platform/env-type combination). Falls
+# back to the "venv" list for any type not explicitly listed here.
+ENV_TYPE_COMMANDS = {
+    "venv": [
+        ("📋 pip list", "pip list"),
+        ("🔄 pip list --outdated", "pip list --outdated"),
+        ("🧊 pip freeze", "pip freeze"),
+    ],
+    "uv": [
+        ("📋 pip list", "pip list"),
+        ("🔄 pip list --outdated", "pip list --outdated"),
+        ("🧊 pip freeze", "pip freeze"),
+    ],
+    "hatch": [
+        ("📋 pip list", "pip list"),
+        ("🔄 pip list --outdated", "pip list --outdated"),
+    ],
+    "pdm": [
+        ("📋 pdm list", "pdm list"),
+        ("📋 pip list", "pip list"),
+    ],
+    "poetry": [
+        ("📋 poetry show", "poetry show"),
+        ("📋 pip list", "pip list"),
+    ],
+    "conda": [
+        ("📋 conda list", "conda list"),
+        ("ℹ️ conda info", "conda info"),
+    ],
+    "pixi": [
+        ("📋 pixi list", "pixi list"),
+        ("📋 pip list", "pip list"),
+    ],
+    "pipx": [
+        ("📋 pipx list", "pipx list"),
+    ],
+}
+
 
 class EnvListMixin:
     """Mixin for MainWindow: environment table refresh, selection, detail loading."""
@@ -621,6 +663,16 @@ class EnvListMixin:
         a_terminal.triggered.connect(self._open_terminal)
         menu.addAction(a_terminal)
 
+        # N34 (2026-08-14): env-type-specific commands, run in a real
+        # terminal right after the env activates -- reuses
+        # open_terminal_at's run_after param (already handles every
+        # terminal/platform/env-type combination correctly).
+        _cmd_list = ENV_TYPE_COMMANDS.get(_ctx_type, ENV_TYPE_COMMANDS["venv"])
+        if _cmd_list:
+            cmd_sub = menu.addMenu("⚡ Run Command")
+            for _label, _cmd in _cmd_list:
+                cmd_sub.addAction(_label, lambda c=_cmd: self._run_env_command(name, _ctx_type, c))
+
         a_folder = QAction("📁 Open Folder", self)
         a_folder.setToolTip("Open the environment folder in your file manager")
         a_folder.triggered.connect(self._open_env_folder)
@@ -669,6 +721,26 @@ class EnvListMixin:
         menu.addAction(a_delete)
 
         menu.exec(self.env_table.viewport().mapToGlobal(pos))
+
+    def _run_env_command(self, name: str, env_type: str, command: str):
+        """N34: activate the given environment in a real terminal and
+        run `command` right after -- reuses open_terminal_at's run_after
+        param, the same activation logic _open_terminal_here already
+        relies on (venv/uv/hatch/pdm/poetry/conda/pixi/pipx all handled
+        there, nothing new invented here)."""
+        if not name:
+            return
+        real_path = self._get_env_path(name)
+        if not real_path:
+            QMessageBox.warning(self, "Environment Not Found", f"Could not resolve a path for '{name}'.")
+            return
+        terminal_type = self.config.get("terminal_type", "") if self.config else ""
+        try:
+            from src.utils.platform_utils import open_terminal_at
+            open_terminal_at(real_path, terminal_type, env_type=env_type, run_after=command)
+            self.statusBar().showMessage(f"Running '{command}' in '{name}'…")
+        except Exception as e:
+            QMessageBox.warning(self, "Command Failed", f"Could not run '{command}' in '{name}':\n{e}")
 
     def _make_default_env(self):
         name = self._get_selected_env_name()

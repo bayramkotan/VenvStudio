@@ -3,8 +3,8 @@
 ## Proje
 - **Repo:** https://github.com/bayramkotan/VenvStudio
 - **PyPI:** https://pypi.org/project/venvstudio/
-- **GÜNCEL VERSİYON: v1.6.44** (2026-08-13 — v1.6.43'ün gerçek ortam testi (N9 canlı PyPI kontrolü + sinyal fix'i doğrulandı, pygame/py3.13 sorunsuz) + tamamen yeni bir özellik: **N11 — Install Launcher** (File → "Install Launcher…"). App seç → önerilen env tipi + Python sürüm aralığı gösterilir → uyumlu env(ler) taranır → tek eşleşme: direkt kur butonu; çok eşleşme: seçim dropdown'u; hiç eşleşme yok: "Create New Environment" yönlendirmesi. 19 app'e PyPI'ın resmi requires_python verisiyle min/max_python eklendi (Chainlit Python 3.14'ü resmi olarak desteklemiyor, pygame'deki desenin bir başka örneği). Detay: "Bu Oturumda Yapılanlar (2026-08-13 — v1.6.44)" bölümü — Install Launcher'ın tasarım mantığı orada uzun uzun anlatılıyor.) — PUSH EDİLECEK. PUSH SONRASI PyPI history sayfasını MUTLAKA kontrol et + `pip install venvstudio==1.6.44 --no-cache-dir --break-system-packages` ile doğrula VE N11'in çok-eşleşme dropdown'unu gerçek ortamda test et (bu oturumda sadece mock test edildi). Çok makineli çalışma: commit öncesi `git fetch` + `git log origin/main`.
-- **Son TODO güncellemesi (2026-08-13, v1.6.44 ile birlikte):** N9 gerçek ortamda doğrulandı olarak kapatıldı. N11 (Install Launcher) sıfırdan eklendi, TODO'ya detaylı işlendi — çok-eşleşme dropdown'u gerçek ortamda test bekliyor, conda-sistem app'leri kapsam dışı not edildi.
+- **GÜNCEL VERSİYON: v1.6.45** (2026-08-14 — N11 Install Launcher'ın sadece venv önerme sorunu düzeltildi (artık uv/hatch/pdm/poetry de taranıyor) + Bayram'ın "Conflict Manager'ı çok çok çok geliştirmemiz lazım" talebiyle **Conflict Manager tamamen dönüştürüldü**: CONFLICT_RULES 24→218 kural (kategori sistemi, Computer Vision kategorisi, pipx/conda/pixi işaretlemeleri, 16 pakete alternatif önerisi), yeni eğitici+yönlendirici detay paneli (Install/Create Env/Try Alternative/Open in Learn butonları), Export (CSV/JSON), scan sonuçlarında artık TÜM paketler görünüyor (önceden sadece sorunlular gösteriliyordu, gizli bir severity bug'ı da düzeltildi), pencere davranışı düzeltmeleri (minimize artık VS'yi kilitlemiyor). Ayrıca **N34 — Environments tablosunda sağ tık "Run Command" menüsü** sıfırdan eklendi (`platform_utils.py`'ye `run_after` parametresi + 2 gerçek terminal/quoting hatası bulunup düzeltildi: wt'nin iç içe tırnak sorunu, hatch/pdm/pixi'nin alt-kabuk blokajı). Detay: "Bu Oturumda Yapılanlar (2026-08-14 — v1.6.45)" bölümü — çok uzun, her alt başlık ayrı ayrı anlatılıyor.) — PUSH EDİLECEK. **pipx'te Run Command'ın gerçekte çalışıp çalışmadığı netleşmedi, sonraki oturumda takip et.** PUSH SONRASI PyPI history sayfasını MUTLAKA kontrol et + `pip install venvstudio==1.6.45 --no-cache-dir --break-system-packages` ile doğrula. Çok makineli çalışma: commit öncesi `git fetch` + `git log origin/main`.
+- **Son TODO güncellemesi (2026-08-14, v1.6.45 ile birlikte):** N34 (sağ tık Run Command menüsü) kapatıldı. Vizyon bölümü (7 sütun) TODO'nun en başına eklendi (2026-08-13'te). Conflict Manager'ın genişlemesi detaylı işlendi — export, alternatif öneri, kategori sistemi hepsi TODO'da ayrı ayrı not edildi, açık kalan (pipx testi, hatch/pdm/pixi gerçek ortam testi, conda/pixi listesinin doğrulanmamış olması) TODO'nun 'sonraki oturum' bölümüne taşındı.
 - **Bir sonraki oturumun kuyruğu:** aşağıdaki "Bu Oturumda Yapılanlar (2026-07-23/24)" bölümünün *Açık maddeler* kısmı
 - **Proje dizini (Windows):** `C:\Github\VenvStudio`
 - **Proje dizini (Linux - CachyOS/Pardus):** `~/Github/VenvStudio`
@@ -825,6 +825,313 @@ ama Qt sinyal string'i veya `getattr` ile çağrılanlar da yanlış işaretleni
 Neden elle tablo tutmuyoruz: handoff'taki el yazımı tablo `_update_quick_sidebar`'ı
 "sidebar güncelleme" diye listeliyordu, oysa o fonksiyon ölü koddu ve gerçek sidebar
 `quicklaunch.py`'deydi. Üretilen harita kaynakla senkron kalır.
+
+---
+
+## Bu Oturumda Yapılanlar (2026-08-14 — v1.6.45, PUSH EDİLECEK)
+
+### Özet
+v1.6.44'ün "Install Launcher" özelliğindeki bir gerçek kısıtlama düzeltildi
+(sadece venv öneriyordu), sonra Bayram'ın isteğiyle **Conflict Manager
+tamamen bir sonraki seviyeye taşındı** — merkezi kapı felsefesi, 209→218
+kurala çıkan zengin veri, eğitici+yönlendirici bir kullanıcı arayüzü, ve
+son olarak **Environments tablosuna sağ tık komut menüsü** (N34) eklendi.
+Bu süreçte 2 gerçek, ciddi terminal/quoting hatası bulunup düzeltildi.
+
+### 1) N11 Install Launcher — sadece venv önerme sorunu düzeltildi
+
+**Bulunan sorun (Bayram'ın ekran görüntüsüyle):** Kullanıcının `dl` ve
+`nlp` diye iki **uv** env'i vardı, ama Install Launcher dialogunda hep
+sadece "venv" öneriliyordu — uv/hatch/pdm/poetry hiç dikkate alınmıyordu.
+
+**Kök neden #1 — veri:** `launcher_ui.py`'de 20 pip-tabanlı app'in
+`env_types` alanı sadece `["venv"]` idi. Oysa hatch/pdm/poetry/uv hepsi
+zaten pip'e devrediyor (bu oturum boyunca defalarca doğrulandı) — yani
+pip ile kurulabilen bir app aslında hepsinde çalışmalı. Tüm 20 app'e
+`["venv", "uv", "hatch", "pdm", "poetry"]` verildi (FastAPI ve Datasette'te
+bu alan hiç yoktu, onlara da eklendi).
+
+**Kök neden #2 — mantık:** `window_menu.py`'deki
+`_install_launcher_env_status`, `env_types` listesinin sadece **ilk**
+elemanına (`env_types[0]`) bakıyordu. Artık listedeki **tüm** tiplerde
+tarama yapıp, hepsinden eşleşen env'leri tek bir listede topluyor.
+Dönüş değeri `rec_type` (tekil) → `rec_types` (liste) oldu, dialog metni
+"Recommended: venv" yerine "Compatible with: venv, uv, hatch, pdm,
+poetry" diyor; çoklu-env dropdown'unda her satırda hangi tip olduğu da
+gösteriliyor (`dl (uv, Python 3.14.6)`).
+
+**Mock test:** Ekrandaki tam senaryo (dl=uv, ml=venv, nlp=uv) simüle
+edildi — bu sefer üçü de bulunuyor.
+
+### 2) BÜYÜK GİRİŞİM — Conflict Manager'ı N9/N11'in ortak kaynağına bağlama
+
+Bayram'ın net talebi (2026-08-13): **"ne yükleyeceksek Conflict
+Manager'dan geçmesi gerekecek"** — merkezi kapı. Netleşen kapsam: arka
+planda TEK ortak kontrol fonksiyonu (kullanıcı hâlâ mevcut dialogları
+görüyor, ama hepsi aynı mantığı çağırıyor) — her kurulumda zorla
+Conflict Manager ekranı açılması DEĞİL.
+
+**Somut adım:** N11'in `_install_launcher_env_status`'ı artık N9'un
+kullandığı **aynı kaynağa** bağlı, öncelik sırasıyla:
+1. `CONFLICT_RULES` (constants.py) — varsa launcher_ui.py'nin kendi
+   min/max_python verisinin ÜZERİNE yazıyor (tek otorite)
+2. Yoksa launcher_ui.py'nin kendi verisi kullanılıyor
+3. O da yoksa N9'un canlı PyPI kontrolü (`_check_pypi_wheel_availability`,
+   `package_ops.py`'den doğrudan import edildi, kopyalanmadı) devreye
+   giriyor
+
+Mock test: 3 katman da (override var / override yok kendi veri kullan /
+hiçbiri yok canlı kontrole düş) ayrı ayrı doğrulandı.
+
+### 3) CONFLICT_RULES — 24'ten 218'e, kategori sistemi, pipx/conda/pixi, alternatifler
+
+Bayram'ın isteği: "200 diyoruz ama ileride 5000 olabilir." İki aşamalı
+zenginleştirme:
+
+**Aşama A — 200'e çıkarma (bilinen-sorunlu + popüler, 209 toplam):**
+- 51 paket: gerçek, dokümante edilmiş sorunları olan (GUI toolkit'ler,
+  GPU/ML, coğrafi paketler, DB sürücüleri, Windows-only, derleyici
+  gerektirenler, Unix-only sunucular, vb.) — her birinin **spesifik**
+  notu var, jenerik değil
+- 136 paket: popüler kütüphaneler (numpy, pandas, flask, pytest, vb.),
+  PyPI'ın gerçek `requires_python` verisiyle, `severity: "warning"`
+  (bunlar gerçek "sorun" değil, sadece sürüm tabanı bilgisi — N9'un
+  canlı kontrolünün zaten otomatik yaptığı şeyin statik hızlandırma
+  katmanı)
+- **Kendi hatam ve düzeltmesi:** `gunicorn` ve `moviepy`'yi hem
+  bilinen-sorunlu hem popüler listeye eklemişim — Python dict'lerinde
+  aynı anahtar iki kez tanımlanınca sessizce sonuncusu kazanıyor, bu da
+  `gunicorn`'un gerçek notunu ("Unix-only") jenerik bir notla eziyordu.
+  `gunicorn`'u elle bulup düzelttim; `moviepy` PyPI sorgusu `None`
+  döndüğü için kendiliğinden elendi.
+
+**Aşama B — Kategori sistemi (209→218):**
+Bayram: "yukarıda dropdown var, değiştirince liste pek değişmedi, ne
+yapıyor tam olarak?" — kontrol edilince: 209 kuralın sadece **2**'sinde
+(`spyder`, `apache-airflow`) `blocked_envs` doluydu. Yani env-tipi
+dropdown'u neredeyse hiçbir satırı etkilemiyordu.
+- Her 209 kurala yapısal `"category"` alanı eklendi (önceden sadece
+  yorum satırlarında gruplanmıştı) — 30 parçalanmış tekil-paket
+  "kategorisi" (PyQt5, TensorFlow, Orange3 ayrı ayrı gibi) anlamlı
+  **17 geniş kategoriye** toplandı.
+- Yeni kategori: **Computer Vision / Image Processing — 10 paket**
+  (opencv-python/opencv-contrib-python/opencv-python-headless — üçü de
+  aynı `cv2` isim alanına kurulup çakışıyor; pytesseract — Tesseract
+  binary'sinin ayrıca kurulması gerektiği; pyzbar — sistem libzbar
+  gerektirdiği; pillow-simd — Pillow ile aynı isim alanını paylaştığı;
+  mediapipe, kornia, av, albumentations).
+- **`blocked_envs` gerçek şekilde dolduruldu (2 → 196 pipx + 19
+  conda/pixi):**
+  - **pipx** (mekanik, güvenle yapıldı — paketin doğasına bakıyor): 22
+    gerçek CLI aracı (black, ruff, mypy, gunicorn, streamlit, uvicorn,
+    mkdocs, pyspark, vb.) HARİÇ, kalan 196 kütüphane pakete `pipx`
+    engeli eklendi.
+  - **conda/pixi** (18 paket — **dürüstçe not: bu, PyPI gibi canlı
+    doğrulanmadı**, `anaconda.org`'a ağ erişimim yok — 403 Forbidden,
+    izin verilen domain listemde değil — kendi eğitim bilgime dayanarak
+    işaretlendi): deepspeed, flash-attn, horovod, detectron2, mmcv,
+    nvidia-cudnn-cu12, nvidia-cublas-cu12, bitsandbytes, mediapipe,
+    pillow-simd, winshell, pywin32-ctypes, llama-index, chromadb,
+    anthropic + opencv-python/opencv-contrib-python/opencv-python-headless
+    (conda-forge'da farklı isimle — `opencv` — var, gerçek bir
+    uyumsuzluk).
+  - Bayram bunu görünce panikledi ("birşeyler mi çıkardın???!!!") —
+    netleştirildi: `blocked_envs` sadece **uyarı** ekliyor, kurulumu asla
+    engellemiyor ("Install Anyway" her zaman mevcut), hiçbir env tipi
+    hiçbir yerden kaldırılmadı.
+
+**Aşama C — Alternatif öneri sistemi (16 paket):**
+Gerçek, iyi bilinen alternatifleri olan paketlere `alternative` alanı:
+pyqt5/pyside2/pyqtwebengine→PySide6, tensorflow/keras→torch,
+pycrypto→pycryptodome, pygame→pygame-ce, pillow-simd→pillow,
+opencv-python/opencv-contrib-python→opencv-python-headless,
+psycopg2→psycopg2-binary, pyaudio→sounddevice, gunicorn/uwsgi→waitress.
+
+**Kendi hatam ve düzeltmesi (bu aşamada):** İlk regex denemem kategori
+değerlerinin bazen tek tırnak (`'...'`, benim `repr()` kullanımımdan)
+bazen çift tırnak (`"..."`, manuel yazdığım CV kategorisi) olmasından
+dolayı 0 eşleşme buldu — regex'i ikisini de kabul edecek şekilde
+düzelttim. Sonra bir `assert` kontrolü (16 beklerken 18 bulunca, pyqt5
+ve opencv-python'ın kaynak metinde çift fiziksel kopyası olduğu için —
+Python dict yüklenince sonuncusu kazanıyor, zararsız) dosya
+**yazılmadan** hata fırlattı — assert'i kaldırıp doğru sırayla
+(önce yaz, sonra doğrula) tekrar çalıştırdım.
+
+**Süreç notu — yanlış dosya kullanma riski (2 kez yaşandı bu bölümde):**
+İki kez Bayram bana `constants.py` gönderdi ama dosya **çok eskiydi**
+(bir kere sadece 24 orijinal kural, başka bir kere de benzer) — muhtemelen
+eski bir Downloads kopyası kazayla yüklenmiş. İkisinde de içerik
+karşılaştırması (`diff`, satır sonu normalize ederek) yapıp, kendi son
+teslim ettiğim (superset olduğu doğrulanmış) dosyayı temel aldım,
+Bayram'a açıkça söyledim, hiçbir şey kaybolmadı.
+
+### 4) Conflict Manager — Pencere davranışı düzeltmeleri
+
+- **Minimize/maximize eklendi** ama ilk denemede minimize edince
+  **VenvStudio'nun ana penceresi de** minimize oluyordu — sebep:
+  `Qt.WindowMinimizeButtonHint` eklerken `self.windowFlags()` üzerine OR
+  yapmak, dialogu MainWindow'un "sahipliğindeki" bir pencere yapıyor,
+  Windows ikisini birlikte küçültüyor. Düzeltme: `Qt.Window`'u temel
+  flag olarak kullanmak (OR yapmak yerine) — gerçekten bağımsız bir
+  üst-seviye pencere.
+- **Minimize edince VenvStudio kilitli kaldı** (ikinci bir rapor) —
+  sebep: dialog `.exec()` ile **modal** açılıyordu, minimize sadece
+  görsel durumu değiştiriyor, Qt'nin modal event loop'unu hiç
+  kaldırmıyordu. Düzeltme: `.exec()` → `.show()` (+ `raise_()` +
+  `activateWindow()`), dialog referansı `self._conflict_mgr_dlg`'e
+  saklandı (aksi halde Python hemen çöpe atardı, `.exec()`'in aksine
+  `.show()` hemen dönüyor).
+- **Show All / Export butonlarının metni kırpılıyordu** — sebep:
+  `setFixedWidth(80/90)` çok dardı bazı font/DPI ayarlarında. Düzeltme:
+  `setMinimumWidth` — buton metne göre büyüyebiliyor, asla küçülmüyor.
+
+### 5) Conflict Manager — Eğitici + Yönlendirici Detay Paneli (YENİ)
+
+Bayram'ın vizyon maddesi 1+5'in ("eğitici + yönlendirici Conflict
+Manager") ilk somut uygulaması. Tabloda bir satıra (pakete) tıklayınca
+açılan detay paneli:
+- Tam açıklama + severity ikonu
+- **Gerçek komut** metni (env tipine göre: `pip install X`,
+  `conda install X`, `pixi add X`, vb. — 8 env tipi için ayrı ayrı)
+- **🚀 Install** — mevcut env uyumluysa gerçek kurulumu başlatır (N9'un
+  kanıtlanmış pipeline'ı, `package_panel._install_packages`)
+- **🌱 Create New Environment…** — uyumsuzsa (sadece o zaman görünür)
+  yeni env'e yönlendirir (`parent()._create_env()`)
+- **🔄 Try alternative…** — sadece gerçek bir alternatifi olan
+  paketlerde görünür; tıklanınca arama kutusuna alternatif paketin
+  adını yazıp otomatik arar (direkt kurmuyor, önce kullanıcı okusun
+  diye)
+- **📚 Open in Learn** — `learn_content.py`'deki mevcut "KütüphaneAdı —
+  Açıklama" başlık deseninden **otomatik** eşleştirme (elle 218 paket
+  işlemek yerine — em-dash'ten önceki kısımla substring eşleşmesi + bir
+  avuç alias: torch/PyTorch, sklearn/scikit-learn, transformers/Hugging
+  Face); eşleşme yoksa buton nazikçe gizleniyor.
+
+Dialog artık MainWindow'a (`self.parent()`) doğrudan erişerek
+`package_panel`, `_create_env`, `learn_page._jump_to_topic` çağırıyor —
+yeni bir sinyal icat etmeye gerek kalmadı çünkü `parent=self` zaten
+constructor'da veriliyor.
+
+### 6) Conflict Manager — Export (CSV/JSON)
+
+"Show All" butonunun yanına **📄 Export…** eklendi. Ekranda o an ne
+görünüyorsa (Scan Results ya da All Rules) tablonun **görünen
+hücrelerinden** okuyup CSV veya JSON'a kaydediyor — gösterilenle
+kaydedilen her zaman birebir aynı. Bayram gerçek ortamda test etti
+(168 satırlık gerçek bir JupyterLab bağımlılık taraması), sorunsuz
+çalıştı.
+
+### 7) Conflict Manager — Scan sonuçlarında "hepsi görünsün" (Bayram: "5000 olsa da hepsi görünsün")
+
+**Bulunan gerçek bug'lar (2 tane, aynı `_ScanWorker`/`_on_scan_done`
+çiftinde):**
+1. `_ScanWorker.run()`'da açık bir filtre vardı:
+   `# only include if there's an actual issue (not just "ok")` —
+   uyumlu paketleri sessizce atıyordu. Kaldırıldı.
+2. **Gizli severity bug'ı:** `worst = "warning"` varsayılan değer olarak
+   başlıyordu — yani hiç sorunu olmayan bir paket bile tabloda **sarı
+   "⚠️ warning" rengiyle** görünüyordu, çünkü kod hiçbir zaman "ok"
+   durumuna düşmüyordu. `worst = "ok"` olarak düzeltildi.
+3. `self._show_all_btn.setChecked(False)` (tarama sonrası zorla
+   "sadece sorunlular" moduna geçiren satır) kaldırıldı.
+
+### 8) N34 — Environments tablosunda sağ tık komut menüsü (YENİ)
+
+Bir env satırına sağ tıklayınca, "Open Terminal"ın hemen altında yeni
+**"⚡ Run Command"** alt menüsü: env tipine özel komutlar (venv/uv: pip
+list, pip list --outdated, pip freeze; hatch: pip list, pip list
+--outdated; pdm: pdm list, pip list; poetry: poetry show, pip list;
+conda: conda list, conda info; pixi: pixi list, pip list; pipx: pipx
+list). Tıklanınca terminal açılıyor, env aktive ediliyor, **sonra**
+komut otomatik çalışıyor.
+
+**Gerekli alt yapı — `platform_utils.py`'ye `run_after` parametresi:**
+`open_terminal_at(path, terminal_type, env_type, run_after="")` — çok
+dallı (~15+ dönüş noktalı Windows fonksiyonu, ayrı POSIX fonksiyonu)
+mevcut fonksiyona MİNİMAL dokunuşla eklendi: her dalın İÇİNE girmek
+yerine, her platformun **çıktısına** (zaten oluşturulmuş komut
+string'i) tek noktada işlem yapılıyor.
+
+**Bulunan ve düzeltilen 2 gerçek hata (Bayram'ın gerçek ortam
+testinde):**
+
+1. **`wt` (Windows Terminal) iç içe tırnak hatası:** İlk denemede
+   `run_after`, string'in sonundaki kapanış `"` öncesine ekleniyordu.
+   `uv` env'inde "pip list" denendiğinde, `wt`'nin KENDİ komut satırı
+   ayrıştırması (PowerShell'in iç tırnaklarından ÖNCE çalışıyor),
+   eklenen `; pip list` kısmını ayrı bir SEKME komutu sandı — başarısız,
+   ayrı bir "pip list" sekmesi açıldı
+   (`error 2147942402 (0x80070002)`, ekran görüntüsüyle doğrulandı).
+   **Düzeltme:** `run_after` set edildiğinde `Run Command` özelliği
+   HER ZAMAN düz `cmd.exe` kullanıyor (tek tırnak çifti, iç içe geçme
+   yok) — kullanıcının tercih ettiği terminal ayarına bu özellik için
+   dokunulmuyor ama güvenilirlik için bu ödün verildi. Mevcut
+   "Open Terminal" butonu (`run_after` kullanmayan) hiç etkilenmedi.
+
+2. **`hatch`/`pdm`/`pixi` alt-kabuk blokaj hatası (doğrularken
+   kendim buldum, henüz gerçek ortamda rapor edilmedi):** Bu üç tip
+   `hatch shell`/`pixi shell`/`pdm run cmd` kullanıyor — bunlar
+   **interaktif bir alt-kabuğa girip orada bekliyor**, yani
+   `&& pip list` eklense bile kullanıcı önce `exit` yazmadan hiç
+   çalışmazdı. **Düzeltme:** `run_after` varsa bu üç tip için "kabuğa
+   gir" yerine `hatch run {cmd}` / `pdm run {cmd}` / `pixi run {cmd}`
+   (tek komut çalıştırıp dön) moduna geçiliyor — hem Windows hem POSIX
+   tarafında. Dış "sona ekleme" mantığı bu üç tip için **atlanıyor**
+   (yoksa çift ekleme olurdu — bunu da doğrularken buldum).
+
+**Mock test (gerçek Windows olmadan, string-seviyesinde):** 5 gerçekçi
+komut kalıbı (cmd.exe, Windows Terminal, PowerShell, git-bash, boş
+run_after) + hatch'in çift-eklemeden kaçındığı + Open Terminal'in
+etkilenmediği ayrı ayrı doğrulandı.
+
+**pipx testi — sonuçsuz kaldı bu oturumda:** Bayram ekran görüntüsü
+gönderdi, çıktı GERÇEKTEN doğru görünüyordu (pipx list'in gerçek
+çıktısı, "sorun yok" gibi) ama Bayram "çalışmadı" dedi. Netleştirme
+sorusu soruldu (pencere hemen mi kapandı / hiç açılmadı mı / yanlış env
+mi), cevap gelmeden konu değişti — **bir sonraki oturumda takip
+edilmeli.**
+
+### Değişen Dosyalar (v1.6.45)
+
+| Dosya | Değişiklik |
+|---|---|
+| `src/gui/launcher_ui.py` | 20 app'in env_types'ı ["venv","uv","hatch","pdm","poetry"]'e genişletildi |
+| `src/gui/window_menu.py` | çoklu env-tipi tarama (rec_type→rec_types), CONFLICT_RULES+canlı-PyPI önceliği, Conflict Manager .show() (modal değil) |
+| `src/utils/constants.py` | CONFLICT_RULES 24→218 (kategori alanı, CV kategorisi, pipx/conda/pixi blocked_envs, alternative alanı) |
+| `src/gui/conflict_manager.py` | minimize/maximize + Qt.Window fix, detay paneli (Install/Create Env/Alternative/Learn), Export (CSV/JSON), scan "hepsi görünsün" + severity bug fix, buton genişlik fix |
+| `src/gui/env_list.py` | N34 — sağ tık "⚡ Run Command" alt menüsü, ENV_TYPE_COMMANDS, `_run_env_command` |
+| `src/utils/platform_utils.py` | `open_terminal_at`'e `run_after` parametresi + wt/PowerShell quoting fix + hatch/pdm/pixi shell-blokaj fix |
+| `VenvStudio_Handoff.md` | v1.6.45 bölümü + meta güncellendi |
+| `VENVSTUDIO_TODO.md` | Vizyon bölümü + N34 kapandı + N11/N9 birleşme notu + yeni açık maddeler |
+
+### Test Durumu
+- N11 çoklu-env düzeltmesi — mock test edildi, gerçek ortamda henüz
+  denenmedi
+- CONFLICT_RULES genişlemesi (218 kural) — yapısal doğrulama yapıldı,
+  gerçek ortamda birkaç örnek (dlib, mysqlclient) test edilmedi henüz
+- Conflict Manager pencere düzeltmeleri — Bayram gerçek ortamda
+  doğruladı (minimize artık VS'yi kilitlemiyor)
+- Conflict Manager detay paneli + Export — Export gerçek ortamda
+  doğrulandı (168 satırlık gerçek export), detay paneli butonları
+  henüz gerçek ortamda denenmedi
+- N34 Run Command — **kısmen test edildi**: uv/venv için ÇALIŞIYOR
+  (Bayram onayladı), pipx için sonuç belirsiz (yukarıya bkz.), hatch/
+  pdm/pixi fix'i hiç test edilmedi (kendi doğrulamamda bulundu)
+
+### Açık / Sonraki Oturuma Not
+- **pipx'te Run Command'ın gerçekte ne yaptığı netleşmedi** — Bayram'a
+  sorulan netleştirme sorusu cevaplanmadı, takip edilmeli
+- hatch/pdm/pixi için Run Command fix'i gerçek ortamda hiç denenmedi
+- N9/N11'in şimdi CONFLICT_RULES'a bağlı olması, henüz **Catalog/Manual
+  Install** akışına genişletilmedi — merkezi kapı vizyonunun bir sonraki
+  adımı olabilir
+- conda/pixi blocked_envs listesi (18 paket) **doğrulanmadı** — gerçek
+  ortamda birkaçını (`conda install cupy` gibi) elle test etmek faydalı
+  olur
+- 🌟 5000 pakete çıkma + bağımlılık ağacı gösterimi hâlâ uzun vadeli
+  hedef, bu oturumda sadece 218'e çıkıldı
+- Flatpak/Scoop dağıtımı (vizyon madde 7) hâlâ hiç başlanmadı
+
 
 ---
 
@@ -6289,7 +6596,7 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 11. **N35** — Hatch self-heal (marker'da hatch_env_path yoksa her refresh'te yeniden dene) — Bayram'a soruldu, cevap bekleniyor
 
 ## Sonraki Chat Başlangıç Promptu
-> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.44, sıradaki: v1.6.45.
+> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.45, sıradaki: v1.6.46.
 
 ## 📋 Dosya Kopyalama Kuralları
 

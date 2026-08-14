@@ -486,7 +486,7 @@ def find_system_pythons() -> List[Tuple[str, str]]:
     pythons.sort(key=_ver_key, reverse=True)
     return pythons
 def open_terminal_at(path: Path, terminal_type: str = "",
-                     env_type: str = "venv") -> None:
+                     env_type: str = "venv", run_after: str = "") -> None:
     """Open a terminal/console at the given path.
     
     env_type:
@@ -617,11 +617,18 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                 return f'start cmd /k "cd /d {path} && {cmd_activate}"'
 
         elif env_type in ("hatch", "pdm", "pixi"):
-            # Hatch/PDM/Pixi: cd into project dir and run the tool's shell command
+            # Hatch/PDM/Pixi: cd into project dir and run the tool's shell command.
+            # `hatch shell`/`pixi shell`/`pdm run cmd` all drop into an
+            # INTERACTIVE nested shell that blocks until the user exits
+            # it -- a run_after chained with && would silently wait
+            # there and never execute (Bayram, 2026-08-14 caught this
+            # via the "Run Command" context menu). When run_after is
+            # set, use each tool's "run one command and return" mode
+            # instead of its "enter a shell" mode.
             import shutil as _sh2, os as _os2
             if env_type == "hatch":
                 _tool = _sh2.which("hatch") or "hatch"
-                _shell_cmd = f'"{_tool}" shell'
+                _shell_cmd = f'"{_tool}" run {run_after}' if run_after else f'"{_tool}" shell'
             elif env_type == "pixi":
                 _pixi_cands = [
                     _os2.path.join(_os2.environ.get("USERPROFILE", ""), ".pixi", "bin", "pixi.exe"),
@@ -629,10 +636,10 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                 ]
                 _tool = next((c for c in _pixi_cands if _os2.path.isfile(c)), None) \
                         or _sh2.which("pixi") or "pixi"
-                _shell_cmd = f'"{_tool}" shell'
+                _shell_cmd = f'"{_tool}" run {run_after}' if run_after else f'"{_tool}" shell'
             else:  # pdm
                 _tool = _sh2.which("pdm") or "pdm"
-                _shell_cmd = f'"{_tool}" run cmd'
+                _shell_cmd = f'"{_tool}" run {run_after}' if run_after else f'"{_tool}" run cmd'
 
             if terminal_type == "wt" and shutil.which("wt"):
                 return f'start wt -d "{path}" cmd /k "{_shell_cmd}"'
@@ -725,17 +732,26 @@ def open_terminal_at(path: Path, terminal_type: str = "",
         if env_type in ("system_tools", "pipx"):
             return f"cd '{path}'"
         elif env_type in ("hatch", "pdm", "pixi"):
+            # Same "shell blocks, run_after would never fire" issue as
+            # the Windows branch above -- use each tool's "run one
+            # command and return" mode when run_after is set.
             import shutil as _sh3, os as _os3
             if env_type == "hatch":
                 _tool = _sh3.which("hatch") or "hatch"
+                if run_after:
+                    return f"cd '{path}' && '{_tool}' run {run_after}"
                 return f"cd '{path}' && '{_tool}' shell"
             elif env_type == "pixi":
                 _pixi = _os3.path.expanduser("~/.pixi/bin/pixi")
                 if not _os3.path.isfile(_pixi):
                     _pixi = _sh3.which("pixi") or "pixi"
+                if run_after:
+                    return f"cd '{path}' && '{_pixi}' run {run_after}"
                 return f"cd '{path}' && '{_pixi}' shell"
             else:  # pdm
                 _tool = _sh3.which("pdm") or "pdm"
+                if run_after:
+                    return f"cd '{path}' && '{_tool}' run {run_after}"
                 return f"cd '{path}' && '{_tool}' run bash"
         elif env_type == "poetry":
             # Poetry venv is in ~/.cache/pypoetry/virtualenvs/
@@ -821,11 +837,46 @@ def open_terminal_at(path: Path, terminal_type: str = "",
 
     try:
         if system == "windows":
-            cmd = _make_cmd_windows(path, terminal_type)
+            if run_after:
+                # First attempt spliced run_after into whatever quoting
+                # style _make_cmd_windows happened to produce (cmd.exe,
+                # PowerShell -Command, or wt -d ... wrapping either) --
+                # wt.exe parses its OWN command line before handing off
+                # to the inner shell, and a spliced ';'/'&&' can get
+                # misread as wt's tab separator instead of staying
+                # inside the inner command (Bayram, 2026-08-14: saw a
+                # spurious extra "pip list" tab that failed to launch).
+                # Force plain cmd.exe here instead -- single quote pair,
+                # no wt/PowerShell nesting, most reliable place to chain
+                # a command onto activation. Costs the user's preferred
+                # terminal_type for just this feature; "Open Terminal"
+                # (no run_after) is completely unaffected.
+                cmd = _make_cmd_windows(path, "cmd")
+                # hatch/pdm/pixi already bake run_after into their own
+                # "run <command>" mode above (instead of "enter shell")
+                # -- splicing it in again here would duplicate it.
+                if env_type not in ("hatch", "pdm", "pixi"):
+                    _sep = "; " if "-Command " in cmd else " && "
+                    _stripped = cmd.rstrip()
+                    if _stripped.endswith('"'):
+                        _idx = len(_stripped) - 1
+                        _exec_marker = "&& exec bash"
+                        _exec_pos = cmd.rfind(_exec_marker, 0, _idx)
+                        if _exec_pos != -1:
+                            cmd = cmd[:_exec_pos] + f"&& {run_after} " + cmd[_exec_pos:]
+                        else:
+                            cmd = cmd[:_idx] + _sep + run_after + cmd[_idx:]
+            else:
+                cmd = _make_cmd_windows(path, terminal_type)
             subprocess.Popen(cmd, shell=True)
 
         elif system == "macos":
             posix_cmd = _make_cmd_posix(path)
+            # hatch/pdm/pixi already bake run_after into their own
+            # "run <command>" mode inside _make_cmd_posix (instead of
+            # "enter shell") -- appending it again here would duplicate it.
+            if run_after and env_type not in ("hatch", "pdm", "pixi"):
+                posix_cmd = f"{posix_cmd} && {run_after}"
             if terminal_type == "iterm2":
                 script = (
                     f'tell application "iTerm" to create window with default profile '
@@ -840,6 +891,11 @@ def open_terminal_at(path: Path, terminal_type: str = "",
 
         else:  # linux
             posix_cmd = _make_cmd_posix(path)
+            # hatch/pdm/pixi already bake run_after into their own
+            # "run <command>" mode inside _make_cmd_posix (instead of
+            # "enter shell") -- appending it again here would duplicate it.
+            if run_after and env_type not in ("hatch", "pdm", "pixi"):
+                posix_cmd = f"{posix_cmd} && {run_after}"
 
             # AppImage bundles override PATH — resolve the real system PATH
             host_path = os.environ.get("PATH", "")

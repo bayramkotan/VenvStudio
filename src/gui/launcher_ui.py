@@ -932,10 +932,19 @@ class LauncherUIMixin:
                     py_range = f"Python ≤{max_py}"
                 elif min_py:
                     py_range = f"Python ≥{min_py}"
-                status.setText(f"⚠️ Requires {py_range}")
+                # min_python/max_python here reflect the LATEST PyPI
+                # release only -- pip's own resolver is perfectly able
+                # to fall back to an OLDER, still-compatible release on
+                # its own (e.g. IPython 9.x needs 3.11+, but IPython 8.x
+                # works fine on 3.10 and pip picks it automatically with
+                # a plain 'pip install ipython'). Hard-disabling the
+                # button here blocked installs that would have actually
+                # succeeded (Bayram, 2026-08-13). Warn, don't block --
+                # same philosophy as N9's "Install Anyway" dialog.
+                status.setText(f"ℹ️ Latest version needs {py_range} — pip will use an older compatible release")
                 status.setStyleSheet(f"color: {self._c().get('warning', '#f9e2af')}; font-size: {self._c()['fs_tiny']}px;")
-                card._launch_btn.setEnabled(False)
-                card._launch_btn.setStyleSheet(f"background-color: {self._c()['disabled_bg']}; color: {self._c()['disabled_fg']};")
+                card._launch_btn.setEnabled(True)
+                card._launch_btn.setStyleSheet("")
                 card._uninstall_btn.setVisible(False)
                 card._shortcut_btn.setVisible(False)
             elif is_installed:

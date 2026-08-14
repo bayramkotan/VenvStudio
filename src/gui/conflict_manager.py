@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
     QComboBox, QFrame, QSizePolicy, QAbstractItemView, QProgressBar,
+    QGroupBox, QFileDialog, QMessageBox,
 )
 from PySide6.QtCore import Qt, QTimer, QThread, Signal
 from PySide6.QtGui import QColor
@@ -66,9 +67,12 @@ class _ScanWorker(QThread):
         results = []
         for pkg in self._pkgs:
             issues = _check_package(pkg, self._env_type, self._py_ver)
-            # only include if there's an actual issue (not just "ok")
-            if any(s in ("error", "warning") for s, _ in issues):
-                results.append((pkg, issues))
+            # Bayram (2026-08-13): "hepsi gorunsun, ister uyumlu ister
+            # uyumsuz" -- show every scanned package's verdict, not just
+            # the ones with a problem. This also matters for the planned
+            # dependency view (5000+ packages someday): a package with no
+            # issues today is still relevant context once its deps show up.
+            results.append((pkg, issues))
         self.done.emit(results)
 
 
@@ -171,10 +175,14 @@ class ConflictManagerDialog(QDialog):
         self._filter_edit.setPlaceholderText("Filter by package name…")
         filter_row.addWidget(self._filter_edit, 1)
         self._show_all_btn = QPushButton("Show All")
-        self._show_all_btn.setFixedWidth(80)
+        self._show_all_btn.setMinimumWidth(90)
         self._show_all_btn.setCheckable(True)
         self._show_all_btn.setChecked(True)
         filter_row.addWidget(self._show_all_btn)
+        self._export_btn = QPushButton("📄 Export…")
+        self._export_btn.setMinimumWidth(100)
+        self._export_btn.setToolTip("Save the table currently shown (Scan Results or All Rules) as CSV or JSON")
+        filter_row.addWidget(self._export_btn)
         root.addLayout(filter_row)
 
         self._progress = QProgressBar()
@@ -194,6 +202,37 @@ class ConflictManagerDialog(QDialog):
         self._table.setAlternatingRowColors(True)
         root.addWidget(self._table, 1)
 
+        # ── detail panel (Bayram, 2026-08-13: "basit ama bol secenekli" --
+        # stays hidden until a row is clicked, so the default view is just
+        # the table; clicking a package expands into full explanation +
+        # the real install command + directive action buttons) ──
+        self._detail_box = QGroupBox("Package Detail")
+        self._detail_box.setVisible(False)
+        detail_layout = QVBoxLayout(self._detail_box)
+        self._detail_label = QLabel("")
+        self._detail_label.setWordWrap(True)
+        self._detail_label.setTextFormat(Qt.RichText)
+        detail_layout.addWidget(self._detail_label)
+        self._detail_cmd_label = QLabel("")
+        self._detail_cmd_label.setWordWrap(True)
+        self._detail_cmd_label.setStyleSheet(
+            "font-family: Consolas, monospace; background-color: rgba(255,255,255,20); "
+            "padding: 6px; border-radius: 4px;"
+        )
+        detail_layout.addWidget(self._detail_cmd_label)
+        detail_btn_row = QHBoxLayout()
+        self._detail_install_btn = QPushButton("🚀 Install")
+        self._detail_create_env_btn = QPushButton("🌱 Create New Environment…")
+        self._detail_alt_btn = QPushButton("🔄 Try alternative…")
+        self._detail_learn_btn = QPushButton("📚 Open in Learn")
+        detail_btn_row.addWidget(self._detail_install_btn)
+        detail_btn_row.addWidget(self._detail_create_env_btn)
+        detail_btn_row.addWidget(self._detail_alt_btn)
+        detail_btn_row.addWidget(self._detail_learn_btn)
+        detail_btn_row.addStretch()
+        detail_layout.addLayout(detail_btn_row)
+        root.addWidget(self._detail_box)
+
         btn_row = QHBoxLayout()
         btn_row.addStretch()
         close_btn = QPushButton("Close")
@@ -210,6 +249,12 @@ class ConflictManagerDialog(QDialog):
         self._filter_edit.textChanged.connect(self._populate_all_table)
         self._show_all_btn.toggled.connect(self._populate_all_table)
         self._scan_btn.clicked.connect(self._do_scan)
+        self._table.itemSelectionChanged.connect(self._on_row_selected)
+        self._detail_install_btn.clicked.connect(self._on_detail_install)
+        self._detail_create_env_btn.clicked.connect(self._on_detail_create_env)
+        self._detail_learn_btn.clicked.connect(self._on_detail_open_learn)
+        self._detail_alt_btn.clicked.connect(self._on_detail_try_alternative)
+        self._export_btn.clicked.connect(self._on_export)
 
         self._filter_timer = QTimer(self)
         self._filter_timer.setSingleShot(True)
@@ -323,23 +368,40 @@ class ConflictManagerDialog(QDialog):
         self._progress.setVisible(False)
 
         if not results:
+            # Only reachable now if there were literally no packages to
+            # scan (empty env) -- results always has an entry per package
+            # since the worker stopped discarding "ok" ones.
             self._table_label.setText(
-                "<b>Scan complete</b> — ✅ No compatibility issues found in the current environment.")
+                "<b>Scan complete</b> — no packages found to check.")
             self._populate_all_table()
             return
 
-        self._table_label.setText(
-            f"<b>Scan Results</b> — ⚠️ {len(results)} package(s) with known issues:")
+        problem_count = sum(
+            1 for _, issues in results
+            if any(s in ("error", "warning") for s, _ in issues)
+        )
+        if problem_count:
+            self._table_label.setText(
+                f"<b>Scan Results</b> — {len(results)} package(s) checked, "
+                f"⚠️ {problem_count} with known issues:")
+        else:
+            self._table_label.setText(
+                f"<b>Scan Results</b> — {len(results)} package(s) checked, "
+                f"✅ no compatibility issues found.")
 
-        # Show only problematic packages
-        self._show_all_btn.setChecked(False)
+        # Bayram (2026-08-13): "hepsi gorunsun, ister uyumlu ister
+        # uyumsuz" -- leave the toggle as the user last set it instead of
+        # forcing "problems only". The worker now includes every scanned
+        # package regardless, so this table already shows everything.
         self._table.setRowCount(len(results))
         for r, (pkg, issues) in enumerate(results):
-            worst = "warning"
+            worst = "ok"
             for sev, _ in issues:
                 if sev == "error":
                     worst = "error"
                     break
+                if sev == "warning":
+                    worst = "warning"
             icon = _SEVERITY_COLOR.get(worst, ("", ""))[1]
             self._table.setItem(r, 0, QTableWidgetItem(f"{icon} {pkg}"))
 
@@ -350,6 +412,11 @@ class ConflictManagerDialog(QDialog):
                 blocked = ", ".join(rule.get("blocked_envs", [])) or "—"
                 self._table.setItem(r, 3, QTableWidgetItem(blocked))
                 self._table.setItem(r, 4, QTableWidgetItem(rule.get("note", "")))
+            else:
+                self._table.setItem(r, 1, QTableWidgetItem("—"))
+                self._table.setItem(r, 2, QTableWidgetItem("—"))
+                self._table.setItem(r, 3, QTableWidgetItem("—"))
+                self._table.setItem(r, 4, QTableWidgetItem("No known compatibility issues."))
 
             if worst in ("error", "warning"):
                 bg = QColor(_SEVERITY_COLOR[worst][0])
@@ -361,7 +428,197 @@ class ConflictManagerDialog(QDialog):
 
         self._table.resizeRowsToContents()
 
-    # ── all-rules table ───────────────────────────────────────────────────────
+    # ── detail panel (2026-08-13, educational/directive Conflict Manager) ──
+
+    def _on_export(self):
+        """Save whatever is CURRENTLY shown in the table (Scan Results or
+        All Rules, whichever the user is looking at -- reads straight from
+        self._table's actual cells, not the underlying data source, so the
+        export always matches what's on screen) to CSV or JSON."""
+        row_count = self._table.rowCount()
+        if row_count == 0:
+            QMessageBox.information(self, "Nothing to Export", "The table is empty -- scan an environment or show the full rules list first.")
+            return
+
+        path, chosen_filter = QFileDialog.getSaveFileName(
+            self, "Export Conflict Manager Results", "conflict_manager_export.csv",
+            "CSV Files (*.csv);;JSON Files (*.json)"
+        )
+        if not path:
+            return
+
+        headers = ["Package", "Min Python", "Max Python", "Blocked Envs", "Note"]
+        rows = []
+        for r in range(row_count):
+            row = []
+            for c in range(5):
+                item = self._table.item(r, c)
+                row.append(item.text() if item else "")
+            rows.append(row)
+
+        is_json = path.lower().endswith(".json") or "JSON" in chosen_filter
+        try:
+            if is_json:
+                import json as _json
+                data = [dict(zip(headers, row)) for row in rows]
+                with open(path, "w", encoding="utf-8") as f:
+                    _json.dump(data, f, indent=2, ensure_ascii=False)
+            else:
+                import csv as _csv
+                if not path.lower().endswith(".csv"):
+                    path += ".csv"
+                with open(path, "w", encoding="utf-8", newline="") as f:
+                    writer = _csv.writer(f)
+                    writer.writerow(headers)
+                    writer.writerows(rows)
+        except Exception as e:
+            QMessageBox.critical(self, "Export Failed", f"Could not save the file:\n{e}")
+            return
+
+        QMessageBox.information(self, "Exported", f"Saved {len(rows)} row(s) to:\n{path}")
+
+    def _install_command_for(self, pkg_name, env_type):
+        """Real, literal command a user would type -- the 'live demonstration'
+        part of the educational pillar. Not run automatically; shown as text
+        (see _on_detail_install for the actual, safe, one-click version that
+        reuses N9's real install pipeline instead of shelling out blind)."""
+        cmds = {
+            "venv": f"pip install {pkg_name}",
+            "uv": f"uv pip install {pkg_name}",
+            "poetry": f"poetry add {pkg_name}",
+            "conda": f"conda install {pkg_name}",
+            "pipx": f"pipx install {pkg_name}",
+            "hatch": f"hatch run pip install {pkg_name}",
+            "pdm": f"pdm add {pkg_name}",
+            "pixi": f"pixi add {pkg_name}",
+        }
+        return cmds.get(env_type, f"pip install {pkg_name}")
+
+    def _find_learn_topic(self, pkg_name):
+        """Best-effort match against LEARN_CATEGORIES' existing "Library —
+        Description" title convention (e.g. "NumPy — Fast N-Dimensional
+        Arrays") -- no manual per-package curation needed, and packages with
+        no matching topic simply get no button (Bayram, 2026-08-13: graceful
+        degradation over forcing a match). A few common PyPI-name-vs-display-
+        name aliases are handled explicitly since they don't share a substring
+        (torch/PyTorch, scikit-learn/sklearn, transformers/Hugging Face)."""
+        try:
+            from src.gui.learn_content import LEARN_CATEGORIES
+        except Exception:
+            return None
+        aliases = {
+            "torch": "pytorch", "sklearn": "scikit-learn",
+            "transformers": "hugging face transformers",
+            "langchain": "langchain",
+        }
+        pkg_norm = pkg_name.lower().replace("-", "").replace("_", "")
+        alt_norm = aliases.get(pkg_name.lower(), "").replace("-", "").replace(" ", "")
+        for cat in LEARN_CATEGORIES:
+            for topic in cat.get("topics", []):
+                title = topic.get("title", "")
+                subject = title.split("—")[0].strip()
+                subject_norm = subject.lower().replace("-", "").replace("_", "").replace(" ", "")
+                if pkg_norm and pkg_norm in subject_norm:
+                    return title
+                if alt_norm and alt_norm in subject_norm:
+                    return title
+        return None
+
+    def _on_row_selected(self):
+        rows = self._table.selectionModel().selectedRows() if self._table.selectionModel() else []
+        if not rows:
+            self._detail_box.setVisible(False)
+            return
+        item = self._table.item(rows[0].row(), 0)
+        if not item:
+            self._detail_box.setVisible(False)
+            return
+        # Column 0 text is "{icon} {pkg_name}" -- strip the icon prefix.
+        raw_text = item.text()
+        pkg_name = raw_text.split(" ", 1)[1].strip() if " " in raw_text else raw_text.strip()
+        self._detail_pkg = pkg_name
+
+        env_type = self._env_cb.currentText()
+        py_ver = self._current_py_ver()
+        issues = _check_package(pkg_name, env_type, py_ver)
+        worst = "ok"
+        note_lines = []
+        for sev, msg in issues:
+            if sev == "error":
+                worst = "error"
+            elif sev == "warning" and worst != "error":
+                worst = "warning"
+            note_lines.append(f"{_SEVERITY_COLOR.get(sev, ('', 'ℹ️'))[1]} {msg}")
+
+        color, icon = _SEVERITY_COLOR.get(worst, ("", "✅"))
+        self._detail_label.setText(
+            f"<b>{icon} {pkg_name}</b><br>" + "<br>".join(note_lines)
+        )
+        self._detail_cmd_label.setText(self._install_command_for(pkg_name, env_type))
+
+        # Directive buttons: Install only makes sense (and is only offered)
+        # when the CURRENT env is actually compatible -- otherwise the only
+        # sensible next step is creating a new, compatible one, matching
+        # N9/N11's existing "don't offer a button that would just fail"
+        # philosophy.
+        self._detail_install_btn.setVisible(worst != "error")
+        self._detail_create_env_btn.setVisible(worst == "error")
+
+        learn_title = self._find_learn_topic(pkg_name)
+        self._detail_learn_title = learn_title
+        self._detail_learn_btn.setVisible(learn_title is not None)
+
+        # Bayram (2026-08-13): auto-suggest a known-good replacement
+        # when one exists in CONFLICT_RULES' "alternative" field (e.g.
+        # PyQt5 -> PySide6, pycrypto -> pycryptodome). Only curated,
+        # genuinely-recommended substitutes have this field -- most
+        # problem packages don't (no real drop-in replacement exists),
+        # and the button just stays hidden for those, same graceful-
+        # degradation approach as the Learn-topic button above.
+        _, _rule = _lookup(pkg_name)
+        alt_pkg = _rule.get("alternative") if _rule else None
+        self._detail_alt_pkg = alt_pkg
+        if alt_pkg:
+            self._detail_alt_btn.setText(f"🔄 Try {alt_pkg} instead")
+        self._detail_alt_btn.setVisible(alt_pkg is not None)
+
+        self._detail_box.setVisible(True)
+
+    def _on_detail_install(self):
+        pkg_name = getattr(self, "_detail_pkg", None)
+        if not pkg_name:
+            return
+        parent = self.parent()
+        if parent is not None and hasattr(parent, "package_panel") and parent.package_panel:
+            parent.package_panel._install_packages([pkg_name], hint_name="Conflict Manager")
+
+    def _on_detail_try_alternative(self):
+        """Look up the suggested alternative in the search box instead of
+        jumping straight to install -- lets the user read its own
+        compatibility info first (it might have its own caveats) rather
+        than silently swapping one package for another."""
+        alt_pkg = getattr(self, "_detail_alt_pkg", None)
+        if not alt_pkg:
+            return
+        self._search_edit.setText(alt_pkg)
+        self._do_search()
+
+    def _on_detail_create_env(self):
+        parent = self.parent()
+        if parent is not None and hasattr(parent, "_create_env"):
+            parent._create_env()
+
+    def _on_detail_open_learn(self):
+        title = getattr(self, "_detail_learn_title", None)
+        parent = self.parent()
+        if not title or parent is None:
+            return
+        if hasattr(parent, "_switch_page"):
+            parent._switch_page(3)
+        if hasattr(parent, "learn_page") and parent.learn_page:
+            parent.learn_page._jump_to_topic(title)
+
+    # ── all-rules table ────────────────────────────────────────────────────
 
     def _populate_all_table(self):
         env_type = self._env_cb.currentText()

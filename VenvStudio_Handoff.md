@@ -3,8 +3,8 @@
 ## Proje
 - **Repo:** https://github.com/bayramkotan/VenvStudio
 - **PyPI:** https://pypi.org/project/venvstudio/
-- **GÜNCEL VERSİYON: v1.6.45** (2026-08-14 — N11 Install Launcher'ın sadece venv önerme sorunu düzeltildi (artık uv/hatch/pdm/poetry de taranıyor) + Bayram'ın "Conflict Manager'ı çok çok çok geliştirmemiz lazım" talebiyle **Conflict Manager tamamen dönüştürüldü**: CONFLICT_RULES 24→218 kural (kategori sistemi, Computer Vision kategorisi, pipx/conda/pixi işaretlemeleri, 16 pakete alternatif önerisi), yeni eğitici+yönlendirici detay paneli (Install/Create Env/Try Alternative/Open in Learn butonları), Export (CSV/JSON), scan sonuçlarında artık TÜM paketler görünüyor (önceden sadece sorunlular gösteriliyordu, gizli bir severity bug'ı da düzeltildi), pencere davranışı düzeltmeleri (minimize artık VS'yi kilitlemiyor). Ayrıca **N34 — Environments tablosunda sağ tık "Run Command" menüsü** sıfırdan eklendi (`platform_utils.py`'ye `run_after` parametresi + 2 gerçek terminal/quoting hatası bulunup düzeltildi: wt'nin iç içe tırnak sorunu, hatch/pdm/pixi'nin alt-kabuk blokajı). Detay: "Bu Oturumda Yapılanlar (2026-08-14 — v1.6.45)" bölümü — çok uzun, her alt başlık ayrı ayrı anlatılıyor.) — PUSH EDİLECEK. **pipx'te Run Command'ın gerçekte çalışıp çalışmadığı netleşmedi, sonraki oturumda takip et.** PUSH SONRASI PyPI history sayfasını MUTLAKA kontrol et + `pip install venvstudio==1.6.45 --no-cache-dir --break-system-packages` ile doğrula. Çok makineli çalışma: commit öncesi `git fetch` + `git log origin/main`.
-- **Son TODO güncellemesi (2026-08-14, v1.6.45 ile birlikte):** N34 (sağ tık Run Command menüsü) kapatıldı. Vizyon bölümü (7 sütun) TODO'nun en başına eklendi (2026-08-13'te). Conflict Manager'ın genişlemesi detaylı işlendi — export, alternatif öneri, kategori sistemi hepsi TODO'da ayrı ayrı not edildi, açık kalan (pipx testi, hatch/pdm/pixi gerçek ortam testi, conda/pixi listesinin doğrulanmamış olması) TODO'nun 'sonraki oturum' bölümüne taşındı.
+- **GÜNCEL VERSİYON: v1.6.46** (2026-08-14 — v1.6.45 push'u sonrası gerçek bir git merge çakışması çözüldü (constants.py + conflict_manager.py, ikisinde de Bayram'ın lokali/HEAD korunarak). Sonra **N12 — özel konuma environment kurma + son kullanılanları takip etme** hayata geçirildi: C:\venv sabit varsayılan kalıyor (sadece Settings değiştirebilir), özel konumdaki env'ler custom_env_locations.json'da ayrıca izleniyor. Bu süreçte 4 gerçek hata art arda bulunup düzeltildi: (1) Qt'nin forward-slash path döndürmesinden kaynaklanan / \ karışıklığı, (2) zaten bozulmuş kalıcı varsayılanın elle düzeltilmesi gerekmesi, (3) bellek önbelleğinin invalidate_memory_cache() ile geçersiz kılınmaması, (4) Recent Environments'ın path'i hiç var olmayan Qt.UserRole verisinden okumaya çalışması (gerçek yer: Path sütununun tooltip'i) + altında yatan, hiç tetiklenmemiş bir _on_env_selected argüman hatası. Recent Environments artık Gezgin'i de o konumda açıyor. Son olarak **JupyterLab/Jupyter Notebook'un "Launch" hiçbir şey yapmıyordu** sorunu, ikisinde de eksik olan open_browser alanının eklenmesiyle çözüldü (henüz test edilmedi). Detay: "Bu Oturumda Yapılanlar (2026-08-14 — v1.6.46)" bölümü.) — PUSH EDİLECEK. **Jupyter fix'i test edilmeli.** PUSH SONRASI PyPI history sayfasını kontrol et + `pip install venvstudio==1.6.46 --no-cache-dir --break-system-packages` ile doğrula. Çok makineli çalışma: commit öncesi `git fetch` + `git log origin/main` — bu oturumda tam da bunu atlayınca merge çakışması yaşandı.
+- **Son TODO güncellemesi (2026-08-14, v1.6.46 ile birlikte):** N12 (özel konum + son kullanılanlar) kapatıldı, 4 alt-hatası ayrı ayrı işlendi. Jupyter open_browser fix'i "test bekliyor" olarak eklendi. Merge çakışması çözümü not edildi (kod tarafında bir şey değişmedi, sadece git geçmişi düzeldi).
 - **Bir sonraki oturumun kuyruğu:** aşağıdaki "Bu Oturumda Yapılanlar (2026-07-23/24)" bölümünün *Açık maddeler* kısmı
 - **Proje dizini (Windows):** `C:\Github\VenvStudio`
 - **Proje dizini (Linux - CachyOS/Pardus):** `~/Github/VenvStudio`
@@ -825,6 +825,206 @@ ama Qt sinyal string'i veya `getattr` ile çağrılanlar da yanlış işaretleni
 Neden elle tablo tutmuyoruz: handoff'taki el yazımı tablo `_update_quick_sidebar`'ı
 "sidebar güncelleme" diye listeliyordu, oysa o fonksiyon ölü koddu ve gerçek sidebar
 `quicklaunch.py`'deydi. Üretilen harita kaynakla senkron kalır.
+
+---
+
+## Bu Oturumda Yapılanlar (2026-08-14 — v1.6.46, PUSH EDİLECEK)
+
+### Özet
+v1.6.45 push'undan sonra bir git merge çakışması çözüldü, sonra Bayram'ın
+"farklı bir konuma environment kurma + son kullanılanları takip etme"
+isteği (N12) hayata geçirildi — bu süreçte **4 gerçek, art arda ortaya
+çıkan hata** bulunup düzeltildi (path ayırıcı karışması, kalıcı
+varsayılanın istemeden değişmesi, bellek önbelleğinin geçersiz
+kılınmaması, Recent Environments'ın hiç çalışmayan bir path-okuma
+mekanizması + altında yatan ikinci bir eski hata). Son olarak
+JupyterLab/Jupyter Notebook'un "Launch" butonunun sessizce hiçbir şey
+yapmama sorunu çözüldü.
+
+### 1) Git merge çakışması çözüldü (v1.6.45 push sonrası)
+
+Bayram v1.6.45'i push etmeye çalışırken `git push origin main` reddedildi
+— origin'de ondan habersiz 2 commit vardı (`constants.py`'nin kategori
+alanı + TODO vizyon birleşmesi, muhtemelen daha erken bir turda başka
+bir noktadan push edilmiş). `git pull` denemesi **gerçek bir merge
+çakışmasına** dönüştü — `constants.py` ve `conflict_manager.py`'de
+çakışma işaretleri (`<<<<<<<`/`=======`/`>>>>>>>`) kaldı, uygulama
+`SyntaxError: invalid decimal literal` ile açılmaz oldu.
+
+**`constants.py`:** 18 küçük çakışma bloğu, hepsi aynı desende —
+Bayram'ın lokalindeki (`HEAD`) `"alternative"` alanları, gelen tarafta
+tamamen boştu. Hepsinde `HEAD` korunup işaretler kaldırıldı. Sonuç: 218
+kural, 16 alternatif, 18 kategori, versiyon 1.6.45 — hepsi sağlam.
+
+**`conflict_manager.py`:** Tek ama dosyanın TAMAMINI kaplayan bir
+çakışma — gelen commit çok daha eski bir sürüme dayanıyordu (Export
+butonu, alternatif önerisi butonu, minimum genişlik düzeltmesi hiçbiri
+yoktu). `HEAD` bunların hepsini içeriyordu, doğrulanıp tamamen `HEAD`
+korundu — benim son teslim ettiğim dosyayla satır-sonu normalize edilince
+**birebir aynı** çıktığı ayrıca doğrulandı.
+
+### 2) N12 — Farklı konuma environment kurma + son kullanılanları takip etme
+
+**İlk tasarım hatası (Bayram'ın sert tepkisiyle düzeltildi):** İlk
+denemede "Recent" butonu, `_change_location`'ın (mevcut "Browse"
+butonu) MEVCUT davranışını miras almıştı — yani hem Browse hem Recent
+**kalıcı varsayılan klasörü** (`C:\venv`) değiştiriyordu. Bayram'ın
+gerçek talebi tam tersiydi: **`C:\venv` sabit kalacak, sadece Settings
+değiştirebilecek**, özel konumdaki env'ler ayrıca bir JSON'da
+kaydedilecek. ("Neden C:\venv den baska birsey olarak ayarladin!!!!!!
+Sana dedim bu default!!!!!!!!!!!!!!")
+
+**Doğru mimari (3 dosya):**
+- `venv_manager_cache.py`: `env_cache.json` ile AYNI desende yeni
+  `custom_env_locations.json` — `add_custom_location`/
+  `_load_custom_locations`/`_save_custom_locations`/
+  `remove_custom_location`.
+- `venv_manager.py`: `list_venvs_fast`'ın tarama döngüsü **hiç
+  değiştirilmeden**, sadece ÜZERİNDE ÇALIŞTIĞI liste genişletildi —
+  `base_dir`'in çocukları + JSON'daki özel konum yolları birleştirilip
+  AYNI (300+ satırlık, env-tipine göre dallanan, dokunulmayan) döngüye
+  besleniyor. Çok daha düşük riskli bir yaklaşım, döngü gövdesini
+  refactor etmek yerine.
+- `env_dialog.py`: `_change_location` artık SADECE
+  `self.location_label`'ı güncelliyor, `config.set_venv_base_dir`'i
+  hiç çağırmıyor. Yeni `_maybe_register_custom_location(name, path,
+  env_type)` yardımcı fonksiyonu, konum kalıcı varsayılandan farklıysa
+  JSON'a kaydediyor. 4 farklı oluşturma akışının (conda, "modern"
+  hatch/pdm/pixi, `_env_path` akışı, düz venv) her birine bağlandı.
+  **Düz venv özel durumu:** `CreateWorker` hiç path parametresi almıyor
+  — her zaman `venv_manager.base_dir`'i kullanıyor. Bunun için özel
+  konum seçilmişse `base_dir` GEÇİCİ olarak değiştirilip (config'e hiç
+  yazılmadan), `_on_finished`'de (başarılı ya da başarısız fark etmeksizin)
+  gerçek varsayılana geri döndürülüyor.
+
+**Bulunan/düzeltilen 4 hata (art arda, her biri bir öncekini
+çözünce ortaya çıktı):**
+
+1. **`/` `\` karışıklığı** (`python -m venv C:/vs\aaaa` gibi bozuk
+   komutlar): `QFileDialog.getExistingDirectory`, Windows'ta bile
+   Qt'nin kendi iç kuralına göre ileri eğik çizgili path döndürüyor.
+   `os.path.join` bunu düzeltmiyor, karışık ayırıcı üretiyor. Düzeltme:
+   path Qt'den gelir gelmez `str(Path(directory))` ile normalize
+   edildi. Python'un `ntpath` modülüyle (gerçek Windows path mantığını
+   simüle eden stdlib parçası) hem hatayı yeniden üretip hem düzeltmeyi
+   doğruladım.
+
+2. **Kalıcı varsayılanın zaten bozulmuş olması:** Yukarıdaki düzeltme
+   sadece GELECEKTEKİ bozulmaları önlüyordu — Bayram'ın o anki config'i
+   zaten `C:\vs` olarak kayıtlıydı (önceki, henüz düzeltilmemiş "Browse"
+   davranışından). Settings sayfasından elle `C:\venv`'e geri
+   döndürüldü.
+
+3. **Bellek önbelleği geçersiz kılınmıyordu:** Varsayılan düzeltilip
+   özel konum JSON'a kaydedildikten SONRA bile, "Refresh" butonu
+   env'leri göstermeye devam etmedi. Kök neden: `list_venvs_fast`'ın
+   class-seviyesi bir bellek önbelleği (`_mem_envs`) var, "Refresh"
+   butonu bile `skip_calc=False` kullanıyor (bilinçli tasarım — "pyvenv.cfg
+   okuma zaten hızlı" diye yorumlanmış), yani önbellek doluysa
+   YENİDEN TARAMIYOR. `add_custom_location` çağrım JSON'a doğru
+   yazıyordu ama bu bellek önbelleğini hiç geçersiz kılmıyordu.
+   Düzeltme: zaten var olan hafif `invalidate_memory_cache()` (her
+   env'i tek tek geçersiz kılıp 30-40 saniyelik tam yeniden tarama
+   yapan `invalidate_all_caches()`'ten FARKLI, çok daha ucuz) çağrısı
+   `_maybe_register_custom_location`'a eklendi.
+
+4. **Recent Environments'ın 2 katmanlı hatası:** Yukarıdakiler
+   düzeldikten sonra bile, File → Recent Environments → bir env'e
+   tıklamak "Not Found — could not be found. It may have been deleted
+   or moved" hatası veriyordu — env tabloda GÖRÜNÜR şekilde listeliyken
+   bile. Kök neden #1: `_open_recent_env`, path'i `Qt.UserRole`'den
+   okumaya çalışıyordu ama `env_list.py` **hiçbir yerde** o sütuna path
+   yazmıyor (`Qt.UserRole` orada env TİPİNİ saklıyor, farklı bir
+   sütunda) — yani `item_path` HER ZAMAN `None` dönüyordu, sadece özel
+   konumlar için değil, HİÇBİR env için bu özellik hiç çalışmamıştı.
+   Gerçek path, Path sütununun (2. sütun) TOOLTIP'inde saklanıyordu
+   (`_get_env_path`'in zaten kullandığı, kanıtlanmış yer) — oradan
+   okuyacak şekilde düzeltildi. Kök neden #2 (düzeltme #1 sonunda ortaya
+   çıktı): eşleşme artık BULUNUNCA, `self._on_env_selected(row)`
+   çağrısı `TypeError: takes 1 positional argument but 2 were given`
+   fırlattı — `_on_env_selected` hiç parametre almıyor, zaten seçili
+   satırı kendi içinden okuyor. Bu ikinci hata da ÖNCEDEN VARDI, hiç
+   tetiklenmemişti çünkü döngü hiçbir zaman eşleşme bulmuyordu.
+
+**Ek özellik (Bayram'ın gerçek beklentisiyle netleşti):** "Recent
+Environments"e tıklamak sadece VenvStudio'nun kendi tablosunda seçim
+yapmıyor, artık mevcut "📁 Open Folder" eylemiyle aynı mekanizmayı
+(`_open_env_folder`) çağırıp Windows Gezgini'ni de o konumda açıyor.
+
+**Mock test (her aşamada):** path normalizasyonu `ntpath` ile 2
+senaryoda, tarama listesi genişletmesi gerçek geçici klasör yapısıyla,
+JSON ekle/dedup/sil 3 senaryoda, "varsayılan konumda asla kayıt olma"
+mantığı 2 senaryoda, Recent Environments'ın tooltip-okuma + çağrı
+sırası (selectRow → on_env_selected → open_env_folder) gerçekçi sahte
+tablo verisiyle — hepsi doğrulandı.
+
+### 3) JupyterLab / Jupyter Notebook — "Launch" hiçbir şey yapmıyordu
+
+Bayram: venv ve uv'de JupyterLab/Jupyter Notebook kurulu ama "Launch"a
+basınca hiçbir tepki yok. Kod incelemesiyle (log gelmeden) bulundu:
+`launcher_ui.py`'de bu iki app'in `open_browser` alanı **hiç
+tanımlanmamıştı** — diğer TÜM benzer sunucu-tipi app'lerde (Streamlit,
+Gradio, Dash, Voilà, TensorBoard, FastAPI, Datasette, Marimo) bu alan
+var, sadece Jupyter'de unutulmuş. `launcher_run.py`'deki tarayıcı-açma
+kodu `if open_browser_url:` diye kontrol ediyor — boşsa hiç
+çalışmıyor. Ayrıca `needs_console: True` olduğu için Jupyter kendi
+konsol penceresinde açılıyor — sunucu hemen çökerse (ya da kullanıcı
+farkına varmadan arka planda kalırsa) "hiçbir şey olmadı" hissi
+oluşuyor.
+
+**Düzeltme:** İkisine de gerçek Jupyter URL kalıbına uygun
+`open_browser` eklendi (`http://localhost:8888/lab` ve
+`http://localhost:8888/tree`). Varsayılan port doluysa Jupyter başka
+bir porta geçebilir — bu durumda konsol penceresindeki gerçek
+token'lı URL'yi elle kullanmak gerekebilir (diğer sabit-portlu
+app'lerle aynı, önceden var olan sınırlama).
+
+**Test durumu: henüz gerçek ortamda denenmedi** — Bayram log göndermeden
+"push et, sonra devam" dedi, düzeltme kod incelemesiyle yüksek güvenle
+yapıldı ama doğrulanmadı.
+
+### Değişen Dosyalar (v1.6.46)
+
+| Dosya | Değişiklik |
+|---|---|
+| `src/utils/constants.py` | merge çakışması çözüldü (alternative alanları korundu, 218 kural sağlam) |
+| `src/gui/conflict_manager.py` | merge çakışması çözüldü (HEAD'in tam özellik seti korundu) |
+| `src/core/venv_manager_cache.py` | N12 — custom_env_locations.json persistence (add/load/save/remove) |
+| `src/core/venv_manager.py` | N12 — list_venvs_fast tarama listesi genişletildi (base_dir + özel konumlar) |
+| `src/gui/env_dialog.py` | N12 — _change_location artık kalıcı varsayılanı değiştirmiyor, _maybe_register_custom_location 4 akışa bağlandı, düz venv için geçici base_dir swap + restore, path normalizasyonu |
+| `src/gui/window_menu.py` | Recent Environments'ın path-okuma kaynağı düzeltildi (UserRole→tooltip), _on_env_selected argüman hatası düzeltildi, Explorer'a da götürme eklendi |
+| `src/gui/launcher_ui.py` | JupyterLab + Jupyter Notebook'a open_browser eklendi |
+| `VenvStudio_Handoff.md` | v1.6.46 bölümü + meta güncellendi |
+| `VENVSTUDIO_TODO.md` | N12 kapatıldı (4 alt-hata detaylı), Jupyter fix'i test bekliyor olarak işlendi |
+
+### Test Durumu
+- Merge çakışması çözümü — Bayram gerçek ortamda doğruladı (`runmain`
+  sorunsuz açıldı)
+- N12 tüm 4 hata düzeltmesi — Bayram gerçek ortamda doğruladı, sırayla
+  her biri test edilip bir sonraki hata ortaya çıktı, sonunda hepsi
+  çalışır durumda onaylandı
+- Jupyter open_browser fix'i — **HENÜZ TEST EDİLMEDİ**, bir sonraki
+  oturumda/hemen doğrulanmalı
+
+### Açık / Sonraki Oturuma Not
+- **Jupyter fix'i test edilmeli** — venv/uv'de Launch deneyip konsol +
+  tarayıcının açıldığını doğrula
+- pipx'te "Run Command"ın gerçekte çalışıp çalışmadığı hâlâ netleşmedi
+  (v1.6.45'ten beri açık)
+- hatch/pdm/pixi için Run Command fix'i gerçek ortamda hiç denenmedi
+- N9/N11'in CONFLICT_RULES'a bağlı olması, henüz Catalog/Manual Install
+  akışına genişletilmedi
+- conda/pixi blocked_envs listesi (18 paket) doğrulanmadı
+- Preset kartlarından Learn sayfasına link (N38)
+- Conda dokümantasyonunu genişletme
+- Yapay zeka mimarilerinin (LSTM, Transformer, GAN) görsel diyagramları
+- 11 dile çeviri
+- Yerel dil modeli (Ollama) yönetimi
+- Toolchain Manager arayüzü yeniden tasarımı
+- Hatch environment'larda kendi kendini onarma (cevap bekleniyor)
+- Flatpak/Scoop dağıtımı (vizyon madde 7, hiç başlanmadı)
+- 🌟 5000 pakete çıkma + bağımlılık ağacı gösterimi (uzun vadeli)
+
 
 ---
 
@@ -6596,7 +6796,7 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 11. **N35** — Hatch self-heal (marker'da hatch_env_path yoksa her refresh'te yeniden dene) — Bayram'a soruldu, cevap bekleniyor
 
 ## Sonraki Chat Başlangıç Promptu
-> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.45, sıradaki: v1.6.46.
+> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.46, sıradaki: v1.6.47.
 
 ## 📋 Dosya Kopyalama Kuralları
 

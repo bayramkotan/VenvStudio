@@ -22,61 +22,6 @@ VenvStudio'yu tanımlayan çarpıcı özellikler olmalı:**
 ---
 
 ## 🆕 Yeni İstek (2026-08-12) — Presets → Learn Bağlantıları
-<<<<<<< Updated upstream
-=======
-
-- **N38 — Preset kartlarından Learn sayfasına konu/kütüphane linkleri:**
-  Packages → Presets sekmesindeki her preset kartına (Data Science
-  Starter, Web API/FastAPI, ML Starter, vb.), o preset'in içerdiği
-  kütüphanelerle veya konuyla ilgili Learn sayfasındaki bölüme
-  götüren link(ler) eklensin. Tıklanınca Learn sekmesine geçip
-  doğrudan ilgili konuya/kütüphaneye scroll etsin ya da o bölümü
-  açsın. Amaç: preset'i görürken "bu ne işe yarıyor, nasıl
-  kullanılır" sorusunun cevabına tek tıkla ulaşmak.
-  **Netleşmesi gerekenler (bir sonraki oturumda):** Learn sayfasının
-  içeriği preset'lerdeki her kütüphaneyi zaten kapsıyor mu (yoksa
-  önce Learn içeriği mi genişletilmeli); link preset kartının neresinde
-  görünecek (başlığın yanında bir ikon mu, ayrı bir "Learn More" satırı
-  mı); birden fazla kütüphane varsa (örn. Data Science Starter →
-  numpy+pandas+matplotlib+scikit-learn+jupyter) hepsi ayrı link mi
-  olacak yoksa tek bir genel link mi.
-
----
-
-## 🌟 BÜYÜK GİRİŞİM — N9'u Conflict Manager'ın Tam Uyumluluk Sistemine Dönüştür (Bayram'ın talebi, 2026-08-12)
-
-**Bu, bugünkü küçük pygame düzeltmesiyle karıştırılmamalı — çok daha
-büyük ve kasıtlı olarak detaylandırılacak bir proje.** Bayram'ın
-kendi sözleriyle: "bunu çok geliştirmemiz lazım... tüm library,
-launcher, presets... için uyumluluk tabloları/matriksleri yapacağız."
-
-**Kapsam (bugünkü ilk taslaktan çok daha geniş):**
-- Sadece tek tek paket kurulumu değil — **Launcher app'leri**
-  (JupyterLab, Spyder IDE, Orange Data Mining, Streamlit, Gradio,
-  Dash, Panel, vb.) ve **Presets** (Data Science Starter, Web API,
-  ML Starter, vb.) için de uyumluluk kontrolü/matriksi
-- Conflict Manager'ın (Tools → 🧩 Conflict Manager) mevcut statik
-  tablo + pre-flight kontrol yapısının üzerine inşa edilecek, ayrı
-  bir sistem olarak kalmayacak — birleşecek
-- Bugün atılan temeller (CONFLICT_RULES statik liste, canlı PyPI
-  wheel-kontrolü, "Create New Environment" yönlendirmesi) bu büyük
-  sistemin sadece paket-kurulumu köşesi — launcher/preset tarafı
-  henüz hiç yok
-- Muhtemelen: her env tipi × her Python sürümü × her library/app
-  için bir uyumluluk matriksi/tablosu görselleştirmesi (Conflict
-  Manager dialogunun kendisinde, arama/filtreleme ile)
-
-**Şimdilik yapılmayacak, sadece not düşülüyor** — Bayram bu oturumda
-detaylandırmadı, "çok detaylandıracağız" dedi, ayrı ve kapsamlı bir
-tasarım oturumu gerektirecek. Bir sonraki oturumda bu konuya
-girilirse, önce kapsamı (hangi launcher/preset'ler, matriks nasıl
-görselleştirilecek, mevcut Conflict Manager dialoguyla nasıl
-birleşecek) netleştirmek gerekir — büyük bir mimari genişleme.
-
----
-
-## 🔴 TEST BEKLİYOR — N9 Canlı Kontrol Sistemi (v1.6.43, henüz gerçek ortamda test edilmedi)
->>>>>>> Stashed changes
 
 - **N38 — Preset kartlarından Learn sayfasına konu/kütüphane linkleri:**
   Packages → Presets sekmesindeki her preset kartına (Data Science
@@ -177,6 +122,52 @@ birleşecek) netleştirmek gerekir — büyük bir mimari genişleme.
   ama gönderdiği ekran görüntüsünde çıktı doğru görünüyordu, netleştirme
   sorusu cevaplanmadı, **sonraki oturumda takip edilmeli.**
   hatch/pdm/pixi fix'i hiç gerçek ortamda denenmedi.
+
+---
+
+## ✅ v1.6.46 (2026-08-14) — N12 Özel Konum + Recent Environments Fix Zinciri + Jupyter
+
+- **✅ Git merge çakışması çözüldü:** v1.6.45 push'u sonrası origin'de
+  habersiz commit'ler vardı, `git pull` gerçek bir merge çakışmasına
+  dönüştü. `constants.py` (18 blok) ve `conflict_manager.py` (dosyanın
+  tamamı) — ikisinde de Bayram'ın lokali/HEAD korundu, hiçbir şey
+  kaybolmadı. Kod tarafında bir değişiklik yok, sadece git geçmişi
+  düzeldi.
+
+- **✅ N12 — Farklı konuma environment kurma + son kullanılanları takip
+  etme:** `C:\venv` artık sabit varsayılan — sadece Settings
+  değiştirebilir, Create dialog'daki Browse/Recent bir daha asla
+  kalıcı varsayılanı değiştirmiyor. Özel konumdaki env'ler
+  `custom_env_locations.json`'da ayrıca izleniyor, `list_venvs_fast`
+  hem `base_dir`'i hem bu JSON'u tarıyor (döngü gövdesi hiç
+  değiştirilmeden, sadece üzerinde çalıştığı liste genişletildi).
+
+  **4 hata art arda bulunup düzeltildi** (her biri bir öncekini
+  çözünce ortaya çıktı):
+  1. `/` `\` karışıklığı (Qt'nin forward-slash path döndürmesi,
+     `os.path.join`'in düzeltmemesi) — path Qt'den gelir gelmez
+     normalize edildi.
+  2. Zaten bozulmuş kalıcı varsayılan (`C:\vs`) — Settings'ten elle
+     `C:\venv`'e geri döndürüldü.
+  3. Bellek önbelleği (`_mem_envs`) geçersiz kılınmıyordu — "Refresh"
+     bile `skip_calc=False` kullanıyor, önbellek doluysa yeniden
+     taramıyor. `invalidate_memory_cache()` çağrısı eklendi.
+  4. Recent Environments'ın path'i `Qt.UserRole`'den okumaya çalışması
+     (env_list.py hiç oraya yazmıyor — gerçek yer: Path sütununun
+     tooltip'i) + altında yatan, hiç tetiklenmemiş bir
+     `_on_env_selected` argüman-say fazlalığı hatası. İkisi de
+     düzeltildi. Ek olarak: Recent Environments artık Gezgin'i de o
+     konumda açıyor (Bayram'ın gerçek beklentisi).
+
+  Bayram gerçek ortamda doğruladı, hepsi çalışıyor.
+
+- **🔴 TEST BEKLİYOR — JupyterLab / Jupyter Notebook "Launch" fix'i:**
+  İkisinde de `open_browser` alanı hiç tanımlanmamıştı (diğer tüm
+  benzer app'lerde vardı) — bu yüzden "Launch" tıklanınca tarayıcı hiç
+  açılmıyordu, "hiçbir şey olmuyor" hissi. İkisine de gerçek Jupyter
+  URL kalıbı eklendi. **Kod incelemesiyle yapıldı, log ile
+  doğrulanmadı — bir sonraki oturumda venv/uv'de Launch deneyip
+  konsol + tarayıcının açıldığını kontrol et.**
 
 ---
 

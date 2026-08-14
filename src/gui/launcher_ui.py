@@ -59,6 +59,14 @@ class LauncherUIMixin:
                 "command": ["-m", "jupyter", "lab"],
                 "desc": "Next-generation notebook interface for interactive computing",
                 "needs_console": True,
+                # Bayram (2026-08-14): "Launch" appeared to do nothing --
+                # unlike every other server-style app here (Streamlit,
+                # Gradio, Dash...), JupyterLab/Notebook never had an
+                # open_browser entry, so the browser-auto-open code in
+                # launcher_run.py never fired. Console window (needs_
+                # console) shows the real token-bearing URL if this
+                # default port/path guess doesn't match.
+                "open_browser": "http://localhost:8888/lab",
                             },
             {
                 "name": "Jupyter Notebook",
@@ -70,6 +78,8 @@ class LauncherUIMixin:
                 "command": ["-m", "jupyter", "notebook"],
                 "desc": "Classic Jupyter Notebook — simple, document-centric interface",
                 "needs_console": True,
+                # Same missing-open_browser issue as JupyterLab above.
+                "open_browser": "http://localhost:8888/tree",
                             },
             {
                 "name": "Orange Data Mining",

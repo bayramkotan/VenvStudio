@@ -90,6 +90,53 @@ class _CacheMixin:
         _log.info(f"💾 [Cache] Written: {_fmt_path(venv_path)} → py={python_version} pkgs={package_count} size={size}")
         _log.debug(f"📄 [Cache] File: {_fmt_path(self._get_cache_file())}")
 
+    # ── custom (non-default-folder) environment locations ────────
+    # N12 (2026-08-14): Bayram wants base_dir to STAY a fixed default
+    # (only Settings changes it), while envs created at a DIFFERENT,
+    # one-off location are tracked separately here so list_venvs_fast()
+    # still finds them without scanning arbitrary folders on disk.
+    # Same env_cache.json pattern/location, separate file.
+
+    def _get_custom_locations_file(self) -> Path:
+        return self._get_cache_file().parent / "custom_env_locations.json"
+
+    def _load_custom_locations(self) -> list:
+        f = self._get_custom_locations_file()
+        if not f.exists():
+            return []
+        try:
+            data = json.load(open(f, encoding="utf-8"))
+            return data if isinstance(data, list) else []
+        except (json.JSONDecodeError, IOError):
+            return []
+
+    def _save_custom_locations(self, locations: list) -> None:
+        try:
+            f = self._get_custom_locations_file()
+            f.parent.mkdir(parents=True, exist_ok=True)
+            with open(f, "w", encoding="utf-8") as fh:
+                json.dump(locations, fh, indent=2)
+        except Exception as e:
+            _log.warning(f"⚠️ [CustomLoc] Write error: {e}")
+
+    def add_custom_location(self, name: str, path: Path, env_type: str) -> None:
+        """Register an env created OUTSIDE base_dir so list_venvs_fast()
+        picks it up. Keyed on normalized path (dedupes same-location
+        re-registration, e.g. if a name changes later)."""
+        locations = self._load_custom_locations()
+        key = self._cache_key(path)
+        locations = [c for c in locations if self._cache_key(Path(c["path"])) != key]
+        locations.append({"name": name, "path": str(path), "env_type": env_type})
+        self._save_custom_locations(locations)
+        _log.info(f"📌 [CustomLoc] Registered: {name} → {_fmt_path(path)}")
+
+    def remove_custom_location(self, path: Path) -> None:
+        locations = self._load_custom_locations()
+        key = self._cache_key(path)
+        new_locations = [c for c in locations if self._cache_key(Path(c["path"])) != key]
+        if len(new_locations) != len(locations):
+            self._save_custom_locations(new_locations)
+
     def invalidate_cache(self, venv_path: Path) -> None:
         all_cache = self._load_all_cache()
         key = self._cache_key(venv_path)

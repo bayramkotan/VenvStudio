@@ -653,17 +653,47 @@ class WindowMenuMixin:
 
     def _open_recent_env(self, name: str, path: str):
         """Select env in table by path; show Packages panel."""
-        import os
-        # Find row in env table matching this path
-        model = self.env_table.model() if hasattr(self, "env_table") else None
-        if model is None:
+        from pathlib import Path as _Path
+        # Find row in env table matching this path. My first attempt
+        # read Qt.UserRole off column 0 -- but env_list.py never
+        # actually WRITES a path there (that UserRole slot holds the
+        # env_type string on column 1 instead). The real full path
+        # lives as a TOOLTIP on the Path column (column 2) --
+        # confirmed via _get_env_path()'s existing, working reads of
+        # `self.env_table.item(row, 2).toolTip()`. Comparison still
+        # uses Path.resolve() (not raw normcase) for robustness
+        # against textual formatting differences.
+        def _norm(p):
+            try:
+                return str(_Path(str(p)).resolve()).casefold()
+            except Exception:
+                return str(p).casefold()
+        _target = _norm(path)
+        if not hasattr(self, "env_table"):
             return
-        for row in range(model.rowCount()):
-            idx = model.index(row, 0)
-            item_path = model.data(idx, Qt.UserRole)  # env path stored as UserRole
-            if item_path and os.path.normcase(str(item_path)) == os.path.normcase(path):
+        for row in range(self.env_table.rowCount()):
+            path_item = self.env_table.item(row, 2)
+            item_path = path_item.toolTip() if path_item else None
+            if item_path and _norm(item_path) == _target:
                 self.env_table.selectRow(row)
-                self._on_env_selected(row)
+                # _on_env_selected takes no arguments -- it reads the
+                # current selection from self.env_table itself. This
+                # line was passing `row` (pre-existing bug, never hit
+                # before because the loop above never found a match
+                # until this fix -- see the tooltip/UserRole fix
+                # above) -- Bayram (2026-08-14) hit it via a real
+                # TypeError as soon as the match-finding started
+                # working.
+                self._on_env_selected()
+                # Bayram (2026-08-14): "neden explorer'da yerine
+                # goturmuyor" -- selecting the row in VenvStudio's
+                # own table wasn't the whole expectation; also open
+                # the folder in the system file manager, reusing the
+                # exact same mechanism as the "📁 Open Folder" context-
+                # menu action. Relies on the selectRow() above already
+                # having set the table selection _open_env_folder reads.
+                if hasattr(self, "_open_env_folder"):
+                    self._open_env_folder()
                 # Update recency
                 try:
                     from src.core.recent_envs import RecentEnvsManager

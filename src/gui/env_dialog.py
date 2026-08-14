@@ -1070,13 +1070,26 @@ class EnvCreateDialog(QDialog):
         self._install_worker = _w
 
     def _change_location(self):
+        """Browse for a location for just THIS environment creation --
+        Bayram (2026-08-14): the persistent default (C:\\venv) must
+        NEVER change from here, only from Settings. Envs created at a
+        different location are tracked in custom_env_locations.json
+        (see _maybe_register_custom_location) so they still show up
+        in the Environments list without needing to live under the
+        default folder."""
         directory = QFileDialog.getExistingDirectory(
-            self, "Select Base Directory",
+            self, "Select Location for This Environment",
             str(self.config.get_venv_base_dir()),
         )
         if directory:
-            self.config.set_venv_base_dir(directory)
-            self.venv_manager.set_base_dir(Path(directory))
+            # Qt's file dialogs return "/"-separated paths on Windows
+            # too (Qt's own internal convention) -- left un-normalized,
+            # this silently mixes with later os.path.join()/f-string
+            # path-building elsewhere, producing broken mixed paths
+            # like "C:/vs\\aaaa" (Bayram, 2026-08-14). Normalize to
+            # native separators immediately, right where the path
+            # enters the app.
+            directory = str(Path(directory))
             self.location_label.setText(directory)
             self._remember_recent_location(directory)
 
@@ -1109,6 +1122,30 @@ class EnvCreateDialog(QDialog):
             action = menu.addAction(loc)
             action.triggered.connect(lambda checked=False, l=loc: self.location_label.setText(l))
         menu.exec(self.recent_loc_btn.mapToGlobal(self.recent_loc_btn.rect().bottomLeft()))
+
+    def _maybe_register_custom_location(self, name: str, path, env_type: str):
+        """N12: if this env was created somewhere OTHER than the
+        persistent default base_dir, register it in
+        custom_env_locations.json so list_venvs_fast() still finds it.
+        Compares against config's stored default (never mutated by
+        this dialog anymore -- see _change_location) rather than
+        self.venv_manager.base_dir, which may be temporarily swapped
+        during plain-venv creation (see _on_finished).
+
+        Also invalidates the in-memory env-list cache -- writing to
+        custom_env_locations.json alone isn't enough, since
+        list_venvs_fast() short-circuits on a cache hit BEFORE ever
+        re-scanning; without this, the new location wouldn't show up
+        until app restart even after clicking Refresh (Bayram,
+        2026-08-14: 'refresh yapinca kayboluyor')."""
+        try:
+            default_dir = str(Path(str(self.config.get_venv_base_dir())))
+            path = Path(path)
+            if str(path.parent) != default_dir:
+                self.venv_manager.add_custom_location(name, path, env_type)
+                self.venv_manager.invalidate_memory_cache()
+        except Exception:
+            pass
 
     def _create(self):
         name = self.name_input.text().strip()
@@ -1213,6 +1250,7 @@ class EnvCreateDialog(QDialog):
                     )
                     self.status_label.setStyleSheet("color: #a6e3a1; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"✅ {message}")
+                    self._maybe_register_custom_location(name, env_path, "conda")
                     self.env_created.emit(name)
                     # Keep dialog open so user can see commands. Cancel → Close.
                     self.cancel_btn.setText("Close")
@@ -1862,6 +1900,7 @@ class EnvCreateDialog(QDialog):
                     )
                     self.status_label.setStyleSheet("color: #a6e3a1; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(f"✅ {message}")
+                    self._maybe_register_custom_location(_name, _env_path, _etype)
                     self.env_created.emit(_name)
                     # Keep dialog open so user can see commands. Cancel → Close.
                     self.cancel_btn.setText("Close")
@@ -1950,6 +1989,20 @@ class EnvCreateDialog(QDialog):
         except Exception:
             pass
 
+        # CreateWorker has no path parameter -- it always creates
+        # into self.venv_manager.base_dir. To support a custom
+        # location for just THIS plain venv without ever touching
+        # the persistent default (Bayram, 2026-08-14), temporarily
+        # swap base_dir for the duration of this one creation and
+        # restore it in _on_finished (never in config -- set_base_dir
+        # only changes the in-memory value CreateWorker reads, it
+        # doesn't persist anything).
+        self._pending_create_name = name
+        self._pending_create_location = location
+        _real_default = self.config.get_venv_base_dir()
+        if str(Path(location)) != str(Path(str(_real_default))):
+            self.venv_manager.set_base_dir(Path(location))
+
         self.worker = CreateWorker(
             self.venv_manager, name, python_path,
             with_pip=True,
@@ -1966,9 +2019,19 @@ class EnvCreateDialog(QDialog):
         self.worker = None
         self._reset_ui()
 
+        # Restore the REAL persistent default -- see the temporary
+        # swap made before starting CreateWorker. Runs whether the
+        # creation succeeded or failed, so a failed custom-location
+        # attempt never leaves base_dir pointed somewhere else.
+        _real_default = self.config.get_venv_base_dir()
+        self.venv_manager.set_base_dir(Path(str(_real_default)))
+
         if success:
             name = self.name_input.text().strip()
             self.config.add_recent_env(name)
+            _loc = getattr(self, "_pending_create_location", None)
+            if _loc:
+                self._maybe_register_custom_location(name, Path(_loc) / name, "venv")
             self.env_created.emit(name)
             self.status_label.setText("✅ " + message)
             self.progress_bar.setRange(0, 100)
@@ -2289,6 +2352,7 @@ class EnvCreateDialog(QDialog):
         self.status_label.setStyleSheet("color: #a6e3a1; font-size: 15px; font-weight: bold;")
         self.status_label.setText(
             f"✅ {self._modern_etype} environment '{self._modern_name}' created!")
+        self._maybe_register_custom_location(self._modern_name, self._modern_path, self._modern_etype)
         self.env_created.emit(self._modern_name)
         # Keep dialog open so user can see commands. Cancel -> Close.
         # hatch/pdm/pixi used to call self.accept() here, closing the dialog

@@ -847,9 +847,23 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
         except Exception:
             import traceback; traceback.print_exc()
 
-        for item in sorted(self.base_dir.iterdir()):
-            if not item.is_dir():
-                continue
+        # N12 (2026-08-14): scan base_dir's children AND any
+        # separately-registered custom-location envs (created
+        # somewhere OTHER than base_dir, which stays a fixed
+        # default -- only Settings changes it). The marker-based
+        # detection below works identically for any directory, so
+        # this only widens what gets FED into the existing loop --
+        # the loop body itself (env-type dispatch, cache, python-
+        # version detection) is untouched.
+        _custom_locations = self._load_custom_locations()
+        _custom_paths = []
+        for _cl in _custom_locations:
+            _cp = Path(_cl.get("path", ""))
+            if _cp.is_dir():
+                _custom_paths.append(_cp)
+        _scan_targets = [i for i in sorted(self.base_dir.iterdir()) if i.is_dir()] + _custom_paths
+
+        for item in _scan_targets:
             # ── Marker-based env (system_tools or conda) ──────────────────
             marker = item / ".venvstudio_env"
             if marker.exists():

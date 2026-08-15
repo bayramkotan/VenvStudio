@@ -197,9 +197,6 @@ VenvStudio checks packages against a curated compatibility list **before** insta
 <p align="center">
   <img src="assets/screenshots/virtual_environments.png" alt="Virtual Environments — full table" width="800">
 </p>
-<p align="center">
-  <img src="assets/screenshots/environments.png" alt="Environments — Command History open" width="800">
-</p>
 </details>
 
 <details>

@@ -127,7 +127,7 @@ Install Launcher) goes through the same check, so nothing slips through.
 
 *Launch any of these tools directly from VenvStudio — if installed in the active environment, it appears in the sidebar automatically.*
 
-### 📓 Python Launchers (pip / uv)
+### 📓 Python Launchers (venv, uv, Hatch, PDM, Poetry)
 
 | | Tool | Description | Category | Website |
 |:---:|:-----|:-----------|:--------:|:-------:|

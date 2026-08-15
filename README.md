@@ -330,7 +330,7 @@ VenvStudio checks packages against a curated compatibility list **before** insta
 
 </div>
 
-### 📓 Python Launchers (pip / uv)
+### 📓 Python Launchers (venv, uv, Hatch, PDM, Poetry)
 
 | | Tool | Description | Category | Website |
 |:---:|:-----|:-----------|:--------:|:-------:|

@@ -1,5 +1,51 @@
 # VENVSTUDIO_TODO.md
 
+## 🆕 Bayram'ın Saha Notları (2026-08-15) — 5 yeni, 1 zaten var
+
+- **🐛 N40 — hatch env oluştururken "Tools" diye ayrı bir env kuruyor:**
+  Hatch tipinde bir environment oluşturunca, env klasörü altında **ek,
+  istenmeyen bir "Tools" env'i** de kuruluyor. Kök neden araştırılmalı
+  — muhtemelen hatch'in kendi `hatch env` mekanizmasının bir yan
+  etkisi (belki hatch'in dahili tooling env'i, materialize sırasında
+  yanlışlıkla env klasörüne yazılıyor). **Öncelik: yüksek, gerçek bug.**
+
+- **N41 — CustomTkinter, Flet, PyQt6 desteği:** Şu an GUI/Desktop
+  kategorisinde PySide6/Tkinter var — CustomTkinter, Flet, PyQt6 da
+  Catalog'a ve/veya Launcher'a eklenebilir mi, değerlendirilmeli.
+
+- **✅ Flatpak/Scoop — ZATEN VAR:** F196 (Dağıtım Kanalları) ve
+  ayrıntılı bir "Dağıtım Kanalları" bölümü (flatpak, scoop, snap, AUR,
+  Homebrew, winget dahil, öncelik sırasıyla) zaten TODO'da mevcut,
+  ekstra bir şey eklenmedi — bkz. F196 ve civarındaki bölüm.
+
+- **N42 — Crash Reports'a Tools menüsünden erişim:** Crash log'ları
+  zaten `%APPDATA%\VenvStudio\logs\crash_*.log` yoluna yazılıyor
+  (v1.4.62'den beri, `sys.excepthook` ile) ve F194 (Opt-in Crash
+  Reporter) çökme ANINDA "Rapor Oluştur" butonunu planlıyor — ama
+  **daha önce yazılmış crash log'larını görmek için Tools menüsünden
+  erişilebilir bir buton yok.** Bayram'ın istediği: Tools altında
+  "Crash Reports" ya da mevcut Log Viewer'ın içinde bir sekme/filtre
+  olarak geçmiş crash'leri listeleyip açabilmek. F194'ten farklı —
+  o anlık rapor oluşturma, bu geçmişe bakma.
+
+- **N43 — Conda backend seçimi (Settings altında):** Bayram'ın notu:
+  "Conda kendi içinde micromamba, conda-forge... ve diğerlerini
+  ayarlar altında seçmemize izin verecek. Yani hangi conda...." —
+  **Netleşmesi gereken:** Settings → Toolchain Manager'da zaten bir
+  "Backend: Auto (default)" dropdown'u var (Conda satırının yanında,
+  ekran görüntüsünde görüldü) — bu mu kastediliyor, yoksa bambaşka bir
+  şey mi (örn. hangi conda DAĞITIMI — Miniconda/Anaconda/Miniforge —
+  kullanılacağı)? Bir sonraki oturumda sorulmalı. Ayrıca F175 (Conda
+  Channels Yönetimi) var ama o CHANNEL (paket kaynağı) yönetimi, BACKEND
+  (hangi conda motoru) seçimi değil — ikisi farklı konular.
+
+- **N44 — Learn'e VS'nin kendi CLI komutlarını ekle:** `vs list`,
+  `vs create`, `vs install`, vb. (README'deki CLI tablosunda zaten
+  var) Learn sayfasında da bir konu olarak anlatılsın — kullanıcı
+  VenvStudio'yu terminalden nasıl kullanacağını Learn'den öğrenebilsin.
+
+---
+
 ## 🎯 VİZYON — VenvStudio'nun 7 Temel Sütunu (Bayram, 2026-08-13)
 
 **Her yeni özellik/karar bu 7 maddeye göre değerlendirilmeli — bunlar

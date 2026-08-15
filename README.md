@@ -195,22 +195,16 @@ VenvStudio checks packages against a curated compatibility list **before** insta
 <summary><b>🗂️ Environments</b></summary>
 <br>
 <p align="center">
-  <img src="assets/screenshots/environment1.png" alt="Virtual Environments" width="800">
+  <img src="assets/screenshots/virtual_environments.png" alt="Virtual Environments — full table" width="800">
 </p>
 <p align="center">
   <img src="assets/screenshots/environments.png" alt="Environments — Command History open" width="800">
-</p>
-<p align="center">
-  <img src="assets/screenshots/virtual_environments.png" alt="Virtual Environments — full table" width="800">
 </p>
 </details>
 
 <details>
 <summary><b>🚀 Launch Apps</b></summary>
 <br>
-<p align="center">
-  <img src="assets/screenshots/packages-launch1.png" alt="Launch Applications" width="800">
-</p>
 <p align="center">
   <img src="assets/screenshots/launch_apps.png" alt="Launch Applications — Links expanded" width="800">
 </p>
@@ -219,15 +213,6 @@ VenvStudio checks packages against a curated compatibility list **before** insta
 <details>
 <summary><b>📦 Installed Packages</b></summary>
 <br>
-<p align="center">
-  <img src="assets/screenshots/packages1.png" alt="Installed Packages" width="800">
-</p>
-<p align="center">
-  <img src="assets/screenshots/packages2.png" alt="Right-click Context Menu" width="800">
-</p>
-<p align="center">
-  <img src="assets/screenshots/packages3.png" alt="Package Info (pip show)" width="800">
-</p>
 <p align="center">
   <img src="assets/screenshots/installed_apps_1.png" alt="Package Info dialog" width="800">
 </p>
@@ -240,9 +225,6 @@ VenvStudio checks packages against a curated compatibility list **before** insta
 <summary><b>📚 Package Catalog</b></summary>
 <br>
 <p align="center">
-  <img src="assets/screenshots/packages-catalog1.png" alt="Package Catalog" width="800">
-</p>
-<p align="center">
   <img src="assets/screenshots/catalog_1.png" alt="Package Catalog — browsing by category" width="800">
 </p>
 <p align="center">
@@ -254,12 +236,6 @@ VenvStudio checks packages against a curated compatibility list **before** insta
 <summary><b>⚡ Presets</b></summary>
 <br>
 <p align="center">
-  <img src="assets/screenshots/packages-presets1.png" alt="Presets" width="800">
-</p>
-<p align="center">
-  <img src="assets/screenshots/packages-presets2.png" alt="Preset Install" width="800">
-</p>
-<p align="center">
   <img src="assets/screenshots/presets.png" alt="Presets — install progress" width="800">
 </p>
 </details>
@@ -267,9 +243,6 @@ VenvStudio checks packages against a curated compatibility list **before** insta
 <details>
 <summary><b>📝 Manual Install</b></summary>
 <br>
-<p align="center">
-  <img src="assets/screenshots/packages-manual_install_1.png" alt="Manual Install" width="800">
-</p>
 <p align="center">
   <img src="assets/screenshots/manual_install.png" alt="Manual Install — installing in progress" width="800">
 </p>
@@ -318,15 +291,6 @@ VenvStudio checks packages against a curated compatibility list **before** insta
 <details>
 <summary><b>⚙️ Settings</b></summary>
 <br>
-<p align="center">
-  <img src="assets/screenshots/settings1.png" alt="Settings - Appearance & Language" width="800">
-</p>
-<p align="center">
-  <img src="assets/screenshots/settings2_python_install.png" alt="Settings - Python & Paths" width="800">
-</p>
-<p align="center">
-  <img src="assets/screenshots/settings3.png" alt="Settings - Custom Catalog & Diagnostics" width="800">
-</p>
 <p align="center">
   <img src="assets/screenshots/settings-1.png" alt="Settings — Appearance, fonts, language" width="800">
 </p>

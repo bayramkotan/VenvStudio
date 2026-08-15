@@ -828,6 +828,86 @@ Neden elle tablo tutmuyoruz: handoff'taki el yazımı tablo `_update_quick_sideb
 
 ---
 
+## 📊 REFERANS — Conflict Manager Sisteminin Güncel Durumu (2026-08-14, v1.6.48 sonrası)
+
+> Bu bölüm bir oturum kaydı değil, **kalıcı bir durum özeti** — başka
+> bir konuşmada/oturumda "Conflict Manager ne durumda, ne eksik"
+> sorusuna hızlıca cevap vermek için. Güncellendikçe bu bölüm de
+> güncellenmeli, eski hale bırakılmamalı.
+
+### ✅ Mimari (nasıl çalıştığı) — TAMAMLANDI sayılır, köklü değişiklik gerekmiyor
+
+Bayram'ın "ne yükleyecek olursak olsun Conflict Manager'den geçmesi
+gerekecek" isteği (2026-08-13) artık gerçek: **4 kurulum yolunun
+hepsi** aynı merkezi kontrol fonksiyonundan (`package_ops.py` →
+`_install_packages`) geçiyor:
+
+| Kurulum yolu | Durum | Dosya |
+|---|---|---|
+| Presets | ✅ | `tab_builders.py` → `_install_packages` |
+| Manual Install | ✅ | `package_ops.py` → `_install_manual` → `_install_packages` |
+| Catalog | ✅ (v1.6.48'de eklendi) | `package_ops.py` → `_apply_catalog_changes` → `_install_packages` |
+| N11 Install Launcher | ✅ | `window_menu.py` → `_install_launcher_env_status`, aynı `CONFLICT_RULES` + canlı PyPI kaynağını kullanıyor |
+
+**Kontrol katmanları (öncelik sırası, `_install_packages` içinde):**
+1. `CONFLICT_RULES` (statik, elle kürasyon edilmiş liste, `constants.py`)
+   — varsa, min/max_python + blocked_envs + severity + note + category
+   + alternative alanlarıyla en yetkili kaynak.
+2. Yoksa: canlı PyPI wheel kontrolü (`_check_pypi_wheel_availability`)
+   — sadece venv/uv/hatch/pdm/poetry için (conda/pixi conda-forge'dan
+   çekiyor, pipx'in `_py_ver`'i hiç çözülmüyor).
+3. Hata varsa: kullanıcıya diyalog — "Install Anyway" / "Create New
+   Environment…" / Cancel. Uyarı varsa: bilgilendirici, engellemeyen.
+
+**Conflict Manager dialogu (`conflict_manager.py`) — arayüz durumu:**
+- Bir satıra (pakete) tıklayınca detay paneli: açıklama + o an seçili
+  env tipine göre gerçek komut (8 env tipi) + **4 buton**: 🚀 Install
+  (N9'un gerçek hattı), 🌱 Create New Environment…, 🔄 Try Alternative
+  (gerçek `alternative` verisiyle dinamik etiketli, tıklayınca
+  gerçekten kuruyor), 📚 Open in Learn (learn_content.py başlık
+  kalıbından otomatik eşleştirme, eşleşme yoksa gizli)
+- Export CSV / Export JSON — tablodaki her şeyi (browse veya scan
+  sonucu) dosyaya kaydediyor
+- "Scan Environment" artık TÜM taranan paketleri gösteriyor (uyumlu
+  olanlar dahil, ✅ ile), sadece sorunluları değil
+- Minimize/maximize var, modal değil (MainWindow'u kilitlemiyor)
+
+**Sonuç:** Bu katmanın kendisinde acil bir geliştirme borcu yok. Yeni
+bir kurulum yolu eklenirse (örn. ileride bir "Bulk Install" özelliği),
+o da `_install_packages`'i çağırmalı — yeni bir kontrol mekanizması
+icat edilmemeli.
+
+### 🟡 Veri (kapsam) — büyütülebilir, acil değil
+
+- `CONFLICT_RULES`: **218 paket** elle kürasyon edilmiş (23 orijinal +
+  51 bilinen-sorunlu [v1.6.44] + 136 popüler [v1.6.44] + v1.6.45
+  oturumunda eklenen category/alternative zenginleştirmesi — bazı
+  sayılar zamanla üst üste binmiş olabilir, kesin güncel sayı için
+  `grep -c '": {' constants.py`'ye bakılmalı, dosyanın TAMAMI bu
+  formatta olmadığından bu da yaklaşık bir sayı).
+- Bayram'ın hedefi (2026-08-13): "belki 5000" pakete çıkmak. Mimari
+  buna hazır (liste boyutundan bağımsız çalışıyor), ama veri girişi
+  organik olarak büyümesi gereken bir iş — acil değil, ihtiyaç
+  çıktıkça (örn. bir kullanıcı belirli bir paketle sorun yaşarsa)
+  eklenmeli.
+- Canlı PyPI kontrolü bu boşluğu KISMEN kapatıyor (wheel yoksa
+  yakalıyor) ama derin sorunları (conda gerektirir, GPU ister, belirli
+  env tipinde anlamsız) SADECE elle girilmiş listede yakalanabiliyor.
+
+### 🔴 Hiç başlanmamış — bağımlılık ağaçları
+
+Bayram'ın "bağımlılıklarını da göstereceğiz ileride inşallah"
+(2026-08-13) dediği özellik — her paketin kendi bağımlılık ağacını
+çekip göstermek. Bu:
+- Mimariye gerçekten dokunacak büyük bir özellik (muhtemelen `pip show`
+  ya da PyPI'ın `requires_dist` verisini kullanarak bir ağaç/graph
+  görselleştirmesi gerekecek)
+- Şu an için sadece bir yön, hiç tasarım/kod çalışması yapılmadı
+- Bir sonraki büyük konuşma konusu olmaya aday, ama Bayram henüz
+  "şimdi yapalım" demedi
+
+---
+
 ## Bu Oturumda Yapılanlar (2026-08-14 — v1.6.48, PUSH EDİLECEK)
 
 ### Özet

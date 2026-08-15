@@ -68,16 +68,37 @@ Or download the standalone binary — **no Python required:**
 | 📦 | **PDM** | `pdm init` | PEP 582 / pyproject.toml based package manager |
 | 🌊 | **Pixi** | `pixi init` | conda-forge + PyPI, blazing fast Rust-powered environment |
 
+### 🧩 Conflict Manager
+
+VenvStudio checks packages against a curated compatibility list **before**
+installing them — every install path (Catalog, Presets, Manual Install,
+Install Launcher) goes through the same check, so nothing slips through.
+
+- **218 curated rules** — packages with known Python-version limits,
+  environment restrictions, or that need a native/conda build instead
+  of a plain pip wheel
+- **Live PyPI fallback** — for packages not on the curated list,
+  VenvStudio checks PyPI directly for a matching wheel before installing
+- Click any package for a **detail panel**: plain-English explanation,
+  the exact install command for your environment type, and one-click
+  actions — 🚀 Install, 🌱 Create New Environment, 🔄 Try Alternative
+  (swap in a known-good replacement, e.g. PyQt5 → PySide6), 📚 Open in
+  Learn
+- **Scan Environment** — check every package already installed, not
+  just new ones
+- **Export** — save the full compatibility table as CSV or JSON
+
 ### 📦 Package Management
 - **Installed** tab — filter, select, uninstall, export, import packages
-- **Catalog** tab — 200+ curated packages across 15 categories with PyPI & Docs links
+- **Catalog** tab — 64 curated packages across 32 categories with PyPI & Docs links
 - **Presets** tab — one-click install bundles (Data Science, Web API, Django, Flask, ML, NLP, CV, Testing...)
 - **Manual Install** tab — paste package names or version specs (`numpy==1.24`, `pandas>=2.0`)
 - pip or **uv** backend (uv is 10–100× faster)
 
 ### 🚀 Quick Launch
 - Sidebar shows installed apps for the active environment
-- **22 one-click launchers** — see full list below
+- **26 one-click launchers** — see full list below
+- **Install Launcher** (File menu) — pick any app, VenvStudio finds a compatible environment automatically or offers to create one
 - **System tools** — R, RStudio, Ollama, DBeaver, jamovi, JASP via Conda
 - **Jupyter Working Directory** — configurable (Home / Env Folder / Custom Path)
 - **Create Desktop Shortcut** for any app
@@ -126,6 +147,10 @@ Or download the standalone binary — **no Python required:**
 | ![Marimo](https://img.shields.io/badge/-8B5CF6?style=flat-square) | **Marimo** | Reactive notebook — no hidden state, runs as an app | 📓 Notebooks | [marimo.io](https://marimo.io/) |
 | ![Quarto](https://img.shields.io/badge/-75AADB?style=flat-square&logo=quarto&logoColor=white) | **Quarto** | Publish documents, reports and dashboards | 📄 Publishing | [quarto.org](https://quarto.org/) |
 | ![IPython](https://img.shields.io/badge/-3776AB?style=flat-square&logo=python&logoColor=white) | **IPython** | Enhanced interactive Python shell | 🐍 Shell | [ipython.org](https://ipython.org/) |
+| ![Chainlit](https://img.shields.io/badge/-000000?style=flat-square) | **Chainlit** | Build conversational AI / LLM chat apps | 🗣️ LLM & GenAI | [chainlit.io](https://chainlit.io/) |
+| ![Shiny](https://img.shields.io/badge/-4E9BCD?style=flat-square) | **Shiny** | Python web apps for data science, R-inspired | 🌐 Web Apps | [shiny.posit.co](https://shiny.posit.co/py/) |
+| ![NiceGUI](https://img.shields.io/badge/-5898D4?style=flat-square) | **NiceGUI** | Python-only web UIs, no HTML/CSS/JS needed | 🌐 Web Apps | [nicegui.io](https://nicegui.io/) |
+| ![Bokeh](https://img.shields.io/badge/-2E7D9E?style=flat-square) | **Bokeh** | Interactive visualization for modern browsers | 📊 ML Ops | [bokeh.org](https://bokeh.org/) |
 
 ### 🛠️ System Tools (Conda / Portable)
 
@@ -205,6 +230,8 @@ Installing with pip gives you two names for the same tool: **`vs`** to type and
 | `vs list` | `venvstudio list` | List every detected environment |
 | `vs create NAME` | `venvstudio create NAME` | Create a venv environment |
 | `vs create NAME -t uv` | `venvstudio create NAME -t uv` | Create a uv environment |
+| `vs create NAME -t poetry` | `venvstudio create NAME -t poetry` | Create a Poetry environment |
+| `vs create NAME -t conda` | `venvstudio create NAME -t conda` | Create a Conda environment |
 | `vs create NAME -t hatch` | `venvstudio create NAME -t hatch` | Create a Hatch environment |
 | `vs create NAME -t pdm` | `venvstudio create NAME -t pdm` | Create a PDM environment |
 | `vs create NAME -t pixi` | `venvstudio create NAME -t pixi` | Create a Pixi environment |

@@ -23,6 +23,7 @@
   <a href="#-install">Install</a> •
   <a href="#-features">Features</a> •
   <a href="#-supported-environment-types">Env Types</a> •
+  <a href="#-conflict-manager">Conflict Manager</a> •
   <a href="#-screenshots">Screenshots</a> •
   <a href="#-quick-start">Quick Start</a> •
   <a href="#-export-formats">Export</a> •
@@ -82,6 +83,7 @@ Or download the standalone binary — **no Python required:**
 - Per-environment cache — instant load, zero delays
 - **Default Environment** — opens automatically on launch
 - Open terminal with env pre-activated
+- **Command History** — every command run this session, filterable, copy to clipboard
 - Export to 6+ formats (see below)
 
 </td>
@@ -89,7 +91,7 @@ Or download the standalone binary — **no Python required:**
 
 ### 📦 Package Management
 - **Installed** — filter, select, uninstall, export, import
-- **Catalog** — 200+ curated packages across 15 categories
+- **Catalog** — 64 curated packages across 32 categories
 - **Presets** — one-click bundles (Data Science, Web API, Django, ML, NLP...)
 - **Manual Install** — paste package names or version specs
 - pip or **uv** backend (10–100× faster)
@@ -102,7 +104,8 @@ Or download the standalone binary — **no Python required:**
 
 ### 🚀 Quick Launch
 - Sidebar shows installed apps for active env
-- **22 one-click launchers** — [see full list below](#-supported-launchers)
+- **26 one-click launchers** — [see full list below](#-supported-launchers)
+- **Install Launcher** (File menu) — pick any app, VenvStudio finds a compatible environment automatically or offers to create one
 - **System tools** — R, RStudio, Ollama, DBeaver, jamovi, JASP via Conda
 - **Jupyter Working Directory** — configurable per launch
 - **Create Desktop Shortcut** for any app
@@ -116,6 +119,7 @@ Or download the standalone binary — **no Python required:**
 - Add custom Python paths
 - Set **User** or **System Default** Python (PATH management)
 - Download standalone builds from [python-build-standalone](https://github.com/astral-sh/python-build-standalone)
+- **Log Viewer** — live, filterable application log, right from the app
 
 </td>
 </tr>
@@ -169,6 +173,22 @@ Each environment is tracked with a `.venvstudio_env` marker file, and the **Runt
 
 ---
 
+## 🧩 Conflict Manager
+
+VenvStudio checks packages against a curated compatibility list **before** installing them — every install path (Catalog, Presets, Manual Install, Install Launcher) goes through the same check, so nothing slips through.
+
+- **218 curated rules** — packages with known Python-version limits, environment restrictions, or that need a native/conda build instead of a plain pip wheel
+- **Live PyPI fallback** — for packages not on the curated list, VenvStudio checks PyPI directly for a matching wheel before installing
+- Click any package for a **detail panel**: plain-English explanation, the exact install command for your environment type, and one-click actions:
+  - 🚀 **Install** — into the current environment, if compatible
+  - 🌱 **Create New Environment…** — if it isn't
+  - 🔄 **Try Alternative** — swap in a known-good replacement (e.g. PyQt5 → PySide6) and install it directly
+  - 📚 **Open in Learn** — jump to the matching tutorial, if one exists
+- **Scan Environment** — check every package already installed, not just new ones
+- **Export** — save the full compatibility table as CSV or JSON
+
+---
+
 ## 📸 Screenshots
 
 <details open>
@@ -177,6 +197,12 @@ Each environment is tracked with a `.venvstudio_env` marker file, and the **Runt
 <p align="center">
   <img src="assets/screenshots/environment1.png" alt="Virtual Environments" width="800">
 </p>
+<p align="center">
+  <img src="assets/screenshots/environments.png" alt="Environments — Command History open" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/virtual_environments.png" alt="Virtual Environments — full table" width="800">
+</p>
 </details>
 
 <details>
@@ -184,6 +210,9 @@ Each environment is tracked with a `.venvstudio_env` marker file, and the **Runt
 <br>
 <p align="center">
   <img src="assets/screenshots/packages-launch1.png" alt="Launch Applications" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/launch_apps.png" alt="Launch Applications — Links expanded" width="800">
 </p>
 </details>
 
@@ -199,6 +228,12 @@ Each environment is tracked with a `.venvstudio_env` marker file, and the **Runt
 <p align="center">
   <img src="assets/screenshots/packages3.png" alt="Package Info (pip show)" width="800">
 </p>
+<p align="center">
+  <img src="assets/screenshots/installed_apps_1.png" alt="Package Info dialog" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/installed_apps_2.png" alt="Right-click menu — copy install commands, open on PyPI" width="800">
+</p>
 </details>
 
 <details>
@@ -206,6 +241,12 @@ Each environment is tracked with a `.venvstudio_env` marker file, and the **Runt
 <br>
 <p align="center">
   <img src="assets/screenshots/packages-catalog1.png" alt="Package Catalog" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/catalog_1.png" alt="Package Catalog — browsing by category" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/catalog_2.png" alt="Package Catalog — category filter" width="800">
 </p>
 </details>
 
@@ -218,6 +259,9 @@ Each environment is tracked with a `.venvstudio_env` marker file, and the **Runt
 <p align="center">
   <img src="assets/screenshots/packages-presets2.png" alt="Preset Install" width="800">
 </p>
+<p align="center">
+  <img src="assets/screenshots/presets.png" alt="Presets — install progress" width="800">
+</p>
 </details>
 
 <details>
@@ -225,6 +269,49 @@ Each environment is tracked with a `.venvstudio_env` marker file, and the **Runt
 <br>
 <p align="center">
   <img src="assets/screenshots/packages-manual_install_1.png" alt="Manual Install" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/manual_install.png" alt="Manual Install — installing in progress" width="800">
+</p>
+</details>
+
+<details>
+<summary><b>🧩 Conflict Manager</b></summary>
+<br>
+<p align="center">
+  <img src="assets/screenshots/conflict_manager.png" alt="Conflict Manager — All Known Rules" width="800">
+</p>
+</details>
+
+<details>
+<summary><b>🚀 Install Launcher</b></summary>
+<br>
+<p align="center">
+  <img src="assets/screenshots/install_launcher.png" alt="Install Launcher — pick an app, auto-detect a compatible environment" width="800">
+</p>
+</details>
+
+<details>
+<summary><b>📖 Learn</b></summary>
+<br>
+<p align="center">
+  <img src="assets/screenshots/learn.png" alt="Learn — tutorials with runnable code" width="800">
+</p>
+</details>
+
+<details>
+<summary><b>🕘 Command History</b></summary>
+<br>
+<p align="center">
+  <img src="assets/screenshots/command_history.png" alt="Command History — every command run this session" width="800">
+</p>
+</details>
+
+<details>
+<summary><b>📜 Log Viewer</b></summary>
+<br>
+<p align="center">
+  <img src="assets/screenshots/log_viewer.png" alt="Log Viewer — live, filterable application log" width="800">
 </p>
 </details>
 
@@ -239,6 +326,33 @@ Each environment is tracked with a `.venvstudio_env` marker file, and the **Runt
 </p>
 <p align="center">
   <img src="assets/screenshots/settings3.png" alt="Settings - Custom Catalog & Diagnostics" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/settings-1.png" alt="Settings — Appearance, fonts, language" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/settings-2.png" alt="Settings — Python Versions & Paths" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/settings-3.png" alt="Settings — pipx Python & Conda Mirrors" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/settings-4.png" alt="Settings — Toolchain Manager" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/settings-5.png" alt="Settings — Themes & Terminal Emulators" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/settings-6.png" alt="Settings — Custom Terminals & Nerd Fonts" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/settings-7.png" alt="Settings — Editor Integration & Custom Categories" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/settings-8.png" alt="Settings — Preset Manager & Custom Catalog Packages" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/settings-9.png" alt="Settings — General & Command Line" width="800">
 </p>
 </details>
 
@@ -272,6 +386,10 @@ Each environment is tracked with a `.venvstudio_env` marker file, and the **Runt
 | ![Marimo](https://img.shields.io/badge/-8B5CF6?style=flat-square) | **Marimo** | Reactive notebook — no hidden state, runs as an app | 📓 Notebooks | [marimo.io](https://marimo.io/) |
 | ![Quarto](https://img.shields.io/badge/-75AADB?style=flat-square&logo=quarto&logoColor=white) | **Quarto** | Publish documents, reports and dashboards | 📄 Publishing | [quarto.org](https://quarto.org/) |
 | ![IPython](https://img.shields.io/badge/-3776AB?style=flat-square&logo=python&logoColor=white) | **IPython** | Enhanced interactive Python shell | 🐍 Shell | [ipython.org](https://ipython.org/) |
+| ![Chainlit](https://img.shields.io/badge/-000000?style=flat-square) | **Chainlit** | Build conversational AI / LLM chat apps | 🗣️ LLM & GenAI | [chainlit.io](https://chainlit.io/) |
+| ![Shiny](https://img.shields.io/badge/-4E9BCD?style=flat-square) | **Shiny** | Python web apps for data science, R-inspired | 🌐 Web Apps | [shiny.posit.co](https://shiny.posit.co/py/) |
+| ![NiceGUI](https://img.shields.io/badge/-5898D4?style=flat-square) | **NiceGUI** | Python-only web UIs, no HTML/CSS/JS needed | 🌐 Web Apps | [nicegui.io](https://nicegui.io/) |
+| ![Bokeh](https://img.shields.io/badge/-2E7D9E?style=flat-square) | **Bokeh** | Interactive visualization for modern browsers | 📊 ML Ops | [bokeh.org](https://bokeh.org/) |
 
 ### 🛠️ System Tools (Conda / Portable)
 

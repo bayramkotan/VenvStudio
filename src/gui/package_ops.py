@@ -586,13 +586,19 @@ class PackageOpsMixin:
                 self.current_worker.finished.connect(self._on_install_finished)
             self.current_worker.start()
         elif to_install:
-            self._do_install(to_install)
+            # Büyük Girişim (Bayram, 2026-08-12/14): Catalog was the one
+            # install path that bypassed the CONFLICT_RULES/dry-run
+            # pre-flight -- Presets and Manual Install already went
+            # through _install_packages, Catalog alone called the bare
+            # _do_install with zero compatibility checking. Routed
+            # through the shared method now, same as everywhere else.
+            self._install_packages(to_install, hint_name="Catalog")
 
     def _chain_install(self, uninstall_ok, uninstall_msg, to_install):
         if not uninstall_ok:
             self._append_log(f"❌ Uninstall failed: {uninstall_msg[:300]}")
         self._append_log("✅ Uninstall done. Starting install...")
-        self._do_install(to_install)
+        self._install_packages(to_install, hint_name="Catalog")
 
     # ── Install / Uninstall ──
 

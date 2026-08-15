@@ -315,6 +315,9 @@ VenvStudio checks packages against a curated compatibility list **before** insta
 <p align="center">
   <img src="assets/screenshots/settings-9.png" alt="Settings — General & Command Line" width="800">
 </p>
+<p align="center">
+  <img src="assets/screenshots/settings_python_install.png" alt="Settings — Download Python (standalone builds)" width="800">
+</p>
 </details>
 
 ---

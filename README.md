@@ -43,7 +43,7 @@ a script, or `requirements.txt` — or just read it and learn what's
 really happening under the hood.
 
 <p align="center">
-  <img src="assets/screenshots/Educational_1_png.png" alt="Create Environment — real python -m venv / activate / install commands shown live" width="800">
+  <img src="assets/screenshots/Educational_1.png" alt="Create Environment — real python -m venv / activate / install commands shown live" width="800">
 </p>
 <p align="center">
   <img src="assets/screenshots/Educational_2.png" alt="Create Environment (PDM) — real pdm init / pdm add commands shown live" width="800">
@@ -52,10 +52,10 @@ really happening under the hood.
   <img src="assets/screenshots/Educational_3.png" alt="Environments — Command Reference panel shows the real rm -rf delete command" width="800">
 </p>
 <p align="center">
-  <img src="assets/screenshots/Educational_4_png.png" alt="Launch — the real install command (e.g. pdm add PyQt5 ...) shown with a Copy button" width="800">
+  <img src="assets/screenshots/Educational_4.png" alt="Launch — the real install command (e.g. pdm add PyQt5 ...) shown with a Copy button" width="800">
 </p>
 <p align="center">
-  <img src="assets/screenshots/Educational_5_png.png" alt="Log Viewer — every command run this session, logged verbatim" width="800">
+  <img src="assets/screenshots/Educational_5.png" alt="Log Viewer — every command run this session, logged verbatim" width="800">
 </p>
 
 This shows up throughout the app:

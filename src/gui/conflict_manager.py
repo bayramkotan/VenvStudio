@@ -5,10 +5,12 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
     QComboBox, QFrame, QSizePolicy, QAbstractItemView, QProgressBar,
-    QGroupBox,
+    QGroupBox, QFileDialog, QMessageBox,
 )
 from PySide6.QtCore import Qt, QTimer, QThread, Signal
 from PySide6.QtGui import QColor
+import csv
+import json
 
 from src.utils.constants import CONFLICT_RULES, CONFLICT_RULES_ALIASES
 
@@ -100,6 +102,7 @@ class ConflictManagerDialog(QDialog):
             | Qt.WindowCloseButtonHint
         )
         self.resize(860, 600)
+        self.setMinimumWidth(760)  # button labels were clipping below this (v1.6.45/46 fix, re-applied)
         self._env_type         = env_type
         self._py_ver           = py_version      # (major, minor) or None
         self._installed_pkgs   = installed_packages or []  # list of pkg names
@@ -175,7 +178,7 @@ class ConflictManagerDialog(QDialog):
         self._filter_edit.setPlaceholderText("Filter by package name…")
         filter_row.addWidget(self._filter_edit, 1)
         self._show_all_btn = QPushButton("Show All")
-        self._show_all_btn.setFixedWidth(80)
+        self._show_all_btn.setFixedWidth(110)  # 80px clipped "Show All" to a few middle letters (Bayram, 2026-08-14)
         self._show_all_btn.setCheckable(True)
         self._show_all_btn.setChecked(True)
         filter_row.addWidget(self._show_all_btn)
@@ -219,15 +222,30 @@ class ConflictManagerDialog(QDialog):
         detail_btn_row = QHBoxLayout()
         self._detail_install_btn = QPushButton("🚀 Install")
         self._detail_create_env_btn = QPushButton("🌱 Create New Environment…")
+        # Re-added after a lost merge (2026-08-14) -- CONFLICT_RULES has a
+        # real "alternative" field on 16 packages (e.g. pygame -> pygame-ce);
+        # label is set dynamically per-package in _on_row_selected so it
+        # names the actual suggestion, not a generic "try something else".
+        self._detail_alt_btn = QPushButton("🔄 Try Alternative")
         self._detail_learn_btn = QPushButton("📚 Open in Learn")
         detail_btn_row.addWidget(self._detail_install_btn)
         detail_btn_row.addWidget(self._detail_create_env_btn)
+        detail_btn_row.addWidget(self._detail_alt_btn)
         detail_btn_row.addWidget(self._detail_learn_btn)
         detail_btn_row.addStretch()
         detail_layout.addLayout(detail_btn_row)
         root.addWidget(self._detail_box)
 
         btn_row = QHBoxLayout()
+        # Re-added after a lost merge (2026-08-14) -- exports whatever is
+        # currently in the table (all-rules browse OR scan results) to a
+        # file the user picks.
+        export_csv_btn = QPushButton("📄 Export CSV")
+        export_json_btn = QPushButton("📄 Export JSON")
+        export_csv_btn.clicked.connect(lambda: self._export_table("csv"))
+        export_json_btn.clicked.connect(lambda: self._export_table("json"))
+        btn_row.addWidget(export_csv_btn)
+        btn_row.addWidget(export_json_btn)
         btn_row.addStretch()
         close_btn = QPushButton("Close")
         close_btn.clicked.connect(self.accept)
@@ -247,6 +265,7 @@ class ConflictManagerDialog(QDialog):
         self._detail_install_btn.clicked.connect(self._on_detail_install)
         self._detail_create_env_btn.clicked.connect(self._on_detail_create_env)
         self._detail_learn_btn.clicked.connect(self._on_detail_open_learn)
+        self._detail_alt_btn.clicked.connect(self._on_detail_try_alternative)
 
         self._filter_timer = QTimer(self)
         self._filter_timer.setSingleShot(True)
@@ -513,6 +532,15 @@ class ConflictManagerDialog(QDialog):
         self._detail_learn_title = learn_title
         self._detail_learn_btn.setVisible(learn_title is not None)
 
+        _, rule = _lookup(pkg_name)
+        alt_pkg = rule.get("alternative") if rule else None
+        self._detail_alt_pkg = alt_pkg
+        if alt_pkg:
+            self._detail_alt_btn.setText(f"🔄 Try {alt_pkg} instead")
+            self._detail_alt_btn.setVisible(True)
+        else:
+            self._detail_alt_btn.setVisible(False)
+
         self._detail_box.setVisible(True)
 
     def _on_detail_install(self):
@@ -537,6 +565,57 @@ class ConflictManagerDialog(QDialog):
             parent._switch_page(3)
         if hasattr(parent, "learn_page") and parent.learn_page:
             parent.learn_page._jump_to_topic(title)
+
+    def _on_detail_try_alternative(self):
+        # Directive, not just informational: clicking this actually
+        # installs the suggested alternative (same real pipeline as
+        # the Install button), it doesn't just show text.
+        alt_pkg = getattr(self, "_detail_alt_pkg", None)
+        if not alt_pkg:
+            return
+        parent = self.parent()
+        if parent is not None and hasattr(parent, "package_panel") and parent.package_panel:
+            parent.package_panel._install_packages([alt_pkg], hint_name="Conflict Manager (alternative)")
+
+    def _export_table(self, fmt):
+        # Exports whatever is CURRENTLY in the table -- works the same
+        # whether it's the all-rules browse view or a Scan Results view,
+        # since both populate the same self._table with the same 5
+        # columns (Package, Min Python, Max Python, Blocked Envs, Note).
+        row_count = self._table.rowCount()
+        if row_count == 0:
+            QMessageBox.information(self, "Export", "Nothing to export -- the table is empty.")
+            return
+        headers = ["Package", "Min Python", "Max Python", "Blocked Envs", "Note"]
+        rows = []
+        for r in range(row_count):
+            row = []
+            for c in range(5):
+                item = self._table.item(r, c)
+                row.append(item.text() if item else "")
+            rows.append(row)
+
+        ext = "csv" if fmt == "csv" else "json"
+        path, _ = QFileDialog.getSaveFileName(
+            self, f"Export as {ext.upper()}", f"conflict_manager_export.{ext}",
+            f"{ext.upper()} Files (*.{ext})"
+        )
+        if not path:
+            return
+        try:
+            if fmt == "csv":
+                with open(path, "w", newline="", encoding="utf-8") as f:
+                    writer = csv.writer(f)
+                    writer.writerow(headers)
+                    writer.writerows(rows)
+            else:
+                data = [dict(zip(headers, row)) for row in rows]
+                with open(path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, indent=2, ensure_ascii=False)
+        except Exception as e:
+            QMessageBox.warning(self, "Export failed", str(e))
+            return
+        QMessageBox.information(self, "Export complete", f"{row_count} row(s) exported to:\n{path}")
 
     # ── all-rules table ────────────────────────────────────────────────────
 

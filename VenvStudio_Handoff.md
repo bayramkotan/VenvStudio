@@ -3,8 +3,8 @@
 ## Proje
 - **Repo:** https://github.com/bayramkotan/VenvStudio
 - **PyPI:** https://pypi.org/project/venvstudio/
-- **GÜNCEL VERSİYON: v1.6.47** (2026-08-14 — İki ana iş: (1) **Conflict Manager eğitici/yönlendirici detay paneli** eklendi (satıra tıkla → açıklama + gerçek komut + Install/Create New Environment/Open in Learn butonları, Learn eşleştirmesi learn_content.py'nin başlık kalıbından otomatik). (2) v1.6.46'nın "henüz test edilmedi" bıraktığı JupyterLab/Notebook open_browser fix'i test edildi — **iki tarayıcı sekmesi açtığı** ortaya çıktı. İlk düzeltme denemesi (--no-browser eklemek) BAŞARISIZ oldu çünkü kod, `cmd` listesi zaten inşa edildikten SONRA `app_def["command"]`'i değiştiriyordu — ölü kod, hiçbir hata vermeden hiçbir etkisi yoktu, sadece gerçek başlatma logunu okuyunca fark edildi. Asıl düzeltme: mutasyon `_launch_app`'in en başına taşındı, herhangi bir `cmd` inşasından önce. **Detaylı ders (tekrar düşmemek için) "Bu Oturumda Yapılanlar (2026-08-14 — v1.6.47)" bölümünde.**) — PUSH EDİLECEK. **JupyterLab fix'i temiz durumda (eski süreçler kapatılmış) yeniden test edilmeli.** PUSH SONRASI PyPI history sayfasını kontrol et + `pip install venvstudio==1.6.47 --no-cache-dir --break-system-packages` ile doğrula. Çok makineli çalışma: commit öncesi HER ZAMAN `git fetch` + `git log origin/main` (v1.6.46'da bunu atlayınca gerçek bir merge çakışması yaşanmıştı).
-- **Son TODO güncellemesi (2026-08-14, v1.6.47 ile birlikte):** Conflict Manager detay paneli eklendi olarak işlendi. Jupyter çift-sekme bug'ı + kök nedeni (sıralama hatası) + düzeltmesi + genel ders detaylı yazıldı. "Temiz durumda yeniden test et" notu öne çıkarıldı.
+- **GÜNCEL VERSİYON: v1.6.48** (2026-08-14 — Ciddi bir kendi hatamı buldum ve düzelttim: bu konuşmadaki v1.6.47 işim, BAŞKA bir oturumda (v1.6.45→46) doğru şekilde merge edilmiş bir conflict_manager.py versiyonunu sessizce ezmişti — Try Alternative butonu, Export CSV/JSON, min-width fix kaybolmuştu (constants.py'nin veri katmanı, 218 kural + alternative/category alanları, sağlam kalmıştı). Kayıp özellikleri gerçek CONFLICT_RULES verisinden yola çıkarak yeniden inşa edip kendi 3 butonumla (Install/Create New Environment/Open in Learn) birleştirdim, hiçbir şey silmeden. Ayrıca bağımsız bir hata daha düzeltildi: "Show All" butonu 80px'te metni kırpıyordu, 110px'e çıkarıldı. **GENEL SÜREÇ DERSİ (önemli, tekrar okunmalı): çok oturumlu/paralel çalışmada, bir dosyayı kendi önbellekten okuyup üzerine yazmak, o dosya ARADA başka bir oturumda değiştirilmişse sessizce geri alır — detay "Bu Oturumda Yapılanlar (2026-08-14 — v1.6.48)" bölümünde.** — PUSH EDİLECEK. PUSH SONRASI PyPI history sayfasını kontrol et + `pip install venvstudio==1.6.48 --no-cache-dir --break-system-packages` ile doğrula. Çok makineli çalışma: commit öncesi HER ZAMAN `git fetch` + `git log origin/main`.
+- **Son TODO güncellemesi (2026-08-14, v1.6.48 ile birlikte):** Büyük Girişim'in v1.6.45 alt-maddesi, gerçek dosya durumuyla uyuşacak şekilde düzeltildi (Try Alternative/Export'un GERÇEKTEN kayıp olduğu ve şimdi geri getirildiği not edildi).
 - **Bir sonraki oturumun kuyruğu:** aşağıdaki "Bu Oturumda Yapılanlar (2026-07-23/24)" bölümünün *Açık maddeler* kısmı
 - **Proje dizini (Windows):** `C:\Github\VenvStudio`
 - **Proje dizini (Linux - CachyOS/Pardus):** `~/Github/VenvStudio`
@@ -825,6 +825,116 @@ ama Qt sinyal string'i veya `getattr` ile çağrılanlar da yanlış işaretleni
 Neden elle tablo tutmuyoruz: handoff'taki el yazımı tablo `_update_quick_sidebar`'ı
 "sidebar güncelleme" diye listeliyordu, oysa o fonksiyon ölü koddu ve gerçek sidebar
 `quicklaunch.py`'deydi. Üretilen harita kaynakla senkron kalır.
+
+---
+
+## Bu Oturumda Yapılanlar (2026-08-14 — v1.6.48, PUSH EDİLECEK)
+
+### Özet
+Ciddi bir kendi hatamı bulup düzelttiğim bir oturum. N38 (Preset→Learn
+linkleri) tamamlandıktan sonra, Büyük Girişim'e devam etmeye çalışırken
+TODO'daki "v1.6.45 ✅" notuyla elimdeki gerçek dosyalar arasında
+tutarsızlık fark ettim — araştırınca **kendi önceki teslimatımın (bu
+konuşmadaki "v1.6.47" işi), başka bir oturumda (v1.6.45→46) doğru
+şekilde merge edilmiş bir versiyonun üzerine sessizce yazdığı** ortaya
+çıktı.
+
+### 1) Kayıp Özellik Keşfi ve Kurtarma — DETAYLI
+
+**Nasıl fark edildi:** Büyük Girişim maddesine devam etmeden önce
+TODO'yu okurken "v1.6.45 (2026-08-14) — Conflict Manager Tam Dönüşüm"
+başlığı altında CONFLICT_RULES'ın 218'e çıkarıldığı, kategorilere
+ayrıldığı, "Try Alternative" butonu ve Export (CSV/JSON) özelliği
+eklendiği yazıyordu — ama BEN bunların hiçbirini bu konuşmada
+yapmamıştım. Bayram'a sordum, gerçekten başka bir oturumda (bu
+konuşmanın dışında) yapılmış olduğu doğrulandı (`vs -V` → v1.6.47,
+yani o versiyonlar gerçekten var).
+
+**Gerçek dosyaları isteyip inceleyince:** `constants.py`'deki
+CONFLICT_RULES gerçekten 218 girişti, `category` ve `alternative`
+alanları sağlamdı — veri katmanı hiç kaybolmamıştı. Ama
+`conflict_manager.py`, **birebir benim kendi son teslim ettiğim
+dosyanın aynısıydı** (584 satır) — "Try Alternative" butonu, Export
+butonu, minimum genişlik düzeltmesi hiçbiri yoktu.
+
+**Handoff'u okuyunca (Bayram: "handoff'u okumuyor musun sen???" —
+haklı bir eleştiriydi) tam hikaye ortaya çıktı:**
+- v1.6.45 push edilirken gerçek bir git merge çakışması olmuş
+  (`constants.py` + `conflict_manager.py`'de çakışma işaretleri
+  kalmış, uygulama `SyntaxError` ile açılmaz olmuş)
+- v1.6.46 oturumunda bu çakışma çözülmüş: `constants.py`'de 18 küçük
+  çakışma bloğu (hepsi `HEAD`'in `alternative` alanı korunarak),
+  `conflict_manager.py`'de TEK ama dosyanın tamamını kaplayan bir
+  çakışma — gelen taraf çok daha eski bir sürümdü (Export/Try
+  Alternative/min-width hiçbiri yoktu), `HEAD` (hepsini içeren)
+  korunmuş, **ve o HEAD'in o zamanki AI'nin (başka bir oturumdaki ben)
+  son teslim ettiği dosyayla birebir aynı olduğu doğrulanmıştı.**
+- Yani v1.6.46 sonunda her şey sağlamdı.
+- **Sonra, BU konuşmada**, ben `conflict_manager.py`'yi "sıfırdan"
+  yeniden inşa ettim (kendi ayrı detay panelimi: Install/Create New
+  Environment/Open in Learn) — bunu **kendi eski, o merge'den habersiz
+  önbelleğimden** yaptım, çünkü bu konuşmadaki kendi iş akışımda
+  dosyayı hep kendi `/mnt/user-data/outputs/` kopyamdan okuyup
+  üzerine yazıyordum, gerçek repo durumunu hiç sormamıştım. Bayram
+  benim dosyamı kopyalayınca, doğru merge edilmiş versiyon **sessizce
+  ezildi.**
+
+**Düzeltme (bu oturumda yapıldı):** Kayıp dosyanın birebir aynısını
+geri getiremedim (hiç görmedim, elimde yok) — ama sağlam kalan veri
+katmanından (`CONFLICT_RULES`'daki gerçek `alternative`/`category`
+alanları) yola çıkarak, kaybolan özellikleri **yeniden inşa edip
+kendi 3 butonumla birleştirdim**, bu sefer hiçbir şeyi silmeden:
+- **🔄 Try Alternative butonu** geri geldi — artık gerçek `alternative`
+  verisiyle dinamik etiketleniyor (örn. "Try pygame-ce instead"),
+  tıklanınca N9'un gerçek kurulum hattıyla o alternatifi kuruyor
+  (sadece bilgi göstermiyor, yönlendirici).
+- **📄 Export CSV / 📄 Export JSON butonları** geri geldi — tablodaki
+  veriyi (browse görünümü veya scan sonuçları, ikisi de aynı
+  `self._table`'ı kullanıyor) kullanıcının seçtiği dosyaya kaydediyor.
+- **Minimum pencere genişliği (760px)** geri geldi.
+- **Ayrıca, bağımsız bir hata daha bulundu ve düzeltildi:** "Show All"
+  butonu `setFixedWidth(80)` ile çok dardı, metin kırpılıyordu
+  (Bayram bunu "How A" yazıyor diye bildirdi) — `110px`'e çıkarıldı.
+  Bu, kayıp-merge hikayesinden bağımsız, muhtemelen en baştan beri var
+  olan ayrı bir kusurdu.
+
+**Doğrulama:** Gerçek `constants.py` verisiyle test edildi — 16 paketin
+gerçek `alternative` alanı var (pygame→pygame-ce, tensorflow→torch,
+pyqt5→PySide6, vb.), buton doğru dinamik etiketleniyor. Export'un CSV
+ve JSON çıktısı izole test edildi, ikisi de doğru/parse edilebilir.
+`py_compile` ✅, `pyflakes` ✅ (tek önceden var olan uyarı, bu
+oturumdan kaynaklanmıyor), CRLF korundu.
+
+### ⚠️ GENEL DERS — Çok oturumlu/paralel çalışmada dosya güveni
+
+Bu oturumun en önemli süreç dersi: **Uzun, çok haftalık bir projede,
+farklı konuşmalar/oturumlar aynı dosyalar üzerinde paralel çalışabilir.
+Bir dosyayı "zaten elimde var" diye kendi önbelleğimden okuyup
+üzerine yazmak, o dosya ARADA BAŞKA BİR OTURUMDA değiştirilmişse
+(özellikle bir git merge çakışması geçirmişse) o değişikliği sessizce
+geri alabilir — hiçbir hata, hiçbir uyarı vermeden.**
+
+Bundan sonraki kural: Handoff'ta "başka bir oturumda X özelliği
+eklendi" gibi bir iz varsa, ya da bir dosyanın git merge geçirdiği
+yazıyorsa, o dosya için kendi önbelleğime **hiç güvenmeyeceğim** —
+her zaman gerçek, güncel dosyayı isteyip üzerine çalışacağım. Ayrıca
+büyük bir işe başlamadan önce Handoff'un son birkaç oturumunu
+gerçekten okuyup, kendi bilmediğim bir şey yapılmış mı diye kontrol
+edeceğim — sadece TODO'nun başlıklarına değil, içeriğine bakacağım.
+
+### Değişen Dosyalar (v1.6.48)
+
+| Dosya | Değişiklik |
+|---|---|
+| `src/gui/conflict_manager.py` | Kayıp Try Alternative + Export CSV/JSON + min-width düzeltmesi geri getirildi (kendi 3 butonumla birleştirilerek); ayrıca bağımsız "Show All" buton genişliği hatası düzeltildi |
+
+### Test Durumu / Sonraki Oturuma Not
+- Try Alternative + Export — mock/izole test edildi, gerçek ortamda
+  henüz denenmedi
+- "Show All" genişlik düzeltmesi — gerçek ortamda henüz denenmedi
+- Hâlâ açık: N11 çok-eşleşme dropdown testi, N35 hatch self-heal
+  (Bayram'ın cevabı bekleniyor), Büyük Girişim'in geri kalanı
+
 
 ---
 
@@ -6971,7 +7081,7 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 11. **N35** — Hatch self-heal (marker'da hatch_env_path yoksa her refresh'te yeniden dene) — Bayram'a soruldu, cevap bekleniyor
 
 ## Sonraki Chat Başlangıç Promptu
-> VenvStudio devam — Handoff'u oku. Mevcut: v1.6.47, sıradaki: v1.6.48.
+> VenvStudio devam — Handoff'u oku (ÖZELLİKLE son birkaç oturumu, dikkatlice — v1.6.48'in dersi tekrar yaşanmasın). Mevcut: v1.6.48, sıradaki: v1.6.49.
 
 ## 📋 Dosya Kopyalama Kuralları
 

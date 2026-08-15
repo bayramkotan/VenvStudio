@@ -65,6 +65,11 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
     # no parent=), so it can't call _new_env() directly -- same reason
     # env_refresh_requested exists as a signal instead of a direct call.
     new_environment_requested = Signal()
+    # N38: emitted when the user clicks a Learn-linked package name on
+    # a Preset card (tab_builders.py). Same cross-class reason as
+    # new_environment_requested above -- PackagePanel can't reach
+    # MainWindow's _switch_page()/learn_page directly.
+    learn_topic_requested = Signal(str)  # topic_title
 
     def __init__(self, parent=None, config=None):
         super().__init__(parent)

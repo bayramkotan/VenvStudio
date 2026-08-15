@@ -415,6 +415,9 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         # _create_env() directly, same reasoning as env_refresh_requested
         # just above.
         self.package_panel.new_environment_requested.connect(self._create_env)
+        # N38: preset-card package links -> Learn page (tab_builders.py) --
+        # reuses the existing bookmark-open handler, same navigation.
+        self.package_panel.learn_topic_requested.connect(self._open_bookmark)
         self.package_panel._ql_update_callback = self._update_ql_buttons
         self.package_panel._ql_env_changed_callback = self._sync_ql_selector
         self.stack.addWidget(self.package_panel)             # Page 0
@@ -1013,6 +1016,7 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
             self.package_panel = PackagePanel(config=self.config)
             self.package_panel.env_refresh_requested.connect(self._refresh_current_env_row)
             self.package_panel.new_environment_requested.connect(self._create_env)
+            self.package_panel.learn_topic_requested.connect(self._open_bookmark)
             self.package_panel._ql_update_callback = self._update_ql_buttons
             self.package_panel._ql_env_changed_callback = self._sync_ql_selector
             self.stack.removeWidget(self._packages_placeholder)

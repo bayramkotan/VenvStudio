@@ -231,6 +231,70 @@ class TabBuildersMixin:
         self._update_tabs_for_env_type()
         self._update_preset_badges()
 
+    # ── N38: preset-card package name → Learn topic links ─────────────
+
+    def _find_learn_topic_for_pkg(self, pkg_name):
+        """Best-effort match against LEARN_CATEGORIES' existing "Library —
+        Description" title convention -- same approach as Conflict
+        Manager's _find_learn_topic (conflict_manager.py). Duplicated here
+        rather than shared because it's a small, stable ~15-line matcher;
+        not worth a cross-module import for this size (Bayram, 2026-08-14:
+        keep it practical)."""
+        try:
+            from src.gui.learn_content import LEARN_CATEGORIES
+        except Exception:
+            return None
+        aliases = {
+            "torch": "pytorch", "sklearn": "scikit-learn",
+            "transformers": "hugging face transformers",
+            "langchain": "langchain", "beautifulsoup4": "beautifulsoup",
+            "psycopg2-binary": "psycopg2", "opencv-python": "opencv",
+            "python-dotenv": "dotenv", "django-rest-framework": "django",
+            "pyside6": "pyside6",
+        }
+        pkg_norm = pkg_name.lower().replace("-", "").replace("_", "")
+        alt_norm = aliases.get(pkg_name.lower(), "").replace("-", "").replace(" ", "")
+        for cat in LEARN_CATEGORIES:
+            for topic in cat.get("topics", []):
+                title = topic.get("title", "")
+                subject = title.split("—")[0].strip()
+                subject_norm = subject.lower().replace("-", "").replace("_", "").replace(" ", "")
+                if pkg_norm and pkg_norm in subject_norm:
+                    return title
+                if alt_norm and alt_norm in subject_norm:
+                    return title
+        return None
+
+    def _build_preset_pkg_html(self, packages):
+        """Render a preset card's package list as rich text: packages with
+        a Learn match become a clickable link (accent color + book icon),
+        packages without one stay plain muted text. href carries the
+        MATCHED TOPIC TITLE directly (not the package name) so the click
+        handler doesn't need to re-run the match."""
+        accent = self._c()["accent"]
+        muted = self._c()["fg_muted"]
+        parts = []
+        for pkg in packages:
+            topic = self._find_learn_topic_for_pkg(pkg)
+            if topic:
+                # href value IS the topic title -- QLabel.linkActivated
+                # hands it back to us verbatim, no re-lookup needed.
+                safe_topic = topic.replace('"', "&quot;")
+                parts.append(
+                    f'<a href="{safe_topic}" style="color:{accent}; '
+                    f'text-decoration:none;">📚 {pkg}</a>'
+                )
+            else:
+                parts.append(f'<span style="color:{muted};">{pkg}</span>')
+        return ", ".join(parts)
+
+    def _on_preset_pkg_link_clicked(self, topic_title):
+        # PackagePanel has no reference back to MainWindow (see
+        # new_environment_requested above for the same reasoning) --
+        # a Signal, connected in main_window.py, does the actual page
+        # switch + _jump_to_topic call.
+        self.learn_topic_requested.emit(topic_title)
+
     def _create_presets_tab(self) -> QWidget:
         outer = QWidget()
         outer_layout = QVBoxLayout(outer)
@@ -293,10 +357,20 @@ class TabBuildersMixin:
                 )
                 card_layout.addWidget(desc_label)
 
-            pkg_text = ", ".join(packages)
-            pkg_label = QLabel(pkg_text)
+            # N38 (Bayram, 2026-08-14): "guzel olsun" -- packages with a
+            # matching Learn topic render as clickable links (accent
+            # color + book icon), packages without one stay plain muted
+            # text. Real coverage measured at ~53% across all presets --
+            # far from all-or-nothing, so per-package links (not one
+            # blanket "Learn More" button) is the only design that makes
+            # sense here. Graceful degradation: no match, no link, no
+            # error -- matches Conflict Manager's same pattern.
+            pkg_label = QLabel(self._build_preset_pkg_html(packages))
+            pkg_label.setTextFormat(Qt.RichText)
             pkg_label.setWordWrap(True)
-            pkg_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_small']}px;")
+            pkg_label.setOpenExternalLinks(False)
+            pkg_label.setStyleSheet(f"font-size: {self._c()['fs_small']}px;")
+            pkg_label.linkActivated.connect(self._on_preset_pkg_link_clicked)
             card_layout.addWidget(pkg_label)
 
             install_btn = QPushButton(f"{tr('install')} ({len(packages)} packages)")

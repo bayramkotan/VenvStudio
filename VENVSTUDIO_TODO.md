@@ -21,23 +21,69 @@ VenvStudio'yu tanımlayan çarpıcı özellikler olmalı:**
 
 ---
 
-## 🆕 Yeni İstek (2026-08-12) — Presets → Learn Bağlantıları
+## 🆕 Yeni İstek (2026-08-14) — Learn'de Package Info / Launcher Tarzı Yapılandırılmış Bilgi
 
-- **N38 — Preset kartlarından Learn sayfasına konu/kütüphane linkleri:**
-  Packages → Presets sekmesindeki her preset kartına (Data Science
-  Starter, Web API/FastAPI, ML Starter, vb.), o preset'in içerdiği
-  kütüphanelerle veya konuyla ilgili Learn sayfasındaki bölüme
-  götüren link(ler) eklensin. Tıklanınca Learn sekmesine geçip
-  doğrudan ilgili konuya/kütüphaneye scroll etsin ya da o bölümü
-  açsın. Amaç: preset'i görürken "bu ne işe yarıyor, nasıl
-  kullanılır" sorusunun cevabına tek tıkla ulaşmak.
-  **Netleşmesi gerekenler (bir sonraki oturumda):** Learn sayfasının
-  içeriği preset'lerdeki her kütüphaneyi zaten kapsıyor mu (yoksa
-  önce Learn içeriği mi genişletilmeli); link preset kartının neresinde
-  görünecek (başlığın yanında bir ikon mu, ayrı bir "Learn More" satırı
-  mı); birden fazla kütüphane varsa (örn. Data Science Starter →
-  numpy+pandas+matplotlib+scikit-learn+jupyter) hepsi ayrı link mi
-  olacak yoksa tek bir genel link mi.
+- **N39 — Learn konularında Package Info dialogu / Launcher kartları
+  tarzında yapılandırılmış bilgi görünsün:** Bayram iki ekran görüntüsü
+  paylaştı — referans alınacak iki mevcut desen:
+  1. **Package Info dialogu** (Installed/Catalog sekmesinde bir
+     kütüphaneye sağ tık → Package Info): Name, Version, Summary,
+     Home-page, Author, Author-email, License, Location, Requires,
+     Required-by alanları + Home/PyPI/Copy/Close butonları.
+  2. **Launcher kartlarındaki "Links ›" satırı** (Launch sekmesi):
+     genişleyince Site/Docs/GitHub/PyPI gibi linkler.
+  **İstek:** Learn sayfasındaki konularda (hem kütüphaneler hem
+  Launcher app'leri için) bu tarz yapılandırılmış bilgi/link
+  görünsün — yani Learn'e bakınca sadece eğitici metin değil, o
+  kütüphanenin/app'in Package Info'daki gibi meta verileri veya
+  Launcher'daki gibi resmi linkleri de görülebilsin.
+  **Netleşmesi gerekenler (bir sonraki oturumda):**
+  - Bu bilgi Learn konusunun İÇİNE mi gömülecek (her konunun
+    üstünde/altında bir "info kutusu"), yoksa ayrı bir sekme/panel mi?
+  - Package Info alanlarının (Version, License, Location, Requires,
+    Required-by gibi) çoğu KURULU bir pakete özel (örn. "Location:
+    /home/.../site-packages") — Learn konuları kurulu olmayan
+    kütüphaneler için de var, bu alanlar orada anlamsız olur. Hangi
+    alanlar Learn'e taşınacak, hangileri sadece kurulu paket
+    bağlamında kalacak?
+  - Launcher app'leri için Links (Site/Docs/GitHub/PyPI) zaten
+    launcher_links.json'da var — bunları Learn'deki "How to Use"
+    konularına (Data & ML Apps kategorisi) otomatik yansıtmak
+    mümkün olabilir, elle veri girmeden.
+  - PyPI'dan canlı meta veri çekmek mi (N9'un `_check_pypi_wheel_
+    availability` gibi bir mekanizma), yoksa statik/önceden
+    doldurulmuş veri mi?
+
+---
+
+## ✅ N38 — Preset → Learn Linkleri TAMAMLANDI (2026-08-14) + 📋 Learn İçerik Boşluğu
+
+- **N38 — Preset kartlarından Learn sayfasına linkler ✅ GERÇEK ORTAMDA
+  DOĞRULANDI, Bayram onayladı ("Harika"):** Her preset kartındaki
+  kütüphane listesi artık düz metin değil — Learn'de karşılığı olan
+  her kütüphane, tema vurgu rengiyle + 📚 ikonuyla tıklanabilir bir
+  link (tıklanınca Learn sekmesine geçip ilgili konuyu açıyor,
+  bookmark'ların kullandığı `_open_bookmark` mekanizması yeniden
+  kullanıldı). Karşılığı olmayanlar düz, soluk metin kalıyor —
+  zorlama yok. Eşleştirme elle yapılmadı, learn_content.py'nin
+  "KütüphaneAdı — Açıklama" başlık kalıbından otomatik + birkaç takma
+  ad (torch↔PyTorch, sklearn↔scikit-learn, vb.).
+  **Dosyalar:** `tab_builders.py` (asıl mantık), `package_panel.py`
+  (yeni `learn_topic_requested` Signal — PackagePanel'in MainWindow'a
+  doğrudan erişimi olmadığı için, N9'un `new_environment_requested`
+  deseni tekrarlandı), `main_window.py` (Signal bağlantısı, 2 yerde).
+
+- **📋 Learn İçerik Boşluğu (Bayram, 2026-08-14 — not düşüldü, aktif
+  iş değil):** Gerçek ölçüm: 48 preset × 260 kütüphane-slotu üzerinden
+  **%53 kapsam** — 139 kütüphane Learn'de bir konuyla eşleşiyor, **~121
+  kütüphane henüz hiç işlenmemiş**. Bayram'ın kararı: şimdilik Learn
+  içeriği genişletilmeyecek, sadece not düşülüyor. N38'in linki zaten
+  otomatik eşleştirmeye dayandığı için, Learn içeriği ileride
+  genişledikçe **elle bakım gerekmeden** yeni linkler kendiliğinden
+  çıkacak. **Bir sonraki oturumda gündeme gelirse sorulacak sorular:**
+  hangi ~121 kütüphane öncelikli (en çok kullanılan preset'lerdekiler
+  mi, yoksa hepsi mi); her biri için ne kadar derinlikte içerik
+  (kısa "nasıl kullanılır" mı, yoksa mevcut konular gibi ayrıntılı mı).
 
 ---
 
@@ -74,6 +120,16 @@ birleşecek) netleştirmek gerekir — büyük bir mimari genişleme.
 ---
 
 ## ✅ v1.6.45 (2026-08-14) — Conflict Manager Tam Dönüşüm + N34 + N11 Fix
+
+> ⚠️ **v1.6.48 düzeltme notu:** Bu bölümdeki arayüz özellikleri (Try
+> Alternative butonu, Export CSV/JSON, min-width fix) bir ARA
+> KAYBOLMUŞTU — başka bir konuşmada (bu bölümü yazan) yapılan iş,
+> sonraki bir oturumda (v1.6.47) farkında olmadan ezilmişti. v1.6.48'de
+> gerçek CONFLICT_RULES verisinden yola çıkılarak yeniden inşa edilip
+> geri getirildi. Veri katmanı (218 kural, category+alternative
+> alanları) hiç kaybolmamıştı, sadece arayüz tarafı. Detay: Handoff'ta
+> "v1.6.48" bölümü.
+
 
 - **N11 fix — artık sadece venv değil, uv/hatch/pdm/poetry de öneriyor:**
   20 pip-tabanlı app'in `env_types`'ı genişletildi + tarama mantığı

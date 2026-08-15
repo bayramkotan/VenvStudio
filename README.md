@@ -20,6 +20,7 @@
 </p>
 
 <p align="center">
+  <a href="#-educational-by-design">Educational</a> •
   <a href="#-install">Install</a> •
   <a href="#-features">Features</a> •
   <a href="#-supported-environment-types">Env Types</a> •
@@ -29,6 +30,51 @@
   <a href="#-export-formats">Export</a> •
   <a href="#-build-from-source">Build</a>
 </p>
+
+---
+
+## 🎓 Educational by Design
+
+VenvStudio never hides the command it's actually running. Whether you're
+creating an environment, installing a package, deleting one, or
+launching an app, you see the **exact, real shell command** behind the
+action — not just a spinner. Click Copy and reuse it in a terminal,
+a script, or `requirements.txt` — or just read it and learn what's
+really happening under the hood.
+
+<p align="center">
+  <img src="assets/screenshots/Educational_1_png.png" alt="Create Environment — real python -m venv / activate / install commands shown live" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/Educational_2.png" alt="Create Environment (PDM) — real pdm init / pdm add commands shown live" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/Educational_3.png" alt="Environments — Command Reference panel shows the real rm -rf delete command" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/Educational_4_png.png" alt="Launch — the real install command (e.g. pdm add PyQt5 ...) shown with a Copy button" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/Educational_5_png.png" alt="Log Viewer — every command run this session, logged verbatim" width="800">
+</p>
+
+This shows up throughout the app:
+- **Create New Environment** — the Progress panel prints the real
+  command for the chosen backend (`python -m venv`, `uv venv`,
+  `pdm init`, `poetry new`, `hatch new`, `pixi init`, `conda create`,
+  `pipx install`) plus activate/deactivate commands, live as it runs
+- **Environments page** — a Command Reference panel shows the exact
+  command behind delete, clone, rename, and export actions
+- **Launch / Install** — the real install command (`pip install`,
+  `uv pip install`, `pdm add`, `poetry add`, `hatch run pip install`,
+  `conda install`, `pixi add`, `pipx install` — whichever fits the
+  environment) is shown with a one-click **Copy** button before it runs
+- **Command History** and **Log Viewer** — every command run this
+  session is logged verbatim, filterable, and copyable — a running,
+  searchable record of exactly what VenvStudio has done
+- **🧩 Conflict Manager** — the detail panel shows the exact install
+  command for the package + environment type you're looking at (see
+  below)
 
 ---
 

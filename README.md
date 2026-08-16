@@ -27,7 +27,7 @@
   <a href="#-conflict-manager">Conflict Manager</a> •
   <a href="#-screenshots">Screenshots</a> •
   <a href="#-quick-start">Quick Start</a> •
-  <a href="#-export-formats">Export</a> •
+  <a href="#-export-and-import">Export/Import</a> •
   <a href="#-build-from-source">Build</a>
 </p>
 
@@ -582,9 +582,10 @@ On Windows, `venvstudio-gui` starts the GUI without a console window.
 
 ---
 
-## 📤 Export Formats
+## 📤 Export and Import
 
-Export your environment from the **Export ▾** dropdown:
+Export your environment from the **Export ▾** dropdown (Environments
+page or Installed tab):
 
 | Format | File(s) | Use Case |
 |--------|---------|----------|
@@ -596,6 +597,12 @@ Export your environment from the **Export ▾** dropdown:
 | 📦 pyproject.toml | `pyproject.toml` | Modern Python packaging |
 | 🐍 environment.yml | `environment.yml` | Conda compatibility |
 | 📋 Clipboard | — | Quick copy-paste |
+
+**Import** does the reverse — pick a `requirements.txt`-style file and
+VenvStudio installs everything in it into the current environment,
+using the right command for that environment's type (`pip install -r`,
+`uv pip install -r`, `poetry install`, `conda install --file`) — the
+same "show the real command" philosophy as everywhere else in the app.
 
 ---
 

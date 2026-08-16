@@ -256,7 +256,7 @@ On Windows, `venvstudio-gui` starts the GUI without a console window.
 
 ---
 
-## 📤 Export Formats
+## 📤 Export and Import
 
 Export your environment in multiple formats from the **Export ▾** dropdown:
 
@@ -270,6 +270,11 @@ Export your environment in multiple formats from the **Export ▾** dropdown:
 | 📦 pyproject.toml | `pyproject.toml` | Modern Python packaging |
 | 🐍 environment.yml | `environment.yml` | Conda compatibility |
 | 📋 Clipboard | — | Quick copy-paste |
+
+**Import** does the reverse — pick a `requirements.txt`-style file and
+VenvStudio installs everything in it into the current environment,
+using the right command for that environment's type (`pip install -r`,
+`uv pip install -r`, `poetry install`, `conda install --file`).
 
 ---
 

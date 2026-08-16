@@ -79,7 +79,7 @@ This shows up throughout the app:
 Every preset card is written the same way — it doesn't just install a
 pile of packages, it tells you what each one is *for*:
 
-<details>
+<details open>
 <summary><b>📋 All 47 presets, in full</b></summary>
 <br>
 

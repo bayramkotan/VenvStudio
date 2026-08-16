@@ -3,8 +3,8 @@
 ## Proje
 - **Repo:** https://github.com/bayramkotan/VenvStudio
 - **PyPI:** https://pypi.org/project/venvstudio/
-- **GÜNCEL VERSİYON: v1.6.48** (2026-08-14 — Ciddi bir kendi hatamı buldum ve düzelttim: bu konuşmadaki v1.6.47 işim, BAŞKA bir oturumda (v1.6.45→46) doğru şekilde merge edilmiş bir conflict_manager.py versiyonunu sessizce ezmişti — Try Alternative butonu, Export CSV/JSON, min-width fix kaybolmuştu (constants.py'nin veri katmanı, 218 kural + alternative/category alanları, sağlam kalmıştı). Kayıp özellikleri gerçek CONFLICT_RULES verisinden yola çıkarak yeniden inşa edip kendi 3 butonumla (Install/Create New Environment/Open in Learn) birleştirdim, hiçbir şey silmeden. Ayrıca bağımsız bir hata daha düzeltildi: "Show All" butonu 80px'te metni kırpıyordu, 110px'e çıkarıldı. **GENEL SÜREÇ DERSİ (önemli, tekrar okunmalı): çok oturumlu/paralel çalışmada, bir dosyayı kendi önbellekten okuyup üzerine yazmak, o dosya ARADA başka bir oturumda değiştirilmişse sessizce geri alır — detay "Bu Oturumda Yapılanlar (2026-08-14 — v1.6.48)" bölümünde.** — PUSH EDİLECEK. PUSH SONRASI PyPI history sayfasını kontrol et + `pip install venvstudio==1.6.48 --no-cache-dir --break-system-packages` ile doğrula. Çok makineli çalışma: commit öncesi HER ZAMAN `git fetch` + `git log origin/main`.
-- **Son TODO güncellemesi (2026-08-14, v1.6.48 ile birlikte):** Büyük Girişim'in v1.6.45 alt-maddesi, gerçek dosya durumuyla uyuşacak şekilde düzeltildi (Try Alternative/Export'un GERÇEKTEN kayıp olduğu ve şimdi geri getirildiği not edildi).
+- **GÜNCEL VERSİYON: v1.6.49** (2026-08-15/16 — İki büyük iş: (1) README.md + README_PYPI.md'nin kapsamlı doğruluk denetimi (launcher sayısı 22→26, catalog 200+/15→64/32, CLI tablosu, "pip/uv" başlığı düzeltmeleri) + Educational by Design bölümü (vizyonun 1. maddesi, ilk kez README'ye yansıdı) + Conflict Manager/Install Launcher bölümleri + 47 preset'in tam tablosu + ~23 gerçek ekran görüntüsü + eski placeholder görsellerin temizlenmesi. (2) YENİ CLI ÖZELLİĞİ: `vs preset list/install/remove` — presetleri terminalden, herhangi bir env tipinde kurup kaldırabilme (mevcut `_pip_manager_for` yeniden kullanıldı) + Learn'e detaylı bir "VenvStudio CLI" konusu. Ayrıca Bayram'ın 6 saha notu TODO'ya işlendi (N40-N44), N40 araştırılıp kapatıldı. **Detay: "Bu Oturumda Yapılanlar (2026-08-15/16 — v1.6.49)" bölümünde — özellikle 'kendi hatalarım' kısmı, tekrar okunmalı.** — PUSH EDİLECEK. PUSH SONRASI PyPI history sayfasını kontrol et + `pip install venvstudio==1.6.49 --no-cache-dir --break-system-packages` ile doğrula + `vs preset list` ve `vs preset install ... ` gerçek ortamda test edilmeli. Çok makineli çalışma: commit öncesi HER ZAMAN `git fetch` + `git log origin/main`.
+- **Son TODO güncellemesi (2026-08-16, v1.6.49 ile birlikte):** N40 (hatch Tools env) kapatıldı — gerçek log'la test edildi, üretilemedi. N41 (CustomTkinter/Flet/PyQt6) "ayrı proje" kapsamıyla dosyanın en sonuna taşındı. N44 (Learn CLI komutları) genişletilip gerçek `vs preset` CLI özelliğine dönüştürüldü, tamamlandı olarak işaretlendi.
 - **Bir sonraki oturumun kuyruğu:** aşağıdaki "Bu Oturumda Yapılanlar (2026-07-23/24)" bölümünün *Açık maddeler* kısmı
 - **Proje dizini (Windows):** `C:\Github\VenvStudio`
 - **Proje dizini (Linux - CachyOS/Pardus):** `~/Github/VenvStudio`
@@ -905,6 +905,188 @@ Bayram'ın "bağımlılıklarını da göstereceğiz ileride inşallah"
 - Şu an için sadece bir yön, hiç tasarım/kod çalışması yapılmadı
 - Bir sonraki büyük konuşma konusu olmaya aday, ama Bayram henüz
   "şimdi yapalım" demedi
+
+---
+
+## Bu Oturumda Yapılanlar (2026-08-15/16 — v1.6.49, PUSH EDİLECEK)
+
+### Özet
+İki büyük iş: (1) `README.md` ve `README_PYPI.md`'nin **kapsamlı bir
+doğruluk denetimi + güzelleştirme turu** — yanlış sayılar düzeltildi,
+eksik özellikler (Conflict Manager, Install Launcher, Educational by
+Design, 47 preset'in tam listesi) eklendi, ~23 gerçek ekran görüntüsü
+yerleştirildi. (2) **Gerçek yeni bir CLI özelliği**: `vs preset
+list/install/remove` — presetleri terminalden, herhangi bir env
+tipinde kurup kaldırabilme + Learn'e detaylı bir "VenvStudio CLI"
+konusu eklendi. Ayrıca Bayram'ın saha notlarından 5 yeni TODO maddesi
+(N40-N44) işlendi, biri (N40) araştırılıp kapatıldı.
+
+### 1) README Doğruluk Denetimi — Bulunan Gerçek Yanlışlıklar
+
+Bayram "bazı yanlışlıklar var, düzelt, ama mevcut sistemi silme"
+dedi. Kod tabanıyla (constants.py, launcher_ui.py, cli.py) çapraz
+kontrol edilerek bulunan gerçek hatalar:
+
+- **Launcher sayısı yanlıştı:** "22 one-click launchers" yazıyordu,
+  `launcher_ui.py`'den gerçek sayı sayıldı: **26** (20 pip-tabanlı + 6
+  conda-sistem). Tabloda **Chainlit, Shiny, NiceGUI, Bokeh** hiç
+  yoktu, eklendi.
+- **Catalog sayısı yanlıştı:** "200+ paket / 15 kategori" yazıyordu.
+  Bayram'ın **taze, gerçek** `constants.py`'sini isteyip kontrol
+  ettim (kendi önbelleğime güvenmedim, PROCESS LESSON #4'ten sonra) —
+  gerçek sayı: **64 paket / 32 kategori**.
+  düzeltildi.
+- **`README_PYPI.md`'nin CLI tablosu eksikti:** gerçek `cli.py`'yi
+  kontrol ettim, `-t` gerçekten `poetry` ve `conda`'yı da destekliyor
+  (`choices=["venv","uv","poetry","conda","hatch","pdm","pixi"]`) ama
+  tabloda yoktu, eklendi. (`README.md`'nin tablosu zaten doğruydu.)
+- **"Python Launchers (pip / uv)" başlığı yanlıştı:** Bu app'lerin
+  gerçek `env_types`'ı (bu oturumdan önce doğrulanmıştı)
+  `["venv","uv","hatch","pdm","poetry"]` — "pip / uv" değil. Başlık
+  "Python Launchers (venv, uv, Hatch, PDM, Poetry)" olarak düzeltildi
+  (iki README'de de).
+- **Preset sayısı 48 değil 47'ymiş** — `constants.py`'deki
+  `PRESETS`/`PRESET_DESCRIPTIONS` sözlüklerinin gerçek uzunluğu
+  sayılarak düzeltildi.
+
+### 2) Yeni Bölümler Eklendi (silme yok, sadece ekleme)
+
+- **🧩 Conflict Manager bölümü** — 218 kural, canlı PyPI kontrolü,
+  detay paneli (4 buton: Install/Create New Env/Try Alternative/Open
+  in Learn), Export CSV/JSON — hiç dokümante edilmemişti, artık var.
+- **🚀 Install Launcher bölümü** — File menüsündeki N11 özelliği, hiç
+  bahsi geçmiyordu, artık var.
+- **🎓 Educational by Design bölümü — EN ÖNEMLİ EKLEME.** Bayram'ın
+  ilk gün belirlediği 7 vizyon sütununun 1. maddesi ("hem eğitici
+  içerik hem komutların canlı gösterimi") hiç README'ye yansımamıştı.
+  Bayram 5 ekran görüntüsü paylaştı (Create Environment'ın Progress
+  paneli, Environments'ın Command Reference paneli, Launch akışındaki
+  Copy-komut kutusu, Log Viewer) — bunların hepsi VenvStudio'nun HİÇBİR
+  ZAMAN gerçek komutu gizlemediğini gösteriyor. Bölüm, README'nin **en
+  başına** (Install'dan bile önce) eklendi, nav linkine de girdi.
+- **📋 47 preset'in tam tablosu** — Educational bölümünün altına,
+  `constants.py`'deki gerçek `PRESET_DESCRIPTIONS` verisinden
+  programatik olarak üretilen, her preset için isim+açıklama+anahtar
+  paketler içeren katlanabilir (varsayılan açık) bir tablo. Bayram'ın
+  asıl motivasyonu: Gemini'ye "VenvStudio'yu nasıl modernize ederim"
+  diye sorduğunda, Gemini'nin önerdiği 4 şeyden **3'ünün zaten var
+  olduğunu** (LLM App Starter preset'i, Data Engineering/Polars/DuckDB
+  preset'i, Learn'deki AI/LLM kategorisi) ama README'de yeterince
+  görünür olmadığı için Gemini'nin bunları görememiş olması — bu artık
+  düzeltildi, gelecekte başka bir AI/kullanıcı bunu kaçırmayacak.
+- **~23 gerçek ekran görüntüsü** — Bayram'ın 3 postada gönderdiği
+  görseller (Catalog, Command History, Conflict Manager, Environments,
+  Install Launcher, Installed Apps, Launch Apps, Learn, Log Viewer,
+  Manual Install, Presets ×4, Settings ×9, Virtual Environments,
+  Educational ×5, sağ-tık menüsü) yerleştirildi. **Eski placeholder
+  görsel referansları (environment1.png, packages1/2/3.png,
+  packages-catalog1.png, packages-presets1/2.png,
+  packages-manual_install_1.png, settings1/settings2_python_install/
+  settings3.png) kaldırıldı** — Bayram "karman çorman oldu" diye
+  uyardı, önce sadece EKLEMİŞTİM, silmemiştim; düzeltildi.
+
+**Bu turda yakalanan kendi hatalarım (dürüstçe):**
+- `environments.png` diye adlandırdığım dosya aslında **Launch
+  sekmesini** gösteriyordu, Environments'ı değil — dosya adına
+  güvenip içeriğini kontrol etmemiştim. Bayram bir ekran görüntüsüyle
+  yakaladı (kırık görünen ikinci pencereye kırmızı okla işaret etti),
+  kaldırıldı.
+- 3 Educational ekran görüntüsünün dosya adı (`Educational_1_png.png`
+  vb.) Bayram'ın diskindeki gerçek adla (`Educational_1.png`)
+  uyuşmuyordu — GitHub'da kırık resim linki olarak görünüyordu (mavi,
+  tıklanabilir "resim bulunamadı" linki). Bayram dosyaları yeniden
+  adlandırdı, ben README'yi ona göre düzelttim.
+- Yeni eklediğim "47 presets" `<details>` bloğu varsayılan **kapalı**
+  geliyordu, Bayram "açık gelsin" dedi, `<details open>` yapıldı.
+- **"push et" dendiğinde kendi kafamdan versiyon bump komutları
+  vermiştim** — Bayram çok sert tepki verdi ("kafana göre hareket
+  etme! Handoff'u oku!"). Handoff'ta zaten (madde 11) bu kural açıkça
+  yazılıydı, kontrol etmeden atlamışım. PROCESS LESSON #5 olarak
+  kaydedildi, bir daha olmaması için hafızama da yazıldı.
+
+### 3) YENİ ÖZELLİK — `vs preset` CLI Komutları (gerçek kod, sadece dokümantasyon değil)
+
+Bayram N44'ü ("Learn'e CLI komutlarını ekle") netleştirirken şunu
+istedi: "Presetleri bile ekleyip kaldırabilme, istediğimiz venv
+tipinde bile olması lazım, çok detaylı bir komut seti." Netleştirme
+sorusuna "her ikisini de yapalım" dedi — hem gerçek CLI özelliği hem
+Learn dokümantasyonu.
+
+**`src/cli.py`'ye eklenenler:**
+- `vs preset list` — her preset'i (slug, gerçek isim, açıklama, paket
+  listesi) yazdırır
+- `vs preset install <isim> <env>` — preset'i env'e kurar
+- `vs preset remove <isim> <env>` — preset'in paketlerini kaldırır
+- **Herhangi bir env tipinde çalışır** — yeni bir mekanizma icat
+  edilmedi, mevcut `_pip_manager_for(info)` fonksiyonu (env_type'a göre
+  pip/uv backend seçen, zaten var olan) aynen yeniden kullanıldı.
+- **Preset ismi esnek eşleştirme ile bulunuyor:** `_slugify()` +
+  `_preset_lookup()` — kullanıcı hem slug (`data-science-starter`) hem
+  gerçek ismin bir parçasını (`LLM App Starter`, emoji olmadan) hem de
+  boşluksuz/tire'siz bir fragment (`dataeng`) yazabiliyor.
+  **Belirsiz sorguda (örn. sadece "data" — hem Data Science Starter
+  hem Data Engineering'e uyuyor) rastgele birini seçmiyor, adayları
+  listeleyip kullanıcıdan netleştirme istiyor** — mock test edildi.
+- `COMMANDS` tuple'ına `"preset"` eklendi, `--help` metni ve dosya
+  başındaki docstring güncellendi.
+
+**`src/gui/learn_content.py`'ye eklenen:**
+- "VenvStudio CLI — Manage Environments from the Terminal" konusu,
+  Quick Start kategorisinde, "Virtual Environments — venv vs uv vs
+  conda" konusunun hemen ardına eklendi. Tüm 7 env tipinde `create`
+  örnekleri, paket yönetimi, ve yeni preset komutları dahil, çok
+  detaylı bir komut seti (Bayram'ın isteği).
+
+**Her iki README'nin CLI tablosuna da `vs preset list/install/remove`
+satırları eklendi** — Bayram bunu ayrıca sorup hatırlattı, ilk turda
+atlamıştım.
+
+**Test durumu:** `_slugify`/`_preset_lookup` gerçek `PRESETS`
+verisiyle mock test edildi (tekil eşleşme, alias eşleşme, belirsiz
+sorgu senaryoları) — hepsi doğru. `py_compile`/`pyflakes` temiz.
+**Gerçek ortamda (`vs preset install ... `) henüz denenmedi.**
+
+### 4) Bayram'ın Saha Notları (2026-08-15) — TODO'ya İşlendi
+
+6 not kontrol edildi, TODO'da arandı:
+- **N40** (hatch "Tools" env bug) — TODO'da yoktu, eklendi. **Sonra
+  2026-08-16'da Bayram gerçek log'la iki kez test etti, "Tools" hiç
+  oluşmadı — kapatıldı, ✅ çalışıyor olarak işaretlendi.** Kod
+  tarafında hiçbir değişiklik yapılmadı (üretilemeyen bir hatayı
+  "düzelttim" demek yanlış olurdu).
+- **N41** (CustomTkinter/Flet/PyQt6) — eklendi, ama Bayram sonradan
+  netleştirdi: "ayrı projeler" demek istiyor (Catalog'a paket eklemek
+  değil), kolay değil — TODO'nun **en sonuna**, yeni bir "🔵 EN SONA
+  — Büyük/Kolay Olmayan İşler" bölümüne taşındı.
+- **Flatpak/Scoop** — zaten F196 + ayrıntılı bir dağıtım bölümünde
+  vardı, tekrar eklenmedi.
+- **N42** (Crash Reports'a Tools menüsünden erişim) — eklendi, F194'ten
+  (anlık rapor oluşturma) farklı bir şey olduğu not edildi.
+- **N43** (conda backend seçimi) — eklendi, ama **açık bir soru var:**
+  Settings → Toolchain Manager'da zaten bir "Backend: Auto (default)"
+  dropdown'u var (ekran görüntüsünde görüldü) — Bayram'ın kastettiği
+  bu mu, yoksa Miniconda/Anaconda/Miniforge gibi farklı bir dağıtım
+  seçimi mi, netleşmedi.
+- **N44** (Learn'e CLI komutları) — eklendi, **sonra genişletilip
+  gerçekten yapıldı** (yukarıdaki bölüm 3).
+
+### Değişen Dosyalar (v1.6.49)
+
+| Dosya | Değişiklik |
+|---|---|
+| `README.md` | Kapsamlı doğruluk denetimi + Educational by Design + Conflict Manager + Install Launcher bölümleri + 47 preset tablosu + ~23 ekran görüntüsü + vs preset CLI satırları |
+| `README_PYPI.md` | Aynı doğruluk düzeltmeleri (launcher/catalog sayıları, CLI tablosu, başlık) + Conflict Manager bölümü + vs preset CLI satırları (ekran görüntüsü YOK, Bayram'ın açık isteğiyle) |
+| `src/cli.py` | YENİ: `vs preset list/install/remove` komutları, `_slugify`/`_preset_lookup`/`_cmd_preset*` fonksiyonları |
+| `src/gui/learn_content.py` | YENİ: "VenvStudio CLI" konusu, Quick Start kategorisinde |
+| `assets/screenshots/` | ~23 yeni gerçek ekran görüntüsü |
+
+### Test Durumu / Sonraki Oturuma Not
+- `vs preset install/remove` — mock test edildi, **gerçek ortamda
+  henüz denenmedi**
+- N43 (conda backend) — Bayram'ın netleştirmesi bekleniyor
+- N11 çok-eşleşme dropdown'u, N35 hatch self-heal — hâlâ açık, Bayram'ın
+  elinde
+
 
 ---
 
@@ -7161,7 +7343,7 @@ Bu oturumda Linux'ta yapılmış değişiklikler Windows'ta test edildi ve çeş
 11. **N35** — Hatch self-heal (marker'da hatch_env_path yoksa her refresh'te yeniden dene) — Bayram'a soruldu, cevap bekleniyor
 
 ## Sonraki Chat Başlangıç Promptu
-> VenvStudio devam — Handoff'u oku (ÖZELLİKLE son birkaç oturumu, dikkatlice — v1.6.48'in dersi tekrar yaşanmasın). Mevcut: v1.6.48, sıradaki: v1.6.49.
+> VenvStudio devam — Handoff'u oku (ÖZELLİKLE son birkaç oturumu, dikkatlice). Mevcut: v1.6.49, sıradaki: v1.6.50.
 
 ## 📋 Dosya Kopyalama Kuralları
 

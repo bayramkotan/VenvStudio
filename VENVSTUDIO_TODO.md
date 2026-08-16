@@ -35,10 +35,17 @@
   Channels Yönetimi) var ama o CHANNEL (paket kaynağı) yönetimi, BACKEND
   (hangi conda motoru) seçimi değil — ikisi farklı konular.
 
-- **N44 — Learn'e VS'nin kendi CLI komutlarını ekle:** `vs list`,
-  `vs create`, `vs install`, vb. (README'deki CLI tablosunda zaten
-  var) Learn sayfasında da bir konu olarak anlatılsın — kullanıcı
-  VenvStudio'yu terminalden nasıl kullanacağını Learn'den öğrenebilsin.
+- **✅ N44 — GENİŞLETİLDİ VE TAMAMLANDI (v1.6.49, 2026-08-16):**
+  Bayram netleştirdi: sadece Learn dokümantasyonu değil, **gerçek
+  yeni bir CLI özelliği** de istedi — "presetleri bile ekleyip
+  kaldırabilme, istediğimiz venv tipinde bile olması lazım". İkisi de
+  yapıldı: `src/cli.py`'ye `vs preset list/install/remove` eklendi
+  (herhangi bir env tipinde çalışıyor, mevcut `_pip_manager_for`
+  yeniden kullanıldı, preset ismi esnek eşleştirmeyle bulunuyor —
+  belirsiz sorguda rastgele seçmiyor). `learn_content.py`'ye Quick
+  Start kategorisinde detaylı bir "VenvStudio CLI" konusu eklendi.
+  Her iki README'nin CLI tablosuna da yeni komutlar eklendi. **Gerçek
+  ortamda henüz test edilmedi** (`vs preset install ... `).
 
 ---
 

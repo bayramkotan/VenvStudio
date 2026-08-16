@@ -138,7 +138,7 @@ Or download the standalone binary — **no Python required:**
 ### 📦 Package Management
 - **Installed** — filter, select, uninstall, export, import
 - **Catalog** — 64 curated packages across 32 categories
-- **Presets** — one-click bundles (Data Science, Web API, Django, ML, NLP...)
+- **48 Presets** — one-click bundles, including modern AI/data stacks: **LLM App Starter** (openai, anthropic, langchain, chromadb), **RAG/NLP** (transformers, datasets, spacy, torch), **Data Engineering** (polars, duckdb, pyarrow, prefect), plus Data Science, Web API, Django, Flask, Computer Vision, Deep Learning (PyTorch/JAX), Financial Analysis, and more
 - **Manual Install** — paste package names or version specs
 - pip or **uv** backend (10–100× faster)
 - Check for package updates
@@ -243,6 +243,9 @@ VenvStudio checks packages against a curated compatibility list **before** insta
 <p align="center">
   <img src="assets/screenshots/virtual_environments.png" alt="Virtual Environments — full table" width="800">
 </p>
+<p align="center">
+  <img src="assets/screenshots/environments_right_click.png" alt="Environments — right-click context menu" width="800">
+</p>
 </details>
 
 <details>
@@ -278,8 +281,23 @@ VenvStudio checks packages against a curated compatibility list **before** insta
 <details>
 <summary><b>⚡ Presets</b></summary>
 <br>
+
+48 one-click bundles — from classic (Data Science, Web API, Django) to
+modern AI/data stacks: **LLM App Starter**, **RAG/NLP**, **Deep
+Learning (PyTorch/JAX)**, **Data Engineering (Polars/DuckDB)**,
+**Computer Vision**, **Financial Analysis**, and more.
+
 <p align="center">
   <img src="assets/screenshots/presets.png" alt="Presets — install progress" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/presets1.png" alt="Presets — Time Series, Financial Analysis, Financial LLM" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/presets2.png" alt="Presets — Web Scraping, Async Backend, LLM App Starter, Deep Learning (PyTorch)" width="800">
+</p>
+<p align="center">
+  <img src="assets/screenshots/presets3.png" alt="Presets — Deep Learning (JAX), Audio/Video Processing, Geospatial, Bioinformatics, Game Dev" width="800">
 </p>
 </details>
 

@@ -566,6 +566,9 @@ Installing with pip gives you two names for the same tool: **`vs`** to type and
 | `vs packages ENV` | `venvstudio packages ENV` | List packages installed in ENV |
 | `vs install ENV PKG...` | `venvstudio install ENV PKG...` | Install one or more packages into ENV |
 | `vs uninstall ENV PKG...` | `venvstudio uninstall ENV PKG...` | Uninstall packages from ENV |
+| `vs preset list` | `venvstudio preset list` | List every preset with its packages |
+| `vs preset install NAME ENV` | `venvstudio preset install NAME ENV` | Install a whole preset into ENV |
+| `vs preset remove NAME ENV` | `venvstudio preset remove NAME ENV` | Uninstall a preset's packages from ENV |
 | `vs -V` | `venvstudio -V` | Show version (also: `version`) |
 | `vs -h` | `venvstudio -h` | Show help |
 

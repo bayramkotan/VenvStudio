@@ -16,13 +16,16 @@ Usage examples:
     vs packages ml
     vs install ml numpy pandas
     vs uninstall ml numpy
+    vs preset list
+    vs preset install data-science-starter ml
+    vs preset remove llm-app-starter ml
     vs delete ml -y
     vs version
 """
 import argparse
 import sys
 
-COMMANDS = ("list", "create", "delete", "packages", "install", "uninstall", "version")
+COMMANDS = ("list", "create", "delete", "packages", "install", "uninstall", "preset", "version")
 
 
 def _normalize_argv(argv):
@@ -428,6 +431,91 @@ def _pkg_op(args, install: bool) -> int:
     return 0 if ok else 1
 
 
+def _slugify(name: str) -> str:
+    """Turn a preset name like "📊 Data Science Starter" into a
+    typeable slug "data-science-starter" -- strips emoji/symbols, keeps
+    only alnum + spaces, lowercases, spaces -> hyphens."""
+    cleaned = "".join(c for c in name if c.isalnum() or c in " -()")
+    cleaned = cleaned.replace("(", "").replace(")", "")
+    return "-".join(cleaned.lower().split())
+
+
+def _preset_lookup(query: str):
+    """Resolve a user-typed preset query (slug, or a plain-text
+    fragment of the real name) to (real_name, packages). Returns
+    (None, None, matches) with a list of close matches if the query is
+    ambiguous or not found, so the caller can print a helpful error
+    instead of silently picking the wrong preset."""
+    from src.utils.constants import PRESETS
+    q = query.strip().lower().replace("_", "-")
+    q_nospace = q.replace(" ", "").replace("-", "")
+
+    exact = []
+    partial = []
+    for name, pkgs in PRESETS.items():
+        slug = _slugify(name)
+        plain = "".join(c for c in name if c.isalnum()).lower()
+        if q == slug or q_nospace == slug.replace("-", "") or q_nospace == plain:
+            exact.append((name, pkgs))
+        elif q_nospace and q_nospace in slug.replace("-", ""):
+            partial.append((name, pkgs))
+
+    if len(exact) == 1:
+        return exact[0][0], exact[0][1], []
+    if not exact and len(partial) == 1:
+        return partial[0][0], partial[0][1], []
+    # ambiguous or not found -- return candidates for a helpful message
+    candidates = exact or partial
+    return None, None, [n for n, _ in candidates] or list(PRESETS.keys())[:5]
+
+
+def _cmd_preset(args) -> int:
+    if args.preset_command == "list":
+        return _cmd_preset_list(args)
+    return _cmd_preset_op(args, install=(args.preset_command == "install"))
+
+
+def _cmd_preset_list(args) -> int:
+    from src.utils.constants import PRESETS, PRESET_DESCRIPTIONS
+    for name, pkgs in PRESETS.items():
+        slug = _slugify(name)
+        desc = PRESET_DESCRIPTIONS.get(name, "").split(". ")[0].strip()
+        print(f"{slug}")
+        print(f"    {name}")
+        if desc:
+            print(f"    {desc}")
+        print(f"    packages: {', '.join(pkgs)}")
+        print()
+    return 0
+
+
+def _cmd_preset_op(args, install: bool) -> int:
+    real_name, pkgs, candidates = _preset_lookup(args.preset)
+    if real_name is None:
+        print(f"Error: preset '{args.preset}' not found or ambiguous.")
+        print("Did you mean one of:")
+        for c in candidates:
+            print(f"  {_slugify(c)}  ({c})")
+        print("Try: vs preset list")
+        return 1
+
+    _config, vm = _managers()
+    info = _find_env(vm, args.env)
+    if not info:
+        print(f"Error: environment '{args.env}' not found. Try: vs list")
+        return 1
+
+    pm = _pip_manager_for(info)
+    verb = "Installing" if install else "Removing"
+    print(f"{verb} preset '{real_name}' in '{args.env}' ({', '.join(pkgs)})")
+    fn = pm.install_packages if install else pm.uninstall_packages
+    ok, output = fn(pkgs)
+    if output:
+        print(output.strip())
+    print("OK" if ok else "FAILED")
+    return 0 if ok else 1
+
+
 def _cmd_version(args) -> int:
     from src.utils.constants import APP_VERSION
     print(f"VenvStudio v{APP_VERSION}")
@@ -454,6 +542,9 @@ def run_cli(argv=None) -> int:
             "  vs packages ENV                   List packages in an environment\n"
             "  vs install ENV PKG [PKG ...]      Install packages\n"
             "  vs uninstall ENV PKG [PKG ...]    Uninstall packages\n"
+            "  vs preset list                    List all presets\n"
+            "  vs preset install NAME ENV        Install a preset into ENV\n"
+            "  vs preset remove NAME ENV         Remove a preset from ENV\n"
             "  vs version                        Show version\n"
             "\n"
             "Every subcommand also works as --<command>, e.g.\n"
@@ -496,6 +587,17 @@ def run_cli(argv=None) -> int:
     p.add_argument("env")
     p.add_argument("packages", nargs="+")
     p.set_defaults(func=_cmd_uninstall)
+
+    p = sub.add_parser("preset", help="List, install, or remove a preset (works with any env type)")
+    preset_sub = p.add_subparsers(dest="preset_command", required=True)
+    preset_sub.add_parser("list", help="List all available presets")
+    pp = preset_sub.add_parser("install", help="Install a preset's packages into an environment")
+    pp.add_argument("preset", help="Preset name or slug, e.g. data-science-starter")
+    pp.add_argument("env")
+    pp = preset_sub.add_parser("remove", help="Uninstall a preset's packages from an environment")
+    pp.add_argument("preset", help="Preset name or slug, e.g. data-science-starter")
+    pp.add_argument("env")
+    p.set_defaults(func=_cmd_preset)
 
     sub.add_parser("version", help="Show VenvStudio version").set_defaults(func=_cmd_version)
 

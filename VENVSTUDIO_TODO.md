@@ -2,16 +2,12 @@
 
 ## 🆕 Bayram'ın Saha Notları (2026-08-15) — 5 yeni, 1 zaten var
 
-- **🐛 N40 — hatch env oluştururken "Tools" diye ayrı bir env kuruyor:**
-  Hatch tipinde bir environment oluşturunca, env klasörü altında **ek,
-  istenmeyen bir "Tools" env'i** de kuruluyor. Kök neden araştırılmalı
-  — muhtemelen hatch'in kendi `hatch env` mekanizmasının bir yan
-  etkisi (belki hatch'in dahili tooling env'i, materialize sırasında
-  yanlışlıkla env klasörüne yazılıyor). **Öncelik: yüksek, gerçek bug.**
-
-- **N41 — CustomTkinter, Flet, PyQt6 desteği:** Şu an GUI/Desktop
-  kategorisinde PySide6/Tkinter var — CustomTkinter, Flet, PyQt6 da
-  Catalog'a ve/veya Launcher'a eklenebilir mi, değerlendirilmeli.
+- **✅ N40 — hatch "Tools" env'i — ÇALIŞIYOR, KAPANDI (2026-08-16):**
+  Bayram bir kez gördü, ama 2026-08-16'da `htc` adında bir hatch env'i
+  temiz kurulumla iki kez oluşturup sildi, gerçek log paylaşıldı —
+  ikisinde de "Tools" diye bir şey oluşmadı, sadece gerçek env
+  (`hatch new` → `hatch env find` → doğru path). Bayram onayladı,
+  kapatıldı. Muhtemelen tek seferlik, ilgisiz bir kalıntıydı.
 
 - **✅ Flatpak/Scoop — ZATEN VAR:** F196 (Dağıtım Kanalları) ve
   ayrıntılı bir "Dağıtım Kanalları" bölümü (flatpak, scoop, snap, AUR,
@@ -5712,3 +5708,18 @@ Tek-blok body yerine bölümlü yapı:
 
 ### ✅ Test bekleyenler — HEPSİ KAPATILDI (2026-08-08)
 ### ✅ Açık maddeler — HEPSİ KAPATILDI (2026-08-08)
+
+---
+
+## 🔵 EN SONA — Büyük/Kolay Olmayan İşler (öncelik sırası düşük, ayrı ele alınacak)
+
+- **N41 — CustomTkinter, Flet, PyQt6 için AYRI PROJELER (Bayram,
+  2026-08-16 açıklaması):** Bu sadece Catalog'a 3 paket eklemek değil
+  — her biri için **ayrı bir proje/showcase** yapılması kastediliyor
+  (VenvStudio'nun kendisinin PySide6 ile inşa edilmiş olması gibi,
+  her framework için ayrı bir demo/örnek uygulama). **Kolay bir iş
+  değil** — Bayram'ın kendi ifadesi. Kapsam, zaman çizelgesi, ve tam
+  olarak "ayrı proje" ile neyin kastedildiği (VenvStudio içinde bir
+  örnek mi, yoksa tamamen ayrı bir repo/uygulama mı) bir sonraki
+  oturumda netleştirilmeli. Bilinçli olarak düşük öncelikli, listenin
+  en sonuna taşındı.

@@ -117,6 +117,69 @@ LEARN_CATEGORIES = [
                 "links": [("🌐 venv docs", "https://docs.python.org/3/library/venv.html"), ("🌐 uv docs", "https://docs.astral.sh/uv/"), ("🌐 conda docs", "https://docs.conda.io")],
             },
             {
+                "title": "VenvStudio CLI — Manage Environments from the Terminal",
+                "body": (
+                    "VenvStudio isn't just a GUI — the core actions work headless too, "
+                    "handy over SSH, in scripts, or when you just want one quick thing "
+                    "done. Installing with pip gives you two names for the same tool: "
+                    "**`vs`** to type and **`venvstudio`** to read — use whichever you "
+                    "like. Every subcommand also works in **any environment type** "
+                    "(venv, uv, poetry, conda, hatch, pdm, pixi) — VenvStudio detects "
+                    "the environment's real type automatically and runs the matching "
+                    "backend (`pip`, `uv pip`, etc.) underneath, so you never have to "
+                    "remember which tool a given environment actually uses."
+                ),
+                "diagram": (
+                    "  vs create ml -t uv        →  creates a uv-backed env\n"
+                    "  vs create api -t poetry   →  creates a poetry-backed env\n"
+                    "  vs create sci -t conda    →  creates a conda-backed env\n"
+                    "         │\n"
+                    "         ▼\n"
+                    "  vs install <env> numpy    →  same command, ANY env type —\n"
+                    "                                VenvStudio picks pip/uv/conda\n"
+                    "                                for you automatically"
+                ),
+                "tip": (
+                    "`vs preset install <name> <env>` installs an entire curated "
+                    "bundle (see Presets in the app) with one command — no need to "
+                    "type out every package by hand. Preset names can be typed as a "
+                    "slug (lowercase, hyphens) or a fragment of the real name — "
+                    "`vs preset list` shows both."
+                ),
+                "snippet": (
+                    "# ── Environments ──────────────────────────────────────\n"
+                    "vs list                                # show every environment\n"
+                    "vs create ml                            # plain venv (default)\n"
+                    "vs create ml -t uv                      # uv-backed env\n"
+                    "vs create api -t poetry                 # poetry-backed env\n"
+                    "vs create sci -t conda --python 3.12    # conda env, pinned Python\n"
+                    "vs create web -t hatch                  # hatch-backed env\n"
+                    "vs create proj -t pdm                   # pdm-backed env\n"
+                    "vs create fast -t pixi                  # pixi-backed env\n"
+                    "vs create ml2 --python /usr/bin/python3.12   # custom interpreter\n"
+                    "vs delete ml                            # asks for confirmation first\n"
+                    "vs delete ml -y                         # skip the confirmation\n"
+                    "\n"
+                    "# ── Packages (works the same in any of the env types above) ──\n"
+                    "vs packages ml                          # list installed packages\n"
+                    "vs install ml numpy pandas               # install packages\n"
+                    "vs install ml \"numpy==1.26\"              # pin an exact version\n"
+                    "vs uninstall ml pandas                  # remove a package\n"
+                    "\n"
+                    "# ── Presets — install/remove a whole curated bundle at once ──\n"
+                    "vs preset list                          # show every preset + packages\n"
+                    "vs preset install data-science-starter ml   # numpy+pandas+matplotlib+...\n"
+                    "vs preset install llm-app-starter ml        # openai+langchain+chromadb+...\n"
+                    "vs preset remove data-science-starter ml    # uninstall that preset's packages\n"
+                    "\n"
+                    "# ── Misc ──────────────────────────────────────────────\n"
+                    "vs version                              # show VenvStudio's version\n"
+                    "vs --help                                # full command reference\n"
+                    "vs --create NAME                        # --<command> also works"
+                ),
+                "links": [("🌐 README — CLI reference", "https://github.com/bayramkotan/VenvStudio#-quick-start")],
+            },
+            {
                 "title": "pyproject.toml — Modern Project Config",
                 "body": (
                     "pyproject.toml is the single config file for modern Python projects. It replaces setup.py, setup.cfg, and requirements.txt in one clean file. It defines project name, version, dependencies, build system, and tool settings (ruff, mypy, pytest)."

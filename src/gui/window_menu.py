@@ -98,6 +98,17 @@ class WindowMenuMixin:
         logs_action.triggered.connect(self._show_log_viewer)
         tools_menu.addAction(logs_action)
 
+        # N42 (Bayram, 2026-08-15/16): a discoverable way to see PAST
+        # crash logs (already written on every crash since v1.4.62, but
+        # previously only reachable by manually browsing the logs
+        # folder). Opens the same Log Viewer, pre-selected to the most
+        # recent crash log via the new file-selector dropdown.
+        crash_reports_action = QAction("💥 Crash Reports", self)
+        crash_reports_action.setToolTip(
+            "Browse past crash logs (if any) in the same Log Viewer.")
+        crash_reports_action.triggered.connect(self._show_crash_reports)
+        tools_menu.addAction(crash_reports_action)
+
         logs_folder_action = QAction("📁 Open Logs Folder", self)
         logs_folder_action.triggered.connect(self._open_logs_folder)
         tools_menu.addAction(logs_folder_action)
@@ -142,6 +153,30 @@ class WindowMenuMixin:
         """Open the log viewer dialog (frozen builds have no terminal)."""
         from src.gui.log_viewer import LogViewerDialog
         dlg = LogViewerDialog(self)
+        dlg.exec()
+
+    def _show_crash_reports(self):
+        """N42: open the Log Viewer pre-selected to the most recent
+        crash_*.log, or tell the user there are none instead of just
+        opening on the regular venvstudio.log looking like nothing
+        happened."""
+        from src.utils.logger import get_log_dir
+        from PySide6.QtWidgets import QMessageBox
+        try:
+            crash_logs = sorted(
+                get_log_dir().glob("crash_*.log"),
+                key=lambda p: p.stat().st_mtime, reverse=True,
+            )
+        except Exception:
+            crash_logs = []
+        if not crash_logs:
+            QMessageBox.information(
+                self, "Crash Reports",
+                "No crash reports found — VenvStudio has not crashed "
+                "(or none have been logged) this install.")
+            return
+        from src.gui.log_viewer import LogViewerDialog
+        dlg = LogViewerDialog(self, initial_file=crash_logs[0].name)
         dlg.exec()
 
     def _open_logs_folder(self):

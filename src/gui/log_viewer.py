@@ -31,21 +31,32 @@ _LINE_RE = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}.*?\[\s*(\w+)\s*\]")
 class LogViewerDialog(QDialog):
     """Read-only viewer for the current venvstudio.log file."""
 
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, initial_file=None):
+        """initial_file: filename (not full path) to select on open, e.g.
+        "crash_2026-08-16_09-12-03.log" — used by the Tools → Crash
+        Reports entry to jump straight to a specific crash log instead
+        of the default venvstudio.log (N42, Bayram 2026-08-15/16)."""
         super().__init__(parent)
-        self.setWindowTitle("🪵 Log Viewer — venvstudio.log")
+        self.setWindowTitle("🪵 Log Viewer")
         self.resize(980, 620)
         self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
 
-        self._log_file = get_log_dir() / "venvstudio.log"
+        self._log_dir = get_log_dir()
         self._all_lines: list[str] = []
 
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 10, 10, 10)
         root.setSpacing(8)
 
-        # ── Top bar: file path + level filter ──
+        # ── Top bar: file selector + level filter ──
         top = QHBoxLayout()
+        top.addWidget(QLabel("File:"))
+        self._file_combo = QComboBox()
+        self._file_combo.setMinimumWidth(260)
+        self._populate_file_list(select=initial_file)
+        self._file_combo.currentTextChanged.connect(self._on_file_changed)
+        top.addWidget(self._file_combo)
+
         self._path_label = QLabel(str(self._log_file))
         self._path_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         top.addWidget(self._path_label, stretch=1)
@@ -136,6 +147,42 @@ class LogViewerDialog(QDialog):
         self.finished.connect(self._live_timer.stop)
         if self._live_cb.isChecked():
             self._live_timer.start()
+
+    # ── File selection (N42: crash log access from the same viewer) ──────
+
+    @property
+    def _log_file(self):
+        """Every existing method in this class reads self._log_file --
+        making it a property means _load/_rewrite_log/_delete_backups/etc.
+        all transparently follow whatever the combo box currently has
+        selected, with zero changes needed anywhere else in the file."""
+        name = self._file_combo.currentText() if hasattr(self, "_file_combo") else "venvstudio.log"
+        return self._log_dir / name
+
+    def _populate_file_list(self, select=None):
+        """venvstudio.log always first (it always exists once the app has
+        run), then any crash_*.log files found, newest first."""
+        self._file_combo.blockSignals(True)
+        self._file_combo.clear()
+        self._file_combo.addItem("venvstudio.log")
+        try:
+            crash_logs = sorted(
+                self._log_dir.glob("crash_*.log"),
+                key=lambda p: p.stat().st_mtime, reverse=True,
+            )
+        except Exception:
+            crash_logs = []
+        for f in crash_logs:
+            self._file_combo.addItem(f.name)
+        if select:
+            idx = self._file_combo.findText(select)
+            if idx >= 0:
+                self._file_combo.setCurrentIndex(idx)
+        self._file_combo.blockSignals(False)
+
+    def _on_file_changed(self, _name):
+        self._path_label.setText(str(self._log_file))
+        self._load()
 
     # ── Helpers ──────────────────────────────────────────────────────────
 
@@ -284,10 +331,12 @@ class LogViewerDialog(QDialog):
         cutoff = datetime.now() - timedelta(days=days)
         removed = self._rewrite_log(lambda ts: ts >= cutoff)
         self._delete_backups()
-        self._load()
+        crash_removed = self._delete_crash_logs(cutoff)
+        self._refresh_after_delete()
         QMessageBox.information(self, "Delete Logs",
                                 f"Removed {removed} line(s) older than {days} days\n"
-                                f"(rotated backup files were also deleted).")
+                                f"(rotated backup files and {crash_removed} old crash "
+                                f"report(s) were also deleted).")
 
     def _delete_before_date(self):
         from datetime import datetime
@@ -304,22 +353,25 @@ class LogViewerDialog(QDialog):
             return
         removed = self._rewrite_log(lambda ts: ts >= cutoff)
         self._delete_backups()
-        self._load()
+        crash_removed = self._delete_crash_logs(cutoff)
+        self._refresh_after_delete()
         QMessageBox.information(self, "Delete Logs",
-                                f"Removed {removed} line(s) before {cutoff:%d.%m.%Y}.")
+                                f"Removed {removed} line(s) before {cutoff:%d.%m.%Y}\n"
+                                f"({crash_removed} old crash report(s) were also deleted).")
 
     def _delete_all(self):
         reply = QMessageBox.warning(
             self, "Delete ALL Logs",
-            "Delete the entire log file and all rotated backups?\n"
-            "This cannot be undone.",
+            "Delete the entire log file, all rotated backups, AND every "
+            "crash report?\nThis cannot be undone.",
             QMessageBox.Yes | QMessageBox.No,
         )
         if reply != QMessageBox.Yes:
             return
         self._rewrite_log(lambda ts: False)
         self._delete_backups()
-        self._load()
+        self._delete_crash_logs(None)  # None = delete every crash log, no cutoff
+        self._refresh_after_delete()
 
     def _delete_backups(self):
         """Remove rotated venvstudio.log.1 .. .N files."""
@@ -330,3 +382,44 @@ class LogViewerDialog(QDialog):
                     b.unlink()
             except Exception:
                 pass
+
+    def _delete_crash_logs(self, cutoff) -> int:
+        """crash_*.log files aren't line-timestamped like venvstudio.log
+        (they're a raw traceback dump from sys.excepthook), so _rewrite_log's
+        per-line datetime.strptime parsing never matches a single line in
+        them -- every "Delete..." action silently did nothing to crash
+        reports (Bayram, 2026-08-16). Each crash log is one atomic incident,
+        so it's deleted or kept as a WHOLE FILE, decided by its own mtime
+        instead of trying to parse timestamps out of its content.
+        cutoff=None means "delete every crash log, unconditionally"."""
+        removed = 0
+        try:
+            for f in self._log_dir.glob("crash_*.log"):
+                try:
+                    if cutoff is None:
+                        f.unlink()
+                        removed += 1
+                    else:
+                        from datetime import datetime
+                        mtime = datetime.fromtimestamp(f.stat().st_mtime)
+                        if mtime < cutoff:
+                            f.unlink()
+                            removed += 1
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        return removed
+
+    def _refresh_after_delete(self):
+        """Some crash logs may no longer exist -- rebuild the file combo,
+        falling back to venvstudio.log if the one that was selected got
+        deleted out from under it."""
+        current = self._file_combo.currentText()
+        self._populate_file_list(select=current)
+        if self._file_combo.currentText() != current:
+            # the previously-selected file is gone; combo fell back to its
+            # first entry (venvstudio.log) -- make sure the path label and
+            # content match what's actually shown now.
+            self._path_label.setText(str(self._log_file))
+        self._load()

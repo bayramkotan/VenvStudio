@@ -76,6 +76,65 @@ This shows up throughout the app:
   command for the package + environment type you're looking at (see
   below)
 
+Every preset card is written the same way — it doesn't just install a
+pile of packages, it tells you what each one is *for*:
+
+<details>
+<summary><b>📋 All 47 presets, in full</b></summary>
+<br>
+
+| Preset | What it's for | Key packages |
+|:---|:---|:---|
+| **📊 Data Science Starter** | Essential tools for data analysis and visualization. | `numpy`, `pandas`, `matplotlib`, `scikit-learn`, `jupyter` |
+| **🌐 Web API (FastAPI)** | Build modern, high-performance REST APIs. | `fastapi`, `uvicorn`, `sqlalchemy`, `pydantic`, `python-dotenv` |
+| **🌐 Web App (Django)** | Full-featured web application framework with batteries included. | `django`, `psycopg2-binary`, `django-rest-framework`, `celery` |
+| **🌐 Web App (Flask)** | Lightweight and flexible web framework. | `flask`, `sqlalchemy`, `flask-cors`, `gunicorn` |
+| **🤖 ML Starter** | Machine learning essentials for building and evaluating models. | `numpy`, `pandas`, `scikit-learn`, `matplotlib`, `jupyter`, `xgboost` |
+| **👁️ Computer Vision** | Tools for image processing and object detection. | `opencv-python`, `pillow`, `scikit-image`, `ultralytics`, `torch`, `torchvision` |
+| **🧪 Testing Suite** | Professional testing tools for Python projects. | `pytest`, `pytest-cov`, `pytest-asyncio`, `factory-boy`, `faker` |
+| **🛠️ Dev Essentials** | Code quality tools every Python developer should use. | `black`, `flake8`, `mypy`, `isort`, `pre-commit`, `pytest` |
+| **🔬 NLP Toolkit** | Natural Language Processing tools for text analysis. | `transformers`, `nltk`, `spacy`, `pandas`, `numpy` |
+| **🖥️ GUI Development** | Build desktop applications with Python. | `PySide6`, `pyinstaller` |
+| **📊 Visualization Suite** | Advanced data visualization libraries. | `matplotlib`, `seaborn`, `plotly`, `bokeh`, `altair` |
+| **🧪 JupyterLab Full** | Complete JupyterLab setup with interactive widgets. | `jupyterlab`, `ipywidgets`, `numpy`, `pandas`, `matplotlib` |
+| **📈 Time Series (Classic)** | Statistical time series analysis and forecasting. | `statsmodels`, `pmdarima`, `prophet`, `sktime`, `tsfresh`, `pandas` +1 more |
+| **📈 Time Series (Deep Learning)** | Neural network-based time series forecasting. | `pytorch-forecasting`, `darts`, `neuralforecast`, `gluonts`, `transformers`, `torch` |
+| **💰 Financial Analysis** | Quantitative finance and algorithmic trading tools. | `yfinance`, `quantlib`, `zipline-reloaded`, `pyfolio`, `ta-lib`, `pandas` +1 more |
+| **💰 Financial LLM** | Fine-tune large language models for financial applications. | `transformers`, `datasets`, `peft`, `bitsandbytes`, `accelerate`, `sentencepiece` +1 more |
+| **🕸️ Web Scraping** | Crawl and extract data from websites. | `scrapy`, `playwright`, `beautifulsoup4`, `lxml`, `requests`, `pandas` |
+| **⚡ Async Backend** | High-throughput async API stack. | `fastapi`, `uvicorn`, `asyncpg`, `sqlalchemy`, `pydantic`, `httpx` +1 more |
+| **🗣️ LLM App Starter** | Build applications on top of large language models. | `openai`, `anthropic`, `langchain`, `tiktoken`, `chromadb`, `python-dotenv` |
+| **🧠 Deep Learning (PyTorch)** | Train neural networks with PyTorch. | `torch`, `torchvision`, `lightning`, `timm`, `numpy`, `matplotlib` +1 more |
+| **🧠 Deep Learning (JAX)** | High-performance deep learning with JAX. | `jax`, `flax`, `optax`, `numpy`, `matplotlib` |
+| **🎨 Audio Processing** | Analyze and manipulate audio. | `librosa`, `soundfile`, `pydub`, `numpy`, `scipy`, `matplotlib` |
+| **🎬 Video Processing** | Edit and process video. | `moviepy`, `imageio`, `opencv-python`, `pillow`, `numpy` |
+| **🗺️ Geospatial Analysis** | Work with geographic data. | `geopandas`, `shapely`, `folium`, `rasterio`, `pyproj`, `pandas` |
+| **🧬 Bioinformatics** | Analyze biological data. | `biopython`, `scanpy`, `anndata`, `numpy`, `pandas`, `matplotlib` |
+| **🎮 Game Dev (Pygame)** | Build 2D games with Pygame — a mature, beginner-friendly cross-platform game library. | `pygame`, `numpy`, `pillow` |
+| **🎮 Game Dev (Arcade)** | Modern 2D game development with Arcade — a cleaner, Pythonic alternative to Pygame. | `arcade`, `pillow`, `numpy` |
+| **📄 PDF & Documents** | Generate and parse documents. | `pypdf`, `pdfplumber`, `python-docx`, `openpyxl`, `reportlab`, `weasyprint` |
+| **📚 Documentation Site** | Build project documentation. | `mkdocs`, `mkdocs-material`, `sphinx`, `jinja2` |
+| **📊 Data Engineering** | Build data pipelines. | `pyarrow`, `duckdb`, `polars`, `sqlalchemy`, `prefect`, `pandas` |
+| **🔬 Data Science Full** | A complete data science toolkit — NumPy, Pandas, SciPy, visualization, Scikit-learn, JupyterLab, and Polars. | `numpy`, `pandas`, `scipy`, `matplotlib`, `seaborn`, `scikit-learn` +3 more |
+| **🛠️ Modern Dev (Ruff)** | Fast modern Python tooling. | `ruff`, `mypy`, `pytest`, `pytest-cov`, `pre-commit`, `black` |
+| **🧪 Testing Full** | Comprehensive testing stack. | `pytest`, `pytest-cov`, `pytest-mock`, `pytest-xdist`, `pytest-asyncio`, `hypothesis` +2 more |
+| **🌐 Full-Stack (Reflex)** | Build full web apps in pure Python with Reflex — no JavaScript required — plus SQLModel for the database. | `reflex`, `sqlmodel`, `httpx`, `python-dotenv` |
+| **📈 Interactive Dashboard** | Create data dashboards fast. | `streamlit`, `plotly`, `pandas`, `numpy`, `altair` |
+| **🔌 Messaging (Kafka)** | Event streaming with Apache Kafka. | `kafka-python`, `pydantic`, `python-dotenv` |
+| **💬 Bot Development** | Build chat bots. | `python-telegram-bot`, `discord.py`, `aiohttp`, `python-dotenv` |
+| **🔐 Security Toolkit** | Security and cryptography tools. | `cryptography`, `bcrypt`, `pyjwt`, `python-nmap`, `scapy` |
+| **☁️ AWS Cloud** | Interact with AWS services. | `boto3`, `botocore`, `awscli`, `python-dotenv` |
+| **🐳 DevOps Toolkit** | Automate infrastructure. | `docker`, `fabric`, `paramiko`, `pyyaml`, `rich` |
+| **🤖 Computer Vision (Full)** | Complete computer vision stack. | `opencv-python`, `pillow`, `scikit-image`, `albumentations`, `torch`, `torchvision` +1 more |
+| **📝 NLP (Transformers)** | Modern NLP with Hugging Face Transformers, Datasets, and Tokenizers, plus spaCy and NLTK. | `transformers`, `datasets`, `tokenizers`, `sentencepiece`, `torch`, `spacy` +1 more |
+| **🔭 Astronomy & Astrophysics** | Python tools for astronomy and astrophysics. | `astropy`, `astroquery`, `astroplan`, `reproject`, `matplotlib`, `numpy` +1 more |
+| **⚛️ Physics Simulation** | Simulate physical systems in Python. | `scipy`, `sympy`, `numpy`, `pint`, `matplotlib`, `qutip` |
+| **🧪 Computational Chemistry** | Molecular modeling and computational chemistry. | `rdkit`, `mdanalysis`, `mendeleev`, `ase`, `numpy`, `matplotlib` |
+| **🌍 Climate & Earth Science** | Analyze climate and Earth science data. | `xarray`, `cartopy`, `cfgrib`, `metpy`, `pandas`, `numpy` +1 more |
+| **🔬 Scientific Computing (SciPy Stack)** | The full scientific Python stack. | `numpy`, `scipy`, `sympy`, `matplotlib`, `pandas`, `numba` |
+
+</details>
+
 ---
 
 ## 📦 Install
@@ -138,7 +197,7 @@ Or download the standalone binary — **no Python required:**
 ### 📦 Package Management
 - **Installed** — filter, select, uninstall, export, import
 - **Catalog** — 64 curated packages across 32 categories
-- **48 Presets** — one-click bundles, including modern AI/data stacks: **LLM App Starter** (openai, anthropic, langchain, chromadb), **RAG/NLP** (transformers, datasets, spacy, torch), **Data Engineering** (polars, duckdb, pyarrow, prefect), plus Data Science, Web API, Django, Flask, Computer Vision, Deep Learning (PyTorch/JAX), Financial Analysis, and more
+- **47 Presets** — one-click bundles, including modern AI/data stacks: **LLM App Starter** (openai, anthropic, langchain, chromadb), **RAG/NLP** (transformers, datasets, spacy, torch), **Data Engineering** (polars, duckdb, pyarrow, prefect), plus Data Science, Web API, Django, Flask, Computer Vision, Deep Learning (PyTorch/JAX), Financial Analysis, and more
 - **Manual Install** — paste package names or version specs
 - pip or **uv** backend (10–100× faster)
 - Check for package updates
@@ -282,7 +341,7 @@ VenvStudio checks packages against a curated compatibility list **before** insta
 <summary><b>⚡ Presets</b></summary>
 <br>
 
-48 one-click bundles — from classic (Data Science, Web API, Django) to
+47 one-click bundles — from classic (Data Science, Web API, Django) to
 modern AI/data stacks: **LLM App Starter**, **RAG/NLP**, **Deep
 Learning (PyTorch/JAX)**, **Data Engineering (Polars/DuckDB)**,
 **Computer Vision**, **Financial Analysis**, and more.

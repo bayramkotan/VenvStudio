@@ -10,3 +10,5 @@ build/
 *.spec
 VenvStudio_Handoff.md*.bak
 
+VenvStudio_Handoff.md
+VENVSTUDIO_TODO.md

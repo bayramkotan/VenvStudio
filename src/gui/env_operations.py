@@ -870,30 +870,49 @@ class EnvOperationsMixin:
             path_item.setToolTip(str(pipx_path))
             path_item.setFlags(path_item.flags() & ~_Qt.ItemIsEditable)
             path_item.setForeground(_QColor(_path_color))
+            path_item.setFont(_bold)
             self.env_table.setItem(row, 2, path_item)
 
-            # Column 3: Runtime (Python version)
+            # Column 3: Runtime (Python version) -- this whole row-insert
+            # path was missing the "  Python " prefix AND the bold font
+            # that _refresh_env_list()/_on_env_detail_ready() (env_list.py)
+            # both apply consistently, so a freshly-reset pipx row looked
+            # left-shifted and unbold until the next full refresh (or an
+            # app restart) replaced it. Matched to the same "  Python {v}"
+            # format and bold font used everywhere else (Bayram, 2026-08-16).
             py_ver = marker_data["python_version"]
-            runtime_item = QTableWidgetItem(py_ver)
+            runtime_item = QTableWidgetItem(f"  Python {py_ver}")
             runtime_item.setFlags(runtime_item.flags() & ~_Qt.ItemIsEditable)
+            runtime_item.setFont(_bold)
+            if _is_light:
+                runtime_item.setForeground(_QColor("#1f2937"))
             self.env_table.setItem(row, 3, runtime_item)
 
             # Column 4: Packages — empty pipx == 0
-            pkg_item = QTableWidgetItem("0")
+            pkg_item = QTableWidgetItem("  0")
             pkg_item.setFlags(pkg_item.flags() & ~_Qt.ItemIsEditable)
+            pkg_item.setFont(_bold)
+            if _is_light:
+                pkg_item.setForeground(_QColor("#1f2937"))
             self.env_table.setItem(row, 4, pkg_item)
 
             # Column 5: Size — directory was just wiped by delete_venv, so
             # the fresh pipx home is empty (0 B). Reflect that in the cell
-            # instead of an inscrutable "—" so the user sees their delete
+            # instead of an inscrutable — so the user sees their delete
             # actually freed the space.
-            size_item = QTableWidgetItem("0.0 B")
+            size_item = QTableWidgetItem("  0.0 B")
             size_item.setFlags(size_item.flags() & ~_Qt.ItemIsEditable)
+            size_item.setFont(_bold)
+            if _is_light:
+                size_item.setForeground(_QColor("#1f2937"))
             self.env_table.setItem(row, 5, size_item)
 
             # Column 6: Created
-            created_item = QTableWidgetItem(marker_data["created"])
+            created_item = QTableWidgetItem(f"  {marker_data['created']}")
             created_item.setFlags(created_item.flags() & ~_Qt.ItemIsEditable)
+            created_item.setFont(_bold)
+            if _is_light:
+                created_item.setForeground(_QColor("#1f2937"))
             self.env_table.setItem(row, 6, created_item)
 
             self._log.info(f"pipx readd: row inserted at index {row}")

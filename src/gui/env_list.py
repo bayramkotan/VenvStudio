@@ -80,6 +80,9 @@ class EnvListMixin:
             _hatch_envs  = [e for e in envs if e.env_type == "hatch"]
             _pdm_envs    = [e for e in envs if e.env_type == "pdm"]
             _pixi_envs   = [e for e in envs if e.env_type == "pixi"]
+            _other_envs = [e for e in envs
+                           if not str(e.path).startswith(_base_dir)
+                           and e.env_type not in ("poetry", "pipx", "hatch", "pdm", "pixi")]
 
             def _fmt_size(lst):
                 total = 0
@@ -100,6 +103,9 @@ class EnvListMixin:
 
             parts = [f"\U0001f4c2 {self.venv_manager.base_dir}  \u2022  "
                      f"{len(_base_envs)} env(s)  \u2022  {_fmt_size(_base_envs)}"]
+            if _other_envs:
+                parts.append(f"\U0001f4cd Other locations  \u2022  {len(_other_envs)} "
+                             f"env(s)  \u2022  {_fmt_size(_other_envs)}")
             if _poetry_envs:
                 parts.append(f"\U0001f4dc poetry  \u2022  {len(_poetry_envs)} "
                              f"env(s)  \u2022  {_fmt_size(_poetry_envs)}")
@@ -415,6 +421,15 @@ class EnvListMixin:
         # Remove external-managed envs from base count
         _base_envs = [e for e in _base_envs
                       if e.env_type not in ("poetry", "pipx", "hatch", "pdm", "pixi")]
+        # N12 custom-location envs (venv/uv/etc created OUTSIDE base_dir,
+        # e.g. via "Location: Browse..." in Create New Environment) fell
+        # into no bucket at all -- not under base_dir, and not one of the
+        # 5 package-manager-specific types above, so they were silently
+        # missing from the summary row entirely even though their size
+        # was already folded into the grand total (Bayram, 2026-08-16).
+        _other_envs = [e for e in envs
+                       if not str(e.path).startswith(_base_dir)
+                       and e.env_type not in ("poetry", "pipx", "hatch", "pdm", "pixi")]
 
         def _fmt_size(envs_list):
             total = 0
@@ -436,6 +451,8 @@ class EnvListMixin:
         parts = []
         _total_all = _fmt_size(envs)
         parts.append(f"📂 {self.venv_manager.base_dir}  •  {len(_base_envs)} env(s)  •  {_fmt_size(_base_envs)}")
+        if _other_envs:
+            parts.append(f"📍 Other locations  •  {len(_other_envs)} env(s)  •  {_fmt_size(_other_envs)}")
         if _poetry_envs:
             parts.append(f"📜 poetry  •  {len(_poetry_envs)} env(s)  •  {_fmt_size(_poetry_envs)}")
         if _pipx_envs:

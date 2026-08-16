@@ -305,6 +305,9 @@ VenvStudio checks packages against a curated compatibility list **before** insta
 <p align="center">
   <img src="assets/screenshots/environments_right_click.png" alt="Environments — right-click context menu" width="800">
 </p>
+<p align="center">
+  <img src="assets/screenshots/export.png" alt="Environments — Export dropdown" width="800">
+</p>
 </details>
 
 <details>

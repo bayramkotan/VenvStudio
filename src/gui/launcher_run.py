@@ -633,7 +633,21 @@ class LauncherRunMixin:
                 notebook_dir = os.path.expanduser("~")
             self._jupyter_notebook_dir = notebook_dir
             app_def = dict(app_def)
-            app_def["command"] = list(app_def["command"]) + ["--notebook-dir", notebook_dir, "--no-browser"]
+            _cmd = list(app_def["command"])
+            # MUST be idempotent: the post-install retry path (launch ->
+            # package missing -> install -> re-launch) re-enters this function
+            # with the ALREADY-flagged app_def, so the plain concat that used
+            # to live here produced
+            #   --notebook-dir X --no-browser --notebook-dir X --no-browser
+            # and Jupyter refused to start with
+            #   "ServerApp.root_dir ... only accepts one value, got 2".
+            # Reproduced on Linux under v1.6.50 (Bayram, 2026-08-17) -- the
+            # earlier "fixed" note above described an intent, not this code.
+            if "--notebook-dir" not in _cmd:
+                _cmd += ["--notebook-dir", notebook_dir]
+            if "--no-browser" not in _cmd:
+                _cmd += ["--no-browser"]
+            app_def["command"] = _cmd
 
         pkg_name = app_def["package"].lower()
         # pip normalizes package names: quarto-cli ↔ quarto_cli — check both

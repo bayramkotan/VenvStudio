@@ -92,6 +92,17 @@ class EnvStateMixin:
             backend = "conda"
         elif self._current_env_type == "pipx":
             backend = "pipx"
+        elif self._current_env_type == "venv":
+            # uv-trampoline fix: "venv" type had NO override here, so it
+            # silently inherited the global `package_manager` config key.
+            # That key is vestigial -- settings_advanced.py hardcodes "pip"
+            # and no UI path can set anything else -- but a stale "uv" left
+            # on disk by an OLDER VenvStudio version survives and routes
+            # installs through `uv pip install --python <exe>`, which emits
+            # uv trampoline .exe launchers. On Windows those die with
+            # "uv trampoline failed to canonicalize script path".
+            # A stdlib venv must always be managed with pip.
+            backend = "pip"
 
         # B182 follow-up: remember the active backend so post-install
         # callbacks can refresh the env info bar without guessing.
@@ -436,6 +447,17 @@ class EnvStateMixin:
                 backend = "conda"
             elif self._current_env_type == "pipx":
                 backend = "pipx"
+            elif self._current_env_type == "venv":
+                # uv-trampoline fix: "venv" type had NO override here, so it
+                # silently inherited the global `package_manager` config key.
+                # That key is vestigial -- settings_advanced.py hardcodes "pip"
+                # and no UI path can set anything else -- but a stale "uv" left
+                # on disk by an OLDER VenvStudio version survives and routes
+                # installs through `uv pip install --python <exe>`, which emits
+                # uv trampoline .exe launchers. On Windows those die with
+                # "uv trampoline failed to canonicalize script path".
+                # A stdlib venv must always be managed with pip.
+                backend = "pip"
 
             self.pip_manager = PipManager(venv_path, backend=backend)
             # B182 follow-up: remember the active backend so post-install

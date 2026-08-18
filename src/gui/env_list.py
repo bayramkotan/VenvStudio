@@ -13,6 +13,74 @@ from PySide6.QtGui import QFont, QColor, QAction
 from src.gui.workers import EnvDetailWorker
 from src.utils.i18n import tr
 
+# N-item (Bayram, 2026-08-18): the summary row used to collapse every env
+# living outside base_dir into one vague "Other locations" chip, which sat
+# oddly next to the concrete pipx/pdm/poetry chips and told the user nothing
+# about WHERE those envs actually were. Now each distinct parent directory
+# gets its own chip, and new locations simply appear as new chips.
+def _shorten_location(path_str: str, max_len: int = 34) -> str:
+    """Home-relative, middle-elided display form of a directory path.
+
+    Full paths blow out the single-line summary row, so collapse the home
+    directory to ~ and elide the middle of anything still too long. The
+    untouched path goes in the label's tooltip instead.
+    """
+    import os as _os
+    try:
+        home = _os.path.expanduser("~")
+        if home and path_str.lower().startswith(home.lower()):
+            path_str = "~" + path_str[len(home):]
+    except Exception:
+        pass
+    if len(path_str) <= max_len:
+        return path_str
+    keep = max_len - 1
+    head = keep // 2
+    return path_str[:head] + "\u2026" + path_str[-(keep - head):]
+
+
+def _location_chips(other_envs, fmt_size, max_chips: int = 3):
+    """Build one summary chip per distinct location, plus a tooltip line.
+
+    Returns (chips, tooltip_lines). Locations are grouped by the env's
+    PARENT directory, so C:/vs/ddd and C:/vs/eee share one "C:/vs" chip.
+    Beyond max_chips the remainder is folded into a single overflow chip so
+    a user with envs scattered across a dozen directories does not push the
+    total off the end of the row -- the tooltip still lists every one.
+    """
+    import os as _os
+    from pathlib import Path as _P
+
+    groups = {}
+    for e in other_envs:
+        try:
+            parent = str(_P(e.path).parent)
+        except Exception:
+            parent = str(e.path)
+        key = _os.path.normcase(parent)
+        if key not in groups:
+            groups[key] = [parent, []]
+        groups[key][1].append(e)
+
+    # Busiest location first, then alphabetical, so the chip order is stable
+    # across refreshes instead of following dict insertion order.
+    items = sorted(groups.values(), key=lambda g: (-len(g[1]), g[0].lower()))
+
+    chips = []
+    for disp, lst in items[:max_chips]:
+        chips.append(f"\U0001f4cd {_shorten_location(disp)}  \u2022  "
+                     f"{len(lst)} env(s)  \u2022  {fmt_size(lst)}")
+    rest = items[max_chips:]
+    if rest:
+        rest_envs = [e for _d, l in rest for e in l]
+        chips.append(f"\U0001f4cd +{len(rest)} more location(s)  \u2022  "
+                     f"{len(rest_envs)} env(s)  \u2022  {fmt_size(rest_envs)}")
+
+    tooltip_lines = [f"{disp}  \u2022  {len(lst)} env(s)  \u2022  {fmt_size(lst)}"
+                     for disp, lst in items]
+    return chips, tooltip_lines
+
+
 # N34 (2026-08-14): env-type-specific commands for the Environments
 # table's right-click menu -- each (label, command) pair runs, in a
 # real terminal, AFTER the env is activated the normal way (reuses
@@ -103,9 +171,10 @@ class EnvListMixin:
 
             parts = [f"\U0001f4c2 {self.venv_manager.base_dir}  \u2022  "
                      f"{len(_base_envs)} env(s)  \u2022  {_fmt_size(_base_envs)}"]
+            _loc_tooltip = []
             if _other_envs:
-                parts.append(f"\U0001f4cd Other locations  \u2022  {len(_other_envs)} "
-                             f"env(s)  \u2022  {_fmt_size(_other_envs)}")
+                _chips, _loc_tooltip = _location_chips(_other_envs, _fmt_size)
+                parts.extend(_chips)
             if _poetry_envs:
                 parts.append(f"\U0001f4dc poetry  \u2022  {len(_poetry_envs)} "
                              f"env(s)  \u2022  {_fmt_size(_poetry_envs)}")
@@ -123,6 +192,9 @@ class EnvListMixin:
                              f"env(s)  \u2022  {_fmt_size(_pixi_envs)}")
             parts.append(f"\U0001f5c2 total  \u2022  {_fmt_size(envs)}")
             self.info_label.setText("        ".join(parts))
+            self.info_label.setToolTip(
+                "Environments outside the base directory:\n" + "\n".join(_loc_tooltip)
+                if _loc_tooltip else "")
         except Exception:
             pass
 
@@ -451,8 +523,10 @@ class EnvListMixin:
         parts = []
         _total_all = _fmt_size(envs)
         parts.append(f"📂 {self.venv_manager.base_dir}  •  {len(_base_envs)} env(s)  •  {_fmt_size(_base_envs)}")
+        _loc_tooltip = []
         if _other_envs:
-            parts.append(f"📍 Other locations  •  {len(_other_envs)} env(s)  •  {_fmt_size(_other_envs)}")
+            _chips, _loc_tooltip = _location_chips(_other_envs, _fmt_size)
+            parts.extend(_chips)
         if _poetry_envs:
             parts.append(f"📜 poetry  •  {len(_poetry_envs)} env(s)  •  {_fmt_size(_poetry_envs)}")
         if _pipx_envs:
@@ -465,6 +539,9 @@ class EnvListMixin:
             parts.append(f"🦜 pixi  •  {len(_pixi_envs)} env(s)  •  {_fmt_size(_pixi_envs)}")
         parts.append(f"🗂 total  •  {_total_all}")
         self.info_label.setText("        ".join(parts))
+        self.info_label.setToolTip(
+            "Environments outside the base directory:\n" + "\n".join(_loc_tooltip)
+            if _loc_tooltip else "")
 
         # Update package panel env dropdown
         env_list = [(e.name, e.path) for e in envs]

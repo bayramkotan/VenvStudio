@@ -47,6 +47,11 @@ class LauncherUIMixin:
         self.launcher_grid = QGridLayout()
         self.launcher_grid.setSpacing(16)
         self.launcher_grid.setAlignment(Qt.AlignTop)
+        # Equal column widths. Without this every column sizes to its own
+        # content, so the leftmost one came out visibly narrower than the
+        # other two on both Windows and Linux (Bayram, 2026-08-18).
+        for _col in range(3):
+            self.launcher_grid.setColumnStretch(_col, 1)
 
         self.app_definitions = [
             {
@@ -618,6 +623,11 @@ class LauncherUIMixin:
         # Status label
         status = QLabel("")
         status.setObjectName(f"status_{app_def['name']}")
+        # Must wrap: the longest status text ("Latest version needs Python
+        # 3.11-3.13 - pip will use an older compatible release") otherwise
+        # forces a huge minimum width on whichever grid column holds it,
+        # squeezing the columns whose cards only carry short text.
+        status.setWordWrap(True)
         status.setStyleSheet(f"font-size: {self._c()['fs_tiny']}px;")
         layout.addWidget(status)
 

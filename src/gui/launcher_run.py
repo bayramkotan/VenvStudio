@@ -1016,18 +1016,50 @@ class LauncherRunMixin:
         else:
             work_dir = os.environ.get("HOME", os.path.expanduser("~"))
 
+        # ── Env-aware PATH for the launched process ───────────────────────
+        # We spawn the env's python by ABSOLUTE path, but the child still
+        # inherits VenvStudio's own PATH. Any tool that dispatches to a
+        # console-script shim therefore finds whatever comes first on the
+        # SYSTEM path instead of the env's own Scripts/bin.
+        #
+        # That is exactly how
+        #     python -m jupyter lab
+        # ended up executing C:\Users\<user>\.local\bin\jupyter-lab.exe
+        # -- a uv-built trampoline left by `uv tool install` -- instead of
+        # the env's own Scripts\jupyter-lab.exe, and died instantly with
+        #     error: uv trampoline failed to canonicalize script path
+        # The env itself was perfectly healthy: its own shims were normal
+        # 108 KB pip launchers, and calling the entry point directly
+        # (python -c "from jupyterlab.labapp import main; main()") started
+        # JupyterLab without a hitch. (Bayram, Windows, 2026-08-18.)
+        #
+        # Prepending the env's script dir is what activation does, so do it
+        # for every launched app -- Jupyter is just where it surfaced first.
+        _scripts_dir = str(venv_path / ("Scripts" if get_platform() == "windows" else "bin"))
+
+        def _env_aware(base):
+            """Return a copy of `base` with the env's script dir first on PATH."""
+            _e = dict(base)
+            if os.path.isdir(_scripts_dir):
+                _e["PATH"] = _scripts_dir + os.pathsep + _e.get("PATH", "")
+                _e["VIRTUAL_ENV"] = str(venv_path)
+                _e.pop("PYTHONHOME", None)
+            return _e
+
+        _launch_env = _env_aware(os.environ)
+
         try:
             if get_platform() == "windows":
                 if show_console:
                     subprocess.Popen(
-                        cmd, cwd=work_dir,
+                        cmd, cwd=work_dir, env=_launch_env,
                         creationflags=subprocess.CREATE_NEW_CONSOLE,
                     )
                 else:
                     DETACHED_PROCESS = 0x00000008
                     CREATE_NO_WINDOW = 0x08000000
                     subprocess.Popen(
-                        cmd, cwd=work_dir,
+                        cmd, cwd=work_dir, env=_launch_env,
                         creationflags=DETACHED_PROCESS | CREATE_NO_WINDOW,
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
@@ -1048,8 +1080,9 @@ class LauncherRunMixin:
                         stdin=subprocess.DEVNULL,
                         start_new_session=True,
                     )
-                    if _ai_env is not None:
-                        _popen_kw["env"] = _ai_env
+                    _popen_kw["env"] = _env_aware(
+                        _ai_env if _ai_env is not None else os.environ
+                    )
                     subprocess.Popen(cmd, **_popen_kw)
 
             self.status_label.setText(f"🚀 Launched {app_def['name']}")

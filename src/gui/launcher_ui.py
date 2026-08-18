@@ -88,6 +88,15 @@ class LauncherUIMixin:
                 "env_types": ["venv", "uv", "hatch", "pdm", "poetry"],
                 "package": "orange3",
                 "min_python": "3.11",
+                # orangecanvas 0.2.9 breaks on Python 3.14: package_dirname()
+                # reads a widget package's __file__ and gets None, dying with
+                # "TypeError: expected str, bytes or os.PathLike object, not
+                # NoneType" while building the widget registry -- the window
+                # flashes open and closes. Reproduced on a pristine venv with
+                # only orange3 + PyQt5 + PyQtWebEngine, outside VenvStudio, so
+                # it is an upstream incompatibility, not ours. Verified working
+                # on Python 3.13.13 (Bayram, 2026-08-18).
+                "max_python": "3.13",
                 "command": ["-m", "Orange.canvas"],
                 "desc": "Visual programming for data mining and machine learning",
                 "note": "Installs PyQt5 + orange3. chardet<4.0 applied automatically.",
@@ -225,7 +234,7 @@ class LauncherUIMixin:
                 "package": "datasette",
                 "env_types": ["venv", "uv", "hatch", "pdm", "poetry"],
                 "min_python": "3.9",
-                "command": ["-m", "datasette", "--open"],
+                "command": ["-m", "datasette"], # headless: VenvStudio opens the browser itself via "open_browser"; without this the app opens one too (Bayram, 2026-08-18)
                 "desc": "Explore & publish SQLite databases",
                 "needs_console": True,
                 "open_browser": "http://localhost:8001",
@@ -239,7 +248,7 @@ class LauncherUIMixin:
                 "env_types": ["venv", "uv", "hatch", "pdm", "poetry"],
                 "package": "marimo",
                 "min_python": "3.10",
-                "command": ["-m", "marimo", "edit"],
+                "command": ["-m", "marimo", "edit", "--headless"], # headless: VenvStudio opens the browser itself via "open_browser"; without this the app opens one too (Bayram, 2026-08-18)
                 "desc": "Reactive notebook — next-gen Jupyter alternative",
                 "needs_console": True,
                 "open_browser": "http://localhost:2718",
@@ -439,7 +448,7 @@ class LauncherUIMixin:
                 "package": "chainlit",
                 "min_python": "3.10",
                 "max_python": "3.13",
-                "command": ["-m", "chainlit", "hello"],
+                "command": ["-m", "chainlit", "hello", "-h"], # headless: VenvStudio opens the browser itself via "open_browser"; without this the app opens one too (Bayram, 2026-08-18)
                 "desc": "Build conversational LLM/chat UIs quickly",
                 "needs_console": True,
                 "open_browser": "http://localhost:8000",

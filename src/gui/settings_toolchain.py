@@ -243,7 +243,12 @@ class ToolchainMixin:
                         "zypper": ["zypper", "install", "-y", pkg],
                     }
                     if pm in _pkg_cmds:
-                        _cmd = ([_pkexec] if _pkexec else ["sudo"]) + _pkg_cmds[pm]
+                        # No bare sudo from a GUI: it prompts on a TTY this
+                        # process does not have and hangs. (2026-08-19)
+                        if not _pkexec:
+                            return False, ("No graphical elevation helper (pkexec) "
+                                           "found — use User install instead")
+                        _cmd = [_pkexec] + _pkg_cmds[pm]
                         r = subprocess.run(_cmd, capture_output=True, text=True, timeout=120)
                         if r.returncode != 0: return False, r.stderr[:200]
                     else:
@@ -252,7 +257,11 @@ class ToolchainMixin:
                                            capture_output=True, text=True, timeout=120)
                         if r.returncode != 0: return False, r.stderr[:200]
             elif scope == "system":
-                r = subprocess.run(["sudo", sys.executable, "-m", "pip", "install", pkg, "-q"],
+                _elev = shutil.which("pkexec")
+                if not _elev:
+                    return False, ("No graphical elevation helper (pkexec) found "
+                                   "— use User install instead")
+                r = subprocess.run([_elev, sys.executable, "-m", "pip", "install", pkg, "-q"],
                                    **subprocess_args(capture_output=True, text=True, timeout=120))
                 if r.returncode != 0: return False, (r.stderr or "failed")[:200]
             else:
@@ -847,36 +856,92 @@ class ToolchainMixin:
             self._tc_load_table(combo.itemData(idx) or "")
 
 
+    def _tc_py_ver_tag(self, py_exe) -> str:
+        """'310' / '314' for the SELECTED interpreter. Cached per exe.
+
+        Needed because the per-user scripts directory is version-stamped on
+        Windows (%APPDATA%\\Python\\Python314\\Scripts), so telling one Python's
+        tools from another's means knowing which version was picked -- not
+        which version VenvStudio itself happens to be running under.
+        """
+        cache = getattr(self, "_tc_pyver_cache", None)
+        if cache is None:
+            cache = self._tc_pyver_cache = {}
+        key = str(py_exe)
+        if key in cache:
+            return cache[key]
+        tag = ""
+        try:
+            import subprocess
+            from src.utils.platform_utils import subprocess_args
+            r = subprocess.run(
+                [py_exe, "-c",
+                 "import sys;print(f'{sys.version_info.major}{sys.version_info.minor}')"],
+                **subprocess_args(capture_output=True, text=True, timeout=5))
+            if r.returncode == 0:
+                tag = (r.stdout or "").strip()
+        except Exception:
+            pass
+        cache[key] = tag
+        return tag
+
     def _tc_find_tool(self, tool, py_exe):
-        """Find tool exe for given Python. Returns path or ''."""
-        import os, sys, shutil, site
+        """Find tool exe for the GIVEN Python. Returns path or ''."""
+        import os, sys, shutil
         cands = []
-        # N11 fix: the SELECTED Python's own Scripts/bin dir must be checked
-        # FIRST. shutil.which() searches system PATH, which resolves to
-        # whichever install happens to be on PATH (often unrelated to the
-        # Python just picked in the dropdown) -- putting it first meant the
-        # table showed the SAME uv/poetry/pipx path no matter which Python
-        # was selected, since next() returns the first match.
+        # The SELECTED Python's own Scripts/bin dir is checked FIRST.
         py_sc = os.path.join(os.path.dirname(py_exe),
             "Scripts" if sys.platform=="win32" else "bin")
         for n in (tool,tool+".exe"):
             cands.append(os.path.join(py_sc,n))
-        try:
-            ub = site.getuserbase()
-            sc = os.path.join(ub,"Scripts" if sys.platform=="win32" else "bin")
-            for n in (tool,tool+".exe"): cands.append(os.path.join(sc,n))
-        except Exception: pass
-        if sys.platform=="win32":
-            pa = os.path.join(os.environ.get("APPDATA",""),"Python")
-            if os.path.isdir(pa):
-                for sub in os.listdir(pa):
-                    sc = os.path.join(pa,sub,"Scripts")
-                    for n in (tool,tool+".exe"): cands.append(os.path.join(sc,n))
-        # Global PATH search LAST -- fallback only when the selected Python
-        # has no local install of the tool, not the first candidate checked.
+
+        # Per-user scripts for THIS interpreter only.
+        #
+        # This block used to call site.getuserbase() -- which reports the user
+        # base of the Python RUNNING VenvStudio, not the one selected in the
+        # dropdown -- and then, on Windows, walked every %APPDATA%\Python\*
+        # directory and added them all. With 3.10 selected the table therefore
+        # listed 3.14's hatch/pdm/pipx/uv, and Upgrade/Remove would have acted
+        # on the wrong installation entirely. Now the version tag of the
+        # selected interpreter decides. (Bayram, 2026-08-19: "her python
+        # versiyonu icin ayri ayri olmasi gerekmiyor mu?")
+        if sys.platform == "win32":
+            _tag = self._tc_py_ver_tag(py_exe)
+            if _tag:
+                sc = os.path.join(os.environ.get("APPDATA",""), "Python",
+                                  f"Python{_tag}", "Scripts")
+                for n in (tool,tool+".exe"): cands.append(os.path.join(sc,n))
+        else:
+            # POSIX puts every interpreter's user scripts in the same
+            # ~/.local/bin, so there is nothing to disambiguate by path here.
+            for n in (tool,tool+".exe"):
+                cands.append(os.path.expanduser(os.path.join("~/.local/bin", n)))
+
+        # Global PATH search LAST, and only as a genuine fallback: a PATH hit
+        # can easily belong to a different interpreter (that is how Poetry from
+        # Program Files\Python314 showed up under a 3.10 selection). Accept it
+        # only when the selected Python actually reports the package installed,
+        # or when the tool is not pip-installable at all (pixi, micromamba).
+        _path_hit = ""
         for n in (tool, tool+".exe"):
             w = shutil.which(n)
-            if w: cands.append(w)
+            if w:
+                _path_hit = w
+                break
+        if _path_hit and not any(c and os.path.isfile(c) for c in cands):
+            if tool in ("pixi", "micromamba", "conda", "mamba"):
+                cands.append(_path_hit)
+            else:
+                try:
+                    import subprocess
+                    from src.utils.platform_utils import subprocess_args
+                    _r = subprocess.run(
+                        [py_exe, "-m", "pip", "show", tool],
+                        **subprocess_args(capture_output=True, text=True, timeout=8))
+                    if _r.returncode == 0:
+                        cands.append(_path_hit)
+                except Exception:
+                    pass
         found = next((c for c in cands if c and os.path.isfile(c)), "")
         if found:
             # For pixi: verify it's the real prefix-dev pixi, not pip-installed fake
@@ -1016,12 +1081,15 @@ class ToolchainMixin:
                                      for l in _pr.stdout.splitlines()
                                      if l.startswith("Location:")), "")
                         if _loc:
-                            import importlib.util as _iu
-                            _spec = _iu.find_spec(tid_local.replace("-", "_"))
-                            if _spec and _spec.origin:
-                                display_path = os.path.dirname(_spec.origin)
-                            else:
-                                display_path = os.path.join(_loc, tid_local)
+                            # Build the display path from the Location: line
+                            # `pip show` reported for the SELECTED python.
+                            # This used to prefer importlib.find_spec(), which
+                            # resolves inside the interpreter running
+                            # VenvStudio -- so with 3.12 picked the pip row
+                            # still pointed at /usr/lib/python3.14/site-
+                            # packages/pip, overwriting the correct answer
+                            # that _loc already held. (Bayram, 2026-08-19.)
+                            display_path = os.path.join(_loc, tid_local)
                     except Exception:
                         pass
                 rows.append((path, ver, display_path))
@@ -1101,25 +1169,23 @@ class ToolchainMixin:
             _is_global_path = ok2 and any(
                 path.lower().startswith(p) for p in _global_prefixes
             )
+            # TWO words, nothing else. This column used to speak six dialects
+            # -- Built-in / Managed / Global / Python / User / Installed -- and
+            # some of them meant the same thing: pixi in ~/.pixi/bin read
+            # "Installed" while pdm in ~/.local/bin read "User", both per-user.
+            # The only distinction that changes what the user can DO is whether
+            # writing there needs admin rights, so that is the only thing the
+            # column reports now. pip and venv are classified by their location
+            # like everything else; their rows already lack a Remove button, so
+            # nothing is lost by dropping the "Built-in" wording.
+            # (Bayram, 2026-08-19: "System ve User demen yeterliiii")
             if ok2:
-                if _tid in ("pip", "venv"):
-                    st_text = "✅ Built-in"
-                    st_color = "#a6e3a1"
-                elif _is_managed:
-                    st_text = "📦 Managed"
-                    st_color = "#cba6f7"
-                elif _is_global_path:
-                    st_text = "🌐 Global"
-                    st_color = "#89b4fa"
-                elif _is_user:
+                if _is_user or _is_managed or self._tc_dir_is_writable(path):
                     st_text = "👤 User"
                     st_color = "#a6e3a1"
-                elif _is_python_local:
-                    st_text = "🐍 Python"
-                    st_color = "#f9e2af"
                 else:
-                    st_text = "✅ Installed"
-                    st_color = "#a6e3a1"
+                    st_text = "🖥 System"
+                    st_color = "#89b4fa"
             else:
                 st_text = "❌ Not found"
                 st_color = "#f38ba8"
@@ -1314,18 +1380,23 @@ class ToolchainMixin:
         if not hasattr(self, "_tc_ws"): self._tc_ws = []
         self._tc_ws.append(w)
 
-    # ── N57 (Bayram, 2026-08-18) ──────────────────────────────────────────
-    # Every tool on Bayram's Windows box except pixi lives in
-    # C:\Program Files\Python314\Scripts, a system location. Upgrading any of
-    # them from a non-elevated VenvStudio cannot succeed, and pip failures here
-    # are easy to miss, so the user just sees nothing happen. Check first and
-    # explain, with the exact command for an elevated terminal.
+    # A USER install never needs admin rights: it writes to the per-user site
+    # (~/.local, %APPDATA%\Python) and leaves any system copy alone -- the user
+    # copy simply wins on PATH. An earlier version of this method tested whether
+    # the EXISTING install was writable and, when it was not, refused the user
+    # install and told the user to go run pip in an elevated terminal. That is
+    # why choosing "User" demanded admin rights for a tool sitting in
+    # /usr/bin or Program Files (Bayram, 2026-08-19: "user install da neden
+    # admin yetkileri istiyorsun"). Elevation belongs to the system scope and
+    # nowhere else, so the check is gone.
     @staticmethod
     def _tc_dir_is_writable(path: str) -> bool:
+        """Can we write next to this executable? Used only to label the
+        Status column System vs User -- never to block an action."""
         import os as _os, tempfile as _tf
         d = _os.path.dirname(path) if _os.path.isfile(path) else path
         if not d or not _os.path.isdir(d):
-            return True          # unknown -> do not block the user
+            return True
         try:
             with _tf.NamedTemporaryFile(dir=d, prefix=".vs-wtest-"):
                 return True
@@ -1335,27 +1406,6 @@ class ToolchainMixin:
     def _tc_do_install(self, tool, pkg, scope, tbl, row):
         import sys, os
         from PySide6.QtGui import QColor
-
-        # Only guard user scope: a system-scope run elevates on purpose, and a
-        # fresh install has no existing location to test.
-        if scope == "user" and pkg:
-            try:
-                _cur = self._tc_find_tool(tool, sys.executable)
-            except Exception:
-                _cur = ""
-            if _cur and os.path.isfile(_cur) and not self._tc_dir_is_writable(_cur):
-                from PySide6.QtWidgets import QMessageBox
-                _elev = ("an Administrator PowerShell"
-                         if sys.platform == "win32" else "a root shell")
-                QMessageBox.warning(
-                    self, "System-wide install \u2014 admin required",
-                    f"'{tool}' is installed in a system location that "
-                    f"VenvStudio cannot write to:\n\n{os.path.dirname(_cur)}\n\n"
-                    f"Upgrading it needs elevated rights. Run this in {_elev}:"
-                    f"\n\n    pip install --upgrade {pkg}\n\n"
-                    f"(Tools installed per-user can be upgraded from here "
-                    f"without admin rights.)")
-                return
 
         # B: 'venv' has pkg=None (it's part of the Python stdlib, not a
         # separately pip-installable package) — installing/upgrading it
@@ -1458,7 +1508,7 @@ class ToolchainMixin:
                 si2 = _tbl.item(_row, 1)
                 if ok:
                     if si2:
-                        si2.setText("✅ Installed")
+                        si2.setText("👤 User")   # reload below re-derives it
                         si2.setForeground(QColor("#a6e3a1"))
                     _QTimer.singleShot(800, lambda: self._tc_load_table(_py, force=True))
                 else:
@@ -1526,18 +1576,23 @@ class ToolchainMixin:
                     # Try pkexec pip install, then sudo pip install --break-system-packages
                     _pip_cmd = [py_exe, "-m", "pip", "install", pkg, "-q",
                                 "--break-system-packages"]
+                    # pkexec ONLY. The old loop fell back to bare sudo, which
+                    # from a GUI prompts on a TTY that is not there: Bayram saw
+                    # "[sudo] password for bayram:" land in the terminal he had
+                    # launched from while the window looked frozen, and the run
+                    # then sat until the 120s timeout. (2026-08-19)
+                    _elev = __import__("shutil").which("pkexec")
                     _installed = False
-                    for _sudo in (["pkexec"], ["sudo"]):
+                    if _elev:
                         try:
-                            r = subprocess.run(_sudo + _pip_cmd,
+                            r = subprocess.run([_elev] + _pip_cmd,
                                 **subprocess_args(capture_output=True, text=True, timeout=120), cwd=_home)
-                            if r.returncode == 0:
-                                _installed = True
-                                break
+                            _installed = (r.returncode == 0)
                         except FileNotFoundError:
-                            continue
+                            pass
                     if not _installed:
-                        return False, "System install failed — try User install instead"
+                        return False, ("System install failed — no pkexec, or the "
+                                       "password prompt was cancelled")
                 else:
                     # User install — prefer pipx for standalone tools
                     if _standalone and tool != "pipx":
@@ -1634,7 +1689,10 @@ class ToolchainMixin:
                     _pacman_map = {"pipx": "python-pipx", "uv": "uv", "poetry": "python-poetry"}
                     # Try pkexec pip uninstall (graphical auth, works on all distros)
                     _pkexec2 = _shutil.which("pkexec") or ""
-                    _uninstall_cmd = ([_pkexec2] if _pkexec2 else ["sudo"]) + [
+                    if not _pkexec2:
+                        return False, ("No graphical elevation helper (pkexec) found "
+                                       "— remove it from a root shell instead")
+                    _uninstall_cmd = [_pkexec2] + [
                         py_exe, "-m", "pip", "uninstall", tool,
                         "--break-system-packages", "-y"
                     ]
@@ -1747,7 +1805,8 @@ class ToolchainMixin:
                     _rm_cmd = (
                         [_pkexec, "pacman", "-R", "--noconfirm", _pacman_pkgs[tool]]
                         if _pkexec else
-                        ["sudo", "pacman", "-R", "--noconfirm", _pacman_pkgs[tool]]
+                        [(__import__("shutil").which("pkexec") or "pkexec"),
+                         "pacman", "-R", "--noconfirm", _pacman_pkgs[tool]]
                     )
                     try:
                         r = subprocess.run(_rm_cmd, capture_output=True, text=True, timeout=60)
@@ -1790,7 +1849,7 @@ class ToolchainMixin:
             if not ok:
                 # Restore original status instead of showing error in status col
                 if si2:
-                    si2.setText("🌐 Global")
+                    si2.setText("🖥 System")
                     si2.setForeground(QColor("#89b4fa"))
                 QMessageBox.information(None, "Cannot Remove Automatically", res)
                 return
@@ -1896,7 +1955,7 @@ class ToolchainMixin:
             if not si: return
             from PySide6.QtGui import QColor; from PySide6.QtWidgets import QTableWidgetItem
             if ok:
-                si.setText("✅ Installed"); si.setForeground(QColor("#a6e3a1"))
+                si.setText("👤 User"); si.setForeground(QColor("#a6e3a1"))
                 pi=tbl.item(row,3)
                 if pi: pi.setText(res)
             else:

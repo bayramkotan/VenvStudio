@@ -28,6 +28,18 @@ import sys
 COMMANDS = ("list", "create", "delete", "packages", "install", "uninstall", "preset", "version")
 
 
+# argparse is case-sensitive, so `vs -v` failed with "the following arguments
+# are required: command" while `vs -V` printed the version -- the same
+# keystroke, one shift key apart, giving a confusing error instead of an
+# answer. Same for -H vs -h. Nothing here is ambiguous (there is no separate
+# lowercase -v meaning "verbose"), so both cases are simply accepted.
+# (Bayram, 2026-08-19: "V v H h gibi buyuk kucuk problemi de olmasin")
+_FLAG_ALIASES = {
+    "-v": "-V", "--Version": "--version", "--VERSION": "--version",
+    "-H": "-h", "--Help": "--help", "--HELP": "--help",
+}
+
+
 def _normalize_argv(argv):
     """Accept `--create NAME` as an alias for `create NAME` (and the
     same for every other subcommand). argparse subparsers are
@@ -35,10 +47,25 @@ def _normalize_argv(argv):
     unrecognized flag -- rewrite it to the positional form first.
     Only argv[1] is ever touched, and only on an exact --<command>
     match, so unrelated flags (including genuinely unknown ones) are
-    left alone and still reach argparse's own error message."""
-    if len(argv) > 1 and argv[1].startswith("--") and argv[1][2:] in COMMANDS:
-        argv = list(argv)
-        argv[1] = argv[1][2:]
+    left alone and still reach argparse's own error message.
+
+    Also folds case for the version/help flags and for subcommand names,
+    so `vs -v`, `vs LIST` and `vs --Create x` all behave like their
+    canonical spelling.
+    """
+    if len(argv) <= 1:
+        return argv
+    argv = list(argv)
+    first = argv[1]
+
+    if first in _FLAG_ALIASES:
+        argv[1] = _FLAG_ALIASES[first]
+        return argv
+
+    if first.startswith("--") and first[2:].lower() in COMMANDS:
+        argv[1] = first[2:].lower()
+    elif not first.startswith("-") and first.lower() in COMMANDS:
+        argv[1] = first.lower()
     return argv
 
 
@@ -600,6 +627,16 @@ def run_cli(argv=None) -> int:
     p.set_defaults(func=_cmd_preset)
 
     sub.add_parser("version", help="Show VenvStudio version").set_defaults(func=_cmd_version)
+
+    # An unrecognised argument used to produce argparse's terse two-line
+    # error. Bayram asked for the command list in that case, so the user can
+    # see what IS available instead of having to run `vs -h` as a second step.
+    def _error(message):
+        sys.stderr.write(f"vs: error: {message}\n\n")
+        parser.print_help(sys.stderr)
+        sys.exit(2)
+
+    parser.error = _error
 
     _argv = _normalize_argv(list(argv or sys.argv))
     args = parser.parse_args(_argv[1:])

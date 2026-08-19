@@ -48,6 +48,12 @@ from .window_menu import WindowMenuMixin
 from .linux_fixes import LinuxFixesMixin
 
 
+# Threads that outlived closeEvent. Holding a reference here keeps Python
+# from collecting a still-running QThread during interpreter teardown --
+# see the note in MainWindow.closeEvent.
+_ORPHANED_WORKERS = []
+
+
 class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMixin,
                   WindowThemeMixin, WindowMenuMixin, LinuxFixesMixin, QMainWindow):
     """Main application window."""
@@ -1433,11 +1439,29 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
             try:
                 if w.wait(1500):
                     continue
+                # "Leaving it to exit with the process" was the intent, but it
+                # did not survive teardown: the thread is a CHILD of this
+                # window, so QWidget's destructor deletes it while it is still
+                # running and Qt calls qFatal ->
+                #   QThread: Destroyed while thread '' is still running
+                #   Fatal Python error: Aborted (core dumped)
+                # Bayram hit exactly this on 2026-08-19 by closing the window
+                # while a toolchain worker sat blocked in subprocess.run()
+                # waiting on a sudo password prompt that never appeared.
+                # Detaching it from the parent hierarchy (and parking a
+                # reference so Python does not collect it either) makes the
+                # comment true: the thread is simply left to die with the
+                # process, which is safe, instead of being destroyed under Qt.
+                try:
+                    w.setParent(None)
+                    _ORPHANED_WORKERS.append(w)
+                except Exception:
+                    pass
                 try:
                     from src.utils.logger import get_logger
                     get_logger("venvstudio.main_window").debug(
                         f"closeEvent: worker {type(w).__name__} still "
-                        f"running, leaving it to exit with the process"
+                        f"running, detached to exit with the process"
                     )
                 except Exception:
                     pass

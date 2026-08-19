@@ -949,11 +949,16 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
 
             return row
 
+        # Placeholders must reflect THIS platform: these were hard-coded
+        # POSIX paths, so a Windows user was pointed at directories that
+        # do not exist there (Bayram, 2026-08-19).
+        from src.utils import platform_utils as _pu
+
         # Poetry virtualenvs path
         _poetry_row = _make_pm_path_row(
             "poetry_venvs_path_enabled",
             "poetry_venvs_path",
-            "~/.cache/pypoetry/virtualenvs  (platform default)",
+            f"{_pu.get_default_poetry_venvs_path()}  (platform default)",
         )
         paths_layout.addRow("🎭 Poetry virtualenvs:", _poetry_row)
 
@@ -961,7 +966,7 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         _pipx_row = _make_pm_path_row(
             "pipx_home_enabled",
             "pipx_home",
-            "~/.local/share/pipx  (platform default)",
+            f"{_pu.get_default_pipx_home()}  (platform default)",
         )
         paths_layout.addRow("📦 Pipx home:", _pipx_row)
 
@@ -969,7 +974,7 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         _conda_row = _make_pm_path_row(
             "conda_envs_dir_enabled",
             "conda_envs_dir",
-            "~/.local/share/mamba/envs  (platform default)",
+            f"{_pu.get_default_conda_envs_dir()}  (platform default)",
         )
         paths_layout.addRow("🐍 Conda envs dir:", _conda_row)
 

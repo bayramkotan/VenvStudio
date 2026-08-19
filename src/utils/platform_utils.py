@@ -273,18 +273,16 @@ def _get_config_path_override(key_enabled: str, key_path: str) -> Optional[str]:
     return None
 
 
-def get_poetry_venvs_path() -> Optional[str]:
-    """Return the poetry virtualenvs directory.
-
-    Returns the user-configured override (Settings → Paths → Poetry virtualenvs)
-    when enabled, otherwise falls back to the platform default that poetry uses.
-    """
+# The Settings → Package Manager Custom Paths rows used to hard-code POSIX
+# strings ("~/.cache/pypoetry/virtualenvs (platform default)") as their
+# placeholders, so a Windows user was told to look in a directory that does
+# not exist on Windows -- while the code below already knew the right answer.
+# These three helpers exist so the UI can show the real default WITHOUT
+# consulting the user's override, which is what a "(platform default)" hint
+# has to mean. (Bayram, 2026-08-19.)
+def get_default_poetry_venvs_path() -> str:
+    """Poetry's own default virtualenvs directory for this platform."""
     import sys as _sys, os as _os
-    override = _get_config_path_override(
-        "poetry_venvs_path_enabled", "poetry_venvs_path"
-    )
-    if override:
-        return override
     if _sys.platform == "win32":
         return str(
             Path(_os.environ.get("LOCALAPPDATA", _os.environ.get("APPDATA", "")))
@@ -292,8 +290,40 @@ def get_poetry_venvs_path() -> Optional[str]:
         )
     elif _sys.platform == "darwin":
         return str(Path.home() / "Library" / "Caches" / "pypoetry" / "virtualenvs")
-    else:
-        return str(Path.home() / ".cache" / "pypoetry" / "virtualenvs")
+    return str(Path.home() / ".cache" / "pypoetry" / "virtualenvs")
+
+
+def get_default_pipx_home() -> str:
+    """pipx's own default home directory for this platform."""
+    import sys as _sys, os as _os
+    if _sys.platform == "win32":
+        return str(Path(_os.environ.get("LOCALAPPDATA",
+                                        _os.environ.get("APPDATA", ""))) / "pipx")
+    elif _sys.platform == "darwin":
+        return str(Path.home() / ".local" / "pipx")
+    return str(Path.home() / ".local" / "share" / "pipx")
+
+
+def get_default_conda_envs_dir() -> str:
+    """micromamba's own default envs directory for this platform."""
+    import sys as _sys, os as _os
+    if _sys.platform == "win32":
+        return str(Path(_os.environ.get("APPDATA", "")) / "mamba" / "envs")
+    return str(Path.home() / ".local" / "share" / "mamba" / "envs")
+
+
+def get_poetry_venvs_path() -> Optional[str]:
+    """Return the poetry virtualenvs directory.
+
+    Returns the user-configured override (Settings → Paths → Poetry virtualenvs)
+    when enabled, otherwise falls back to the platform default that poetry uses.
+    """
+    override = _get_config_path_override(
+        "poetry_venvs_path_enabled", "poetry_venvs_path"
+    )
+    if override:
+        return override
+    return get_default_poetry_venvs_path()
 
 
 def get_conda_envs_dir() -> Optional[str]:

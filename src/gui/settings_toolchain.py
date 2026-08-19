@@ -512,8 +512,18 @@ class ToolchainMixin:
         tbl.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
         tbl.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
         tbl.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
-        tbl.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
-        tbl.setColumnWidth(3, 380)
+        # Actions column: give it a guaranteed width instead of
+        # ResizeToContents. With Path on Stretch, Qt satisfies the stretching
+        # column first and squeezes the content-sized one when the table is
+        # narrower than the sum of both -- which clipped the Conda row, the
+        # widest cell here (label + backend combo + THREE buttons, where
+        # every other row has at most two). Sized from the same constants the
+        # cell is built from: 3 buttons x 110 + combo 200 + label ~60 +
+        # spacing/margins ~30. Path elides, so it is the right one to give way
+        # on a narrow window. (Bayram, 2026-08-19: "yazilar bile okunmuyor")
+        tbl.horizontalHeader().setSectionResizeMode(4, QHeaderView.Fixed)
+        tbl.setColumnWidth(4, 3 * 120 + 220 + 70 + 30)
+        tbl.horizontalHeader().setMinimumSectionSize(60)
         # N12: long paths (e.g. C:\Program Files\Python314\Scripts\uv.EXE)
         # overflowed the Path column instead of being readable. Elide in the
         # middle so both the drive/leading folder and the filename stay
@@ -532,7 +542,7 @@ class ToolchainMixin:
             f"QTableWidget::item {{ padding: 4px 8px; }}"
         )
         for row, (tid, pkg, lbl, icon) in enumerate(self._TC_TOOLS):
-            tbl.setRowHeight(row, 38)
+            tbl.setRowHeight(row, 42)
             name = QTableWidgetItem(f"{icon}  {lbl}")
             _f = QFont(tbl.font()); _f.setWeight(QFont.Medium); name.setFont(_f)
             tbl.setItem(row, 0, name)
@@ -543,7 +553,7 @@ class ToolchainMixin:
             tbl.setCellWidget(row, 4, self._tc_row_btns(tid, pkg, tbl, row))
         self._tc_table = tbl
         # Size table to show all rows without scrolling
-        row_h = 40
+        row_h = 44
         header_h = 28
         total_h = len(self._TC_TOOLS) * row_h + header_h + 4
         tbl.setMinimumHeight(total_h)
@@ -577,13 +587,13 @@ class ToolchainMixin:
         w = QWidget()
         w.setAttribute(Qt.WA_TranslucentBackground)
         hl = QHBoxLayout(w)
-        hl.setContentsMargins(2, 1, 2, 1)
+        hl.setContentsMargins(4, 3, 4, 3)
         hl.setSpacing(4)
 
         def _b(text, tip="", danger=False, name=""):
             b = QPushButton(text)
-            b.setMinimumHeight(26)
-            b.setMinimumWidth(110)
+            b.setMinimumHeight(30)
+            b.setMinimumWidth(120)
             b.setObjectName("danger" if danger else "secondary")
             b.setToolTip(tip)
             b.setAccessibleName(name)
@@ -611,8 +621,14 @@ class ToolchainMixin:
             hl.addWidget(_backend_label)
 
             _backend_combo = _CB2()
-            _backend_combo.setFixedHeight(26)
-            _backend_combo.setMinimumWidth(170)
+            # setFixedHeight(26) squashed the combo below what the font needs,
+            # so the glyphs were clipped along the bottom and "mamba" was
+            # unreadable -- the row itself is 38px and the neighbouring
+            # buttons only set a MINIMUM height, so they were free to grow
+            # while the combo was not. Match them. (Bayram, 2026-08-19:
+            # "su yazilar bi okunakli olsun")
+            _backend_combo.setMinimumHeight(30)
+            _backend_combo.setMinimumWidth(220)
             _backend_combo.setToolTip(
                 "Which conda-compatible binary VenvStudio uses for creating and\n"
                 "managing conda environments.\n\n"
@@ -972,14 +988,18 @@ class ToolchainMixin:
                             out = (r.stdout or r.stderr).strip()
                             for p in out.split():
                                 if p and p[0].isdigit():
-                                    ver = p.rstrip(","); break
+                                    # "Poetry (version 2.4.1)" -> split() yields
+                                    # "2.4.1)"; rstrip(",") left the bracket.
+                                    ver = p.strip("(),;"); break
                         else:
                             r = subprocess.run([path, "--version"],
                                 **subprocess_args(capture_output=True, text=True, timeout=5), cwd=__import__('os').path.expanduser('~'))
                             out = (r.stdout or r.stderr).strip()
                             for p in out.split():
                                 if p and p[0].isdigit():
-                                    ver = p.rstrip(","); break
+                                    # "Poetry (version 2.4.1)" -> split() yields
+                                    # "2.4.1)"; rstrip(",") left the bracket.
+                                    ver = p.strip("(),;"); break
                             if ver == "—": ver = out[:20]
                     except Exception:
                         pass
@@ -1294,9 +1314,48 @@ class ToolchainMixin:
         if not hasattr(self, "_tc_ws"): self._tc_ws = []
         self._tc_ws.append(w)
 
+    # ── N57 (Bayram, 2026-08-18) ──────────────────────────────────────────
+    # Every tool on Bayram's Windows box except pixi lives in
+    # C:\Program Files\Python314\Scripts, a system location. Upgrading any of
+    # them from a non-elevated VenvStudio cannot succeed, and pip failures here
+    # are easy to miss, so the user just sees nothing happen. Check first and
+    # explain, with the exact command for an elevated terminal.
+    @staticmethod
+    def _tc_dir_is_writable(path: str) -> bool:
+        import os as _os, tempfile as _tf
+        d = _os.path.dirname(path) if _os.path.isfile(path) else path
+        if not d or not _os.path.isdir(d):
+            return True          # unknown -> do not block the user
+        try:
+            with _tf.NamedTemporaryFile(dir=d, prefix=".vs-wtest-"):
+                return True
+        except OSError:
+            return False
+
     def _tc_do_install(self, tool, pkg, scope, tbl, row):
         import sys, os
         from PySide6.QtGui import QColor
+
+        # Only guard user scope: a system-scope run elevates on purpose, and a
+        # fresh install has no existing location to test.
+        if scope == "user" and pkg:
+            try:
+                _cur = self._tc_find_tool(tool, sys.executable)
+            except Exception:
+                _cur = ""
+            if _cur and os.path.isfile(_cur) and not self._tc_dir_is_writable(_cur):
+                from PySide6.QtWidgets import QMessageBox
+                _elev = ("an Administrator PowerShell"
+                         if sys.platform == "win32" else "a root shell")
+                QMessageBox.warning(
+                    self, "System-wide install \u2014 admin required",
+                    f"'{tool}' is installed in a system location that "
+                    f"VenvStudio cannot write to:\n\n{os.path.dirname(_cur)}\n\n"
+                    f"Upgrading it needs elevated rights. Run this in {_elev}:"
+                    f"\n\n    pip install --upgrade {pkg}\n\n"
+                    f"(Tools installed per-user can be upgraded from here "
+                    f"without admin rights.)")
+                return
 
         # B: 'venv' has pkg=None (it's part of the Python stdlib, not a
         # separately pip-installable package) — installing/upgrading it

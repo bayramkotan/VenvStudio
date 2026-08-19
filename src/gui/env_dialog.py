@@ -33,6 +33,133 @@ except Exception:
 from src.gui.workers import CreateWorker
 
 
+# ── N56 (Bayram, 2026-08-18) ─────────────────────────────────────────────
+# Creation used to hard-stop with "Environment 'X' already exists at <path>"
+# whenever the target directory existed on disk -- even when that directory
+# was NOT a tracked environment and did not appear in the environments table
+# at all. A leftover folder, an empty directory, or an unrelated folder that
+# happened to share the name left the user with no way forward and no way to
+# tell which folder was even meant (the inline label elides long paths).
+#
+# Now the path is classified and the user is asked. Deleting is irreversible,
+# so the three cases are deliberately NOT treated alike:
+#   * empty directory   -> removed silently; nothing is at stake
+#   * looks like an env -> confirm, default Cancel
+#   * unrelated content -> confirm, default Cancel, and the dialog LISTS what
+#                          is about to be destroyed so the user can recognise
+#                          a folder they did not mean to point at
+# Nothing is ever deleted without an explicit click, and venv_manager's own
+# guard is left untouched -- by the time we return True the path is gone, so
+# the core check still passes and still protects the non-GUI paths (CLI).
+def _looks_like_python_env(p) -> bool:
+    """True if the directory carries the fingerprints of a Python env."""
+    try:
+        return any([
+            (p / "pyvenv.cfg").is_file(),
+            (p / "conda-meta").is_dir(),
+            (p / "Scripts" / "python.exe").is_file(),
+            (p / "bin" / "python").exists(),
+            (p / "bin" / "python3").exists(),
+        ])
+    except OSError:
+        return False
+
+
+def _confirm_existing_path(parent, name: str, path) -> bool:
+    """Ask the user what to do about an existing path. True = go ahead.
+
+    Returns True only when the path is clear afterwards, so callers can treat
+    a True as "the target directory does not exist any more".
+    """
+    import shutil as _shutil
+    from pathlib import Path as _P
+
+    p = _P(str(path))
+    if not p.exists():
+        return True
+
+    if not p.is_dir():
+        QMessageBox.critical(
+            parent, "Path is not a directory",
+            f"'{name}' cannot be created because a FILE already exists at "
+            f"this path:\n\n{p}\n\nRename or remove it, or pick another name.")
+        return False
+
+    try:
+        entries = sorted(x.name for x in p.iterdir())
+    except OSError as e:
+        QMessageBox.critical(
+            parent, "Cannot read directory",
+            f"The folder at\n\n{p}\n\ncould not be read:\n{e}")
+        return False
+
+    # Empty leftovers are not worth a prompt.
+    if not entries:
+        try:
+            p.rmdir()
+            return True
+        except OSError as e:
+            QMessageBox.critical(
+                parent, "Cannot remove empty folder",
+                f"The empty folder at\n\n{p}\n\ncould not be removed:\n{e}")
+            return False
+
+    is_env = _looks_like_python_env(p)
+    if is_env:
+        headline = (f"A Python environment already exists at this path, but it "
+                    f"is not listed in VenvStudio.")
+    else:
+        headline = (f"This folder already exists and does NOT look like a "
+                    f"Python environment. It contains {len(entries)} item(s).")
+
+    box = QMessageBox(parent)
+    box.setIcon(QMessageBox.Warning)
+    box.setWindowTitle(f"'{name}' already exists")
+    box.setText(headline)
+    # The full path goes here rather than in the inline status label, which
+    # elides it -- the user has to see WHICH folder they are agreeing to lose.
+    box.setInformativeText(
+        f"Path:\n{p}\n\nDeleting is permanent and cannot be undone.")
+    box.setDetailedText("Contents:\n" + "\n".join(entries[:200]) +
+                        ("\n..." if len(entries) > 200 else ""))
+    delete_btn = box.addButton("Delete and recreate\u2026", QMessageBox.DestructiveRole)
+    cancel_btn = box.addButton("Cancel", QMessageBox.RejectRole)
+    box.setDefaultButton(cancel_btn)
+    box.exec()
+
+    if box.clickedButton() is not delete_btn:
+        return False
+
+    # Second gate: make the user TYPE the folder name (Bayram, 2026-08-18).
+    # One misplaced click on a DestructiveRole button should not be able to
+    # wipe a folder the user did not mean to point at. Typing the name is
+    # slow on purpose -- it forces the user to read the path first, and it
+    # cannot be satisfied by muscle memory the way Enter-on-a-button can.
+    from PySide6.QtWidgets import QInputDialog
+    _typed, _ok = QInputDialog.getText(
+        parent, "Confirm deletion",
+        f"This will permanently delete:\n{p}\n\n"
+        f"Type the folder name to confirm:  {p.name}")
+    if not _ok:
+        return False
+    if _typed.strip() != p.name:
+        QMessageBox.information(
+            parent, "Not deleted",
+            f"The name you typed did not match '{p.name}'.\n\n"
+            f"Nothing was deleted.")
+        return False
+
+    try:
+        _shutil.rmtree(p)
+    except OSError as e:
+        QMessageBox.critical(
+            parent, "Delete failed",
+            f"The folder at\n\n{p}\n\ncould not be deleted:\n{e}\n\n"
+            f"It may be open in another program.")
+        return False
+    return True
+
+
 class EnvCreateDialog(QDialog):
     """Dialog for creating a new virtual environment."""
 
@@ -1176,12 +1303,13 @@ class EnvCreateDialog(QDialog):
             # N15: conda create went straight to create_conda_env with no
             # check that this path was already taken -- same guard as
             # plain venv creation already has.
-            if env_path.exists():
+            if not _confirm_existing_path(self, name, env_path):
                 self.progress_bar.setVisible(False)
                 self.status_label.setStyleSheet(
                     "color: #f38ba8; font-size: 15px; font-weight: bold;")
                 self.status_label.setText(
-                    f"❌ Environment '{name}' already exists at {env_path}")
+                    f"❌ Cancelled — '{name}' already exists at {env_path}")
+                self.status_label.setToolTip(str(env_path))
                 return
             python_version = self.conda_python_combo.currentData() \
                 if hasattr(self, "conda_python_combo") else "3.12"
@@ -1315,7 +1443,7 @@ class EnvCreateDialog(QDialog):
                 # silently instead of erroring, so a duplicate name
                 # quietly overwrote/reused the old env. Match the same
                 # guard plain venv creation already has.
-                if env_path.exists():
+                if not _confirm_existing_path(self, name, env_path):
                     # Inline in the Progress panel, matching how real
                     # create failures are shown -- a popup dialog on top
                     # of the progress bar read as "is it still running?"
@@ -1323,7 +1451,8 @@ class EnvCreateDialog(QDialog):
                     self.status_label.setStyleSheet(
                         "color: #f38ba8; font-size: 15px; font-weight: bold;")
                     self.status_label.setText(
-                        f"❌ Environment '{name}' already exists at {env_path}")
+                        f"❌ Cancelled — '{name}' already exists at {env_path}")
+                    self.status_label.setToolTip(str(env_path))
                     return
 
             python_path = self.python_combo.currentData() or None
@@ -1930,11 +2059,12 @@ class EnvCreateDialog(QDialog):
         # worker (as before) meant the progress bar sat there alongside
         # a popup dialog, and it wasn't clear whether creation was still
         # running. Same inline pattern as uv/poetry/conda now use.
-        if os.path.exists(venv_path):
+        if not _confirm_existing_path(self, name, venv_path):
             self.status_label.setStyleSheet(
                 "color: #f38ba8; font-size: 15px; font-weight: bold;")
             self.status_label.setText(
-                f"❌ Environment '{name}' already exists at {venv_path}")
+                f"❌ Cancelled — '{name}' already exists at {venv_path}")
+            self.status_label.setToolTip(str(venv_path))
             return
 
         self.progress_bar.setVisible(True)

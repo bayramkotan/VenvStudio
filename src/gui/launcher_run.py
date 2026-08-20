@@ -575,6 +575,78 @@ class LauncherRunMixin:
         except Exception as e:
             QMessageBox.critical(self, tr("error"), f"Failed to launch script:\n{e}")
 
+    # -- N54 (Bayram, 2026-08-19) -----------------------------------------
+    # Console-less launchers sent stdout AND stderr to DEVNULL, so an app that
+    # died on startup left the user with nothing at all -- the window simply
+    # never appeared. Orange did exactly that (an upstream Python 3.14
+    # incompatibility with a perfectly clear traceback) and it cost about
+    # twenty minutes of guessing before the command was run by hand in a
+    # terminal to finally see the error.
+    #
+    # Output now goes to a TEMP FILE rather than a pipe. A pipe is the obvious
+    # choice and a trap: nobody drains it, so a long-running app that logs
+    # steadily fills the buffer and blocks forever. A file cannot deadlock,
+    # costs nothing while the app behaves, and is deleted the moment we know
+    # the launch went fine.
+    #
+    # We look once, a few seconds in. Still running -> healthy, drop the log.
+    # Exited non-zero -> show what it printed.
+    _LAUNCH_PROBE_MS = 6000
+
+    def _launch_probe(self, proc, log_path: str, app_name: str, cmd_str: str):
+        """One-shot check on a just-launched app; report an early crash."""
+        import os as _os
+
+        def _drop():
+            try:
+                _os.unlink(log_path)
+            except OSError:
+                pass
+
+        try:
+            rc = proc.poll()
+        except Exception:
+            _drop()
+            return
+
+        if rc is None or rc == 0:
+            # Still alive (the normal case) or exited cleanly on purpose.
+            _drop()
+            return
+
+        try:
+            with open(log_path, "r", encoding="utf-8", errors="replace") as fh:
+                output = fh.read().strip()
+        except OSError:
+            output = ""
+        _drop()
+
+        _log.warning(f"[Launcher] '{app_name}' exited with code {rc} within "
+                     f"{self._LAUNCH_PROBE_MS // 1000}s")
+        if output:
+            _log.warning(f"[Launcher] output:\n{output}")
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Warning)
+        box.setWindowTitle(f"{app_name} closed immediately")
+        box.setText(f"{app_name} started and then exited (code {rc}).")
+        box.setInformativeText(
+            "This usually means the app itself failed, not VenvStudio. "
+            "Its output is below."
+            if output else
+            "It produced no output, so it failed before it could print "
+            "anything.")
+        _detail = f"Command:\n{cmd_str}\n"
+        if output:
+            # Tail only: a traceback ends with the useful line, and a chatty
+            # app can produce far more than a dialog should hold.
+            _tail = output[-6000:]
+            if len(output) > 6000:
+                _tail = "...\n" + _tail
+            _detail += f"\nOutput:\n{_tail}"
+        box.setDetailedText(_detail)
+        box.exec()
+
     def _launch_app(self, app_def: dict):
         """Launch an app from the selected environment."""
         import os
@@ -594,15 +666,40 @@ class LauncherRunMixin:
             self._launch_system_app(app_def)
             return
 
+        # N51 (Bayram, 2026-08-18/19): keep the pristine definition. Everything
+        # below rebinds `app_def` to progressively mutated copies, and the
+        # install callback used to capture whichever copy existed at that
+        # moment -- so after "not installed -> install -> relaunch" the
+        # function re-entered with an ALREADY-mutated definition and mutated it
+        # a second time. That is where the duplicated
+        #     --notebook-dir X --no-browser --notebook-dir X --no-browser
+        # came from, which stopped JupyterLab from starting at all. v1.6.51
+        # made the Jupyter mutation idempotent, which cured that one symptom
+        # but left the trap armed for the next flag anyone adds here. The retry
+        # now gets THIS object, so re-entry starts from a clean slate.
+        _app_def_pristine = app_def
+
         # TensorBoard and similar tools need a log directory
         if app_def.get("pick_logdir", False):
-            logdir = QFileDialog.getExistingDirectory(
-                self,
-                f"Select log directory for {app_def['name']}",
-                os.path.expanduser("~")
-            )
-            if not logdir:
-                return
+            # Reuse the directory picked earlier in this launch attempt.
+            # Without this, handing the pristine definition to the retry would
+            # ask the user for the same folder a second time right after the
+            # install finished -- which is exactly why the clean fix was
+            # deferred when v1.6.51 shipped.
+            _ld_cache = getattr(self, "_logdir_choice", None)
+            if _ld_cache is None:
+                _ld_cache = self._logdir_choice = {}
+            _ld_key = app_def.get("name", "")
+            logdir = _ld_cache.get(_ld_key, "")
+            if not logdir or not os.path.isdir(logdir):
+                logdir = QFileDialog.getExistingDirectory(
+                    self,
+                    f"Select log directory for {app_def['name']}",
+                    os.path.expanduser("~")
+                )
+                if not logdir:
+                    return
+                _ld_cache[_ld_key] = logdir
             # Replace "." in command with chosen dir
             app_def = dict(app_def)
             app_def["command"] = [
@@ -888,7 +985,9 @@ class LauncherRunMixin:
                 )
             self.current_worker.progress.connect(self._on_progress)
             self.current_worker.finished.connect(
-                lambda ok, msg, a=app_def: self._on_app_install_finished(ok, msg, a)
+                # Pristine, not the mutated copy -- see the N51 note above.
+                lambda ok, msg, a=_app_def_pristine:
+                    self._on_app_install_finished(ok, msg, a)
             )
             self.current_worker.start()
             return
@@ -1048,6 +1147,34 @@ class LauncherRunMixin:
 
         _launch_env = _env_aware(os.environ)
 
+        # N54 plumbing: capture a console-less launch to a temp file so an
+        # instant crash can be shown instead of vanishing (see _launch_probe).
+        _probe_path = [""]
+
+        def _open_probe_log():
+            try:
+                import tempfile
+                fh = tempfile.NamedTemporaryFile(
+                    prefix="venvstudio-launch-", suffix=".log",
+                    mode="w+", delete=False)
+                _probe_path[0] = fh.name
+                return fh
+            except Exception:
+                return None      # never let logging break a launch
+
+        def _arm_probe(proc, fh):
+            if not fh:
+                return
+            try:
+                fh.close()       # the child holds its own handle
+            except Exception:
+                pass
+            _p, _n = _probe_path[0], app_def.get("name", "The app")
+            _c = " ".join(str(x) for x in cmd)
+            QTimer.singleShot(
+                self._LAUNCH_PROBE_MS,
+                lambda: self._launch_probe(proc, _p, _n, _c))
+
         try:
             if get_platform() == "windows":
                 if show_console:
@@ -1058,13 +1185,16 @@ class LauncherRunMixin:
                 else:
                     DETACHED_PROCESS = 0x00000008
                     CREATE_NO_WINDOW = 0x08000000
-                    subprocess.Popen(
+                    _probe_f = _open_probe_log()
+                    _proc = subprocess.Popen(
                         cmd, cwd=work_dir, env=_launch_env,
                         creationflags=DETACHED_PROCESS | CREATE_NO_WINDOW,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
+                        stdout=_probe_f or subprocess.DEVNULL,
+                        stderr=(subprocess.STDOUT if _probe_f
+                                else subprocess.DEVNULL),
                         stdin=subprocess.DEVNULL,
                     )
+                    _arm_probe(_proc, _probe_f)
             else:
                 if show_console:
                     from src.gui.platform_utils import launch_in_terminal
@@ -1073,17 +1203,19 @@ class LauncherRunMixin:
                 else:
                     from src.utils.platform_utils import appimage_clean_env
                     _ai_env = appimage_clean_env()
+                    _probe_f = _open_probe_log()
                     _popen_kw = dict(
                         cwd=work_dir,
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
+                        stdout=_probe_f or subprocess.DEVNULL,
+                        stderr=(subprocess.STDOUT if _probe_f
+                                else subprocess.DEVNULL),
                         stdin=subprocess.DEVNULL,
                         start_new_session=True,
                     )
                     _popen_kw["env"] = _env_aware(
                         _ai_env if _ai_env is not None else os.environ
                     )
-                    subprocess.Popen(cmd, **_popen_kw)
+                    _arm_probe(subprocess.Popen(cmd, **_popen_kw), _probe_f)
 
             self.status_label.setText(f"🚀 Launched {app_def['name']}")
 

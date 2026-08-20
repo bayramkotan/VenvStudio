@@ -73,6 +73,11 @@ jobs:
 
   build-linux-appimage:
     runs-on: ubuntu-22.04
+    # Without a cap this job can sit forever: on 2026-08-19 (v1.6.55, run #285)
+    # `apt-get install` hung and the job burned the full 6-hour GitHub default
+    # before being cancelled -- every other job had finished in minutes. A tight
+    # limit turns a stuck build into a fast, obvious failure.
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -80,9 +85,22 @@ jobs:
           python-version: '3.12'
 
       - name: Install system deps
+        env:
+          # apt on the 22.04 runner will otherwise stop on TWO interactive
+          # prompts that -y does not cover, with no TTY to answer them:
+          #   * debconf config screens  -> DEBIAN_FRONTEND=noninteractive
+          #   * needrestart's "which services should be restarted?" -> NEEDRESTART_MODE=a
+          # libfuse2 in particular touches running services and triggers the
+          # needrestart prompt. This is what wedged run #285 for six hours.
+          DEBIAN_FRONTEND: noninteractive
+          NEEDRESTART_MODE: a
+          NEEDRESTART_SUSPEND: '1'
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libxcb-cursor0 libxcb-xinerama0 libegl1 \
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            -o Dpkg::Options::=--force-confdef \
+            -o Dpkg::Options::=--force-confold \
+            libxcb-cursor0 libxcb-xinerama0 libegl1 \
             libxcb-icccm4 libxkbcommon-x11-0 libxcb-keysyms1 libxcb-image0 \
             libxcb-render-util0 libxcb-shape0 libxcb-xfixes0 libxcb-randr0 \
             libxcb-sync1 libxcb-shm0 fuse libfuse2 fonts-noto-color-emoji

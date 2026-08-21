@@ -719,7 +719,23 @@ class LauncherRunMixin:
         # 2026-08-14, caught via the launch log showing the bare
         # "python -m jupyter lab" with neither flag present).
         self._jupyter_notebook_dir = None
-        if any("jupyter" in str(c).lower() for c in app_def.get("command", [])):
+        # N50 (2026-08-19): the guard used to sniff the command for the string
+        # "jupyter", which is a poor proxy for "this app honours a working
+        # directory". Voila is the case that exposed it: its command is
+        # ["-m", "voila", "--no-browser"], no "jupyter" anywhere, so it never
+        # entered this block and the jupyter_workdir setting was silently
+        # ignored for it -- no error, just the wrong directory. Apps now say so
+        # themselves via `workdir` in launcher_ui.py:
+        #     "flag" -> pass --notebook-dir explicitly (JupyterLab, Notebook)
+        #     "cwd"  -> serve the process's working directory (Voila)
+        # Voila deliberately gets "cwd" rather than a guessed flag: it serves
+        # its cwd by default, and cwd is set from _jupyter_notebook_dir further
+        # down, so this needs no assumption about Voila's CLI surface.
+        _wd_mode = app_def.get("workdir")
+        if _wd_mode is None and any(
+                "jupyter" in str(c).lower() for c in app_def.get("command", [])):
+            _wd_mode = "flag"      # safety net for entries not yet declaring it
+        if _wd_mode:
             jwd = self.config.get("jupyter_workdir", "home") if hasattr(self, "config") and self.config else "home"
             jwd_custom = self.config.get("jupyter_workdir_custom", "") if hasattr(self, "config") and self.config else ""
             if jwd == "custom" and jwd_custom and os.path.isdir(jwd_custom):
@@ -728,7 +744,10 @@ class LauncherRunMixin:
                 notebook_dir = str(venv_path)
             else:
                 notebook_dir = os.path.expanduser("~")
+            # Setting this makes cwd=notebook_dir below, which is the whole
+            # mechanism for "cwd" apps.
             self._jupyter_notebook_dir = notebook_dir
+        if _wd_mode == "flag":
             app_def = dict(app_def)
             _cmd = list(app_def["command"])
             # MUST be idempotent: the post-install retry path (launch ->

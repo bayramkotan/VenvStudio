@@ -39,12 +39,16 @@ class EnvStateMixin:
         except Exception:
             pass
 
+        # N52 (2026-08-19): this used to seed `backend` from the global
+        # `package_manager` config key. That key was write-once dead weight --
+        # settings_advanced.py hardcoded "pip" into it and no UI could set
+        # anything else -- yet a stale "uv" left on disk by an older build
+        # still steered installs, which is how a plain venv ended up calling
+        # `uv pip install`. Since v1.6.51 every env type is assigned
+        # explicitly just below, so the read had no effect anyway. The key is
+        # gone from settings_advanced.py too; "pip" is simply the default for
+        # anything the branch does not name.
         backend = "pip"
-        try:
-            from src.core.config_manager import ConfigManager
-            backend = self._get_config("package_manager", "pip")
-        except Exception:
-            pass
 
         # Detect env type from marker FIRST — needed to choose backend
         self._current_env_type = "venv"  # default
@@ -402,12 +406,8 @@ class EnvStateMixin:
         """Handle env dropdown change."""
         path_str = self.env_selector.currentData()
         if path_str:
+            # Same as _set_venv above: the dead `package_manager` read is gone.
             backend = "pip"
-            try:
-                from src.core.config_manager import ConfigManager
-                backend = self._get_config("package_manager", "pip")
-            except Exception:
-                pass
             venv_path = Path(path_str)
             self._current_venv_path = venv_path
 

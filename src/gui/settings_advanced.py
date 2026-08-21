@@ -425,11 +425,15 @@ class AdvancedMixin:
         self.config.set("check_updates", self.check_updates_cb.isChecked())
         self.config.set("save_window_geometry", self.save_window_cb.isChecked())
 
-        # Package manager — only save if checkbox is enabled
-        self.config.set("package_manager", "pip")
-        # Default Terminal — only save if checkbox is enabled
-
-        # Default environment type
+        # N52 (2026-08-19): three comments here sat above empty bodies, left
+        # behind when the controls they described were removed. The worst of
+        # them, "Package manager — only save if checkbox is enabled", capped an
+        # UNCONDITIONAL write of "pip" to a key no UI could set to anything
+        # else -- and that misleading pair sent the 2026-08-17 investigation
+        # down a dead end for a whole round. The write is gone with the key
+        # (see env_state.py, which no longer reads it either); the two bodiless
+        # "Default Terminal" / "Default environment type" comments are dropped
+        # because the code they belonged to lives further down this method.
 
         # Toolchain Manager Python checkbox
         if hasattr(self, "_tc_py_cb"):

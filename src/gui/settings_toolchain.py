@@ -150,11 +150,69 @@ class ToolchainMixin:
                 except Exception: return False
 
             if scope == "system" and sys.platform == "win32":
+                # N57: this used to fire ShellExecuteW and sleep(4).
+                # ShellExecuteW returns as soon as the process is STARTED, so
+                # `ret > 32` only means "the user accepted the UAC prompt" --
+                # never that pip succeeded. A slow install outran the fixed
+                # four-second nap and VenvStudio reported success regardless.
+                # ShellExecuteEx with SEE_MASK_NOCLOSEPROCESS hands back a real
+                # process handle, so we can wait for it and read its exit code.
                 try:
                     import ctypes
-                    ret = ctypes.windll.shell32.ShellExecuteW(None, "runas", sys.executable, f"-m pip install {pkg} -q", None, 1)
-                    if ret <= 32: return False, f"UAC failed (code {ret})"
-                    import time; time.sleep(4)
+                    from ctypes import wintypes
+
+                    class _SHELLEXECUTEINFOW(ctypes.Structure):
+                        _fields_ = [
+                            ("cbSize", wintypes.DWORD),
+                            ("fMask", ctypes.c_ulong),
+                            ("hwnd", wintypes.HWND),
+                            ("lpVerb", wintypes.LPCWSTR),
+                            ("lpFile", wintypes.LPCWSTR),
+                            ("lpParameters", wintypes.LPCWSTR),
+                            ("lpDirectory", wintypes.LPCWSTR),
+                            ("nShow", ctypes.c_int),
+                            ("hInstApp", wintypes.HINSTANCE),
+                            ("lpIDList", ctypes.c_void_p),
+                            ("lpClass", wintypes.LPCWSTR),
+                            ("hkeyClass", wintypes.HKEY),
+                            ("dwHotKey", wintypes.DWORD),
+                            ("hIcon", wintypes.HANDLE),
+                            ("hProcess", wintypes.HANDLE),
+                        ]
+
+                    SEE_MASK_NOCLOSEPROCESS = 0x00000040
+                    SEE_MASK_NOASYNC        = 0x00000100
+                    INFINITE_WAIT_MS        = 300000      # 5 minutes is plenty
+
+                    info = _SHELLEXECUTEINFOW()
+                    info.cbSize = ctypes.sizeof(info)
+                    info.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC
+                    info.lpVerb = "runas"
+                    info.lpFile = sys.executable
+                    # Quote the package: a spec like "chardet<4.0" is fine bare,
+                    # but a path or extras spec would otherwise split.
+                    info.lpParameters = f'-m pip install "{pkg}" -q'
+                    info.nShow = 1
+
+                    if not ctypes.windll.shell32.ShellExecuteExW(ctypes.byref(info)):
+                        _err = ctypes.get_last_error()
+                        return False, ("Elevation was declined or failed "
+                                       f"(error {_err})")
+                    if not info.hProcess:
+                        return False, "Elevation returned no process handle"
+
+                    _rc = ctypes.windll.kernel32.WaitForSingleObject(
+                        info.hProcess, INFINITE_WAIT_MS)
+                    _code = wintypes.DWORD()
+                    ctypes.windll.kernel32.GetExitCodeProcess(
+                        info.hProcess, ctypes.byref(_code))
+                    ctypes.windll.kernel32.CloseHandle(info.hProcess)
+
+                    if _rc != 0:            # WAIT_OBJECT_0 == 0
+                        return False, "Timed out waiting for the elevated install"
+                    if _code.value != 0:
+                        return False, (f"pip exited with code {_code.value} "
+                                       f"in the elevated process")
                 except Exception as e:
                     return False, f"UAC error: {e}"
             elif sys.platform != "win32" and _is_ext_managed():

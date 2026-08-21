@@ -61,6 +61,9 @@ class LauncherUIMixin:
                 "env_types": ["venv", "uv", "hatch", "pdm", "poetry"],
                 "package": "jupyterlab",
                 "min_python": "3.10",
+                # N50: declare workdir handling explicitly instead of
+                # letting launcher_run.py sniff for "jupyter" in the command.
+                "workdir": "flag",
                 "command": ["-m", "jupyter", "lab"],
                 "desc": "Next-generation notebook interface for interactive computing",
                 "needs_console": True,
@@ -80,6 +83,9 @@ class LauncherUIMixin:
                 "env_types": ["venv", "uv", "hatch", "pdm", "poetry"],
                 "package": "notebook",
                 "min_python": "3.10",
+                # N50: declare workdir handling explicitly instead of
+                # letting launcher_run.py sniff for "jupyter" in the command.
+                "workdir": "flag",
                 "command": ["-m", "jupyter", "notebook"],
                 "desc": "Classic Jupyter Notebook — simple, document-centric interface",
                 "needs_console": True,
@@ -184,6 +190,11 @@ class LauncherUIMixin:
                 "env_types": ["venv", "uv", "hatch", "pdm", "poetry"],
                 "package": "voila",
                 "min_python": "3.10",
+                # "cwd", not "flag": Voila serves its working directory by
+                # default, so the setting is honoured without inventing a
+                # command-line flag for it. Before this, Voila silently
+                # ignored jupyter_workdir entirely (Bayram, 2026-08-19).
+                "workdir": "cwd",
                 "command": ["-m", "voila", "--no-browser"],
                 "desc": "Turn notebooks into standalone web apps",
                 "needs_console": True,

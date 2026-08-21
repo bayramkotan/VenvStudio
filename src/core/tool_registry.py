@@ -52,16 +52,63 @@ class ToolRegistry:
         except Exception:
             pass
 
+    @staticmethod
+    def scope_of(path: str) -> str:
+        """'user' or 'system' — can we write next to this executable?
+
+        N57: the Toolchain Manager needs to tell the two apart to label a tool
+        and to know whether an upgrade will need elevation. The question is not
+        "which directory is this" but "can this process write there", so it is
+        answered by trying, not by matching path prefixes that differ per
+        distro, per Python installer and per Windows layout.
+        """
+        import tempfile as _tf
+        d = os.path.dirname(path) if os.path.isfile(path) else path
+        if not d or not os.path.isdir(d):
+            return "unknown"
+        try:
+            with _tf.NamedTemporaryFile(dir=d, prefix=".vs-wtest-"):
+                return "user"
+        except OSError:
+            return "system"
+
     def register(self, tool_name: str, path: str, version: str = "",
-                 installed_by: str = "venvstudio"):
-        """Register a tool with its path, version, and install source."""
+                 installed_by: str = "venvstudio", scope: str = ""):
+        """Register a tool with its path, version, install source and scope.
+
+        `installed_by` answers WHO put it there and only ever holds
+        "venvstudio" or "external". It used to be set to "system" for anything
+        merely discovered on PATH, which read like an install-scope claim and
+        was not one -- a tool found in ~/.local/bin was recorded as "system".
+        Scope is a separate question and now has its own field. (N57)
+        """
+        if installed_by not in ("venvstudio", "external"):
+            # Tolerate the old "system" value from existing registry files and
+            # from any caller not yet updated.
+            installed_by = "external"
         self._data[tool_name] = {
             "path": str(path),
             "version": version,
             "installed_by": installed_by,
+            "scope": scope or self.scope_of(str(path)),
             "installed_at": datetime.now().isoformat(),
         }
         self._save()
+
+    def get_scope(self, tool_name: str) -> str:
+        """'user', 'system' or '' — install scope of a registered tool.
+
+        Recomputed when the stored entry predates the field, so upgrading
+        VenvStudio does not leave every tool unlabelled.
+        """
+        entry = self._data.get(tool_name, {})
+        scope = entry.get("scope", "")
+        if not scope and entry.get("path"):
+            scope = self.scope_of(entry["path"])
+            if scope != "unknown":
+                entry["scope"] = scope
+                self._save()
+        return scope
 
     def find(self, tool_name: str) -> str:
         """Find tool executable — registry first, then shutil.which fallback.
@@ -78,15 +125,16 @@ class ToolRegistry:
         if not found:
             found = shutil.which(tool_name + ".exe")
         if found:
-            # Auto-register discovered tool
-            self.register(tool_name, found, installed_by="system")
+            # Discovered, not installed by us -- see register()'s note on why
+            # this is no longer called "system".
+            self.register(tool_name, found, installed_by="external")
             return found
 
         # 3. Common locations
         common_paths = self._common_paths(tool_name)
         for p in common_paths:
             if os.path.isfile(p):
-                self.register(tool_name, p, installed_by="system")
+                self.register(tool_name, p, installed_by="external")
                 return p
 
         return ""

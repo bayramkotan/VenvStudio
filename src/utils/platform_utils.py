@@ -63,6 +63,62 @@ def subprocess_args(**kwargs):
     return kwargs
 
 
+def _project_dir_for_env(env_path, env_type: str):
+    """Project directory that owns a hatch/pdm/pixi/poetry env, or None.
+
+    N60 (Bayram, 2026-08-22). These four tools compute their environment FROM
+    THE PROJECT. Running `hatch shell` from inside the env directory does not
+    just fail -- hatch decides there is no project here and CREATES A NEW,
+    EMPTY ENVIRONMENT. Bayram's htc env showed it plainly: the real env at
+    .../virtual/htc/tWMad1mk/htc holds 237 packages and was created at 09:43,
+    while .../virtual/htc/4-rJeEWq/htc holds 3 and was created at 09:44 --
+    the moment he clicked Open Terminal. Every click left another one behind.
+
+    The project directory is the one holding the `.venvstudio_env` marker, and
+    the marker records the env path (`hatch_env_path`, `poetry_venv_path`...),
+    so the env can be matched back to its project by scanning the base dir.
+    That scan is a handful of small JSON reads over a directory the user
+    already keeps their envs in.
+    """
+    import json as _json
+    try:
+        base = _get_config_path_override("venv_base_dir_enabled", "venv_base_dir") \
+            or str(get_default_venv_base_dir())
+        base = Path(base)
+        if not base.is_dir():
+            return None
+        target = str(Path(env_path).resolve())
+        for item in base.iterdir():
+            if not item.is_dir():
+                continue
+            marker = item / ".venvstudio_env"
+            if not marker.is_file():
+                continue
+            try:
+                data = _json.loads(marker.read_text())
+            except Exception:
+                continue
+            if data.get("type") != env_type:
+                continue
+            for key, val in data.items():
+                if not key.endswith(("_env_path", "_venv_path", "_project_dir")):
+                    continue
+                if not val:
+                    continue
+                try:
+                    if str(Path(val).resolve()) == target or key.endswith("_project_dir"):
+                        return item if not key.endswith("_project_dir") else Path(val)
+                except Exception:
+                    continue
+            # Same env, matched by name alone -- weaker, but better than
+            # letting the tool invent a fresh environment.
+            if data.get("name") and Path(env_path).parts[-2:-1] == (data["name"],):
+                return item
+    except Exception:
+        return None
+    return None
+
+
 def get_platform() -> str:
     """Return normalized platform name."""
     system = platform.system().lower()
@@ -516,7 +572,7 @@ def find_system_pythons() -> List[Tuple[str, str]]:
     pythons.sort(key=_ver_key, reverse=True)
     return pythons
 def open_terminal_at(path: Path, terminal_type: str = "",
-                     env_type: str = "venv", run_after: str = "") -> None:
+                     env_type: str = "venv", run_after: str = "") -> bool:
     """Open a terminal/console at the given path.
     
     env_type:
@@ -524,6 +580,14 @@ def open_terminal_at(path: Path, terminal_type: str = "",
       "conda"        → micromamba activate <path>
       "system_tools" → just cd into the folder, no activation
     """
+    # Callers hand us whatever they have -- a Path, a str from a config file,
+    # a str read out of a marker. Everything below composes paths with `/`, so
+    # a str argument blew up with
+    #     TypeError: unsupported operand type(s) for /: 'str' and 'str'
+    # and, because the whole body sits in a try/except that only LOGS, the
+    # window silently did nothing while the status bar cheerfully reported
+    # "Running 'poetry show'..." (Bayram, 2026-08-22). Normalise once, here.
+    path = Path(path)
     system = get_platform()
 
     # ── Build activation command based on env_type ────────────────────────
@@ -656,6 +720,9 @@ def open_terminal_at(path: Path, terminal_type: str = "",
             # set, use each tool's "run one command and return" mode
             # instead of its "enter a shell" mode.
             import shutil as _sh2, os as _os2
+            # Run from the PROJECT, not the env dir -- otherwise these
+            # tools decide there is no project and make a new env.
+            _pdir = _project_dir_for_env(path, env_type) or path
             if env_type == "hatch":
                 _tool = _sh2.which("hatch") or "hatch"
                 _shell_cmd = f'"{_tool}" run {run_after}' if run_after else f'"{_tool}" shell'
@@ -672,16 +739,16 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                 _shell_cmd = f'"{_tool}" run {run_after}' if run_after else f'"{_tool}" run cmd'
 
             if terminal_type == "wt" and shutil.which("wt"):
-                return f'start wt -d "{path}" cmd /k "{_shell_cmd}"'
+                return f'start wt -d "{_pdir}" cmd /k "{_shell_cmd}"'
             elif terminal_type == "pwsh":
-                return f'start pwsh -NoExit -Command "Set-Location \'{path}\'; {_shell_cmd}"'
+                return f'start pwsh -NoExit -Command "Set-Location \'{_pdir}\'; {_shell_cmd}"'
             elif terminal_type == "powershell":
-                return f'start powershell -NoExit -Command "Set-Location \'{path}\'; {_shell_cmd}"'
+                return f'start powershell -NoExit -Command "Set-Location \'{_pdir}\'; {_shell_cmd}"'
             elif terminal_type == "git-bash" and shutil.which("bash"):
                 git_bash = shutil.which("bash")
-                return f'start "" "{git_bash}" --login -c "cd \'{path}\' && {_shell_cmd} && exec bash"'
+                return f'start "" "{git_bash}" --login -c "cd \'{_pdir}\' && {_shell_cmd} && exec bash"'
             else:
-                return f'start cmd /k "cd /d {path} && {_shell_cmd}"'
+                return f'start cmd /k "cd /d {_pdir} && {_shell_cmd}"'
 
         elif env_type == "poetry":
             # Same self-heal as POSIX: the marker may lack poetry_venv_path
@@ -716,14 +783,18 @@ def open_terminal_at(path: Path, terminal_type: str = "",
             _pv = Path(_poetry_venv) if _poetry_venv and Path(_poetry_venv).exists() else path
             activate_bat = _pv / "Scripts" / "activate.bat"
             activate_ps1 = _pv / "Scripts" / "Activate.ps1"
+            # N59: activate the venv (_pv) but SIT IN the project (_cd) -- see
+            # the POSIX branch below for why. Poetry's commands read
+            # pyproject.toml from the working directory.
+            _cd = Path(_proj_dir) if _proj_dir and Path(_proj_dir).is_dir() else _pv
             if terminal_type == "pwsh" and activate_ps1.exists():
                 return (f'start pwsh -NoExit -Command '
-                        f'"Set-Location \'{_pv}\'; & \'{activate_ps1}\'"')
+                        f'"Set-Location \'{_cd}\'; & \'{activate_ps1}\'"')
             if terminal_type == "wt" and shutil.which("wt") and activate_ps1.exists():
-                return f'start wt -d "{_pv}" powershell -NoExit -Command "& \'{activate_ps1}\'"'
+                return f'start wt -d "{_cd}" powershell -NoExit -Command "& \'{activate_ps1}\'"'
             if activate_bat.exists():
-                return f'start cmd /k "cd /d {_pv} && {activate_bat}"'
-            return f'start cmd /k "cd /d {_pv}"'
+                return f'start cmd /k "cd /d {_cd} && {activate_bat}"'
+            return f'start cmd /k "cd /d {_cd}"'
         else:  # venv
             activate_bat = path / "Scripts" / "activate.bat"
             activate_ps1 = path / "Scripts" / "Activate.ps1"
@@ -766,23 +837,36 @@ def open_terminal_at(path: Path, terminal_type: str = "",
             # the Windows branch above -- use each tool's "run one
             # command and return" mode when run_after is set.
             import shutil as _sh3, os as _os3
+            # Run these from the PROJECT, never from the env directory -- see
+            # _project_dir_for_env for what happens otherwise.
+            _pdir = _project_dir_for_env(path, env_type) or path
             if env_type == "hatch":
                 _tool = _sh3.which("hatch") or "hatch"
                 if run_after:
-                    return f"cd '{path}' && '{_tool}' run {run_after}"
-                return f"cd '{path}' && '{_tool}' shell"
+                    return f"cd '{_pdir}' && '{_tool}' run {run_after}"
+                # N63 (Bayram, 2026-08-22): activate directly instead of
+                # `hatch shell`. Hatch's shell command spawns a NESTED bash and
+                # sources the env's activate script from inside it, so the user
+                # sees the source line echoed twice and then needs two exits to
+                # get out. A hatch environment is an ordinary virtualenv and we
+                # already know exactly where it is (`path`), so source it once
+                # and stay in the same shell -- same result, none of the noise.
+                _hact = Path(path) / "bin" / "activate"
+                if _hact.is_file():
+                    return f"cd '{_pdir}' && source '{_hact}'"
+                return f"cd '{_pdir}' && '{_tool}' shell"
             elif env_type == "pixi":
                 _pixi = _os3.path.expanduser("~/.pixi/bin/pixi")
                 if not _os3.path.isfile(_pixi):
                     _pixi = _sh3.which("pixi") or "pixi"
                 if run_after:
-                    return f"cd '{path}' && '{_pixi}' run {run_after}"
-                return f"cd '{path}' && '{_pixi}' shell"
+                    return f"cd '{_pdir}' && '{_pixi}' run {run_after}"
+                return f"cd '{_pdir}' && '{_pixi}' shell"
             else:  # pdm
                 _tool = _sh3.which("pdm") or "pdm"
                 if run_after:
-                    return f"cd '{path}' && '{_tool}' run {run_after}"
-                return f"cd '{path}' && '{_tool}' run bash"
+                    return f"cd '{_pdir}' && '{_tool}' run {run_after}"
+                return f"cd '{_pdir}' && '{_tool}' run bash"
         elif env_type == "poetry":
             # Poetry venv is in ~/.cache/pypoetry/virtualenvs/
             import json as _j
@@ -816,16 +900,49 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                     pass
             if _poetry_venv and Path(_poetry_venv).exists():
                 _pa = Path(_poetry_venv) / "bin" / "activate"
-                return f"cd '{_poetry_venv}' && source '{_pa}'"
+                # N59 (Bayram, 2026-08-22): land in the PROJECT, not the venv.
+                # This used to cd into _poetry_venv, i.e.
+                # ~/.cache/pypoetry/virtualenvs/<hash>, where poetry's own
+                # commands cannot work at all:
+                #   "Poetry could not find a pyproject.toml file in ... or its
+                #    parents"
+                # The venv is still what gets ACTIVATED -- only the working
+                # directory changes -- so `pip list` and friends behave exactly
+                # as before while `poetry show` now has its project.
+                _cwd = _proj_dir if _proj_dir and Path(_proj_dir).is_dir() \
+                    else _poetry_venv
+                return f"cd '{_cwd}' && source '{_pa}'"
             return f"cd '{path}'"
         elif env_type == "conda":
-            # Try micromamba first, fall back to conda
-            _mamba = shutil.which("micromamba")
+            # Ask the installer where OUR micromamba is, exactly as the
+            # Windows branch above already does.
+            #
+            # N61 (Bayram, 2026-08-22): this branch used to start at
+            # shutil.which("micromamba") and then try a handful of hardcoded
+            # locations -- none of which was
+            #   ~/.local/share/VenvStudio/micromamba/micromamba
+            # i.e. the copy VenvStudio downloads and uses for everything else.
+            # With micromamba absent from PATH the lookup found nothing, no
+            # activation command was produced, and the terminal opened into an
+            # unactivated shell where `conda list` and `conda info` naturally
+            # failed. Package installs worked the whole time because THAT code
+            # asks get_micromamba_exe() -- the same question, asked properly.
+            _mamba = ""
+            try:
+                from src.core.micromamba_installer import get_micromamba_exe
+                _exe = get_micromamba_exe()
+                if _exe and Path(_exe).exists():
+                    _mamba = str(_exe)
+            except Exception:
+                pass
+            if not _mamba:
+                _mamba = shutil.which("micromamba") or ""
             _conda = shutil.which("conda") if not _mamba else None
-            # Detect mamba from common install paths if not in PATH
+            # Detect mamba from common install paths if still nothing
             if not _mamba and not _conda:
                 import os as _os
                 for _candidate in (
+                    Path.home() / ".local" / "share" / "VenvStudio" / "micromamba" / "micromamba",
                     Path.home() / ".local" / "bin" / "micromamba",
                     Path.home() / "micromamba" / "bin" / "micromamba",
                     Path("/usr/local/bin/micromamba"),
@@ -1104,10 +1221,14 @@ def open_terminal_at(path: Path, terminal_type: str = "",
             for term in auto_order:
                 if _launch_linux_terminal(term):
                     break
+        return True
     except Exception as e:
         logging.getLogger("venvstudio.gui.terminal").warning(
             f"⚠️ [Terminal] Could not open terminal: {e}"
         )
+        # Report it. Swallowing this is why a broken terminal launch looked
+        # like a successful one for three rounds of debugging.
+        return False
 
 
 def get_venv_size(venv_path: Path) -> str:

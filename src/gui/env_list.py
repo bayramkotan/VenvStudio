@@ -816,6 +816,131 @@ class EnvListMixin:
 
         menu.exec(self.env_table.viewport().mapToGlobal(pos))
 
+    # N58 (Bayram, 2026-08-22): right-click commands used to run the tool by
+    # BARE NAME, so the shell picked whatever came first on PATH. On his box
+    # `type -a pixi` lists four of them and the winner is /usr/sbin/pixi -- an
+    # unrelated distro program that answers `pixi list` with
+    #     Error: No such command 'list'. (Did you mean one of: 'artist', ...)
+    # while the real one sits second at ~/.pixi/bin/pixi. Same failure class as
+    # the JupyterLab trampoline in v1.6.52: resolve by name and you get
+    # whoever shouts loudest on PATH.
+    #
+    # Tools that BELONG TO THE ENV (pip, and anything the activation script
+    # puts first) are deliberately left as bare names -- the terminal activates
+    # the env before running the command, so those already resolve correctly,
+    # and hardcoding a path there would break conda/pixi shells that shim them.
+    # Only the standalone managers are pinned, and only when the registry can
+    # actually produce a path.
+    _PINNED_TOOLS = ("pixi", "pdm", "poetry", "conda", "pipx", "hatch", "uv")
+
+    def _resolve_command_tool(self, command: str, env_path=None) -> str:
+        """Rewrite a command's leading tool name to a real, runnable program."""
+        parts = command.split()
+        if not parts:
+            return command
+        tool = parts[0]
+
+        # N62 (Bayram, 2026-08-22): "conda" is a LABEL, not necessarily a
+        # program. VenvStudio creates conda envs with micromamba (the marker
+        # says `"manager": "micromamba"`) and most machines running it have no
+        # `conda` on PATH at all, so the context menu's `conda list` answered
+        #     bash: conda: command not found
+        # even though the env had just activated correctly. Keep the menu
+        # label -- everyone calls these "conda commands" and the menus double
+        # as teaching material -- but run whatever engine actually exists.
+        if tool == "conda":
+            _engine = ""
+            try:
+                from src.core.micromamba_installer import get_micromamba_exe
+                _exe = get_micromamba_exe()
+                if _exe and Path(_exe).exists():
+                    _engine = str(_exe)
+            except Exception:
+                pass
+            if not _engine:
+                import shutil as _sh0
+                _engine = _sh0.which("micromamba") or _sh0.which("conda") or ""
+            if _engine:
+                _rest = parts[1:]
+                # micromamba needs to be told WHICH env; `conda list` inside an
+                # activated shell would have inferred it, micromamba will not.
+                if env_path and _rest and _rest[0] in ("list", "info"):
+                    _rest = _rest + ["--prefix", str(env_path)]
+                return " ".join([f"'{_engine}'"] + _rest)
+            return command
+
+        if tool not in self._PINNED_TOOLS:
+            return command
+        try:
+            from src.core.tool_registry import ToolRegistry
+            found = ToolRegistry().find(tool)
+        except Exception:
+            found = ""
+        if not found:
+            return command                      # better a bare name than nothing
+        import shutil as _sh
+        if " " in found:
+            found = _sh.quote(found) if hasattr(_sh, "quote") else f'"{found}"'
+        return " ".join([found] + parts[1:])
+
+    # N59 (Bayram, 2026-08-22): PROJECT-scoped tools must run in the PROJECT,
+    # not in the venv. `poetry show` inside
+    # ~/.cache/pypoetry/virtualenvs/ptr-Prfhx0b6-py3.14 answers
+    #     "Poetry could not find a pyproject.toml file in ... or its parents"
+    # because for poetry the venv and the project sit in completely different
+    # places. pdm, pixi and hatch are the same class -- they read
+    # pyproject.toml / pixi.toml next to the project.
+    #
+    # The answer is written down already: the env's `.venvstudio_env` marker
+    # carries `poetry_project_dir` (and the equivalent for the others). Read
+    # the field. A first attempt here walked base_dir matching type+name, which
+    # was both fragile and unnecessary -- the value was sitting in the file.
+    _PROJECT_SCOPED = ("poetry", "pdm", "pixi", "hatch")
+    _PROJECT_DIR_KEYS = ("poetry_project_dir", "pdm_project_dir",
+                         "pixi_project_dir", "hatch_project_dir",
+                         "project_dir")
+
+    def _project_dir_for(self, name: str, env_type: str) -> str:
+        """Directory a project-scoped command should run in, or '' if n/a."""
+        if env_type not in self._PROJECT_SCOPED:
+            return ""
+        import json as _json
+        import os as _os
+
+        def _from_marker(d):
+            try:
+                data = _json.loads((Path(d) / ".venvstudio_env").read_text())
+            except Exception:
+                return ""
+            for key in self._PROJECT_DIR_KEYS:
+                val = data.get(key, "")
+                if val and _os.path.isdir(val):
+                    return val
+            return ""
+
+        # The venv itself may carry the marker...
+        env_path = self._get_env_path(name) or ""
+        found = _from_marker(env_path) if env_path else ""
+        if found:
+            return found
+
+        # ...otherwise the project dir under base_dir carries it, and that dir
+        # is what we are looking for anyway.
+        try:
+            base = self.venv_manager.base_dir
+            cand = Path(base) / name
+        except Exception:
+            return ""
+        found = _from_marker(cand)
+        if found:
+            return found
+        # Last resort: the plain convention, but only if it really is a
+        # project -- never cd into an unrelated folder that shares the name.
+        for f in ("pyproject.toml", "pixi.toml"):
+            if (cand / f).is_file():
+                return str(cand)
+        return ""
+
     def _run_env_command(self, name: str, env_type: str, command: str):
         """N34: activate the given environment in a real terminal and
         run `command` right after -- reuses open_terminal_at's run_after
@@ -828,10 +953,26 @@ class EnvListMixin:
         if not real_path:
             QMessageBox.warning(self, "Environment Not Found", f"Could not resolve a path for '{name}'.")
             return
+
+        # Project-scoped tools need the project, not the venv (see N59).
+        _proj = self._project_dir_for(name, env_type)
+        if _proj and command.split()[:1] and command.split()[0] in self._PROJECT_SCOPED:
+            real_path = Path(_proj)   # str here made open_terminal_at do str / str
         terminal_type = self.config.get("terminal_type", "") if self.config else ""
+        _to_run = self._resolve_command_tool(command, self._get_env_path(name))
         try:
             from src.utils.platform_utils import open_terminal_at
-            open_terminal_at(real_path, terminal_type, env_type=env_type, run_after=command)
+            _ok = open_terminal_at(real_path, terminal_type,
+                                   env_type=env_type, run_after=_to_run)
+            if _ok is False:
+                QMessageBox.warning(
+                    self, "Terminal Failed",
+                    f"Could not open a terminal to run '{command}'.\n\n"
+                    f"Check Settings \u2192 Default Terminal, and see the log "
+                    f"for the underlying error.")
+                return
+            # Show the SHORT form: the absolute path is an implementation
+            # detail, and these menus double as teaching material.
             self.statusBar().showMessage(f"Running '{command}' in '{name}'…")
         except Exception as e:
             QMessageBox.warning(self, "Command Failed", f"Could not run '{command}' in '{name}':\n{e}")

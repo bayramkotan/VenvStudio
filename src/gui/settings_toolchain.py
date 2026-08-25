@@ -39,13 +39,12 @@ class ToolchainMixin:
         user_btn.setVisible(False)
         user_btn.clicked.connect(lambda checked=False, t=tool, p=pkg, st=status, b=user_btn: self._pm_install_tool(t, p, "user", st, b))
         rl.addWidget(user_btn)
-        sys_btn = QPushButton(f"Install {tool} (System 🔒)")
-        sys_btn.setObjectName("secondary")
-        sys_btn.setFixedHeight(26)
+        # N64: the "Install (System)" button is gone. It is kept as a hidden
+        # placeholder only so _pm_check_tool's signature and every caller
+        # stay untouched; nothing ever shows it. See _pm_install_tool for
+        # why system-scope installs were dropped altogether.
+        sys_btn = QPushButton("")
         sys_btn.setVisible(False)
-        sys_btn.setToolTip("Install system-wide — requires Administrator / sudo")
-        sys_btn.clicked.connect(lambda checked=False, t=tool, p=pkg, st=status, b=sys_btn: self._pm_install_tool(t, p, "system", st, b))
-        rl.addWidget(sys_btn)
         uninstall_btn = QPushButton("Uninstall")
         uninstall_btn.setObjectName("secondary")
         uninstall_btn.setFixedHeight(26)
@@ -112,7 +111,7 @@ class ToolchainMixin:
             status_label.setText("❌ Not installed")
             status_label.setStyleSheet("font-size: 11px; color: #f38ba8;")
             user_btn.setVisible(True)
-            sys_btn.setVisible(True)
+            sys_btn.setVisible(False)   # N64: user scope only
 
     def _pm_check_conda(self, status_label, dl_btn):
         try:
@@ -149,76 +148,23 @@ class ToolchainMixin:
                     return bool(stdlib and os.path.exists(os.path.join(stdlib, "EXTERNALLY-MANAGED")))
                 except Exception: return False
 
-            if scope == "system" and sys.platform == "win32":
-                # N57: this used to fire ShellExecuteW and sleep(4).
-                # ShellExecuteW returns as soon as the process is STARTED, so
-                # `ret > 32` only means "the user accepted the UAC prompt" --
-                # never that pip succeeded. A slow install outran the fixed
-                # four-second nap and VenvStudio reported success regardless.
-                # ShellExecuteEx with SEE_MASK_NOCLOSEPROCESS hands back a real
-                # process handle, so we can wait for it and read its exit code.
-                try:
-                    import ctypes
-                    from ctypes import wintypes
-
-                    class _SHELLEXECUTEINFOW(ctypes.Structure):
-                        _fields_ = [
-                            ("cbSize", wintypes.DWORD),
-                            ("fMask", ctypes.c_ulong),
-                            ("hwnd", wintypes.HWND),
-                            ("lpVerb", wintypes.LPCWSTR),
-                            ("lpFile", wintypes.LPCWSTR),
-                            ("lpParameters", wintypes.LPCWSTR),
-                            ("lpDirectory", wintypes.LPCWSTR),
-                            ("nShow", ctypes.c_int),
-                            ("hInstApp", wintypes.HINSTANCE),
-                            ("lpIDList", ctypes.c_void_p),
-                            ("lpClass", wintypes.LPCWSTR),
-                            ("hkeyClass", wintypes.HKEY),
-                            ("dwHotKey", wintypes.DWORD),
-                            ("hIcon", wintypes.HANDLE),
-                            ("hProcess", wintypes.HANDLE),
-                        ]
-
-                    SEE_MASK_NOCLOSEPROCESS = 0x00000040
-                    SEE_MASK_NOASYNC        = 0x00000100
-                    INFINITE_WAIT_MS        = 300000      # 5 minutes is plenty
-
-                    info = _SHELLEXECUTEINFOW()
-                    info.cbSize = ctypes.sizeof(info)
-                    info.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC
-                    info.lpVerb = "runas"
-                    info.lpFile = sys.executable
-                    # Quote the package: a spec like "chardet<4.0" is fine bare,
-                    # but a path or extras spec would otherwise split.
-                    info.lpParameters = f'-m pip install "{pkg}" -q'
-                    info.nShow = 1
-
-                    if not ctypes.windll.shell32.ShellExecuteExW(ctypes.byref(info)):
-                        _err = ctypes.get_last_error()
-                        return False, ("Elevation was declined or failed "
-                                       f"(error {_err})")
-                    if not info.hProcess:
-                        return False, "Elevation returned no process handle"
-
-                    _rc = ctypes.windll.kernel32.WaitForSingleObject(
-                        info.hProcess, INFINITE_WAIT_MS)
-                    _code = wintypes.DWORD()
-                    ctypes.windll.kernel32.GetExitCodeProcess(
-                        info.hProcess, ctypes.byref(_code))
-                    ctypes.windll.kernel32.CloseHandle(info.hProcess)
-
-                    if _rc != 0:            # WAIT_OBJECT_0 == 0
-                        return False, "Timed out waiting for the elevated install"
-                    if _code.value != 0:
-                        return False, (f"pip exited with code {_code.value} "
-                                       f"in the elevated process")
-                except Exception as e:
-                    return False, f"UAC error: {e}"
-            elif sys.platform != "win32" and _is_ext_managed():
+            # N64 (2026-08-23): system-scope installs are gone entirely.
+            #
+            # Supporting them meant elevation, and elevation from a desktop
+            # app is where this feature kept breaking: ShellExecuteW returned
+            # before pip had finished, so failures read as successes; plain
+            # `sudo` asked for a password on a TTY that does not exist and hung
+            # until the timeout; pkexec is missing on plenty of systems; and a
+            # writability check meant to INFORM the user ended up demanding
+            # admin rights for a USER install. A per-user install needs no
+            # rights at all, works everywhere, and wins on PATH anyway.
+            #
+            # Tools already installed system-wide are still listed -- their
+            # rows simply carry no action buttons (see _tc_update_row_btns).
+            if sys.platform != "win32" and _is_ext_managed():
                 # PEP 668 system — strategy depends on scope
                 pm = _detect_pm()
-                if scope == "user":
+                if True:   # user scope is the only scope now
                     # USER install — never use sudo/pkexec, just pip --user or official installer
                     if tool == "uv":
                         r = subprocess.run([sys.executable, "-m", "pip", "install", "uv",
@@ -290,38 +236,6 @@ class ToolchainMixin:
                                             "--break-system-packages", "--user", "-q"],
                                            capture_output=True, text=True, timeout=120)
                         if r.returncode != 0: return False, r.stderr[:200]
-                else:
-                    # SYSTEM install — use pkexec/pacman
-                    _pkexec = shutil.which("pkexec") or ""
-                    _pkg_cmds = {
-                        "apt":    ["apt", "install", "-y", pkg],
-                        "pacman": ["pacman", "-S", "--noconfirm",
-                                   {"pipx": "python-pipx", "poetry": "python-poetry"}.get(tool, tool)],
-                        "dnf":    ["dnf", "install", "-y", pkg],
-                        "zypper": ["zypper", "install", "-y", pkg],
-                    }
-                    if pm in _pkg_cmds:
-                        # No bare sudo from a GUI: it prompts on a TTY this
-                        # process does not have and hangs. (2026-08-19)
-                        if not _pkexec:
-                            return False, ("No graphical elevation helper (pkexec) "
-                                           "found — use User install instead")
-                        _cmd = [_pkexec] + _pkg_cmds[pm]
-                        r = subprocess.run(_cmd, capture_output=True, text=True, timeout=120)
-                        if r.returncode != 0: return False, r.stderr[:200]
-                    else:
-                        r = subprocess.run([sys.executable, "-m", "pip", "install", pkg,
-                                            "--break-system-packages", "-q"],
-                                           capture_output=True, text=True, timeout=120)
-                        if r.returncode != 0: return False, r.stderr[:200]
-            elif scope == "system":
-                _elev = shutil.which("pkexec")
-                if not _elev:
-                    return False, ("No graphical elevation helper (pkexec) found "
-                                   "— use User install instead")
-                r = subprocess.run([_elev, sys.executable, "-m", "pip", "install", pkg, "-q"],
-                                   **subprocess_args(capture_output=True, text=True, timeout=120))
-                if r.returncode != 0: return False, (r.stderr or "failed")[:200]
             else:
                 r = subprocess.run([sys.executable, "-m", "pip", "install", pkg, "--user", "-q"],
                                    **subprocess_args(capture_output=True, text=True, timeout=120))
@@ -364,7 +278,7 @@ class ToolchainMixin:
                 status_label.setText(f"❌ {result}")
                 status_label.setStyleSheet("font-size: 11px; color: #f38ba8;")
                 btn.setEnabled(True)
-                btn.setText(f"Install {tool} ({'User' if scope == 'user' else 'System 🔒'})")
+                btn.setText(f"Install {tool} (User)")
         from src.gui.package_panel import WorkerThread
         w = WorkerThread(_do, parent=self)
         w.finished.connect(_done)
@@ -528,7 +442,7 @@ class ToolchainMixin:
             "Install, remove and verify tools per Python version.\n"
             "Select a Python from the dropdown, then use the action buttons.\n\n"
             "pip / venv: upgrade with User or System\n"
-            "uv / poetry / pipx: User (no admin) or System (admin)\n"
+            "uv / poetry / pipx: installed per-user, no admin needed\n"
             "Conda (micromamba): download binary",
         ))
 
@@ -669,14 +583,16 @@ class ToolchainMixin:
             return b
 
         def _ask_scope(parent_btn, cb_user, cb_system):
-            """Show User/System popup menu under button."""
-            menu = QMenu(parent_btn)
-            a_user   = menu.addAction("👤 User  (no admin)")
-            a_system = menu.addAction("🖥 System  (admin/sudo)")
-            chosen = menu.exec(parent_btn.mapToGlobal(
-                parent_btn.rect().bottomLeft()))
-            if chosen == a_user:    cb_user()
-            elif chosen == a_system: cb_system()
+            """Install straight away -- there is only one scope now.
+
+            N64 (2026-08-25): this popped a menu offering "User (no admin)"
+            or "System (admin/sudo)". The system half is gone from every
+            install path in this file, so the menu was offering a choice
+            that no longer exists -- and asking the user to make it before
+            every single install. One option is not a choice; just do it.
+            `cb_system` is still accepted so no caller has to change.
+            """
+            cb_user()
 
         if tool == "micromamba":
             # ── Conda Backend selector ────────────────────────────────────
@@ -947,7 +863,31 @@ class ToolchainMixin:
         """Find tool exe for the GIVEN Python. Returns path or ''."""
         import os, sys, shutil
         cands = []
-        # The SELECTED Python's own Scripts/bin dir is checked FIRST.
+
+        # N64 (2026-08-25): the PER-USER copy is preferred over the one in
+        # the interpreter's own Scripts dir.
+        #
+        # Both can exist at once -- Bayram has hatch.exe in
+        # C:\Program Files\Python314\Scripts AND in
+        # %APPDATA%\Python\Python314\Scripts. Checking the interpreter dir
+        # first meant the table always reported the system copy, so the row
+        # stayed "System" with no buttons and Install appeared to do nothing,
+        # even though a perfectly manageable user copy was sitting right
+        # there. Per-user first matches what this manager can actually act
+        # on, and matches how PATH is meant to resolve it anyway.
+        _user_sc = ""
+        if sys.platform == "win32":
+            _tag0 = self._tc_py_ver_tag(py_exe)
+            if _tag0:
+                _user_sc = os.path.join(os.environ.get("APPDATA",""), "Python",
+                                        f"Python{_tag0}", "Scripts")
+        else:
+            _user_sc = os.path.expanduser("~/.local/bin")
+        if _user_sc:
+            for n in (tool, tool+".exe"):
+                cands.append(os.path.join(_user_sc, n))
+
+        # Then the SELECTED Python's own Scripts/bin dir.
         py_sc = os.path.join(os.path.dirname(py_exe),
             "Scripts" if sys.platform=="win32" else "bin")
         for n in (tool,tool+".exe"):
@@ -1001,6 +941,10 @@ class ToolchainMixin:
                 except Exception:
                     pass
         found = next((c for c in cands if c and os.path.isfile(c)), "")
+        # Decisive logging: after a whole session of guessing why one row
+        # resolved differently from its neighbours, show the actual search.
+        _log.debug(f"[TC] find {tool}: chose {found or "(nothing)"} from "
+                   f"{[c for c in cands if c and os.path.isfile(c)]}")
         if found:
             # For pixi: verify it's the real prefix-dev pixi, not pip-installed fake
             if tool == "pixi":
@@ -1031,15 +975,19 @@ class ToolchainMixin:
                             return _c
                     except Exception:
                         pass
-        # Fallback: check if tool is available as python module (e.g. python3 -m pipx)
-        try:
-            import subprocess
-            r = subprocess.run([py_exe, "-m", tool, "--version"],
-                               capture_output=True, text=True, timeout=5)
-            if r.returncode == 0:
-                return py_exe  # signals "available as module"
-        except Exception:
-            pass
+        # N64 (2026-08-25): NO "available as module" fallback.
+        #
+        # It ran `<py> -m <tool> --version` and, on success, returned PY_EXE
+        # as the tool's path -- a sentinel meaning "importable, but has no
+        # launcher". Everything downstream then treated that Python as if it
+        # WERE the tool: the version cell ran `<py_exe> --version` and printed
+        # Python's own version (PDM and pipx both showed "3.14.6"), and the
+        # path cell resolved through `pip show` to a package DIRECTORY
+        # (...\Lib\site-packages\pdm) -- not something anyone can run, upgrade
+        # or remove. On Bayram's box `where.exe pdm` and `where.exe pipx` both
+        # come back empty: the packages are there, the launchers never got
+        # created. "Not found" with an Install button is the honest answer,
+        # and Install actually fixes it.
         return ""
 
 
@@ -1533,10 +1481,42 @@ class ToolchainMixin:
                                 _new = os.path.join(os.environ.get("USERPROFILE", ""),
                                                     ".pixi", "bin", "pixi.exe")
                                 return True, _new if os.path.isfile(_new) else ""
+                        # N64: absolute path. Bare "powershell" failed with
+                        # PermissionError [WinError 5] Access is denied --
+                        # CreateProcess resolves the bare name against PATH
+                        # and can land on something it may not execute. The
+                        # same lesson as pixi and conda earlier today: never
+                        # launch a program by name when the path is knowable.
+                        # Real System32 copy FIRST. shutil.which() is a trap
+                        # here: on Windows 11 it often returns the App
+                        # Execution Alias under
+                        #   ...\AppData\Local\Microsoft\WindowsApps\powershell.exe
+                        # which is a zero-byte reparse point, and launching it
+                        # from a background thread fails with
+                        #   PermissionError [WinError 5] Access is denied
+                        # -- exactly what Bayram hit twice, once with the bare
+                        # name and once with which(). (2026-08-25)
+                        import shutil as _sh4
+                        _root = os.environ.get("SystemRoot", r"C:\Windows")
+                        _ps = ""
+                        for _c4 in (
+                            os.path.join(_root, "System32", "WindowsPowerShell",
+                                         "v1.0", "powershell.exe"),
+                            _sh4.which("pwsh") or "",
+                            _sh4.which("powershell") or "",
+                        ):
+                            if _c4 and os.path.isfile(_c4) and \
+                                    "windowsapps" not in _c4.lower() and \
+                                    os.path.getsize(_c4) > 0:
+                                _ps = _c4
+                                break
+                        if not _ps:
+                            return False, ("Could not find a usable PowerShell to "
+                                           "run the pixi installer")
                         r = subprocess.run(
-                            ["powershell", "-NoProfile", "-Command",
+                            [_ps, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command",
                              "iwr -useb https://pixi.sh/install.ps1 | iex"],
-                            capture_output=True, text=True, timeout=300)
+                            **subprocess_args(capture_output=True, text=True, timeout=300))
                     else:
                         r = subprocess.run(
                             ["sh", "-c", "curl -fsSL https://pixi.sh/install.sh | bash"],
@@ -1601,6 +1581,57 @@ class ToolchainMixin:
 
         def _do(callback=None):
             import subprocess, time, shutil as _sh
+
+            # N64 (2026-08-25): pip is not enough on its own.
+            #
+            # `pip install pdm --user` answered
+            #     Requirement already satisfied: pdm in
+            #     C:\Program Files\Python314\Lib\site-packages (2.28.0)
+            # and exited 0 -- while `where.exe pdm` stayed empty. The PACKAGE
+            # was present, its LAUNCHER was not (deleted at some point), and
+            # pip only ever checks the former. So Install reported success,
+            # the table re-scanned, found no executable, and said Not found.
+            # Round and round, with nothing in the log to show for it.
+            #
+            # So: run pip, then look for the executable. If it is still
+            # missing, retry once with --force-reinstall (which does rebuild
+            # the launcher, verified on Bayram's box) and check again. And log
+            # every command and every result -- four separate bugs today hid
+            # behind a silent subprocess.
+            def _log_run(argv, **kw):
+                _log.debug(f"[TC] run: {' '.join(str(a) for a in argv)}")
+                _r = subprocess.run(argv, **kw)
+                _log.debug(f"[TC]   -> exit={_r.returncode}"
+                           + (f" err={(_r.stderr or '').strip()[:200]}"
+                              if _r.returncode else ""))
+                return _r
+
+            def _launcher_exists():
+                return bool(self._tc_find_tool(tool, py_exe))
+
+            def _pip_user(extra=()):
+                _argv = [py_exe, "-m", "pip", "install", pkg, "--user", "-q"] + list(extra)
+                if sys.platform == "linux":
+                    _argv.append("--break-system-packages")
+                return _log_run(_argv,
+                                **subprocess_args(capture_output=True, text=True,
+                                                  timeout=180),
+                                cwd=os.path.expanduser("~"))
+
+            def _ensure_launcher():
+                """True if the tool's executable exists, forcing a rebuild once."""
+                if _launcher_exists():
+                    return True
+                _log.info(f"[TC] {tool}: pip succeeded but no launcher — "
+                          f"retrying with --force-reinstall")
+                _pip_user(("--force-reinstall", "--no-deps"))
+                return _launcher_exists()
+            # N64 (2026-08-25): `_spa` IS subprocess_args (see the import at the
+            # top of this method), so every call site that wrote both
+            #     **subprocess_args(...), cwd=_home, **_spa()
+            # handed subprocess.run() creationflags twice and died with
+            #     TypeError: got multiple values for keyword argument
+            # Kept only for the two places that use it on its own.
             _spa = _spa_fn
             _is_win = sys.platform == "win32"
             _is_linux = sys.platform == "linux"
@@ -1611,79 +1642,52 @@ class ToolchainMixin:
             _standalone = tool in ("uv", "poetry", "pipx")
 
             if _is_win:
-                if scope == "system":
-                    try:
-                        import ctypes
-                        ret = ctypes.windll.shell32.ShellExecuteW(
-                            None, "runas", py_exe, f"-m pip install {pkg} -q", None, 1)
-                        if ret <= 32: return False, f"UAC failed ({ret})"
-                        time.sleep(4)
-                    except Exception as e:
-                        return False, str(e)
-                else:
-                    # User install
-                    r = subprocess.run(
-                        [py_exe, "-m", "pip", "install", pkg, "--user", "-q"],
-                        **subprocess_args(capture_output=True, text=True, timeout=120),
-                        cwd=_home, **_spa())
-                    if r.returncode != 0:
-                        return False, (r.stderr or r.stdout or "failed")[:300]
+                # N64: user scope only -- the elevated path is gone (see the
+                # note in _pm_install_tool for the full reasoning).
+                r = _pip_user()
+                if r.returncode != 0:
+                    return False, (r.stderr or r.stdout or "failed")[:300]
+                if not _ensure_launcher():
+                    return False, (
+                        f"pip reported success but no {tool} executable "
+                        f"appeared, even after a forced reinstall.")
             else:
                 # Linux / macOS
-                if scope == "system":
-                    # Try pkexec pip install, then sudo pip install --break-system-packages
-                    _pip_cmd = [py_exe, "-m", "pip", "install", pkg, "-q",
-                                "--break-system-packages"]
-                    # pkexec ONLY. The old loop fell back to bare sudo, which
-                    # from a GUI prompts on a TTY that is not there: Bayram saw
-                    # "[sudo] password for bayram:" land in the terminal he had
-                    # launched from while the window looked frozen, and the run
-                    # then sat until the 120s timeout. (2026-08-19)
-                    _elev = __import__("shutil").which("pkexec")
-                    _installed = False
-                    if _elev:
-                        try:
-                            r = subprocess.run([_elev] + _pip_cmd,
-                                **subprocess_args(capture_output=True, text=True, timeout=120), cwd=_home)
-                            _installed = (r.returncode == 0)
-                        except FileNotFoundError:
-                            pass
-                    if not _installed:
-                        return False, ("System install failed — no pkexec, or the "
-                                       "password prompt was cancelled")
-                else:
-                    # User install — prefer pipx for standalone tools
-                    if _standalone and tool != "pipx":
-                        # Install via pipx if available, else pip --user
-                        _pipx = _sh.which("pipx")
-                        if _pipx:
-                            r = subprocess.run([_pipx, "install", pkg],
-                                **subprocess_args(capture_output=True, text=True, timeout=120),
-                                cwd=_home, **_spa())
-                        else:
-                            _bsp3 = ["--break-system-packages"] if _is_linux else []
-                            r = subprocess.run(
-                                [py_exe, "-m", "pip", "install", pkg, "--user", "-q"] + _bsp3,
-                                **subprocess_args(capture_output=True, text=True, timeout=120),
-                                cwd=_home, **_spa())
-                        if r.returncode != 0:
-                            return False, (r.stderr or r.stdout or "failed")[:300]
-                    elif tool == "pipx":
-                        _bsp = ["--break-system-packages"] if _is_linux else []
-                        r = subprocess.run(
-                            [py_exe, "-m", "pip", "install", "pipx", "--user", "-q"] + _bsp,
-                            **subprocess_args(capture_output=True, text=True, timeout=120),
-                            cwd=_home, **_spa())
-                        if r.returncode != 0:
-                            return False, (r.stderr or r.stdout or "failed")[:300]
+                # N64: user scope only here too. The pkexec path is gone --
+                # a per-user install needs no password and always works.
+                # User install — prefer pipx for standalone tools
+                if _standalone and tool != "pipx":
+                    # Install via pipx if available, else pip --user
+                    _pipx = _sh.which("pipx")
+                    if _pipx:
+                        r = _log_run([_pipx, "install", pkg],
+                            **subprocess_args(capture_output=True, text=True, timeout=180),
+                            cwd=_home)
                     else:
-                        _bsp2 = ["--break-system-packages"] if _is_linux else []
-                        r = subprocess.run(
-                            [py_exe, "-m", "pip", "install", pkg, "--user", "-q"] + _bsp2,
-                            **subprocess_args(capture_output=True, text=True, timeout=120),
-                            cwd=_home, **_spa())
-                        if r.returncode != 0:
-                            return False, (r.stderr or r.stdout or "failed")[:300]
+                        r = _pip_user()
+                    if r.returncode != 0:
+                        return False, (r.stderr or r.stdout or "failed")[:300]
+                    if not _ensure_launcher():
+                        return False, (
+                            f"pip reported success but no {tool} executable "
+                            f"appeared, even after a forced reinstall.")
+                elif tool == "pipx":
+                    r = _pip_user()
+                    if r.returncode != 0:
+                        return False, (r.stderr or r.stdout or "failed")[:300]
+                    if not _ensure_launcher():
+                        return False, (
+                            f"pip reported success but no {tool} executable "
+                            f"appeared, even after a forced reinstall.")
+                else:
+                    # hatch, pdm and anything else added later.
+                    r = _pip_user()
+                    if r.returncode != 0:
+                        return False, (r.stderr or r.stdout or "failed")[:300]
+                    if not _ensure_launcher():
+                        return False, (
+                            f"pip reported success but no {tool} executable "
+                            f"appeared, even after a forced reinstall.")
 
             # Post-install: ensurepath for pipx
             if tool == "pipx":
@@ -1730,41 +1734,25 @@ class ToolchainMixin:
             from src.utils.platform_utils import subprocess_args
             # Build correct remove command per tool
             # Find the tool's own executable first
-            _tool_exe = _shutil.which(tool) or _shutil.which(tool + ".exe")
-            # If tool is only available as module (python -m tool), handle specially
+            # Resolve exactly like the table does. This used to call
+            # shutil.which(), which searches PATH -- and on Bayram's box
+            # C:\Program Files\Python314\Scripts comes BEFORE the per-user
+            # Scripts dir, so Remove kept finding the system hatch.exe and
+            # refusing, while the row itself was showing (and offering to
+            # manage) the per-user copy sitting one directory away.
+            # One resolver, one answer. (2026-08-25)
+            _tool_exe = (self._tc_find_tool(tool, py_exe)
+                         or _shutil.which(tool)
+                         or _shutil.which(tool + ".exe"))
+            # N64: no module-only uninstall path any more. It elevated with
+            # pkexec to run `pip uninstall`, which is exactly the kind of
+            # thing this manager should not be doing -- and a tool with no
+            # executable is no longer listed as installed at all (see
+            # _tc_find_tool), so this branch had nothing left to act on.
             if not _tool_exe:
-                import subprocess as _sp2
-                r2 = _sp2.run([py_exe, "-m", tool, "--version"],
-                              capture_output=True, text=True, timeout=5)
-                if r2.returncode == 0:
-                    # Module-only install — find via pip show
-                    _loc_r = _sp2.run([py_exe, "-m", "pip", "show", tool],
-                                      capture_output=True, text=True, timeout=10)
-                    _loc = next((l.split(":", 1)[1].strip()
-                                 for l in _loc_r.stdout.splitlines()
-                                 if l.startswith("Location:")), "")
-                    _pm = next((p for p in ("apt","pacman","dnf","zypper") if _shutil.which(p)), None)
-                    _pacman_map = {"pipx": "python-pipx", "uv": "uv", "poetry": "python-poetry"}
-                    # Try pkexec pip uninstall (graphical auth, works on all distros)
-                    _pkexec2 = _shutil.which("pkexec") or ""
-                    if not _pkexec2:
-                        return False, ("No graphical elevation helper (pkexec) found "
-                                       "— remove it from a root shell instead")
-                    _uninstall_cmd = [_pkexec2] + [
-                        py_exe, "-m", "pip", "uninstall", tool,
-                        "--break-system-packages", "-y"
-                    ]
-                    try:
-                        r3 = _sp2.run(_uninstall_cmd, capture_output=True, text=True, timeout=60)
-                        if r3.returncode == 0:
-                            return True, f"{tool} removed successfully"
-                    except Exception:
-                        pass
-                    return False, (
-                        f"{tool} is installed as a Python module.\n\n"
-                        f"Run in terminal to remove:\n"
-                        f"  sudo pip uninstall {tool} --break-system-packages"
-                    )
+                return False, (
+                    f"{tool} has no executable in this environment, so there "
+                    f"is nothing for VenvStudio to remove.")
             if tool in ("pip", "venv"):
                 return False, f"{tool} cannot be removed — it is a core Python component"
             elif tool == "micromamba":
@@ -1836,58 +1824,49 @@ class ToolchainMixin:
             _linux_global = sys.platform != "win32" and _tool_exe and any(
                 _tool_exe.startswith(p) for p in ("/usr/bin/", "/usr/local/bin/", "/bin/", "/opt/")
             )
+            # N64: a system-located tool is simply not ours to remove.
+            #
+            # This block used to elevate -- UAC + Remove-Item on Windows,
+            # pkexec + pacman or `rm -f` on Linux -- and when that failed it
+            # dumped a terminal command on the user. Every path was wrong for
+            # a desktop app: it silently deleted files owned by the system
+            # package manager when it worked, and blamed the user when it did
+            # not. Whoever installed it there manages it there. Rows for these
+            # tools no longer offer Remove at all, so this is only reached if
+            # something slipped through.
             if _win_global or _linux_global:
-                _pacman_pkgs = {"uv": "uv", "poetry": "python-poetry", "pipx": "python-pipx"}
-                if _win_global:
-                    # Windows: UAC elevation via PowerShell RunAs
-                    try:
-                        import ctypes
-                        _ps_cmd = f'Remove-Item -Force "{_tool_exe}"'
-                        ret = ctypes.windll.shell32.ShellExecuteW(
-                            None, "runas", "powershell.exe",
-                            f'-NoProfile -Command "{_ps_cmd}"', None, 1)
-                        if ret > 32:
-                            import time; time.sleep(2)
-                            if not os.path.isfile(_tool_exe):
-                                return True, f"{tool} removed from {_tool_exe}"
-                    except Exception:
-                        pass
-                    return False, (
-                        f"{tool} is system-installed at {_tool_exe}\n\n"
-                        f"Run in PowerShell (as Administrator):\n"
-                        f'  Remove-Item -Force "{_tool_exe}"'
-                    )
-                # Linux global
-                if _shutil.which("pacman") and tool in _pacman_pkgs:
-                    _pkexec = _shutil.which("pkexec") or ""
-                    _rm_cmd = (
-                        [_pkexec, "pacman", "-R", "--noconfirm", _pacman_pkgs[tool]]
-                        if _pkexec else
-                        [(__import__("shutil").which("pkexec") or "pkexec"),
-                         "pacman", "-R", "--noconfirm", _pacman_pkgs[tool]]
-                    )
-                    try:
-                        r = subprocess.run(_rm_cmd, capture_output=True, text=True, timeout=60)
-                        if r.returncode == 0:
-                            return True, f"{tool} removed via pacman"
-                    except Exception:
-                        pass
-                if _shutil.which("pkexec"):
-                    try:
-                        r = subprocess.run(["pkexec", "rm", "-f", _tool_exe],
-                                           capture_output=True, text=True, timeout=60)
-                        if r.returncode == 0:
-                            return True, f"{tool} removed from {_tool_exe}"
-                    except Exception:
-                        pass
-                _ph = f"  sudo pacman -R {_pacman_pkgs.get(tool, tool)}" if _shutil.which("pacman") else ""
                 return False, (
-                    f"{tool} is system-installed at {_tool_exe}\n\n"
-                    f"Run in terminal:\n  sudo rm {_tool_exe}"
-                    + (f"\n{_ph}" if _ph else "")
-                )
+                    f"{tool} is installed in a system location:\n{_tool_exe}\n\n"
+                    f"VenvStudio only manages per-user installs. Use whatever "
+                    f"put it there \u2014 your system package manager, or an "
+                    f"elevated terminal \u2014 to remove it.")
 
-            # 3. Fallback: pip uninstall with --break-system-packages
+            # 3. Tools with no pip package (pixi, venv, micromamba) come from
+            #    their own installer, so there is nothing for pip to uninstall.
+            #    Feeding pkg=None to subprocess produced
+            #        TypeError: expected str, bytes or os.PathLike object,
+            #        not NoneType
+            #    from list2cmdline, which surfaced as a bare "Error:" box.
+            #    (Bayram, 2026-08-25.) Remove the launcher instead, and say
+            #    plainly what is left behind rather than deleting a whole tree
+            #    the user did not ask us to touch.
+            if not pkg:
+                if not _tool_exe or not os.path.isfile(_tool_exe):
+                    return False, f"{tool} has no executable to remove."
+                try:
+                    os.remove(_tool_exe)
+                except OSError as e:
+                    return False, f"Could not remove {_tool_exe}:\n{e}"
+                _home_dir = os.path.dirname(os.path.dirname(_tool_exe))
+                _extra = ""
+                if os.path.basename(_home_dir).lower() in (f".{tool}", tool):
+                    _extra = (f"\n\nIts data directory is still there:\n{_home_dir}\n"
+                              f"Delete it yourself if you want the environments "
+                              f"and cached packages gone too.")
+                _log.info(f"[TC] removed launcher {_tool_exe}")
+                return True, f"{tool} removed ({_tool_exe}){_extra}"
+
+            # 4. Fallback: pip uninstall with --break-system-packages
             cmd = [py_exe, "-m", "pip", "uninstall", pkg, "-y", "-q"]
             r = subprocess.run(cmd, capture_output=True, text=True, timeout=60,
                                cwd=_home, **subprocess_args())
@@ -1905,11 +1884,14 @@ class ToolchainMixin:
             from PySide6.QtWidgets import QMessageBox
             si2 = tbl.item(row, 1)
             if not ok:
-                # Restore original status instead of showing error in status col
-                if si2:
-                    si2.setText("🖥 System")
-                    si2.setForeground(QColor("#89b4fa"))
+                # Re-scan rather than guessing. This branch used to hardcode
+                # "System" on any failure, which silently RELABELLED a
+                # per-user tool as a system one -- hatch showed User until
+                # Remove failed once, then read System from then on and the
+                # row lost its buttons. A failed removal tells us nothing
+                # about where the tool lives; ask again. (2026-08-25)
                 QMessageBox.information(None, "Cannot Remove Automatically", res)
+                QTimer.singleShot(0, lambda: self._tc_load_table(py_exe, force=True))
                 return
             QTimer.singleShot(300, lambda: self._tc_load_table(py_exe, force=True))
 

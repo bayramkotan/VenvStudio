@@ -110,10 +110,48 @@ class ToolRegistry:
                 self._save()
         return scope
 
+    def _user_scope_candidate(self, tool_name: str) -> str:
+        """Per-user copy of the tool, if one exists.
+
+        N64 (Bayram, 2026-08-25): a per-user install is preferred over anything
+        else, because it is the only kind VenvStudio can upgrade or remove.
+        Both can exist at once -- Bayram had hatch.exe in
+        C:/Program Files/Python314/Scripts AND in
+        %APPDATA%/Python/Python314/Scripts. The registry had recorded the
+        system one, and since that file still existed `find()` kept handing it
+        back for good: deleting the registry did not help either, because the
+        very next scan looked the same way and wrote the same answer again.
+        The Toolchain table therefore showed Hatch as System, with Remove
+        refusing, while a perfectly manageable user copy sat right there.
+        """
+        import sys
+        cands = []
+        if sys.platform == "win32":
+            base = os.path.join(os.environ.get("APPDATA", ""), "Python")
+            if os.path.isdir(base):
+                # Newest interpreter dir first; any of them beats a system copy.
+                for sub in sorted(os.listdir(base), reverse=True):
+                    sc = os.path.join(base, sub, "Scripts")
+                    cands += [os.path.join(sc, tool_name + ".exe"),
+                              os.path.join(sc, tool_name)]
+        else:
+            cands.append(os.path.expanduser(f"~/.local/bin/{tool_name}"))
+        return next((c for c in cands if os.path.isfile(c)), "")
+
     def find(self, tool_name: str) -> str:
-        """Find tool executable — registry first, then shutil.which fallback.
+        """Find tool executable — per-user copy first, then registry, then PATH.
+
         Returns path string or empty string if not found.
         """
+        # 0. A per-user copy wins over everything -- see _user_scope_candidate.
+        user_copy = self._user_scope_candidate(tool_name)
+        if user_copy:
+            entry = self._data.get(tool_name, {})
+            if os.path.normcase(entry.get("path", "")) != os.path.normcase(user_copy):
+                self.register(tool_name, user_copy,
+                              installed_by=entry.get("installed_by", "external"))
+            return user_copy
+
         # 1. Check registry
         entry = self._data.get(tool_name, {})
         reg_path = entry.get("path", "")

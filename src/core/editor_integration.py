@@ -214,6 +214,66 @@ def detect_editors() -> List[EditorInfo]:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Opening a file in an editor (N45)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def resolve_editor_binary(editor_id: str = "") -> tuple:
+    """Return (binary_path, editor_name) for an installed editor, or ("", "").
+
+    N45 (2026-08-27): detect_editors() answers "is it installed" from the
+    binary OR a leftover config directory, which is right for the Register
+    feature but not for launching -- a config dir proves the editor ran once,
+    not that we can start it. Launching needs a real executable, so this asks
+    shutil.which and nothing else.
+
+    With no editor_id, the first editor that resolves wins, in EDITORS order.
+    """
+    for entry in EDITORS:
+        if editor_id and entry.id != editor_id:
+            continue
+        for name in entry.binary_names:
+            found = shutil.which(name)
+            if found:
+                return found, entry.name
+    return "", ""
+
+
+def open_file(file_path, editor_id: str = "") -> tuple:
+    """Open `file_path` in an editor. Returns (ok, message).
+
+    Falls back to the OS file association when no known editor is on PATH --
+    on a machine with no VS Code or PyCharm, "nothing happened" would be a
+    worse answer than whatever the system has registered for .py files.
+    """
+    import subprocess
+
+    path = str(file_path)
+    binary, name = resolve_editor_binary(editor_id)
+    if binary:
+        try:
+            _kw = {}
+            if sys.platform == "win32":
+                # Detached, no console flash. The editor outlives VenvStudio.
+                _kw["creationflags"] = 0x00000008 | 0x08000000
+            else:
+                _kw["start_new_session"] = True
+            subprocess.Popen([binary, path], **_kw)
+            return True, f"Opened in {name}"
+        except Exception as e:
+            return False, f"{name} could not be started: {e}"
+
+    try:
+        from src.utils.platform_utils import open_url
+        open_url(path)
+        return True, "Opened with the system default application"
+    except Exception as e:
+        return False, (
+            "No supported editor was found on PATH, and the file could not be "
+            f"opened with the system default either: {e}"
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # JSONC (JSON with comments) — VS Code family uses this
 # ─────────────────────────────────────────────────────────────────────────────
 

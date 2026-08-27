@@ -330,6 +330,19 @@ class TopicCard(QFrame):
             copy_btn.setCursor(Qt.PointingHandCursor)
             copy_btn.clicked.connect(self._copy_snippet)
             sh_layout.addWidget(copy_btn)
+
+            # N45 (Bayram, 2026-08-27): take the example straight into an
+            # editor. Copy already exists, but "copy, open an editor, make a
+            # file, paste" is four steps for something the reader wants to try
+            # right now -- and the point of Learn is that they try it.
+            open_btn = QPushButton("\U0001f4dd Open in Editor")
+            open_btn.setFixedHeight(28)
+            open_btn.setStyleSheet(copy_btn.styleSheet())
+            open_btn.setCursor(Qt.PointingHandCursor)
+            open_btn.setToolTip(
+                "Write this snippet to a file and open it in your editor")
+            open_btn.clicked.connect(self._open_snippet_in_editor)
+            sh_layout.addWidget(open_btn)
             sf_layout.addWidget(snippet_header)
 
             # Snippet text — bigger, more readable
@@ -436,6 +449,59 @@ class TopicCard(QFrame):
     def _copy_snippet(self):
         if hasattr(self, "_snippet_edit"):
             QApplication.clipboard().setText(self._snippet_edit.toPlainText())
+
+    def _open_snippet_in_editor(self):
+        """N45: write the snippet to a file and open it in an editor.
+
+        The file goes in a `venvstudio-learn` folder under the system temp
+        directory, named after the topic. Temp rather than the user's project:
+        this is an example to try, not something they asked to keep, and
+        dropping stray files into someone's working directory is the kind of
+        surprise this application should not spring. The path is shown in the
+        confirmation so it can be saved elsewhere if it turns out to be useful.
+        """
+        from PySide6.QtWidgets import QMessageBox
+        import os, re, tempfile
+
+        snippet = ""
+        if hasattr(self, "_snippet_edit"):
+            snippet = self._snippet_edit.toPlainText()
+        if not snippet.strip():
+            return
+
+        _title = self._topic.get("title", "snippet")
+        _slug = re.sub(r"[^0-9A-Za-z_-]+", "_", _title).strip("_").lower() or "snippet"
+        _ext = ".py" if (self._topic.get("language") or "python").lower() == "python" else ".txt"
+
+        try:
+            _dir = os.path.join(tempfile.gettempdir(), "venvstudio-learn")
+            os.makedirs(_dir, exist_ok=True)
+            _path = os.path.join(_dir, _slug + _ext)
+            with open(_path, "w", encoding="utf-8") as fh:
+                fh.write(snippet if snippet.endswith("\n") else snippet + "\n")
+        except Exception as e:
+            QMessageBox.warning(
+                self, "Could not write the file",
+                f"The snippet could not be saved before opening:\n{e}")
+            return
+
+        try:
+            from src.core.editor_integration import open_file
+            ok, msg = open_file(_path)
+        except Exception as e:
+            ok, msg = False, str(e)
+
+        if ok:
+            try:
+                from src.utils.logger import get_logger
+                get_logger("venvstudio.learn").info(
+                    f"[Learn] snippet opened in editor: {_path}")
+            except Exception:
+                pass
+        else:
+            QMessageBox.warning(
+                self, "Could not open an editor",
+                f"{msg}\n\nThe snippet was saved here, so it is not lost:\n{_path}")
 
     def _open_url(self, url: str):
         from src.utils.platform_utils import open_url

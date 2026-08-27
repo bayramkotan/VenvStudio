@@ -455,6 +455,110 @@ class ToolchainMixin:
     # seconds each: telling the user to wait is honest and cannot itself go
     # wrong. The flag is cleared in a `finally` so a crashing job cannot wedge
     # the panel shut.
+    @staticmethod
+    def _tc_env_root(py_exe: str) -> str:
+        """The <env> directory if py_exe belongs to one, otherwise "".
+
+        N68 (2026-08-27): two things need this answer and they must agree --
+        the location column (a tool inside the selected env is labelled Env,
+        not User) and the installer (`--user` is rejected inside a virtualenv).
+        One helper, so they cannot drift apart the way every other duplicated
+        rule in this file has.
+        """
+        import os as _o
+        try:
+            _d1 = _o.path.dirname(py_exe)      # <env>/bin | <env>\Scripts
+            _d2 = _o.path.dirname(_d1)         # <env>
+            for _root in (_d2, _d1):
+                if _root and (_o.path.isfile(_o.path.join(_root, "pyvenv.cfg"))
+                              or _o.path.isdir(_o.path.join(_root, "conda-meta"))):
+                    return _root
+        except Exception:
+            pass
+        return ""
+
+    def _tc_pick_copy(self, tool, py_exe, action):
+        """Which copy of `tool` should `action` touch?
+
+        N69 (Bayram, 2026-08-27): when a tool exists BOTH inside the selected
+        environment and outside it, ask.
+
+        I argued against this at first -- picking the env in the dropdown looked
+        like answer enough, and we had just deleted a "User or System?" prompt.
+        That was the wrong read. The removed prompt offered a choice where only
+        one option ever worked; this one offers two copies that both really
+        exist and are both really manageable. Guessing silently would leave the
+        user unable to reach one of them at all.
+
+        Returns (path, interpreter) for the chosen copy, or (None, None) if the
+        user cancelled. When only one copy exists it returns straight away
+        without troubling anyone.
+        """
+        import os, sys, shutil
+        from PySide6.QtWidgets import QMessageBox
+
+        _env_root = self._tc_env_root(py_exe)
+        _here = self._tc_find_tool(tool, py_exe)
+        if not _env_root or not _here:
+            return _here, py_exe
+
+        _outside = []
+        for _c in (shutil.which(tool), shutil.which(tool + ".exe")):
+            if not _c or os.path.normcase(_c).startswith(os.path.normcase(_env_root)):
+                continue
+            if _c not in _outside:
+                _outside.append(_c)
+        if not _outside:
+            return _here, py_exe
+
+        _other = _outside[0]
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Question)
+        # Name the two scopes the way the rest of the application does --
+        # Environment / User (or System) -- rather than "this one" and "the
+        # other one", which says nothing about what is being chosen.
+        _out_scope = ("System" if not self._tc_dir_is_writable(_other)
+                      else "User")
+        _env_name = os.path.basename(_env_root.rstrip("/\\")) or "environment"
+        box.setWindowTitle(f"{tool}: two installations")
+        box.setText(f"{tool} is installed in two scopes. Which installation "
+                    f"should VenvStudio {action}?")
+        box.setInformativeText(
+            f"Environment \u2014 {_env_name}:\n{_here}\n\n"
+            f"{_out_scope}-wide:\n{_other}")
+        _b_env = box.addButton(f"Environment ({_env_name})",
+                               QMessageBox.AcceptRole)
+        _b_out = box.addButton(f"{_out_scope}-wide", QMessageBox.AcceptRole)
+        box.addButton(QMessageBox.Cancel)
+        box.setDefaultButton(_b_env)
+        box.exec()
+
+        if box.clickedButton() is _b_env:
+            return _here, py_exe
+        if box.clickedButton() is _b_out:
+            # The other copy belongs to whichever interpreter owns its scripts
+            # directory; find it among the entries already in the dropdown so we
+            # never invent a path. Falling back to the running interpreter is
+            # good enough for pip, which only needs to reach the same site.
+            _owner = ""
+            try:
+                _dir = os.path.normcase(os.path.dirname(_other))
+                for i in range(self._tc_py_combo.count()):
+                    _cand = self._tc_py_combo.itemData(i) or ""
+                    if not _cand or self._tc_env_root(_cand):
+                        continue
+                    _tag = self._tc_py_ver_tag(_cand)
+                    _user = os.path.join(os.environ.get("APPDATA", ""), "Python",
+                                         f"Python{_tag}", "Scripts") if _tag else ""
+                    if (_dir.startswith(os.path.normcase(os.path.dirname(_cand)))
+                            or (_user and _dir.startswith(os.path.normcase(_user)))):
+                        _owner = _cand
+                        break
+            except Exception:
+                _owner = ""
+            return _other, (_owner or sys.executable)
+        return None, None
+
     def _tc_begin_job(self, what: str = "operation") -> bool:
         """True if this job may start; otherwise warn and return False."""
         from PySide6.QtWidgets import QMessageBox
@@ -524,9 +628,24 @@ class ToolchainMixin:
         note_row.addWidget(py_note, 1)
         refresh_btn = QPushButton("🔄 Refresh")
         refresh_btn.setFixedWidth(100)
-        refresh_btn.setToolTip("Reload tool status for selected Python")
-        refresh_btn.clicked.connect(lambda: self._tc_load_table(
-            self._tc_py_combo.currentData() or "", force=True) if self._tc_py_cb.isChecked() else None)
+        refresh_btn.setToolTip(
+            "Rescan Pythons, environments and tool status")
+
+        def _tc_refresh_all():
+            # N68: rescan the SELECTOR too, not just the table.
+            # Refresh used to reload tool status only, so an environment
+            # created a minute earlier stayed missing from the dropdown
+            # until the whole app was restarted -- Bayram hit exactly that
+            # with a new env called "dl". _tc_scan_pythons ends by loading
+            # the table for the current selection, so this covers both.
+            if not self._tc_py_cb.isChecked():
+                return
+            _keep = self._tc_py_combo.currentData() or ""
+            self._tc_scan_pythons()
+            self._tc_load_table(
+                self._tc_py_combo.currentData() or _keep, force=True)
+
+        refresh_btn.clicked.connect(_tc_refresh_all)
         note_row.addWidget(refresh_btn)
         vl.addLayout(note_row)
 
@@ -857,11 +976,80 @@ class ToolchainMixin:
                 combo.insertItem(0, f"Python {ver}  [Current]  {sys.executable}",
                                  sys.executable)
 
+        # N68 (Bayram, 2026-08-27): the user's own environments belong here too.
+        #
+        # He asked what happens when someone installs pdm/pixi/pipx INTO an env
+        # they made with VenvStudio. The answer was: nothing -- this combo was
+        # fed only from the Python Versions table, so an env's interpreter never
+        # appeared, and the panel could not see, let alone manage, anything
+        # inside it. "Onun kurduklarini kullanmak isterse?" had no answer.
+        #
+        # Adding them widens what this panel means: with a system interpreter
+        # selected it answers "what is on this machine", with an env selected
+        # "what is in this environment". The rows already say which, since the
+        # Path column shows where each tool actually lives, and the entries here
+        # are labelled [env] so the two are never confused.
+        _sys_count = combo.count()
+        try:
+            # SettingsPage has no venv_manager -- that attribute lives on the
+            # main window, and reaching for it here raised AttributeError which
+            # the bare `except` below swallowed, leaving an empty dropdown and
+            # no explanation. Build one directly, the way
+            # settings_page._get_editor_venv_dir already does.
+            _vm = getattr(self, "venv_manager", None)
+            if _vm is None:
+                # VenvManager needs its base dir -- main_window.py:79
+                # builds it as VenvManager(config.get_venv_base_dir()),
+                # so ask the same question here. (settings_page.py has a
+                # bare VenvManager() in _get_editor_venv_dir that raises
+                # TypeError and lands in its own except -- it has simply
+                # never been noticed, since that path falls through to a
+                # default. Worth fixing separately.)
+                from src.core.venv_manager import VenvManager
+                _vm = VenvManager(self.config.get_venv_base_dir())
+            # Same call env_list.py uses; skip_calc keeps it off the disk-size
+            # walk, which this panel has no use for.
+            _envs = _vm.list_venvs_fast(skip_calc=True) or []
+            _log.debug(f"[TC] env scan: {len(_envs)} environment(s) found")
+        except Exception as _ee:
+            # Never silently: an empty dropdown with no reason in the log is
+            # exactly the kind of thing that cost this project whole sessions.
+            _log.warning(f"[TC] env scan failed: {_ee!r}")
+            _envs = []
+        for _e in _envs:
+            try:
+                _ep = str(getattr(_e, "path", "") or "")
+                _en = str(getattr(_e, "name", "") or "") or \
+                    os.path.basename(_ep.rstrip("/\\"))
+                if not _ep:
+                    continue
+                _cand = [os.path.join(_ep, "Scripts", "python.exe"),
+                         os.path.join(_ep, "bin", "python3"),
+                         os.path.join(_ep, "bin", "python")]
+                _pyx = next((c for c in _cand if os.path.isfile(c)), "")
+                if not _pyx:
+                    _log.debug(f"[TC] env {_en!r}: no interpreter under {_ep}")
+                    continue
+                if os.path.normcase(_pyx) in {
+                        os.path.normcase(combo.itemData(i) or "")
+                        for i in range(combo.count())}:
+                    continue
+                _log.debug(f"[TC] env {_en!r}: adding {_pyx}")
+                combo.addItem(f"\U0001f4c1 {_en}  [env]  {_pyx}", _pyx)
+            except Exception as _e2:
+                _log.warning(f"[TC] env entry skipped: {_e2!r}")
+                continue
+        _env_count = combo.count() - _sys_count
+
         combo.blockSignals(False)
 
         note = getattr(self, "_tc_py_note", None)
         if note:
-            note.setText(f"{combo.count()} Python installation(s) available.")
+            _msg = f"{_sys_count} Python installation(s) available."
+            if _env_count:
+                _msg += (f"  \u2022  {_env_count} environment(s) \u2014 select one "
+                         f"to manage the tools installed inside it.")
+            note.setText(_msg)
 
         # Restore previous selection or use first
         idx = 0
@@ -933,6 +1121,42 @@ class ToolchainMixin:
             return ""
 
         cands = []
+
+        # N68 (Bayram, 2026-08-27): if the selected interpreter belongs to an
+        # ENVIRONMENT, that environment's own Scripts/bin wins over everything.
+        #
+        # He asked what happens when a user installs pdm/pixi/conda/pipx INTO an
+        # env they made with VenvStudio. Two answers, and the second is a bug I
+        # introduced earlier today.
+        #
+        # First: the Python selector is fed from the Python Versions table, so
+        # it only offers system interpreters -- an env's tools are invisible to
+        # this panel entirely. That is a design gap, filed separately; showing
+        # envs here would change what the panel means ("what is on this machine"
+        # vs "what is in this environment") and deserves its own decision.
+        #
+        # Second, and fixable right now: the per-user-first order below is right
+        # for a system interpreter (that is what stopped Program Files shadowing
+        # %APPDATA%), but it would be exactly wrong for an env. An environment
+        # exists to be isolated; a tool sitting inside it must never lose to a
+        # global copy. So when py_exe is an env's interpreter, its own directory
+        # goes first and the rule above applies only to the rest.
+        _env_scripts = ""
+        try:
+            _d1 = os.path.dirname(py_exe)                 # <env>/bin or <env>\Scripts
+            _d2 = os.path.dirname(_d1)                    # <env>
+            for _root in (_d2, _d1):
+                if not _root:
+                    continue
+                if (os.path.isfile(os.path.join(_root, "pyvenv.cfg"))
+                        or os.path.isdir(os.path.join(_root, "conda-meta"))):
+                    _env_scripts = _d1
+                    break
+        except Exception:
+            _env_scripts = ""
+        if _env_scripts:
+            for n in (tool, tool + ".exe"):
+                cands.append(os.path.join(_env_scripts, n))
 
         # N64 (2026-08-25): the PER-USER copy is preferred over the one in
         # the interpreter's own Scripts dir.
@@ -1226,6 +1450,8 @@ class ToolchainMixin:
             # Python Scripts/bin dir — only match if it's a venv-style path
             # e.g. /home/user/venv/bin, not /usr/bin
             _py_scripts_lower = _py_scripts.lower() if _py_scripts else ""
+            _in_env = False
+            _env_root = ""
             _is_system_scripts = any(_py_scripts_lower.startswith(p) for p in (
                 "/usr/bin", "/usr/local/bin", "/bin",
                 "c:\\windows", "c:\\program files"
@@ -1257,8 +1483,19 @@ class ToolchainMixin:
             # nothing is lost by dropping the "Built-in" wording.
             # (Bayram, 2026-08-19: "System ve User demen yeterliiii")
             if ok2:
-                if _is_user or _is_managed or self._tc_dir_is_writable(path):
-                    st_text = "👤 User"
+                _env_root = self._tc_env_root(_py)
+                _in_env = bool(_env_root and path and
+                               _os2.path.normcase(path).startswith(
+                                   _os2.path.normcase(_env_root)))
+                if _in_env:
+                    # N68: with an environment selected, a tool living INSIDE it
+                    # is neither a system nor a user-global install -- and that
+                    # distinction is the point of the row, because Upgrade and
+                    # Remove act on this copy alone, not on the global one.
+                    st_text = "\U0001f4c1 Env"
+                    st_color = "#f9e2af"
+                elif _is_user or _is_managed or self._tc_dir_is_writable(path):
+                    st_text = "\U0001f464 User"
                     st_color = "#a6e3a1"
                 else:
                     st_text = "🖥 System"
@@ -1278,9 +1515,42 @@ class ToolchainMixin:
             tbl.setItem(row, 2, vi)
 
             # col 3: Path (display_path already resolved by the scan, cached)
-            pi = QTableWidgetItem(_display_path if ok2 else "—")
+            pi = QTableWidgetItem(_display_path if ok2 else "\u2014")
             pi.setForeground(QColor(self._c()["fg_muted"]))
-            pi.setToolTip(path)
+            _tip = path
+
+            # N68 (Bayram, 2026-08-27): say when a SECOND copy exists.
+            #
+            # He asked whether VenvStudio should ask which copy to act on when a
+            # tool is installed both inside the selected environment and
+            # globally. It should not -- picking the environment in the dropdown
+            # already answered that, and asking again would bring back exactly
+            # the "User or System?" question we just removed. But his confusion
+            # was fair: the row showed one path and gave no hint the other copy
+            # existed, so it was impossible to tell what Upgrade and Remove were
+            # NOT going to touch. Show it instead of asking about it.
+            if _in_env and _tid:
+                try:
+                    import shutil as _sh6
+                    _others = []
+                    for _c6 in (_sh6.which(_tid), _sh6.which(_tid + ".exe")):
+                        if not _c6:
+                            continue
+                        if _os2.path.normcase(_c6).startswith(
+                                _os2.path.normcase(_env_root)):
+                            continue          # that is this row's own copy
+                        if _c6 not in _others:
+                            _others.append(_c6)
+                    if _others:
+                        _tip += ("\n\nAlso installed outside this "
+                                 "environment:\n"
+                                 + "\n".join(_others)
+                                 + "\n\nUpgrade and Remove will ask which "
+                                   "installation to act on.")
+                        pi.setText((_display_path if ok2 else "\u2014") + "  \u2295")
+                except Exception:
+                    pass
+            pi.setToolTip(_tip)
             tbl.setItem(row, 3, pi)
 
             # Update action buttons
@@ -1673,7 +1943,17 @@ class ToolchainMixin:
             py_exe = self._tc_py_combo.currentData() or sys.executable
         if not py_exe:
             py_exe = sys.executable
-        if si: si.setText("⏳ Installing..."); si.setForeground(QColor("#89b4fa"))
+
+        # N69: upgrading a tool that exists twice -- ask which copy. Only when
+        # one is already there; a fresh install has nothing to choose between.
+        if self._tc_find_tool(tool, py_exe):
+            _chosen_up, _owner_up = self._tc_pick_copy(tool, py_exe, "upgrade")
+            if _chosen_up is None:
+                return                  # cancelled
+            if _owner_up:
+                py_exe = _owner_up
+
+        if si: si.setText("\u23f3 Installing..."); si.setForeground(QColor("#89b4fa"))
 
         # Pre-import subprocess_args outside worker thread
         try:
@@ -1712,7 +1992,17 @@ class ToolchainMixin:
                 return bool(self._tc_find_tool(tool, py_exe))
 
             def _pip_user(extra=()):
-                _argv = [py_exe, "-m", "pip", "install", pkg, "--user", "-q"] + list(extra)
+                # N68: `--user` is meaningless -- and rejected -- inside a
+                # virtualenv:
+                #   "Can not perform a '--user' install. User site-packages are
+                #    not visible in this virtualenv."
+                # With an environment selected the install belongs IN that
+                # environment, which is what a plain `pip install` already does.
+                # Add the flag only when the target is a system interpreter.
+                _argv = [py_exe, "-m", "pip", "install", pkg, "-q"]
+                if not self._tc_env_root(py_exe):
+                    _argv.insert(-1, "--user")
+                _argv += list(extra)
                 if sys.platform == "linux":
                     _argv.append("--break-system-packages")
                 return _log_run(_argv,
@@ -1844,7 +2134,15 @@ class ToolchainMixin:
         if not py_exe and hasattr(self, "_tc_py_combo"):
             py_exe = self._tc_py_combo.currentData() or sys.executable
         if not py_exe: py_exe = sys.executable
-        if si: si.setText("⏳ Removing..."); si.setForeground(QColor("#89b4fa"))
+
+        # N69: if two copies exist, let the user say which one.
+        _chosen, _owner = self._tc_pick_copy(tool, py_exe, "remove")
+        if _chosen is None:
+            return                      # cancelled
+        if _owner:
+            py_exe = _owner
+
+        if si: si.setText("\u23f3 Removing..."); si.setForeground(QColor("#89b4fa"))
         _home = __import__("os").path.expanduser("~")
 
         def _do(callback=None):
@@ -1859,7 +2157,9 @@ class ToolchainMixin:
             # refusing, while the row itself was showing (and offering to
             # manage) the per-user copy sitting one directory away.
             # One resolver, one answer. (2026-08-25)
-            _tool_exe = (self._tc_find_tool(tool, py_exe)
+            # N69: the copy the user picked above wins over a fresh lookup.
+            _tool_exe = (_chosen
+                         or self._tc_find_tool(tool, py_exe)
                          or _shutil.which(tool)
                          or _shutil.which(tool + ".exe"))
             # N64: no module-only uninstall path any more. It elevated with

@@ -69,20 +69,29 @@ class EditorsMixin:
         # Editor list table
         self._ed_table = QTableWidget()
         self._ed_table.setStyleSheet(self._table_style(12))
-        self._ed_table.setColumnCount(5)
+        self._ed_table.setColumnCount(6)
+        # N45: "Default" sits next to the editor name, not out at the far
+        # right. The fixed columns already came to 650px before it was added,
+        # so a sixth one on the end fell off the edge of the panel — and the
+        # answer to "which editor opens my files" belongs beside the name
+        # anyway, not past two action buttons.
         self._ed_table.setHorizontalHeaderLabels(
-            ["Editor", "Status", "Current Path", "", ""]
+            ["Editor", "Default", "Status", "Current Path", "", ""]
         )
         hdr = self._ed_table.horizontalHeader()
         hdr.setSectionResizeMode(0, QHeaderView.Fixed)
-        self._ed_table.setColumnWidth(0, 160)
+        self._ed_table.setColumnWidth(0, 150)
         hdr.setSectionResizeMode(1, QHeaderView.Fixed)
-        self._ed_table.setColumnWidth(1, 100)
-        hdr.setSectionResizeMode(2, QHeaderView.Stretch)
-        hdr.setSectionResizeMode(3, QHeaderView.Fixed)
-        self._ed_table.setColumnWidth(3, 130)
+        # 140, not 120: at 120 the button rendered "Make Defau..." — a cell has
+        # margins of its own, so the column has to be wider than the button.
+        self._ed_table.setColumnWidth(1, 140)
+        hdr.setSectionResizeMode(2, QHeaderView.Fixed)
+        self._ed_table.setColumnWidth(2, 100)
+        hdr.setSectionResizeMode(3, QHeaderView.Stretch)
         hdr.setSectionResizeMode(4, QHeaderView.Fixed)
-        self._ed_table.setColumnWidth(4, 130)
+        self._ed_table.setColumnWidth(4, 120)
+        hdr.setSectionResizeMode(5, QHeaderView.Fixed)
+        self._ed_table.setColumnWidth(5, 120)
         self._ed_table.verticalHeader().setVisible(False)
         self._ed_table.verticalHeader().setDefaultSectionSize(42)
         self._ed_table.setEditTriggers(QTableWidget.NoEditTriggers)
@@ -94,7 +103,9 @@ class EditorsMixin:
         help_lbl = QLabel(
             "Registering writes to the editor's user settings file. "
             "A backup (.vs-backup) is created before any change. "
-            "Unregister cleanly removes the entries VenvStudio added."
+            "Unregister cleanly removes the entries VenvStudio added.\n"
+            "The default editor is the one VenvStudio opens files with — "
+            "for example the \"Open in Editor\" button on a Learn snippet."
         )
         help_lbl.setWordWrap(True)
         help_lbl.setStyleSheet(
@@ -154,12 +165,47 @@ class EditorsMixin:
         self._ed_venv_dir_lbl.setText(venv_dir or "(not set)")
 
         c = self._c()
+        _default_id = ""
+        try:
+            if hasattr(self, "config") and self.config:
+                _default_id = self.config.get("default_editor", "") or ""
+        except Exception:
+            _default_id = ""
+
         for row, ed in enumerate(editors):
             # Col 0: icon + name
             name_item = QTableWidgetItem(f"{ed.icon}  {ed.name}")
             self._ed_table.setItem(row, 0, name_item)
 
-            # Col 1: installed / not-found badge
+            # Col 1: default-editor marker (N45, Bayram 2026-08-27)
+            #
+            # "Open in Editor" used to take the first entry that resolved on
+            # PATH, so on a machine with three editors the user had no say in
+            # which one opened. Registering and opening are different questions
+            # -- you may register every editor you own and still want files to
+            # land in one of them.
+            if ed.id == _default_id:
+                def_lbl = QLabel("\u2605 Default")
+                def_lbl.setAlignment(Qt.AlignCenter)
+                def_lbl.setStyleSheet(
+                    f"color: {c['accent']}; font-weight: bold; border: none;")
+                self._ed_table.setCellWidget(row, 1, def_lbl)
+            else:
+                # "Set Default" rather than "Make Default": same meaning, two
+                # characters shorter, and it stops fighting the column width.
+                def_btn = QPushButton("Set Default")
+                def_btn.setObjectName("secondary")
+                def_btn.setMinimumWidth(124)
+                def_btn.setEnabled(ed.installed)
+                def_btn.setToolTip(
+                    f"Open files with {ed.name} from now on"
+                    if ed.installed else
+                    f"{ed.name} is not installed")
+                def_btn.clicked.connect(
+                    lambda _=None, e=ed: self._set_default_editor(e))
+                self._ed_table.setCellWidget(row, 1, def_btn)
+
+            # Col 2: installed / not-found badge
             if ed.installed:
                 status_item = QTableWidgetItem("● Installed")
                 status_item.setForeground(QColor("#a6e3a1"))  # green
@@ -167,9 +213,9 @@ class EditorsMixin:
                 status_item = QTableWidgetItem("○ Not found")
                 status_item.setForeground(QColor("#6c7086"))  # dim
             status_item.setTextAlignment(Qt.AlignCenter)
-            self._ed_table.setItem(row, 1, status_item)
+            self._ed_table.setItem(row, 2, status_item)
 
-            # Col 2: current registered path (or "(not registered)")
+            # Col 3: current registered path (or "(not registered)")
             current = current_registered_path(ed) if ed.installed else None
             if current:
                 path_item = QTableWidgetItem(current)
@@ -179,9 +225,9 @@ class EditorsMixin:
                     "(not registered)" if ed.installed else ""
                 )
                 path_item.setForeground(QColor(c["fg_muted"]))
-            self._ed_table.setItem(row, 2, path_item)
+            self._ed_table.setItem(row, 3, path_item)
 
-            # Col 3: Register button (disabled if editor not installed)
+            # Col 4: Register button (disabled if editor not installed)
             reg_btn = QPushButton("Register")
             reg_btn.setEnabled(ed.installed)
             reg_btn.setMinimumWidth(110)
@@ -190,15 +236,15 @@ class EditorsMixin:
                 f"Register VenvStudio's venv directory with {ed.name}."
             )
             reg_btn.clicked.connect(lambda _=None, e=ed: self._register_editor(e))
-            self._ed_table.setCellWidget(row, 3, reg_btn)
+            self._ed_table.setCellWidget(row, 4, reg_btn)
 
-            # Col 4: Unregister button
+            # Col 5: Unregister button
             unreg_btn = QPushButton("Unregister")
             unreg_btn.setEnabled(ed.installed and current is not None)
             unreg_btn.setObjectName("danger")
             unreg_btn.setMinimumWidth(110)
             unreg_btn.clicked.connect(lambda _=None, e=ed: self._unregister_editor(e))
-            self._ed_table.setCellWidget(row, 4, unreg_btn)
+            self._ed_table.setCellWidget(row, 5, unreg_btn)
 
     def _register_editor(self, editor):
         """Register with one editor."""
@@ -269,6 +315,19 @@ class EditorsMixin:
             QMessageBox.information(self, f"{editor.name} — Unregistered", result.message)
         else:
             QMessageBox.warning(self, f"{editor.name} — Failed", result.message)
+        self._refresh_editor_list()
+
+    def _set_default_editor(self, editor):
+        """Remember which editor VenvStudio should open files with."""
+        from PySide6.QtWidgets import QMessageBox
+        try:
+            self.config.set("default_editor", editor.id)
+            self.config.save()
+        except Exception as e:
+            QMessageBox.warning(
+                self, "Could not save",
+                f"The default editor setting could not be written:\n{e}")
+            return
         self._refresh_editor_list()
 
     def _register_all_editors(self):

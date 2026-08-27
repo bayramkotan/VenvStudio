@@ -485,9 +485,22 @@ class TopicCard(QFrame):
                 f"The snippet could not be saved before opening:\n{e}")
             return
 
+        # Honour the default chosen in Settings -> Editor Integration. Without
+        # this the first editor on PATH would win, which is no answer at all
+        # for someone who has three of them installed. (N45)
+        _pref = ""
+        try:
+            _cfg = getattr(self, "config", None)
+            if _cfg is None:
+                from src.core.config_manager import ConfigManager
+                _cfg = ConfigManager()
+            _pref = _cfg.get("default_editor", "") or ""
+        except Exception:
+            _pref = ""
+
         try:
             from src.core.editor_integration import open_file
-            ok, msg = open_file(_path)
+            ok, msg = open_file(_path, _pref)
         except Exception as e:
             ok, msg = False, str(e)
 

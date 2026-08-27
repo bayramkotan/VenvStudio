@@ -228,9 +228,13 @@ def resolve_editor_binary(editor_id: str = "") -> tuple:
 
     With no editor_id, the first editor that resolves wins, in EDITORS order.
     """
-    for entry in EDITORS:
-        if editor_id and entry.id != editor_id:
-            continue
+    # The preferred editor first, then anything else that resolves. Falling
+    # back matters: a user can pick a default and later uninstall it, and
+    # "nothing happens" would be a poor way to find that out. The caller says
+    # which editor actually opened, so the substitution is never silent.
+    _order = ([e for e in EDITORS if e.id == editor_id] +
+              [e for e in EDITORS if e.id != editor_id]) if editor_id else list(EDITORS)
+    for entry in _order:
         for name in entry.binary_names:
             found = shutil.which(name)
             if found:

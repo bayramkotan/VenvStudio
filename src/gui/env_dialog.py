@@ -444,7 +444,7 @@ class EnvCreateDialog(QDialog):
         self.tool_status_label.setStyleSheet("font-size: 11px; color: #f9e2af;")
         _ts_layout.addWidget(self.tool_status_label, 1)
 
-        self.tool_install_user_btn = QPushButton("Install for User")
+        self.tool_install_user_btn = QPushButton("Install")
         self.tool_install_user_btn.setObjectName("secondary")
         self.tool_install_user_btn.setFixedHeight(26)
         self.tool_install_user_btn.setFocusPolicy(Qt.NoFocus)
@@ -455,18 +455,12 @@ class EnvCreateDialog(QDialog):
             lambda: self._install_tool("user"))
         _ts_layout.addWidget(self.tool_install_user_btn)
 
-        self.tool_install_system_btn = QPushButton("Install for System 🔒")
-        self.tool_install_system_btn.setObjectName("secondary")
-        self.tool_install_system_btn.setFixedHeight(26)
-        self.tool_install_system_btn.setFocusPolicy(Qt.NoFocus)
-        self.tool_install_system_btn.setDefault(False)
-        self.tool_install_system_btn.setAutoDefault(False)
+        # N64: the "Install for System" button is gone -- the install is
+        # per-user either way, so offering the choice only invited a UAC
+        # prompt for nothing. Kept as a hidden placeholder so the code
+        # below that shows/hides/disables it needs no changes.
+        self.tool_install_system_btn = QPushButton("")
         self.tool_install_system_btn.setVisible(False)
-        self.tool_install_system_btn.setToolTip(
-            "Install system-wide — requires Administrator privileges")
-        self.tool_install_system_btn.clicked.connect(
-            lambda: self._install_tool("system"))
-        _ts_layout.addWidget(self.tool_install_system_btn)
 
         self.tool_status_widget.setVisible(False)
         left.addWidget(self.tool_status_widget)
@@ -824,11 +818,10 @@ class EnvCreateDialog(QDialog):
             self.tool_status_label.setText(f"⚠️ {env_type} not found")
             self.tool_status_label.setStyleSheet("font-size: 11px; color: #f9e2af;")
             if hasattr(self, "tool_install_user_btn"):
-                self.tool_install_user_btn.setText(f"Install {env_type} (User)")
+                self.tool_install_user_btn.setText(f"Install {env_type}")
                 self.tool_install_user_btn.setVisible(True)
             if hasattr(self, "tool_install_system_btn"):
-                self.tool_install_system_btn.setText(f"Install {env_type} (System 🔒)")
-                self.tool_install_system_btn.setVisible(True)
+                self.tool_install_system_btn.setVisible(False)   # N64
 
     @staticmethod
     def _find_tool_exe(tool: str) -> str:
@@ -915,7 +908,7 @@ class EnvCreateDialog(QDialog):
                 btn.setEnabled(False)
         if hasattr(self, "tool_status_label"):
             self.tool_status_label.setText(
-                f"⏳ Installing {env_type} ({'user' if scope == 'user' else 'system-wide'})...")
+                f"⏳ Installing {env_type} (user)...")
             self.tool_status_label.setStyleSheet("font-size: 11px; color: #89b4fa;")
 
         def _do_install(callback=None):
@@ -954,13 +947,12 @@ class EnvCreateDialog(QDialog):
 
             def _install_uv_linux(user_scope: bool):
                 """Install uv: pacman → pip --break-system-packages → curl installer."""
-                pm = _detect_pkg_manager() if '_detect_pkg_manager' in dir() else None
-                # 1. pacman (Arch/CachyOS) — avoids cross-device move error
-                if shutil.which("pacman"):
-                    r = subprocess.run(["sudo", "pacman", "-S", "--noconfirm", "uv"],
-                                       capture_output=True, text=True, timeout=120)
-                    if r.returncode == 0: return True, ""
-                # 2. pip --break-system-packages
+                # N64: the `sudo pacman -S uv` attempt is gone. A bare sudo
+                # from a GUI asks for a password on a TTY that does not
+                # exist, so it just blocks until the timeout -- and this is
+                # the USER install path, where admin has no business being.
+                # pip --user is the first and only try now; the curl
+                # installer below still covers the PEP 668 case.
                 r = subprocess.run([python_path, "-m", "pip", "install", "uv",
                                     "--break-system-packages", "--user", "-q"],
                                    capture_output=True, text=True, timeout=120)
@@ -1016,25 +1008,13 @@ class EnvCreateDialog(QDialog):
 
             def _install_pipx_linux(user_scope: bool):
                 """Install pipx via system package manager or pip --break-system-packages."""
-                pm = _detect_pkg_manager()
-                if pm == "apt":
-                    r = subprocess.run(["sudo", "apt", "install", "-y", "pipx"],
-                                       capture_output=True, text=True, timeout=120)
-                    if r.returncode == 0: return True, ""
-                elif pm == "pacman":
-                    # Arch/CachyOS/Manjaro — python-pipx is in official repos
-                    r = subprocess.run(["sudo", "pacman", "-S", "--noconfirm", "python-pipx"],
-                                       capture_output=True, text=True, timeout=120)
-                    if r.returncode == 0: return True, ""
-                elif pm == "dnf":
-                    r = subprocess.run(["sudo", "dnf", "install", "-y", "pipx"],
-                                       capture_output=True, text=True, timeout=120)
-                    if r.returncode == 0: return True, ""
-                elif pm == "zypper":
-                    r = subprocess.run(["sudo", "zypper", "install", "-y", "python3-pipx"],
-                                       capture_output=True, text=True, timeout=120)
-                    if r.returncode == 0: return True, ""
-                # Fallback: pip with --break-system-packages
+                # N64: the four `sudo apt/pacman/dnf/zypper` attempts are
+                # gone for the same reason as uv above -- a GUI cannot
+                # answer a sudo password prompt, so each one hung for its
+                # full 120s timeout before falling through to the line
+                # that actually worked. Users who want the distro package
+                # can install it with their package manager; VenvStudio
+                # installs per-user.
                 cmd = [python_path, "-m", "pip", "install", "pipx",
                        "--break-system-packages", "--user", "-q"]
                 r = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
@@ -1076,48 +1056,19 @@ class EnvCreateDialog(QDialog):
                     except Exception as e:
                         return False, str(e)
 
-            if scope == "system":
-                if sys.platform == "win32":
-                    try:
-                        import ctypes
-                        args = f'-m pip install {pkg} -q'
-                        ret = ctypes.windll.shell32.ShellExecuteW(
-                            None, "runas", python_path, args, None, 1)
-                        if ret <= 32:
-                            return False, f"UAC elevation failed (code {ret})"
-                        import time; time.sleep(4)
-                    except Exception as e:
-                        return False, f"UAC error: {e}"
-                else:
-                    # Linux/macOS system install
-                    if _is_externally_managed():
-                        # PEP 668 — use official installers
-                        if env_type == "uv":
-                            ok, err = _install_uv_linux(False)
-                            if not ok:
-                                return False, f"uv install failed: {err}"
-                        elif env_type == "poetry":
-                            ok, err = _install_poetry_linux(False)
-                            if not ok:
-                                return False, f"poetry install failed: {err}"
-                        elif env_type == "pipx":
-                            ok, err = _install_pipx_linux(False)
-                            if not ok:
-                                return False, f"pipx install failed: {err}"
-                        else:
-                            r = subprocess.run(
-                                ["sudo", python_path, "-m", "pip", "install", pkg,
-                                 "--break-system-packages", "-q"],
-                                **subprocess_args(capture_output=True, text=True, timeout=120))
-                            if r.returncode != 0:
-                                return False, (r.stderr or r.stdout or "install failed")[:200]
-                    else:
-                        r = subprocess.run(
-                            ["sudo", python_path, "-m", "pip", "install", pkg, "-q"],
-                            **subprocess_args(capture_output=True, text=True, timeout=120))
-                        if r.returncode != 0:
-                            return False, (r.stderr or r.stdout or "sudo install failed")[:200]
-            else:
+            # N64 (Bayram, 2026-08-26): system-scope installs are gone here too.
+            #
+            # The Toolchain Manager dropped them in v1.6.58, but this dialog
+            # kept its own copy of the same decision -- a second
+# "Install for System" button, its own UAC call, its own bare
+            # `sudo pip` and `sudo pacman/apt/dnf/zypper`. Bayram put it
+            # plainly: the install ends up local every time anyway, so asking
+            # for admin is pointless. And a bare `sudo` in a GUI asks for a
+            # password on a TTY that does not exist, which simply hangs.
+            #
+            # One decision, one place. `scope` is still accepted so callers
+            # need no change; it just no longer selects anything.
+            if True:
                 # User install
                 if sys.platform != "win32" and _is_externally_managed():
                     # PEP 668 — use official installers

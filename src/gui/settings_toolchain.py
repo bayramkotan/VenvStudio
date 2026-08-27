@@ -415,18 +415,62 @@ class ToolchainMixin:
     # Per-Python: pip | venv | uv | poetry | pipx | conda
     # ════════════════════════════════════════════════════════
 
+    # Order matters and is deliberate (Bayram, 2026-08-27): the three that come
+    # with Python or underpin everything else go first, in the order you meet
+    # them -- pip, venv, then Conda -- and the standalone managers follow
+    # alphabetically so a growing list stays predictable to scan.
+    #
+    # Row index is the link between this list, the cached rows and the table
+    # widget, so reordering here reorders all three. The cache stores a
+    # fingerprint of these IDs and drops itself when they change, so an old
+    # cache cannot paint yesterday's order over today's rows.
     _TC_TOOLS = [
         # (id,          pip_pkg,   label,    icon)
         ("pip",         "pip",     "pip",    "📦"),
         ("venv",        None,      "venv",   "🐍"),
-        ("hatch",       "hatch",   "Hatch",  "🏗️"),
         ("micromamba",  None,      "Conda",  "🦎"),
+        ("hatch",       "hatch",   "Hatch",  "🏗️"),
         ("pdm",         "pdm",     "PDM",    "📦"),
-        ("pixi",        None,      "Pixi",   "🌊"),  # pixi uses its own installer
         ("pipx",        "pipx",    "pipx",   "📦"),
+        ("pixi",        None,      "Pixi",   "🌊"),  # pixi uses its own installer
         ("poetry",      "poetry",  "Poetry", "📜"),
         ("uv",          "uv",      "uv",     "⚡"),
     ]
+
+    # N65 (Bayram, 2026-08-27): toolchain jobs run ONE AT A TIME.
+    #
+    # Clicking Install on several rows in a row started several workers at
+    # once, and Windows does not take kindly to it. From his log:
+    #     09:51:56  pip install pipx   (starts)
+    #     09:51:57  pip install poetry (starts -- while pipx is still writing)
+    #     09:52:09  pip install poetry -> PermissionError [WinError 5]
+    #     09:52:30  pip install poetry -> exit=0        (same command!)
+    #     09:52:41  pixi self-update   -> WinError 32, file in use
+    # Two pip processes writing the same site-packages, and pixi rewriting its
+    # own exe while another job held it open. The same command failing and then
+    # succeeding twenty seconds later is the signature of a race, not a bug in
+    # the command.
+    #
+    # A queue would be nicer, but these are user-initiated actions taking a few
+    # seconds each: telling the user to wait is honest and cannot itself go
+    # wrong. The flag is cleared in a `finally` so a crashing job cannot wedge
+    # the panel shut.
+    def _tc_begin_job(self, what: str = "operation") -> bool:
+        """True if this job may start; otherwise warn and return False."""
+        from PySide6.QtWidgets import QMessageBox
+        if getattr(self, "_tc_job_running", False):
+            QMessageBox.information(
+                None, "One at a Time",
+                f"Another toolchain {self._tc_job_name} is still running.\n\n"
+                f"Wait for it to finish before starting the {what}. Running two "
+                f"at once makes them fight over the same files.")
+            return False
+        self._tc_job_running = True
+        self._tc_job_name = what
+        return True
+
+    def _tc_end_job(self):
+        self._tc_job_running = False
 
     def _build_toolchain_ui(self, layout):
         from PySide6.QtWidgets import (
@@ -862,6 +906,32 @@ class ToolchainMixin:
     def _tc_find_tool(self, tool, py_exe):
         """Find tool exe for the GIVEN Python. Returns path or ''."""
         import os, sys, shutil
+
+        # N66 (Bayram, 2026-08-27): conda is resolved here too, not only in the
+        # scan loop. VenvStudio downloads its OWN micromamba and the table asks
+        # get_micromamba_exe() for it -- but this function knew nothing about
+        # that, so it answered "nothing found" for micromamba. The row showed
+        # version 2.6.2 with working buttons while Remove replied "micromamba
+        # has no executable in this environment". Two resolvers, two answers,
+        # for the third time this week. One resolver: everything that needs to
+        # know where a tool is comes through here.
+        if tool == "micromamba":
+            try:
+                from src.core.micromamba_installer import get_micromamba_exe
+                _mm = get_micromamba_exe()
+                if _mm and os.path.isfile(str(_mm)):
+                    _log.debug(f"[TC] find micromamba: bundled at {_mm}")
+                    return str(_mm)
+            except Exception:
+                pass
+            for _n in ("micromamba", "conda"):
+                _w = shutil.which(_n)
+                if _w:
+                    _log.debug(f"[TC] find micromamba: PATH copy at {_w}")
+                    return _w
+            _log.debug("[TC] find micromamba: nothing found")
+            return ""
+
         cands = []
 
         # N64 (2026-08-25): the PER-USER copy is preferred over the one in
@@ -1103,6 +1173,7 @@ class ToolchainMixin:
             return True, json.dumps({"py": py_exe, "rows": rows})
 
         def _done(ok, result):
+            self._tc_end_job()
             import json
             if not ok:
                 _log.warning(f"🧰 [TC] _done called with ok=False, result={result[:120]!r}")
@@ -1253,6 +1324,32 @@ class ToolchainMixin:
             if time.time() - _ts > 3600:
                 return None
             raw_rows = entry.get("rows", [])
+
+            # N67 (Bayram, 2026-08-27): a cached path is only worth anything
+            # while the file is still there.
+            #
+            # He removed Conda, the app crashed before it could refresh, and on
+            # the next start the table happily showed "Conda 2.6.2" from the
+            # hour-old cache -- while the binary was gone. Clicking Remove then
+            # answered "micromamba has no executable in this environment", which
+            # reads as nonsense next to a row displaying a version. The resolver
+            # was right and the table was stale.
+            #
+            # Anything the user does OUTSIDE VenvStudio -- uninstalling a tool
+            # in a terminal, a distro upgrade moving a binary -- lands us in the
+            # same spot, so this is not only about the crash. A handful of
+            # os.path.isfile calls is cheap next to re-running every tool's
+            # --version, which is what a full rescan costs.
+            try:
+                import os as _os_v
+                for _r in raw_rows:
+                    _p = _r[1] if entry.get("keyed", False) and len(_r) > 1 else (
+                        _r[0] if _r else "")
+                    if _p and not _os_v.path.isfile(_p):
+                        _log.debug(f"[TC] cache: {_p} is gone \u2014 rescanning")
+                        return None
+            except Exception:
+                return None
             is_keyed = entry.get("keyed", False)
             if is_keyed:
                 _id_to_row = {}
@@ -1341,6 +1438,7 @@ class ToolchainMixin:
         progress.show()
 
         def _done(ok, result):
+            self._tc_end_job()
             progress.close()
             if not ok:
                 QMessageBox.warning(
@@ -1381,6 +1479,8 @@ class ToolchainMixin:
                     f"You already have the latest version ({current_ver})."
                 )
 
+        if not self._tc_begin_job("install"):
+            return
         from src.gui.package_panel import WorkerThread
         w = WorkerThread(_do, parent=self); w.finished.connect(_done); w.start()
         if not hasattr(self, "_tc_ws"): self._tc_ws = []
@@ -1556,6 +1656,8 @@ class ToolchainMixin:
                     from PySide6.QtWidgets import QMessageBox
                     QMessageBox.warning(self, "Pixi Install Failed", result)
 
+            if not self._tc_begin_job("pixi install"):
+                return
             from src.gui.package_panel import WorkerThread
             w = WorkerThread(_do_pixi, parent=self)
             w.finished.connect(_on_pixi_done)
@@ -1701,6 +1803,7 @@ class ToolchainMixin:
             return True, "ok"
 
         def _done(ok, res):
+            self._tc_end_job()
             from PySide6.QtCore import QTimer
             from PySide6.QtGui import QColor
             from PySide6.QtWidgets import QMessageBox
@@ -1713,6 +1816,21 @@ class ToolchainMixin:
                 return
             QTimer.singleShot(500, lambda: self._tc_load_table(py_exe, force=True))
 
+        # Conda removal takes the whole toolchain down with it, so confirm
+        # first -- on the MAIN thread, where widgets are legal (N66).
+        if tool == "micromamba":
+            from PySide6.QtWidgets import QMessageBox as _QMB2
+            if _QMB2.warning(
+                    self, "Remove Conda (micromamba)",
+                    "This will remove the micromamba binary managed by "
+                    "VenvStudio.\n\n"
+                    "⚠️ Conda environments will no longer be accessible "
+                    "until you\nre-install micromamba via Toolchain "
+                    "Manager.\n\nProceed?",
+                    _QMB2.Yes | _QMB2.No, _QMB2.No) != _QMB2.Yes:
+                return
+        if not self._tc_begin_job("removal"):
+            return
         from src.gui.package_panel import WorkerThread
         w = WorkerThread(_do, parent=self); w.finished.connect(_done); w.start()
         if not hasattr(self, "_tc_ws"): self._tc_ws = []
@@ -1756,17 +1874,16 @@ class ToolchainMixin:
             if tool in ("pip", "venv"):
                 return False, f"{tool} cannot be removed — it is a core Python component"
             elif tool == "micromamba":
-                from PySide6.QtWidgets import QMessageBox
-                reply = QMessageBox.warning(
-                    self, "Remove Conda (micromamba)",
-                    "This will remove the micromamba binary managed by VenvStudio.\n\n"
-                    "⚠️ Conda environments will no longer be accessible until you\n"
-                    "re-install micromamba via Toolchain Manager.\n\n"
-                    "Proceed?",
-                    QMessageBox.Yes | QMessageBox.No, QMessageBox.No
-                )
-                if reply != QMessageBox.Yes:
-                    return False, "cancelled"
+                # N66: the confirmation used to be asked HERE, inside the
+                # worker thread. Qt only allows widgets on the main thread,
+                # so it produced
+                #   QObject::setParent: Cannot set parent, new parent is in
+                #   a different thread
+                # followed by an access violation that killed the process.
+                # It stayed hidden while micromamba resolved to nothing and
+                # the function returned before reaching this branch; making
+                # conda findable is what finally walked into it. The prompt
+                # now happens before the job starts (see _tc_uninstall).
                 try:
                     from src.core.micromamba_installer import get_micromamba_exe
                     _mamba_exe = get_micromamba_exe()
@@ -1777,7 +1894,12 @@ class ToolchainMixin:
                     if _mamba_dir and os.path.isdir(_mamba_dir):
                         import shutil as _sh
                         _sh.rmtree(_mamba_dir, ignore_errors=True)
-                    return True
+                    # Every other exit from _do returns (ok, message);
+                    # this one returned a bare True, so the worker died on
+                    #   TypeError: cannot unpack non-iterable bool object
+                    # It went unnoticed for as long as micromamba resolved
+                    # to nothing and this branch was never entered.
+                    return True, "Conda (micromamba) removed"
                 except Exception as e:
                     return False, str(e)
 
@@ -1879,6 +2001,7 @@ class ToolchainMixin:
             return True, f"{tool} removed successfully"
 
         def _done(ok, res):
+            self._tc_end_job()
             from PySide6.QtCore import QTimer
             from PySide6.QtGui import QColor
             from PySide6.QtWidgets import QMessageBox
@@ -1895,6 +2018,8 @@ class ToolchainMixin:
                 return
             QTimer.singleShot(300, lambda: self._tc_load_table(py_exe, force=True))
 
+        if not self._tc_begin_job("upgrade"):
+            return
         from src.gui.package_panel import WorkerThread
         w = WorkerThread(_do, parent=self); w.finished.connect(_done); w.start()
         if not hasattr(self, "_tc_ws"): self._tc_ws = []
@@ -1991,15 +2116,33 @@ class ToolchainMixin:
                 return True,str(p)
             except Exception as e: return False,str(e)
         def _done(ok,res):
-            si=tbl.item(row,1)
-            if not si: return
-            from PySide6.QtGui import QColor; from PySide6.QtWidgets import QTableWidgetItem
+            self._tc_end_job()
+            from PySide6.QtGui import QColor
+            from PySide6.QtCore import QTimer as _QT
             if ok:
-                si.setText("👤 User"); si.setForeground(QColor("#a6e3a1"))
-                pi=tbl.item(row,3)
-                if pi: pi.setText(res)
-            else:
+                # N67: rescan instead of hand-painting cells.
+                # This callback used to set only Status and Path, leaving
+                # Version at "—" and the button still reading Install --
+                # so a successful conda download looked like it had done
+                # nothing. Every other job in this file finishes by
+                # reloading the table, which fills all five columns and
+                # swaps the buttons; this one was the exception.
+                # Same source the rest of the panel uses for "which Python".
+                _py = ""
+                try:
+                    _py = self._tc_py_combo.currentData() or ""
+                except Exception:
+                    pass
+                if not _py:
+                    import sys as _sys5
+                    _py = _sys5.executable
+                _QT.singleShot(0, lambda: self._tc_load_table(_py, force=True))
+                return
+            si=tbl.item(row,1)
+            if si:
                 si.setText(f"❌ {res[:40]}"); si.setForeground(QColor("#f38ba8"))
+        if not self._tc_begin_job("operation"):
+            return
         from src.gui.package_panel import WorkerThread
         w=WorkerThread(_do, parent=self); w.finished.connect(_done); w.start()
         if not hasattr(self,"_tc_ws"): self._tc_ws=[]

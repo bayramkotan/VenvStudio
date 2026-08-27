@@ -745,6 +745,17 @@ class PackageMiscMixin:
         # leave the QTabWidget in an inconsistent state (previously the old
         # placeholder was removed first, then insertTab failed → duplicate
         # tabs accumulated on every retry).
+        # N70 (Bayram, 2026-08-27): time this. On two of his Windows machines the
+        # GUI locks up for ~25s during startup and the faulthandler dump lands
+        # here every time -- specifically on the insertTab line below, which is
+        # a Qt C++ call laying out whatever `creator()` just built. A third
+        # machine only feels sluggish, so the cost is real and merely amplified
+        # by the slower boxes rather than being a hang. Which tab, and whether
+        # the time goes into building the widget or into Qt laying it out, is
+        # exactly what nobody has measured -- so measure it before optimising
+        # anything.
+        import time as _t70
+        _t_build = _t70.perf_counter()
         try:
             widget = creator()
         except Exception as _ce:
@@ -773,8 +784,11 @@ class PackageMiscMixin:
         # Linux/Python 3.13 fires currentChanged on setCurrentIndex even when
         # the index does not actually change, which previously caused the
         # function to recurse until RecursionError.
+        _ms_build = (_t70.perf_counter() - _t_build) * 1000
+
         self._tab_built[key] = True
         _was_blocked = False
+        _t_insert = _t70.perf_counter()
         try:
             _was_blocked = self.tabs.blockSignals(True)
             self.tabs.removeTab(index)
@@ -793,6 +807,13 @@ class PackageMiscMixin:
         finally:
             try:
                 self.tabs.blockSignals(_was_blocked)
+            except Exception:
+                pass
+            try:
+                from src.utils.logger import get_logger as _gl70
+                _gl70("venvstudio.tabs").info(
+                    f"[Tabs] '{key}' built in {_ms_build:.0f} ms, "
+                    f"inserted in {(_t70.perf_counter() - _t_insert) * 1000:.0f} ms")
             except Exception:
                 pass
 

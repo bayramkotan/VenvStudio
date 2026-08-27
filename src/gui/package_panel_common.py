@@ -63,6 +63,36 @@ class _EnvSizeWorker(QThread):
             self.done.emit(self._venv_path_str, "")
 
 
+# N71 (Bayram, 2026-08-27): keep a reference to every running worker.
+#
+# A QThread whose last Python reference disappears while it is still running
+# gets its C++ object deleted underneath Qt, which answers with
+#     QThread: Destroyed while thread '' is still running
+#     Fatal Python error: Aborted (core dumped)
+# and takes the whole application down. He hit it on Linux right after
+# "Environment 'ml' is ready!".
+#
+# env_dialog.py creates three workers with no Qt parent -- one of them into a
+# plain local (`_w = WorkerThread(_do_install)`), the others onto the dialog,
+# which is destroyed as soon as it closes. MainWindow.closeEvent already parks
+# orphaned workers, but it finds them with findChildren(), so a parentless
+# thread is invisible to it.
+#
+# Rather than patch twenty call sites and hope the next one remembers, the
+# class keeps its own registry: a worker is retained while it runs and dropped
+# once it has finished. Threads that DO have a Qt parent are unaffected by this
+# -- their parent still owns them -- so nothing here changes their lifetime.
+_LIVE_WORKERS = []
+
+
+def _is_alive(w) -> bool:
+    """True while a worker is still running; False once it stopped or died."""
+    try:
+        return bool(w.isRunning())
+    except RuntimeError:
+        return False        # C++ side already gone
+
+
 class WorkerThread(QThread):
     """Worker thread with cancel support."""
     finished = Signal(bool, str)
@@ -78,6 +108,14 @@ class WorkerThread(QThread):
         self.args = args
         self.kwargs = kwargs
         self._cancelled = False
+        # Retain self, and let go of workers that have already stopped. Pruning
+        # here (rather than on a signal) avoids relying on QThread.finished,
+        # which this class shadows with its own `finished = Signal(bool, str)`.
+        try:
+            _LIVE_WORKERS[:] = [w for w in _LIVE_WORKERS if _is_alive(w)]
+            _LIVE_WORKERS.append(self)
+        except Exception:
+            pass
 
     def run(self):
         try:

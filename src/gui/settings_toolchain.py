@@ -1301,6 +1301,7 @@ class ToolchainMixin:
             cached = self._tc_cache_read(py_exe)
             if cached is not None:
                 self._tc_populate_table(py_exe, cached)
+                self._tc_note_scan_age(self._tc_cache_age(py_exe))
                 return
         import subprocess, sys
         from PySide6.QtGui import QColor
@@ -1397,7 +1398,10 @@ class ToolchainMixin:
             return True, json.dumps({"py": py_exe, "rows": rows})
 
         def _done(ok, result):
-            self._tc_end_job()
+            # NOT _tc_end_job() here: this scan never called _tc_begin_job,
+            # so clearing the flag would release a lock belonging to a real
+            # install/remove job still in flight. (My own slip -- the blanket
+            # edit that added the guard caught this handler too.)
             import json
             if not ok:
                 _log.warning(f"🧰 [TC] _done called with ok=False, result={result[:120]!r}")
@@ -1409,9 +1413,30 @@ class ToolchainMixin:
             except Exception as e:
                 _log.warning(f"🧰 [TC] JSON parse error: {e!r}, result={result[:120]!r}")
                 return
+
+            # N72 (Bayram, 2026-08-27): drop results for a Python that is no
+            # longer selected.
+            #
+            # A scan takes several seconds. Switch interpreter twice and two
+            # scans are in flight; whichever finished LAST used to win and
+            # paint its rows over the current selection, whatever the user was
+            # actually looking at. That is why switching Python "needed a few
+            # presses of Refresh" -- each press was another race, and one
+            # eventually came back in the right order.
+            try:
+                _want = self._tc_py_combo.currentData() or ""
+            except Exception:
+                _want = ""
+            if _want and os.path.normcase(_py) != os.path.normcase(_want):
+                _log.debug(f"[TC] discarding stale scan for {_py[:40]} "
+                           f"(selection is now {_want[:40]})")
+                self._tc_cache_write(_py, rows)   # still worth caching
+                return
+
             _log.debug(f"🧰 [TC] _done: {len(rows)} rows loaded for {_py[:40]}")
             self._tc_populate_table(_py, rows)
             self._tc_cache_write(_py, rows)
+            self._tc_note_scan_age(0)
 
         from src.gui.package_panel import WorkerThread
         w = WorkerThread(_do, parent=self); w.finished.connect(_done); w.start()
@@ -1556,6 +1581,39 @@ class ToolchainMixin:
             # Update action buttons
             self._tc_update_row_btns(tbl, row, ok2)
 
+    def _tc_cache_age(self, py_exe) -> float:
+        """Seconds since this Python's rows were scanned; 0 if unknown."""
+        import json, os, time
+        try:
+            with open(self._tc_cache_file(), "r", encoding="utf-8") as f:
+                entry = json.load(f).get(os.path.normcase(py_exe), {})
+            _ts = entry.get("ts", 0)
+            return max(0.0, time.time() - _ts) if _ts else 0.0
+        except Exception:
+            return 0.0
+
+    def _tc_note_scan_age(self, age_seconds: float):
+        """Say how old the displayed rows are.
+
+        N73: with the one-hour expiry gone the table can show data from days
+        ago, which is fine -- but only if the user can see that it is old.
+        Silent staleness is what made the Conda row claim version 2.6.2 for a
+        binary that had already been deleted.
+        """
+        note = getattr(self, "_tc_py_note", None)
+        if not note:
+            return
+        _base = note.text().split("   \u2022   Scanned")[0]
+        if age_seconds < 60:
+            _when = "just now"
+        elif age_seconds < 3600:
+            _when = f"{int(age_seconds // 60)} min ago"
+        elif age_seconds < 86400:
+            _when = f"{int(age_seconds // 3600)} h ago"
+        else:
+            _when = f"{int(age_seconds // 86400)} d ago"
+        note.setText(f"{_base}   \u2022   Scanned {_when} \u2014 press Refresh to rescan")
+
     def _tc_cache_file(self):
         """Path to the toolchain scan cache -- same VenvStudio config dir
         pattern already used elsewhere in this file (APPDATA/VenvStudio on
@@ -1572,9 +1630,26 @@ class ToolchainMixin:
         return os.path.join(base, "toolchain_cache.json")
 
     def _tc_cache_read(self, py_exe):
-        """Return cached (path, ver, display_path) rows for py_exe, or None
-        if this Python has never been scanned. Cache is invalidated automatically
-        when _TC_TOOLS changes or cache is older than 1 hour."""
+        """Return cached rows for py_exe, or None if a rescan is needed.
+
+        N73 (Bayram, 2026-08-27): the cache is now trusted until something
+        actually invalidates it. There are exactly three reasons to rescan:
+
+          1. this Python has never been scanned
+          2. the tool list (_TC_TOOLS) changed
+          3. a recorded executable is no longer on disk
+
+        ...plus the user pressing Refresh, and any install/upgrade/remove,
+        both of which call _tc_load_table(force=True) and rewrite the cache.
+
+        What went: a one-hour expiry that threw away a perfectly good answer
+        and re-ran nine `--version` subprocesses for nothing. Its purpose was
+        to notice changes made outside VenvStudio, but reason 3 already covers
+        a tool that disappeared, and the honest cost of the rest is that a
+        version number upgraded in a terminal stays stale until Refresh.
+        Bayram knows to press Refresh; he should not have to wait every hour
+        for a scan he did not ask for.
+        """
         import json, os, time
         try:
             fp = self._tc_cache_file()
@@ -1589,10 +1664,8 @@ class ToolchainMixin:
             entry = data.get(os.path.normcase(py_exe))
             if not entry:
                 return None
-            # TTL: invalidate if older than 1 hour
-            _ts = entry.get("ts", 0)
-            if time.time() - _ts > 3600:
-                return None
+            # No expiry -- see the docstring. `ts` is still written and is
+            # surfaced in the UI so stale data is visible, not silent.
             raw_rows = entry.get("rows", [])
 
             # N67 (Bayram, 2026-08-27): a cached path is only worth anything
@@ -1900,6 +1973,10 @@ class ToolchainMixin:
                     return False, r.stderr[:300] or r.stdout[:300]
 
             def _on_pixi_done(ok, result, _row=row, _tbl=tbl, _py=py_exe):
+                # Release the one-job-at-a-time flag. This handler was the
+                # only guarded job missing it, which would have left the
+                # panel refusing every later action after one pixi install.
+                self._tc_end_job()
                 from PySide6.QtCore import QTimer as _QTimer
                 # Invalidate cache so next open shows fresh state
                 try:

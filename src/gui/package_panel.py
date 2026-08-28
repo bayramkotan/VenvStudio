@@ -37,6 +37,7 @@ from src.utils.constants import (
 )
 from src.utils.i18n import tr
 from src.utils.platform_utils import get_platform, get_python_executable, subprocess_args, open_terminal_at
+from src.utils.platform_utils import fit_button_width as _fit_w
 
 from pathlib import Path
 import subprocess
@@ -357,9 +358,19 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
         )
         row1.addWidget(self.python_version_label)
 
-        self._env_bar_terminal_btn = QPushButton("🖥 Open Terminal")
+        # N74 (Bayram, 2026-08-28): the glyph and the width both differ by
+        # platform.
+        #
+        # U+1F5A5 renders as a tidy monochrome monitor in Segoe UI Symbol on
+        # Windows, but Noto Color Emoji draws it as a full-colour picture that
+        # sits oddly among monochrome controls -- and, being wider, it pushed
+        # the label out to "Open Termi". A terminal prompt reads the same
+        # everywhere and costs no font luck.
+        import sys as _sys74
+        _term_icon = "\U0001f5a5 " if _sys74.platform == "win32" else ">_ "
+        self._env_bar_terminal_btn = QPushButton(f"{_term_icon}Open Terminal")
         self._env_bar_terminal_btn.setObjectName("secondary")
-        self._env_bar_terminal_btn.setMinimumWidth(110)
+        _fit_w(self._env_bar_terminal_btn, 110)
         self._env_bar_terminal_btn.setToolTip(UI_TOOLTIPS.get("btn_open_terminal", "Open terminal with this environment activated"))
         self._env_bar_terminal_btn.clicked.connect(self._open_terminal_here)
         self._env_bar_terminal_btn.setEnabled(False)
@@ -401,7 +412,7 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
         # Move Up/Down buttons).
         self.env_cmd_copy_btn = QPushButton("Copy")
         self.env_cmd_copy_btn.setObjectName("secondary")
-        self.env_cmd_copy_btn.setFixedWidth(70)
+        _fit_w(self.env_cmd_copy_btn, 70)
         self.env_cmd_copy_btn.setToolTip("Copy this command")
         self.env_cmd_copy_btn.setVisible(False)
         self.env_cmd_copy_btn.clicked.connect(self._copy_env_cmd)
@@ -510,7 +521,7 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
 
         self.cancel_btn = QPushButton("⛔ Cancel")
         self.cancel_btn.setObjectName("danger")
-        self.cancel_btn.setFixedWidth(100)
+        _fit_w(self.cancel_btn, 100)
         self.cancel_btn.setVisible(False)
         self.cancel_btn.clicked.connect(self._cancel_operation)
         status_layout.addWidget(self.cancel_btn)

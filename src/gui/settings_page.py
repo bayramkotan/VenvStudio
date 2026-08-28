@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QThread
 from PySide6.QtGui import QFont, QColor
 from src.utils.platform_utils import find_system_pythons, get_platform, subprocess_args
+from src.utils.platform_utils import fit_button_width as _fit_w
 from src.utils.constants import APP_NAME, APP_VERSION
 from src.utils.i18n import tr
 import os, subprocess, shutil
@@ -689,13 +690,13 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
 
         browse_btn = QPushButton("Browse...")
         browse_btn.setObjectName("secondary")
-        browse_btn.setFixedWidth(100)
+        _fit_w(browse_btn, 100)
         browse_btn.clicked.connect(self._browse_venv_dir)
         venv_dir_layout.addWidget(browse_btn)
 
         reset_dir_btn = QPushButton("Reset")
         reset_dir_btn.setObjectName("secondary")
-        reset_dir_btn.setFixedWidth(70)
+        _fit_w(reset_dir_btn, 70)
         reset_dir_btn.clicked.connect(self._reset_venv_dir)
         venv_dir_layout.addWidget(reset_dir_btn)
 
@@ -729,21 +730,21 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
 
         self._cache_browse_btn = QPushButton("Browse...")
         self._cache_browse_btn.setObjectName("secondary")
-        self._cache_browse_btn.setFixedWidth(100)
+        _fit_w(self._cache_browse_btn, 100)
         self._cache_browse_btn.setEnabled(False)
         self._cache_browse_btn.clicked.connect(self._browse_cache_dir)
         _cache_path_layout.addWidget(self._cache_browse_btn)
 
         self._cache_reset_btn = QPushButton("Reset")
         self._cache_reset_btn.setObjectName("secondary")
-        self._cache_reset_btn.setFixedWidth(70)
+        _fit_w(self._cache_reset_btn, 70)
         self._cache_reset_btn.setEnabled(False)
         self._cache_reset_btn.clicked.connect(self._reset_cache_dir)
         _cache_path_layout.addWidget(self._cache_reset_btn)
 
         self._cache_clear_btn = QPushButton("Clear Cache")
         self._cache_clear_btn.setObjectName("danger")
-        self._cache_clear_btn.setFixedWidth(130)
+        _fit_w(self._cache_clear_btn, 130)
         self._cache_clear_btn.setEnabled(False)
         self._cache_clear_btn.setToolTip("Delete all cached packages from the shared cache directory.")
         self._cache_clear_btn.clicked.connect(self._clear_cache_dir)
@@ -838,7 +839,8 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         ):
             _b = QPushButton(_txt)
             _b.setObjectName(_obj)
-            _b.setFixedWidth(_w)
+            # Keep the row even, but never below what the label needs.
+            _fit_w(_b, _w)
             _b.clicked.connect(_fn)
             _mirror_btns.addWidget(_b)
         _mirror_btns.addStretch()
@@ -906,13 +908,13 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
 
             browse_btn = QPushButton("Browse…")
             browse_btn.setObjectName("secondary")
-            browse_btn.setFixedWidth(90)
+            _fit_w(browse_btn, 90)
             browse_btn.setEnabled(False)
             row.addWidget(browse_btn)
 
             reset_btn = QPushButton("Reset")
             reset_btn.setObjectName("secondary")
-            reset_btn.setFixedWidth(65)
+            _fit_w(reset_btn, 65)
             reset_btn.setEnabled(False)
             row.addWidget(reset_btn)
 
@@ -1250,7 +1252,7 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         if _platform == "linux":
             _detect_btn = QPushButton("🔍 Detect")
             _detect_btn.setObjectName("secondary")
-            _detect_btn.setFixedWidth(90)
+            _fit_w(_detect_btn, 90)
             _detect_btn.clicked.connect(self._detect_terminals)
             terminal_row.addWidget(_detect_btn)
 

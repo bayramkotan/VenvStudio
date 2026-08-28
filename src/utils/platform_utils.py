@@ -119,6 +119,32 @@ def _project_dir_for_env(env_path, env_type: str):
     return None
 
 
+def fit_button_width(button, minimum: int = 0, padding: int = 10):
+    """Widen a button when its label needs more room than `minimum`.
+
+    N74 (Bayram, 2026-08-28): setFixedWidth pins a button to a number chosen
+    while looking at one machine. Those numbers were picked on Windows with
+    Segoe UI; on his CachyOS box Cantarell is wider and the same buttons read
+    "Detec", "Rese", "Browse..", "Open Termi". There are 38 setFixedWidth calls
+    in the GUI, so raising each number by hand only moves the problem to the
+    next font, the next translation, or the next label edit.
+
+    Qt already knows how wide the text is. Treat the old number as a FLOOR --
+    it keeps rows of buttons visually even, which is why the fixed widths were
+    there -- and let sizeHint win whenever the text genuinely needs more.
+    """
+    try:
+        needed = button.sizeHint().width() + padding
+        button.setMinimumWidth(max(int(minimum), int(needed)))
+    except Exception:
+        if minimum:
+            try:
+                button.setMinimumWidth(int(minimum))
+            except Exception:
+                pass
+    return button
+
+
 def get_platform() -> str:
     """Return normalized platform name."""
     system = platform.system().lower()

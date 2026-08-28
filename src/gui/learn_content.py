@@ -2700,6 +2700,36 @@ LEARN_CATEGORIES = [
                 "links": [("🌐 nicegui.io", "https://nicegui.io"), ("📖 Docs", "https://nicegui.io/documentation")],
             },
             {
+                "title": "Dash — How to Use",
+                "body": (
+                    "Dash turns Plotly figures into a web application. You describe the page as a tree of components in app.layout, then write callbacks saying which inputs feed which outputs — Dash wires up the browser side for you. It suits dashboards needing precise layout control and several interacting widgets, where Streamlit's rerun-everything model starts to fight you."
+                ),
+                "diagram": "  How a Dash app fits together\n\n  app.layout = html.Div([\n      dcc.Dropdown(id='city', options=[...]),\n      dcc.Graph(id='chart'),\n  ])\n\n  @callback(Output('chart', 'figure'),\n            Input('city', 'value'))\n  def redraw(city):\n      return px.line(df[df.city == city], x='date', y='temp')\n\n  app.run(debug=True)   ->  http://127.0.0.1:8050",
+                "tip": "Dash tips:\n  dcc.Graph            any Plotly figure\n  Input / Output / State  callback wiring\n  prevent_initial_call=True  skip the first fire\n  dcc.Store            state without a global\n  dash-bootstrap-components  ready-made layouts\n  Only the callback reruns — not the whole script",
+                "packages": ["dash", "plotly", "pandas"],
+                "links": [("🌐 dash.plotly.com", "https://dash.plotly.com"), ("📖 Docs", "https://dash.plotly.com/tutorial")],
+            },
+            {
+                "title": "Panel — How to Use",
+                "body": (
+                    "Panel builds dashboards from objects you already have — a Matplotlib figure, a Bokeh plot, a DataFrame — without asking you to commit to one plotting library. Mark a function with @pn.depends and its widgets become live controls. The same code runs inline in a Jupyter notebook and as a standalone server, which is why it suits turning exploratory work into something shareable."
+                ),
+                "diagram": "  From notebook to dashboard\n\n  import panel as pn\n  pn.extension()\n\n  slider = pn.widgets.IntSlider(name='Window', start=1, end=30)\n\n  @pn.depends(slider)\n  def plot(window):\n      return df.rolling(window).mean().plot()\n\n  pn.Column(slider, plot).servable()\n\n  In the notebook  ->  renders inline\n  panel serve app.py --show  ->  http://localhost:5006",
+                "tip": "Panel tips:\n  .servable()          marks what the server shows\n  pn.Row / pn.Column   layout\n  pn.bind(fn, widget)  newer than @pn.depends\n  pn.template.*        polished page templates\n  Built on Bokeh — Bokeh models work directly",
+                "packages": ["panel", "bokeh", "pandas"],
+                "links": [("🌐 panel.holoviz.org", "https://panel.holoviz.org"), ("📖 Docs", "https://panel.holoviz.org/getting_started/index.html")],
+            },
+            {
+                "title": "Voilà — How to Use",
+                "body": (
+                    "Voilà serves an existing notebook as a web page with the code hidden — readers see the widgets and output, not the cells. Nothing needs rewriting: if the notebook already uses ipywidgets, Voilà runs it and shows the result. It is the shortest path from a finished analysis to something a colleague can open in a browser."
+                ),
+                "diagram": "  A notebook, minus the code\n\n  notebook.ipynb\n    cell 1  import ipywidgets as w   (hidden)\n    cell 2  slider = w.IntSlider()   (hidden)\n    cell 3  display(slider, chart)   -> shown\n\n  voila notebook.ipynb\n    -> http://localhost:8866\n    -> widgets live, one kernel per visitor, no code visible",
+                "tip": "Voilà tips:\n  --template=lab       JupyterLab styling\n  --strip_sources=False  show the code after all\n  One kernel per visitor — watch memory\n  Widgets must be ipywidgets to stay interactive\n  Serve a directory to list several notebooks",
+                "packages": ["voila", "ipywidgets", "notebook"],
+                "links": [("🌐 voila.readthedocs.io", "https://voila.readthedocs.io"), ("📖 Docs", "https://voila.readthedocs.io/en/stable/using.html")],
+            },
+            {
                 "title": "Bokeh — How to Use",
                 "body": (
                     "Bokeh creates interactive plots that render in the browser — pan, zoom, hover tooltips, linked selections — all without writing JavaScript. Use it for standalone HTML charts, or run `bokeh serve` for a live app whose plots update from Python callbacks and streaming data."

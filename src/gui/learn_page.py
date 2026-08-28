@@ -834,6 +834,24 @@ class LearnPage(QWidget):
 
         self._switch_cat(0)
 
+    def open_topic(self, topic_title: str) -> bool:
+        """Open the Learn card for this exact topic title.
+
+        N46 (2026-08-27): a public entry point so a launcher card can send the
+        reader straight to the page about THAT app. The first version of this
+        opened the category instead, which left the reader in "Data & ML Apps"
+        having to find JupyterLab again -- Bayram's point exactly. _jump_to_topic
+        already switches category, expands the card and scrolls to it; this only
+        adds the "did it exist" answer, so a wrong title is reported rather than
+        silently doing nothing.
+        """
+        for cat in LEARN_CATEGORIES:
+            for topic in cat.get("topics", []):
+                if topic.get("title") == topic_title:
+                    self._jump_to_topic(topic_title)
+                    return True
+        return False
+
     def _switch_cat(self, idx: int):
         self._stack.setCurrentIndex(idx)
         for i, btn in enumerate(self._nav_btns):

@@ -20,6 +20,34 @@ from src.utils.constants import LAUNCHER_TOOLTIPS
 
 
 class LauncherUIMixin:
+    def _open_learn_topic(self, topic_title: str):
+        """Show the Learn page at the topic covering this app (N46).
+
+        This mixin lives on PackagePanel, which has no reference to the Learn
+        page or to the page switcher -- both belong to the main window. Rather
+        than thread a signal through for one button, ask Qt for the top-level
+        window and use its public surface, failing loudly if the shape is not
+        what we expect. A silent no-op here would be indistinguishable from a
+        broken mapping, and this session has spent enough time on buttons that
+        appear to do nothing.
+        """
+        import logging as _lg
+        _log46 = _lg.getLogger("venvstudio.gui.launcher")
+        try:
+            _win = self.window()
+            _page = getattr(_win, "learn_page", None)
+            if _page is None or not hasattr(_win, "_switch_page"):
+                _log46.warning(
+                    "[Launcher] Learn link: main window has no learn_page / "
+                    "_switch_page — cannot navigate")
+                return
+            _win._switch_page(3)
+            if not _page.open_topic(topic_title):
+                _log46.warning(
+                    f"[Launcher] Learn link: no topic titled {topic_title!r}")
+        except Exception as e:
+            _log46.warning(f"[Launcher] Learn link failed: {e!r}")
+
     """Mixin for PackagePanel: Launcher tab UI construction."""
 
     # ── Tab Builders ──
@@ -532,6 +560,61 @@ class LauncherUIMixin:
         desc.setToolTip(tooltip_text)
         layout.addWidget(desc)
 
+        # ── N46 (Bayram, 2026-08-27): Learn link ──────────────────────────
+        #
+        # N45 took the reader from a Learn snippet into an editor; this is the
+        # other direction. Someone looking at the JupyterLab card and wondering
+        # what it is has the answer one tab away, and no way to get there.
+        #
+        # The mapping is written out by hand below rather than matched on the
+        # app's name. Name matching has misfired twice in this session alone
+        # (pixi resolving to an unrelated program, the "jupyter" substring
+        # guard missing Voila), and here it would fail quietly: a renamed app
+        # would simply stop offering the link, with nothing to notice.
+        #
+        # Only apps with a genuine topic appear. An app with no entry gets no
+        # button -- better than a link that lands on something unrelated.
+        _LEARN_FOR_APP = {
+            # Fourteen of these have a topic written for them by name — the
+            # "— How to Use" series. Those are exact, not guesses.
+            "JupyterLab":         "JupyterLab — How to Use",
+            "Spyder IDE":         "Spyder IDE — How to Use",
+            "Streamlit":          "Streamlit — How to Use",
+            "Gradio":             "Gradio — How to Use",
+            "MLflow UI":          "MLflow — How to Use",
+            "TensorBoard":        "TensorBoard — How to Use",
+            "Marimo":             "Marimo — How to Use",
+            "Datasette":          "Datasette — How to Use",
+            "Ollama":             "Ollama — How to Use",
+            "Quarto":             "Quarto — How to Use",
+            "Shiny":              "Shiny — How to Use",
+            "NiceGUI":            "NiceGUI — How to Use",
+            "Bokeh":              "Bokeh — How to Use",
+            "Chainlit":           "Chainlit — How to Use",
+            "Dash":               "Dash — How to Use",
+            "Panel":              "Panel — How to Use",
+            "Voilà":            "Voilà — How to Use",
+
+            # The rest have no page of their own, so they point at the topic
+            # that actually covers them. Each of these titles was read out of
+            # learn_content.py, never invented.
+            "Jupyter Notebook":   "Jupyter Notebooks",
+            "IPython":            "Jupyter Notebooks",
+            "FastAPI":            "FastAPI — Modern Async APIs",
+            "Orange Data Mining": "Scikit-learn — Classical ML",
+
+            # Dash, Panel and Voilà had no page either, until Bayram pointed
+            # out that the answer was to WRITE one rather than to link
+            # sideways. Their topics now exist in learn_content.py.
+            #
+            # Still absent: R Console, RStudio, jamovi, JASP, DBeaver — none
+            # of them is a Python package, and Learn has nothing about them
+            # yet. A button landing on a loosely related page is worse than
+            # no button: the reader clicks expecting THIS app explained.
+        }
+
+        _learn_topic = _LEARN_FOR_APP.get(app_def["name"], "")
+
         # Links toggle — lazy load from JSON only on first click
         _app_name_for_links = app_def["name"]
         _link_defs = [
@@ -623,7 +706,26 @@ class LauncherUIMixin:
         _toggle_btn.clicked.connect(
             _make_lazy_toggle(_toggle_btn, _links_container, _app_name_for_links, _link_defs)
         )
+
+        # The Learn button sits beside the Links toggle rather than inside it:
+        # everything in that container opens a browser, this one stays in the
+        # application, and it should be visible without a click.
+        if _learn_topic:
+            _learn_btn = QPushButton("\U0001f4d6 Learn")
+            _learn_btn.setFixedHeight(19)
+            _learn_btn.setStyleSheet(
+                f"QPushButton {{ background: transparent; "
+                f"color: {self._c()['accent']}; border: none; font-size: 11px; "
+                f"padding: 0 6px; }}"
+                f"QPushButton:hover {{ text-decoration: underline; color: white; }}")
+            _learn_btn.setCursor(Qt.PointingHandCursor)
+            _learn_btn.setToolTip(
+                f"Open the Learn topic covering {app_def['name']}")
+            _learn_btn.clicked.connect(
+                lambda _=None, t=_learn_topic: self._open_learn_topic(t))
         _toggle_row.addWidget(_toggle_btn)
+        if _learn_topic:
+            _toggle_row.addWidget(_learn_btn)
         _toggle_row.addStretch()
         layout.addLayout(_toggle_row)
         layout.addWidget(_links_container)

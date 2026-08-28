@@ -119,6 +119,25 @@ def _project_dir_for_env(env_path, env_type: str):
     return None
 
 
+def terminal_icon() -> str:
+    """The glyph for every "Open Terminal" control, with its trailing space.
+
+    N75 (Bayram, 2026-08-28): there were THREE of these and all three differed
+    -- main_window.py used U+1F5A5, env_list.py's context menu used the same
+    codepoint plus VS16 (which asks for emoji presentation and renders
+    differently again), and package_panel.py had just been changed to ">_" for
+    Linux in v1.6.63. Bayram picked that last one and asked for it everywhere.
+
+    Copying the string to the other two would have left four places to keep in
+    step, so it lives here instead. The choice itself: U+1F5A5 is a tidy
+    monochrome monitor in Segoe UI Symbol, while Noto Color Emoji draws a
+    full-colour picture that sits oddly among monochrome controls and is wider
+    than the space allowed for it.
+    """
+    import sys as _s
+    return "\U0001f5a5 " if _s.platform == "win32" else ">_ "
+
+
 def fit_button_width(button, minimum: int = 0, padding: int = 10):
     """Widen a button when its label needs more room than `minimum`.
 

@@ -753,7 +753,10 @@ class EnvListMixin:
 
         menu.addSeparator()
 
-        a_terminal = QAction("🖥️ Open Terminal", self)
+        # N75: same glyph as the two buttons -- this one carried VS16,
+        # which asks for emoji presentation and renders differently again.
+        from src.utils.platform_utils import terminal_icon as _term_icon
+        a_terminal = QAction(f"{_term_icon()}Open Terminal", self)
         a_terminal.triggered.connect(self._open_terminal)
         menu.addAction(a_terminal)
 

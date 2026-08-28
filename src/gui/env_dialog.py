@@ -306,7 +306,10 @@ class EnvCreateDialog(QDialog):
         change_btn = QPushButton("Browse")
         change_btn.setObjectName("secondary")
         change_btn.setFixedHeight(28)
-        change_btn.setFixedWidth(80)
+        # N75: 80px was measured under Segoe UI; Cantarell needs more and
+        # the label came out as "Brows". Keep 80 as the floor.
+        from src.utils.platform_utils import fit_button_width as _fit_w
+        _fit_w(change_btn, 80)
         change_btn.setToolTip("Browse for a different folder")
         change_btn.setFocusPolicy(Qt.NoFocus)
         change_btn.setDefault(False)
@@ -327,6 +330,9 @@ class EnvCreateDialog(QDialog):
         self.recent_loc_btn.setDefault(False)
         self.recent_loc_btn.setAutoDefault(False)
         self.recent_loc_btn.clicked.connect(self._show_recent_locations_menu)
+        # No fixed width here, but the clock emoji is drawn wide by
+        # Noto Color Emoji and squeezed the label; ask for what it needs.
+        _fit_w(self.recent_loc_btn, 0)
         self._update_recent_loc_btn_visibility()
         loc_layout.addWidget(self.recent_loc_btn)
         form_layout.addRow("Location:", loc_layout)

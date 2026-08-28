@@ -623,7 +623,9 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         self.btn_manage_pkgs.setEnabled(False)
         action_layout.addWidget(self.btn_manage_pkgs)
 
-        self.btn_terminal = QPushButton(f"🖥 {tr('open_terminal')}")
+        # N75: one source for this glyph -- see platform_utils.terminal_icon
+        from src.utils.platform_utils import terminal_icon as _term_icon
+        self.btn_terminal = QPushButton(f"{_term_icon()}{tr('open_terminal')}")
         self.btn_terminal.setObjectName("secondary")
         self.btn_terminal.setToolTip(UI_TOOLTIPS.get("btn_terminal", ""))
         self.btn_terminal.clicked.connect(self._open_terminal)

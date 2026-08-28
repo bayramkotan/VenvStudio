@@ -366,9 +366,8 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
         # sits oddly among monochrome controls -- and, being wider, it pushed
         # the label out to "Open Termi". A terminal prompt reads the same
         # everywhere and costs no font luck.
-        import sys as _sys74
-        _term_icon = "\U0001f5a5 " if _sys74.platform == "win32" else ">_ "
-        self._env_bar_terminal_btn = QPushButton(f"{_term_icon}Open Terminal")
+        from src.utils.platform_utils import terminal_icon as _term_icon
+        self._env_bar_terminal_btn = QPushButton(f"{_term_icon()}Open Terminal")
         self._env_bar_terminal_btn.setObjectName("secondary")
         _fit_w(self._env_bar_terminal_btn, 110)
         self._env_bar_terminal_btn.setToolTip(UI_TOOLTIPS.get("btn_open_terminal", "Open terminal with this environment activated"))

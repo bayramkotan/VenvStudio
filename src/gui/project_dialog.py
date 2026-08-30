@@ -349,6 +349,21 @@ class NewProjectDialog(QDialog):
         # merely looking at this window leaves no folders behind.
         os.makedirs(os.path.dirname(_path) or ".", exist_ok=True)
 
+        # B39-a: record it in the command history like every other action.
+        #
+        # This was missing: the dialog logged the command to its own logger but
+        # never called banner_command, so Tools -> View Commands showed
+        # environments being created and never projects. The whole point of
+        # that window is that it answers "what did VenvStudio run?", and a
+        # gap in it is worse than a long list.
+        try:
+            from src.utils.logger import banner_command
+            banner_command(
+                " ".join(f'"{a}"' if " " in a else a for a in argv),
+                context=f"New project ({_tool})")
+        except Exception:
+            pass
+
         self._status.setText("Creating…")
         self._ok_btn.setEnabled(False)
         try:

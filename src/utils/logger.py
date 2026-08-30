@@ -441,6 +441,31 @@ def banner(title: str, style: str = "info", details: Optional[List[str]] = None,
 
     Cross-platform: uses Rich panel if available, otherwise ANSI box art.
     """
+    # N80 (Bayram, 2026-08-30): record every banner in the LOG FILE.
+    #
+    # The docstring below has always claimed "if a `logger` is passed, the
+    # banner is also recorded at INFO level", and the parameter has always been
+    # accepted -- but nothing in this function ever used it. Every banner went
+    # to the console and nowhere else, so the log file never showed the
+    # commands, which is the one thing this application most wants to be able
+    # to show you afterwards.
+    #
+    # It sits HERE, before the Rich and ANSI branches, because the Rich branch
+    # returns early -- putting it at the end of the function would have left it
+    # unreachable on any machine where Rich is installed.
+    #
+    # Falling back to the module logger rather than requiring one: not a single
+    # caller passes it, and asking twenty call sites to remember an argument is
+    # how the parameter came to be ignored in the first place.
+    try:
+        _lg80 = logger or logging.getLogger("venvstudio")
+        _parts80 = [str(title)] + [str(d) for d in (details or [])]
+        if bold_extra:
+            _parts80.append(str(bold_extra))
+        _lg80.info(" | ".join(x.strip() for x in _parts80 if str(x).strip()))
+    except Exception:
+        pass
+
     style_config = {
         "welcome": {"color": "br_cyan",    "icon": "🐍", "rich_style": "bold cyan"},
         "start":   {"color": "br_cyan",    "icon": "🚀", "rich_style": "bold cyan"},
@@ -682,6 +707,63 @@ def banner_command(command, context: str = "",
 # =====================================================================
 
 
+def install_qt_message_handler() -> bool:
+    """Route Qt's own warnings into the log, with a Python traceback.
+
+    N78 (Bayram, 2026-08-30): the warning
+
+        QFont::setPointSize: Point size <= 0 (-1), must be greater than 0
+
+    has outlived three attempts to find it by reading code. It goes to stderr
+    from Qt's C++ side, so it names no file and no line, and grepping for
+    setPointSize only finds the places somebody already fixed.
+
+    Qt will tell us where it comes from if we ask: this handler catches the
+    message as it is emitted and records the Python stack that was running at
+    that moment. The frame just below Qt's own is the widget responsible.
+
+    Only the font warning gets a traceback -- everything else Qt says is
+    logged as an ordinary line, so this does not turn every routine warning
+    into a wall of text.
+
+    Returns False when PySide6 is unavailable, so callers can carry on.
+    """
+    try:
+        from PySide6.QtCore import qInstallMessageHandler, QtMsgType
+    except Exception:
+        return False
+
+    _qt_log = logging.getLogger("venvstudio.qt")
+    _seen: set = set()
+
+    def _handler(mode, context, message):
+        _lvl = {
+            QtMsgType.QtDebugMsg: logging.DEBUG,
+            QtMsgType.QtInfoMsg: logging.INFO,
+            QtMsgType.QtWarningMsg: logging.WARNING,
+            QtMsgType.QtCriticalMsg: logging.ERROR,
+            QtMsgType.QtFatalMsg: logging.CRITICAL,
+        }.get(mode, logging.WARNING)
+
+        if "setPointSize" in message or "setPixelSize" in message:
+            import traceback
+            stack = "".join(traceback.format_stack()[:-1])
+            # One traceback per distinct call site: this fires repeatedly from
+            # the same widget and the log should stay readable.
+            key = stack[-400:]
+            if key not in _seen:
+                _seen.add(key)
+                _qt_log.warning(f"{message}\n--- Python stack ---\n{stack}")
+            else:
+                _qt_log.debug(message)
+            return
+
+        _qt_log.log(_lvl, message)
+
+    qInstallMessageHandler(_handler)
+    return True
+
+
 def setup_logging() -> logging.Logger:
     """
     Initialize the VenvStudio logging system.
@@ -799,6 +881,11 @@ def setup_logging() -> logging.Logger:
     # ── Install crash handlers ──
     _install_sys_excepthook(log_dir, logger)
     _install_threading_excepthook(logger)
+
+    # ── Qt's own messages, with a stack for the font warning (N78) ──
+    # Harmless if PySide6 is not importable yet; it returns False and the
+    # application carries on with Qt writing to stderr as before.
+    install_qt_message_handler()
 
     # ── Cleanup old crash logs ──
     _cleanup_old_crash_logs(log_dir, logger, max_age_days=30)

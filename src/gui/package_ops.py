@@ -630,6 +630,11 @@ class PackageOpsMixin:
         # already pipx-aware and handles per-app isolation correctly.
         _env_type = getattr(self, "_current_env_type", "venv")
 
+        # N76: the list the conflict check looks at. It starts as everything
+        # the user asked for and stays that way even after the filter below
+        # narrows `packages` down to what pip still has to fetch.
+        _conflict_check_list = list(packages)
+
         # Kurulu paketleri filtrele — sadece kurulu olmayanları kur
         if _env_type != "pipx":
             try:
@@ -649,6 +654,20 @@ class PackageOpsMixin:
                     QMessageBox.information(self, "Info", "All packages are already installed.")
                     return
                 packages = not_installed
+                # N76 (Bayram, 2026-08-28): keep the FULL list for the conflict
+                # check below.
+                #
+                # He installed one NLP preset into a fresh env and got a
+                # warning; installing a second preset into the same env gave
+                # none, and everything went in silently. The two presets share
+                # transformers, spacy and nltk -- already installed by then, so
+                # they were dropped here, and their rule violations left with
+                # them.
+                #
+                # Being installed is not the same as being compatible. It only
+                # means pip will not download it again: a package that needs
+                # Python >= 3.11 in a 3.10 env is still wrong, and the user
+                # asking for it a second time is exactly when to say so.
             except Exception:
                 pass  # Filtreleme başarısız olursa tüm paketlerle devam et
 
@@ -706,7 +725,8 @@ class PackageOpsMixin:
                 except Exception:
                     pass
 
-            for _pkg_spec in packages:
+            # The full requested set, not just what pip will fetch (N76).
+            for _pkg_spec in _conflict_check_list:
                 # Normalize: strip version spec, lowercase, dash→underscore
                 _pkg_raw  = _re_cf.split(r'[><=!~;]', _pkg_spec)[0].strip()
                 _pkg_key  = _pkg_raw.lower().replace("_", "-")

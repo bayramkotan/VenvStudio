@@ -558,24 +558,81 @@ def banner_warning(title: str, details: Optional[List[str]] = None,
     banner(title, "warning", details, logger)
 
 
-# Commands run this session, newest last. Kept in memory only: the rotating
-# file log already holds the permanent record, and this list exists so the
-# Command History window can show them as discrete, copyable rows rather than
-# text the user has to hunt for. Capped so a long session cannot grow it
-# without bound.
+# Commands run, newest last, kept ACROSS sessions.
+#
+# N77 (Bayram, 2026-08-28): this used to be memory-only, on the reasoning that
+# the rotating file log already held the permanent record. That reasoning was
+# wrong in practice: the log interleaves commands with cache lines and progress
+# output, which is the very thing this window exists to avoid -- so "it is in
+# the log" meant "go and hunt for it", and closing VenvStudio threw away the
+# readable copy.
+#
+# It is now mirrored to a small JSON file. The cap stays at 500: this is a
+# record to read back, not an archive, and an unbounded file would grow for
+# years and be read at every startup.
 _COMMAND_HISTORY: List[dict] = []
 _COMMAND_HISTORY_MAX = 500
+_COMMAND_HISTORY_LOADED = False
+
+
+def _command_history_file():
+    """Where the history lives. Beside the config, not the logs: the log
+    directory is rotated and pruned, and this should survive that."""
+    from src.utils.platform_utils import get_config_dir
+    return Path(get_config_dir()) / "command_history.json"
+
+
+def _load_command_history() -> None:
+    """Read the stored history once, on first access."""
+    global _COMMAND_HISTORY_LOADED
+    if _COMMAND_HISTORY_LOADED:
+        return
+    _COMMAND_HISTORY_LOADED = True
+    try:
+        import json
+        fp = _command_history_file()
+        if not fp.is_file():
+            return
+        with open(fp, "r", encoding="utf-8") as fh:
+            data = json.load(fh)
+        if isinstance(data, list):
+            # Keep only well-formed entries -- a truncated write should cost
+            # the tail of the history, not the whole window.
+            _COMMAND_HISTORY.extend(
+                e for e in data
+                if isinstance(e, dict) and e.get("command"))
+            if len(_COMMAND_HISTORY) > _COMMAND_HISTORY_MAX:
+                del _COMMAND_HISTORY[:-_COMMAND_HISTORY_MAX]
+    except Exception:
+        pass        # A damaged file must never stop the application starting.
+
+
+def _save_command_history() -> None:
+    """Mirror the list to disk. Best-effort: never raises into the caller."""
+    try:
+        import json, os
+        fp = _command_history_file()
+        fp.parent.mkdir(parents=True, exist_ok=True)
+        tmp = str(fp) + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(_COMMAND_HISTORY, fh, ensure_ascii=False, indent=1)
+        os.replace(tmp, fp)     # atomic: a crash mid-write leaves the old file
+    except Exception:
+        pass
 
 
 def get_command_history() -> List[dict]:
-    """Commands recorded this session: {time, context, command}."""
+    """Every recorded command: {time, context, command}. Loads from disk once."""
+    _load_command_history()
     return list(_COMMAND_HISTORY)
 
 
 def clear_command_history() -> int:
     """Forget the recorded commands. Returns how many were dropped."""
+    _load_command_history()
     n = len(_COMMAND_HISTORY)
     _COMMAND_HISTORY.clear()
+    _save_command_history()
     return n
 
 
@@ -604,13 +661,17 @@ def banner_command(command, context: str = "",
     if not command:
         return
     import datetime as _dt_cmd
+    _load_command_history()
     _COMMAND_HISTORY.append({
-        "time": _dt_cmd.datetime.now().strftime("%H:%M:%S"),
+        # N77: the date matters now that entries outlive the session -- a bare
+        # "14:32:07" says nothing once yesterday's commands are in the list.
+        "time": _dt_cmd.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "context": context or "",
         "command": command,
     })
     if len(_COMMAND_HISTORY) > _COMMAND_HISTORY_MAX:
         del _COMMAND_HISTORY[:-_COMMAND_HISTORY_MAX]
+    _save_command_history()
 
     title = f"COMMAND — {context}" if context else "COMMAND"
     banner(title, "command", [command], logger, bold_extra=vs_equivalent or None)

@@ -6,7 +6,11 @@ and the log keeps them all, but the log interleaves them with cache lines and
 progress output. This window lists the commands on their own, one per row, so
 you can read back what a session actually did and copy any of them.
 
-Session-only: the rotating file log holds the permanent record.
+N77 (2026-08-28): the history now survives restarts -- it is mirrored to
+command_history.json beside the config. It used to be session-only on the
+grounds that the log file was the permanent record, but the log interleaves
+commands with cache and progress lines, which is exactly what this window
+exists to avoid. The last 500 are kept.
 """
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem,
@@ -18,11 +22,11 @@ from src.utils.logger import get_command_history, clear_command_history
 
 
 class CommandHistoryDialog(QDialog):
-    """Read-only list of the terminal commands run this session."""
+    """Read-only list of the terminal commands VenvStudio has run."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Command History — this session")
+        self.setWindowTitle("Command History")
         self.resize(980, 560)
         self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
 
@@ -94,7 +98,7 @@ class CommandHistoryDialog(QDialog):
         btn_clear = QPushButton("Clear")
         btn_clear.setObjectName("danger")
         btn_clear.setToolTip(
-            "Forget the commands listed here.\n"
+            "Forget the commands listed here, including earlier sessions.\n"
             "The log file keeps its own copy.")
         btn_clear.clicked.connect(self._clear)
         bottom.addWidget(btn_clear)
@@ -179,7 +183,8 @@ class CommandHistoryDialog(QDialog):
             return
         reply = QMessageBox.question(
             self, "Clear Command History",
-            f"Forget the {len(self._entries)} command(s) listed here?\n\n"
+            f"Forget the {len(self._entries)} command(s) listed here, "
+            f"including earlier sessions?\n\n"
             "The log file keeps its own copy, so nothing is lost.",
             QMessageBox.Yes | QMessageBox.No,
         )

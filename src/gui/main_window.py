@@ -80,19 +80,41 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         self.selected_env = None
         self._applying_theme = False  # Guard against re-entrant / screen-change crashes
 
-        self._setup_window()
-        self._setup_menubar()
-        self._setup_ui()
-        self._apply_theme()
+        # N78 (Bayram, 2026-08-30): time each startup step.
+        #
+        # On his other machines the window takes far longer to appear than here,
+        # and one log showed a 27-second gap with nothing written between the
+        # last tab being built and the environment list refreshing. Six calls
+        # sit in that gap and any of them could be the one; sync_cache_with_disk
+        # and ensure_pipx_env both touch the filesystem, and the pipx directory
+        # on that machine is 279 MB.
+        #
+        # Naming the slow step is the whole job here -- the earlier attempt at
+        # this measured tab construction, found it costs ~350 ms, and therefore
+        # ruled out the wrong suspect.
+        import time as _t78
+        _log78 = get_logger("venvstudio.startup")
+        _t_prev = _t78.perf_counter()
+
+        def _step(name):
+            nonlocal _t_prev
+            _now = _t78.perf_counter()
+            _log78.info(f"[Startup] {name}: {(_now - _t_prev) * 1000:.0f} ms")
+            _t_prev = _now
+
+        self._setup_window();       _step("_setup_window")
+        self._setup_menubar();      _step("_setup_menubar")
+        self._setup_ui();           _step("_setup_ui")
+        self._apply_theme();        _step("_apply_theme")
 
         # ── Screen change safety: re-apply theme when moving between monitors ──
-        self._connect_screen_changed()
+        self._connect_screen_changed(); _step("_connect_screen_changed")
 
-        self.venv_manager.sync_cache_with_disk()
-        self.venv_manager.ensure_pipx_env()
-        self._apply_linux_emoji_fix()
-        self._check_linux_venv_module()
-        self._refresh_env_list()
+        self.venv_manager.sync_cache_with_disk(); _step("sync_cache_with_disk")
+        self.venv_manager.ensure_pipx_env();      _step("ensure_pipx_env")
+        self._apply_linux_emoji_fix();            _step("_apply_linux_emoji_fix")
+        self._check_linux_venv_module();          _step("_check_linux_venv_module")
+        self._refresh_env_list();                 _step("_refresh_env_list")
 
         from PySide6.QtCore import QTimer
         QTimer.singleShot(300, self._open_default_env)

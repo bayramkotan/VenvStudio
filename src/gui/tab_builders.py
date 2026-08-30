@@ -550,7 +550,9 @@ class TabBuildersMixin:
         self.output_log = QTextEdit()
         self.output_log.setReadOnly(True)
         self.output_log.setMaximumHeight(200)
-        self.output_log.setPlaceholderText("Installation output will appear here...")
+        self.output_log.setPlaceholderText(
+            "Installation output appears here, and is kept for this "
+            "environment between sessions.")
         self.output_log.setStyleSheet(
             f"QTextEdit {{ background-color: {self._c()['card']}; color: {self._c()['fg']}; "
             f"font-family: 'Consolas', 'Courier New', monospace; font-size: {self._c()['fs_small']}px; "
@@ -565,6 +567,17 @@ class TabBuildersMixin:
         self._copy_log_btn.setFixedHeight(26)
         self._copy_log_btn.clicked.connect(self._copy_output_log)
         copy_log_row.addWidget(self._copy_log_btn)
+
+        # B31: the output is kept per environment and survives restarts,
+        # so there has to be a way to be rid of it.
+        self._clear_log_btn = QPushButton("🗑️ Clear History")
+        self._clear_log_btn.setObjectName("secondary")
+        self._clear_log_btn.setFixedHeight(26)
+        self._clear_log_btn.setToolTip(
+            "Forget the saved install output for this environment")
+        self._clear_log_btn.clicked.connect(self._clear_install_history)
+        copy_log_row.addWidget(self._clear_log_btn)
+
         copy_log_row.addStretch()
         layout.addLayout(copy_log_row)
 

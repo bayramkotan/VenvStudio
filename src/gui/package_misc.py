@@ -399,6 +399,13 @@ class PackageMiscMixin:
         # for, so it still clears busy immediately, right where it is.
         self._append_log(f"\n{'✅ Success' if success else '❌ Failed'}: {message[:500]}")
 
+        # B31: save the run AFTER the result line, so the history records
+        # how it ended and not just what pip printed along the way.
+        try:
+            self._log_run_end()
+        except Exception:
+            pass
+
         # Log for debugging (especially EXE/AppImage builds)
         try:
             from src.utils.logger import get_logger

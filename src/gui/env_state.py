@@ -114,6 +114,12 @@ class EnvStateMixin:
 
         self.pip_manager = PipManager(venv_path, backend=backend)
         self._current_venv_path = venv_path
+        # B31: show THIS environment's saved install output, not
+        # whatever the previous one printed.
+        try:
+            self._restore_install_log()
+        except Exception:
+            pass
         # Inject shared cache dir if enabled (pip/uv only)
         if self.pip_manager and self._current_env_type in ("venv", "uv"):
             try:
@@ -460,6 +466,11 @@ class EnvStateMixin:
                 backend = "pip"
 
             self.pip_manager = PipManager(venv_path, backend=backend)
+            # B31: same as the other construction site above.
+            try:
+                self._restore_install_log()
+            except Exception:
+                pass
             # B182 follow-up: remember the active backend so post-install
             # callbacks can refresh the env info bar without guessing.
             self._current_backend = backend

@@ -573,7 +573,8 @@ class PackageOpsMixin:
         self._show_command_hint("Apply Changes", " && ".join(cmds))
 
         self._set_busy(True)
-        self.output_log.clear()
+        # B31: keep what came before; mark the new run instead.
+        self._log_run_begin("Apply Changes")
 
         if to_uninstall:
             self.current_worker = self._make_uninstall_worker(to_uninstall)
@@ -924,7 +925,9 @@ class PackageOpsMixin:
     def _do_install(self, packages):
         """Actually start install worker (no confirm dialog)."""
         self._set_busy(True)
-        self.output_log.clear()
+        self._log_run_begin(
+            "Install " + ", ".join(str(x) for x in packages[:4])
+            + ("…" if len(packages) > 4 else ""))
 
         # ── Merkezi kurulum logu: env + kaynak (preset/uygulama) + paketler ──
         _env_name = ""

@@ -534,7 +534,18 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
         layout.addWidget(self.status_bar)
 
     def _append_log(self, text: str):
-        """Append colored HTML lines to output log."""
+        """Append colored HTML lines to output log.
+
+        B31: lines are also collected into `_log_run_lines`, so the run can be
+        written to the per-environment history when it finishes. Collecting
+        here rather than at the source means every producer is covered without
+        each having to remember.
+        """
+        if not hasattr(self, "_log_run_lines"):
+            self._log_run_lines = []
+        for _l in text.split("\n"):
+            self._log_run_lines.append(_l.rstrip())
+
         def _escape(s):
             """Simple HTML escape — avoids 'import html' which PyInstaller may exclude."""
             return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
@@ -563,6 +574,107 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
             else:
                 color = "#cdd6f4"
             self.output_log.append(f'<span style="color:{color};">{escaped}</span>')
+
+    # ── Manual Install history (B31) ──────────────────────────────────────
+
+    def _log_run_begin(self, title: str = ""):
+        """Start a new run: show a heading instead of wiping what came before.
+
+        The old code called output_log.clear() here. Bayram asked for the
+        opposite -- the previous runs are the useful part -- so earlier output
+        stays on screen with the new run marked off below it.
+        """
+        import datetime
+        self._log_run_lines = []
+        self._log_run_title = title or ""
+        _stamp = datetime.datetime.now().strftime("%H:%M:%S")
+        if self.output_log.toPlainText().strip():
+            self.output_log.append("")
+        self.output_log.append(
+            f'<span style="color:#6c7086;">'
+            f'──────── {_stamp}  {title} ────────</span>')
+
+    def _log_run_end(self):
+        """Store the finished run against the current environment."""
+        _lines = [l for l in getattr(self, "_log_run_lines", []) if l.strip()]
+        self._log_run_lines = []
+        if not _lines:
+            return
+        _env = self._current_env_path()
+        if not _env:
+            return
+        try:
+            from src.gui.install_history import add_run
+            add_run(_env, getattr(self, "_log_run_title", ""), _lines)
+        except Exception:
+            pass
+
+    def _current_env_path(self):
+        """The environment the panel is showing, or "" when there is none."""
+        try:
+            _pm = getattr(self, "pip_manager", None)
+            if _pm is not None and getattr(_pm, "venv_path", None):
+                return str(_pm.venv_path)
+        except Exception:
+            pass
+        return ""
+
+    def _restore_install_log(self):
+        """Redraw this environment's saved runs into the output pane.
+
+        Called when the selected environment changes, so switching to `nlp`
+        shows what happened in `nlp` rather than whatever `ml` printed a minute
+        ago.
+        """
+        if not hasattr(self, "output_log"):
+            return
+        _env = self._current_env_path()
+        self.output_log.clear()
+        if not _env:
+            return
+        try:
+            from src.gui.install_history import load_runs
+            runs = load_runs(_env)
+        except Exception:
+            runs = []
+        if not runs:
+            return
+        for run in runs:
+            self.output_log.append(
+                f'<span style="color:#6c7086;">'
+                f'──────── {run.get("time", "")}  {run.get("title", "")} '
+                f'────────</span>')
+            self._append_log("\n".join(run.get("lines", [])))
+        # Lines redrawn from history must not be saved back as a new run.
+        self._log_run_lines = []
+        self.output_log.append(
+            '<span style="color:#6c7086;">'
+            '──────── end of saved history ────────</span>')
+        _sb = self.output_log.verticalScrollBar()
+        _sb.setValue(_sb.maximum())
+
+    def _clear_install_history(self):
+        """Forget this environment's stored output, after asking."""
+        from PySide6.QtWidgets import QMessageBox
+        _env = self._current_env_path()
+        if not _env:
+            return
+        try:
+            from src.gui.install_history import load_runs, clear_env
+        except Exception:
+            return
+        _n = len(load_runs(_env))
+        if not _n:
+            self.output_log.clear()
+            return
+        if QMessageBox.question(
+                self, "Clear install history",
+                f"Forget the {_n} saved run(s) for this environment?\n\n"
+                f"The application log keeps its own copy.",
+                QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+            return
+        clear_env(_env)
+        self.output_log.clear()
 
     def _copy_output_log(self):
         """Copy output log content to clipboard."""

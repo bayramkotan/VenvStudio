@@ -20,6 +20,9 @@ from src.utils.i18n import tr
 from src.gui.package_ops import _check_pypi_wheel_availability
 
 
+import os as _os_pm      # N55: used by the Recent Projects menu
+
+
 class WindowMenuMixin:
     """Mixin for MainWindow: menu bar, desktop shortcuts, recent-envs menu."""
 
@@ -31,6 +34,22 @@ class WindowMenuMixin:
         new_env_action.setShortcut("Ctrl+N")
         new_env_action.triggered.connect(self._create_env)
         file_menu.addAction(new_env_action)
+
+        # N55/B26: File -> New Project... -- create a project skeleton with
+        # uv, poetry, hatch, pdm or pixi.
+        #
+        # It sits directly under New Environment because the two answer
+        # neighbouring questions, and above the separator for the same reason:
+        # both are things you make, where the entries below act on things that
+        # already exist. Environment first, since that is what most sessions
+        # start with.
+        new_proj_action = QAction("\U0001f4c1 New &Project…", self)
+        new_proj_action.setShortcut("Ctrl+Shift+N")
+        new_proj_action.setStatusTip(
+            "Create a project with uv, poetry, hatch, pdm or pixi")
+        new_proj_action.triggered.connect(self._new_project)
+        file_menu.addAction(new_proj_action)
+
         file_menu.addSeparator()
         # N11: File -> Install Launcher... -- pick an app, get a
         # recommended env type/Python version, install into a matching
@@ -44,9 +63,16 @@ class WindowMenuMixin:
         file_menu.addSeparator()
 
         # ── Recent Environments submenu ───────────────────────────────────
-        self._recent_menu = QMenu("🕐 Recent Environments", self)
+        self._recent_menu = QMenu("\U0001f550 Recent Environments", self)
         file_menu.addMenu(self._recent_menu)
         self._populate_recent_menu()
+
+        # N55: the same idea for projects. Sits directly under its environment
+        # counterpart because the two are the same gesture -- "take me back to
+        # the thing I was working on".
+        self._recent_proj_menu = QMenu("\U0001f4c1 Recent Projects", self)
+        file_menu.addMenu(self._recent_proj_menu)
+        self._populate_recent_projects_menu()
         file_menu.addSeparator()
         # ─────────────────────────────────────────────────────────────────
 
@@ -137,6 +163,56 @@ class WindowMenuMixin:
         help_menu.addAction(issues_action)
 
 
+
+    def _new_project(self):
+        """File -> New Project... (N55/B26).
+
+        VenvStudio has always made environments; poetry, hatch, pdm, pixi and uv
+        want a PROJECT, and derive the environment from it. Creating one used to
+        mean leaving for a terminal and coming back.
+
+        The dialog offers to open the finished project in a terminal, which is
+        usually the next thing anyone does -- `uv sync`, `poetry install`, and
+        so on. Declining leaves the project sitting on disk, ready.
+        """
+        from src.gui.project_dialog import NewProjectDialog
+
+        dlg = NewProjectDialog(self._c, config=self.config, parent=self)
+        # QDialog.Accepted is a class constant in PySide6, not an instance
+        # attribute -- dlg.Accepted raises AttributeError.
+        from PySide6.QtWidgets import QDialog as _QDialog
+        if dlg.exec() != _QDialog.Accepted or not dlg.created_path:
+            return
+
+        _path = dlg.created_path
+
+        # The new project is on the Recent Projects menu from here on.
+        try:
+            self._populate_recent_projects_menu()
+        except Exception:
+            pass
+
+        _box = QMessageBox(self)
+        _box.setIcon(QMessageBox.Information)
+        _box.setWindowTitle("Project created")
+        _box.setText(f"\u2705  {_os_pm.path.basename(_path)} is ready.")
+        _box.setInformativeText(
+            f"{_path}\n\n"
+            f"It is on the File \u2192 Recent Projects menu now.\n"
+            f"Open a terminal there to install its dependencies?")
+        _box.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        _box.setDefaultButton(QMessageBox.Yes)
+        _ask = _box.exec()
+        if _ask == QMessageBox.Yes:
+            try:
+                from src.utils.platform_utils import open_terminal_at
+                if not open_terminal_at(_path):
+                    QMessageBox.warning(
+                        self, "Terminal",
+                        "The project was created, but a terminal could not be "
+                        "opened there. Settings has a default-terminal option.")
+            except Exception as e:
+                QMessageBox.warning(self, "Terminal", f"{type(e).__name__}: {e}")
 
     def _show_command_history(self):
         """Open the command history window.
@@ -685,6 +761,115 @@ class WindowMenuMixin:
         clear_action = QAction("🗑️ Clear Recent List", self)
         clear_action.triggered.connect(self._clear_recent_envs)
         self._recent_menu.addAction(clear_action)
+
+    def _populate_recent_projects_menu(self):
+        """Rebuild the Recent Projects submenu from the config.
+
+        Projects are recorded by the New Project dialog rather than by a
+        manager class: unlike environments, VenvStudio does not own them after
+        creation -- the tool does -- so there is nothing to keep in sync beyond
+        the path.
+        """
+        self._recent_proj_menu.clear()
+        try:
+            entries = self.config.get("recent_projects", []) or []
+        except Exception:
+            entries = []
+
+        _live = [e for e in entries
+                 if isinstance(e, dict) and _os_pm.path.isdir(e.get("path", ""))]
+
+        if not _live:
+            empty_action = QAction("  (No recent projects)", self)
+            empty_action.setEnabled(False)
+            self._recent_proj_menu.addAction(empty_action)
+            return
+
+        _icons = {"uv": "\u26a1", "poetry": "\U0001f4dc", "hatch": "\U0001f423",
+                  "pdm": "\U0001f4e6", "pixi": "\U0001f9ea"}
+        for entry in _live:
+            name = entry.get("name", "?")
+            path = entry.get("path", "")
+            tool = entry.get("tool", "")
+            when = entry.get("created", "")
+            icon = _icons.get(tool, "\U0001f4c1")
+            label = f"{icon} {name}   \u2014   {when}"
+
+            # A submenu rather than a single action: opening a terminal is the
+            # likelier next step, but not the only one -- sometimes you just
+            # want to see the files. Guessing which would be wrong half the
+            # time, and the guess is cheap to avoid.
+            _sub = QMenu(label, self)
+            _sub.setToolTipsVisible(True)
+
+            _act_term = QAction("\U0001f4bb  Open Terminal", self)
+            _act_term.setToolTip(path)
+            _act_term.triggered.connect(
+                lambda checked=False, p=path: self._open_recent_project(p))
+            _sub.addAction(_act_term)
+
+            _act_dir = QAction("\U0001f4c2  Open Folder", self)
+            _act_dir.setToolTip(path)
+            _act_dir.triggered.connect(
+                lambda checked=False, p=path: self._open_project_folder(p))
+            _sub.addAction(_act_dir)
+
+            _sub.addSeparator()
+            _act_path = QAction(f"   {path}", self)
+            _act_path.setEnabled(False)
+            _sub.addAction(_act_path)
+
+            self._recent_proj_menu.addMenu(_sub)
+
+        self._recent_proj_menu.addSeparator()
+        clear_action = QAction("\U0001f5d1\ufe0f Clear Recent List", self)
+        clear_action.triggered.connect(self._clear_recent_projects)
+        self._recent_proj_menu.addAction(clear_action)
+
+    def _open_recent_project(self, path: str):
+        """Open a terminal in the project.
+
+        A project is not something VenvStudio displays -- it is a folder its
+        tool works in -- so the useful thing to do with one is to be there.
+        """
+        if not _os_pm.path.isdir(path):
+            QMessageBox.warning(
+                self, "Not there any more",
+                f"This project folder no longer exists:\n{path}")
+            self._populate_recent_projects_menu()
+            return
+        try:
+            from src.utils.platform_utils import open_terminal_at
+            if not open_terminal_at(path):
+                QMessageBox.warning(
+                    self, "Terminal",
+                    f"A terminal could not be opened at:\n{path}")
+        except Exception as e:
+            QMessageBox.warning(self, "Terminal", f"{type(e).__name__}: {e}")
+
+    def _open_project_folder(self, path: str):
+        """Show the project in the system file manager."""
+        if not _os_pm.path.isdir(path):
+            QMessageBox.warning(
+                self, "Not there any more",
+                f"This project folder no longer exists:\n{path}")
+            self._populate_recent_projects_menu()
+            return
+        try:
+            from src.utils.platform_utils import open_folder
+            ok, msg = open_folder(path)
+            if not ok:
+                QMessageBox.warning(self, "Open Folder", msg)
+        except Exception as e:
+            QMessageBox.warning(self, "Open Folder", f"{type(e).__name__}: {e}")
+
+    def _clear_recent_projects(self):
+        try:
+            self.config.set("recent_projects", [])
+            self.config.save()
+        except Exception:
+            pass
+        self._populate_recent_projects_menu()
 
     def _open_recent_env(self, name: str, path: str):
         """Select env in table by path; show Packages panel."""

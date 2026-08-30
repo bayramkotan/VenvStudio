@@ -431,7 +431,29 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         # Content Area
         self.stack = QStackedWidget()
         from src.gui.package_panel import PackagePanel
+        # N81 (Bayram, 2026-08-30): time the four pages separately.
+        #
+        # The per-step timing added in v1.6.64 narrowed the slow startup
+        # down to _setup_ui (5.8s on his Linux box) and cleared the two
+        # filesystem calls that had been the obvious suspects. But the
+        # launcher tab inside it costs 134 ms, so nearly six seconds go
+        # somewhere that measurement cannot see. Four pages are built here;
+        # one of them is the answer.
+        import time as _t81
+        _tui = _t81.perf_counter()
+
+        def _ui_step(name):
+            nonlocal _tui
+            _now = _t81.perf_counter()
+            try:
+                self._log.info(
+                    f"[Startup]   {name}: {(_now - _tui) * 1000:.0f} ms")
+            except Exception:
+                pass
+            _tui = _now
+
         self.package_panel = PackagePanel(config=self.config)
+        _ui_step("PackagePanel")
         # B182 follow-up: when a package / launch app / preset finishes
         # installing, refresh ONLY the current env's row (package count,
         # size, runtime) — don't kick off a full re-scan of every env on
@@ -450,10 +472,12 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         self.package_panel._ql_env_changed_callback = self._sync_ql_selector
         self.stack.addWidget(self.package_panel)             # Page 0
         self.stack.addWidget(self._create_env_page())       # Page 1
+        _ui_step("env page")
 
         # Settings page
         from src.gui.settings_page import SettingsPage
         self.settings_page = SettingsPage(self.config)
+        _ui_step("SettingsPage")
         self.settings_page.theme_changed.connect(self._on_theme_changed)
         self.settings_page.font_changed.connect(self._on_font_changed)
         self.settings_page.settings_saved.connect(self._on_settings_saved)
@@ -462,9 +486,11 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         # Learn page
         from src.gui.learn_page import LearnPage
         self.learn_page = LearnPage(self._c, config=self.config)
+        _ui_step("LearnPage")
         self.learn_page.install_packages_requested.connect(self._on_learn_install)
         self.learn_page.bookmark_changed.connect(self._refresh_bookmarks)
         self.stack.addWidget(self.learn_page)               # Page 3
+        _ui_step("rest of _setup_ui")
         # Load existing bookmarks into sidebar on startup
         from PySide6.QtCore import QTimer
         QTimer.singleShot(200, lambda: self._refresh_bookmarks(

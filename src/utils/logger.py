@@ -441,31 +441,6 @@ def banner(title: str, style: str = "info", details: Optional[List[str]] = None,
 
     Cross-platform: uses Rich panel if available, otherwise ANSI box art.
     """
-    # N80 (Bayram, 2026-08-30): record every banner in the LOG FILE.
-    #
-    # The docstring below has always claimed "if a `logger` is passed, the
-    # banner is also recorded at INFO level", and the parameter has always been
-    # accepted -- but nothing in this function ever used it. Every banner went
-    # to the console and nowhere else, so the log file never showed the
-    # commands, which is the one thing this application most wants to be able
-    # to show you afterwards.
-    #
-    # It sits HERE, before the Rich and ANSI branches, because the Rich branch
-    # returns early -- putting it at the end of the function would have left it
-    # unreachable on any machine where Rich is installed.
-    #
-    # Falling back to the module logger rather than requiring one: not a single
-    # caller passes it, and asking twenty call sites to remember an argument is
-    # how the parameter came to be ignored in the first place.
-    try:
-        _lg80 = logger or logging.getLogger("venvstudio")
-        _parts80 = [str(title)] + [str(d) for d in (details or [])]
-        if bold_extra:
-            _parts80.append(str(bold_extra))
-        _lg80.info(" | ".join(x.strip() for x in _parts80 if str(x).strip()))
-    except Exception:
-        pass
-
     style_config = {
         "welcome": {"color": "br_cyan",    "icon": "🐍", "rich_style": "bold cyan"},
         "start":   {"color": "br_cyan",    "icon": "🚀", "rich_style": "bold cyan"},

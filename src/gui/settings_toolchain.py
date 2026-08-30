@@ -424,6 +424,70 @@ class ToolchainMixin:
     # widget, so reordering here reorders all three. The cache stores a
     # fingerprint of these IDs and drops itself when they change, so an old
     # cache cannot paint yesterday's order over today's rows.
+    # N79 (Bayram, 2026-08-28): where to read about each tool.
+    #
+    # His words: "kullanici hatch, uv... nedir diye aramasin". The panel names
+    # nine tools and says nothing about what any of them is for, so anyone
+    # meeting hatch or pdm for the first time has to leave and search.
+    #
+    # Right-click rather than a column: the table already has five columns and
+    # a name cell is a QTableWidgetItem, which cannot hold a button. This costs
+    # no width and no layout change.
+    #
+    # venv gets one entry only -- it is part of the standard library, so there
+    # is no project site and no separate repository, and an empty "GitHub" row
+    # would be worse than its absence. The conda row points at mamba because
+    # that is what VenvStudio actually runs (v1.6.57 onwards); sending someone
+    # to Anaconda would describe a different program from the one installed.
+    _TC_LINKS = {
+        "pip": [
+            ("\U0001f310 pip.pypa.io", "https://pip.pypa.io"),
+            ("\U0001f4d6 Documentation", "https://pip.pypa.io/en/stable/"),
+            ("\U0001f419 GitHub", "https://github.com/pypa/pip"),
+        ],
+        "venv": [
+            ("\U0001f4d6 Python docs \u2014 venv",
+             "https://docs.python.org/3/library/venv.html"),
+        ],
+        "micromamba": [
+            ("\U0001f310 mamba.readthedocs.io", "https://mamba.readthedocs.io"),
+            ("\U0001f4d6 micromamba guide",
+             "https://mamba.readthedocs.io/en/latest/user_guide/micromamba.html"),
+            ("\U0001f419 GitHub", "https://github.com/mamba-org/mamba"),
+        ],
+        "hatch": [
+            ("\U0001f310 hatch.pypa.io", "https://hatch.pypa.io"),
+            ("\U0001f4d6 Documentation", "https://hatch.pypa.io/latest/"),
+            ("\U0001f419 GitHub", "https://github.com/pypa/hatch"),
+        ],
+        "pdm": [
+            ("\U0001f310 pdm-project.org", "https://pdm-project.org"),
+            ("\U0001f4d6 Documentation", "https://pdm-project.org/latest/"),
+            ("\U0001f419 GitHub", "https://github.com/pdm-project/pdm"),
+        ],
+        "pipx": [
+            ("\U0001f310 pipx.pypa.io", "https://pipx.pypa.io"),
+            ("\U0001f4d6 Documentation", "https://pipx.pypa.io/stable/"),
+            ("\U0001f419 GitHub", "https://github.com/pypa/pipx"),
+        ],
+        "pixi": [
+            ("\U0001f310 pixi.sh", "https://pixi.sh"),
+            ("\U0001f4d6 Documentation", "https://pixi.sh/latest/"),
+            ("\U0001f419 GitHub", "https://github.com/prefix-dev/pixi"),
+        ],
+        "poetry": [
+            ("\U0001f310 python-poetry.org", "https://python-poetry.org"),
+            ("\U0001f4d6 Documentation", "https://python-poetry.org/docs/"),
+            ("\U0001f419 GitHub", "https://github.com/python-poetry/poetry"),
+        ],
+        "uv": [
+            ("\U0001f310 docs.astral.sh/uv", "https://docs.astral.sh/uv/"),
+            ("\U0001f4d6 Getting started",
+             "https://docs.astral.sh/uv/getting-started/"),
+            ("\U0001f419 GitHub", "https://github.com/astral-sh/uv"),
+        ],
+    }
+
     _TC_TOOLS = [
         # (id,          pip_pkg,   label,    icon)
         ("pip",         "pip",     "pip",    "📦"),
@@ -455,6 +519,49 @@ class ToolchainMixin:
     # seconds each: telling the user to wait is honest and cannot itself go
     # wrong. The flag is cleared in a `finally` so a crashing job cannot wedge
     # the panel shut.
+    def _tc_show_links_menu(self, table, pos):
+        """Right-click a toolchain row for that tool's own documentation.
+
+        N79: the panel lists nine tools and explains none of them. Someone
+        meeting pdm or pixi here has no way from this table to what they are,
+        short of leaving and searching.
+        """
+        from PySide6.QtWidgets import QMenu
+        item = table.itemAt(pos)
+        if item is None:
+            return
+        _row = item.row()
+        _id_item = table.item(_row, 0)
+        _tid = (_id_item.data(Qt.UserRole) if _id_item else "") or ""
+        _links = self._TC_LINKS.get(_tid) or []
+        if not _links:
+            return
+
+        _label = (_id_item.text() if _id_item else _tid).strip()
+        menu = QMenu(self)
+        _title = menu.addAction(f"About {_label}")
+        _title.setEnabled(False)
+        menu.addSeparator()
+        for _text, _url in _links:
+            _act = menu.addAction(_text)
+            _act.setToolTip(_url)
+            _act.triggered.connect(
+                lambda checked=False, u=_url: self._tc_open_url(u))
+        menu.exec(table.viewport().mapToGlobal(pos))
+
+    @staticmethod
+    def _tc_open_url(url: str):
+        """Open a documentation link in the browser."""
+        try:
+            from src.utils.platform_utils import open_url
+            open_url(url)
+        except Exception:
+            try:
+                import webbrowser
+                webbrowser.open(url)
+            except Exception:
+                _log.warning(f"[TC] could not open {url}")
+
     @staticmethod
     def _tc_env_root(py_exe: str) -> str:
         """The <env> directory if py_exe belongs to one, otherwise "".
@@ -681,6 +788,9 @@ class ToolchainMixin:
         tbl.setSelectionMode(QAbstractItemView.NoSelection)
         tbl.setShowGrid(False)
         tbl.setAlternatingRowColors(True)
+        tbl.setContextMenuPolicy(Qt.CustomContextMenu)
+        tbl.customContextMenuRequested.connect(
+            lambda pos, _t=tbl: self._tc_show_links_menu(_t, pos))
         tbl.setStyleSheet(
             f"QTableWidget {{ font-size: {self._c()['fs_base']}px; }}"
             f"QTableWidget::item {{ padding: 4px 8px; }}"
@@ -689,6 +799,12 @@ class ToolchainMixin:
             tbl.setRowHeight(row, 42)
             name = QTableWidgetItem(f"{icon}  {lbl}")
             _f = QFont(tbl.font()); _f.setWeight(QFont.Medium); name.setFont(_f)
+            # N79: the row remembers which tool it is, so the context
+            # menu can find its links without re-deriving them from the
+            # visible label (which is "Conda" for micromamba).
+            name.setData(Qt.UserRole, tid)
+            if self._TC_LINKS.get(tid):
+                name.setToolTip(f"Right-click for {lbl} documentation")
             tbl.setItem(row, 0, name)
             for col in (1, 2, 3):
                 ph = QTableWidgetItem("—")

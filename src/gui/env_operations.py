@@ -341,6 +341,28 @@ class EnvOperationsMixin:
                     vm.invalidate_cache(real_path)
             except Exception as e:
                 self._log.warning(f"env_deleted: cache cleanup error: {e}")
+
+            # B31-a: drop this environment's saved Manual Install output too.
+            #
+            # Separate try from the cache cleanup above on purpose: a failure
+            # there must not skip this, and a failure here must not undo that.
+            # Without it the history file accumulates entries for environments
+            # that no longer exist, and an environment rebuilt under the same
+            # name would inherit the previous one's output -- which would read
+            # as its own history and be wrong in a quiet, believable way.
+            try:
+                from pathlib import Path as _P31
+                from src.gui.install_history import forget_env
+                # Derive the path again rather than reusing `real_path`:
+                # that name is bound inside the try above and would be
+                # undefined if the cache cleanup failed before reaching it.
+                real_path = (_P31(deleted_path) if deleted_path
+                             else self.venv_manager.base_dir / deleted_name)
+                forget_env(real_path)
+                self._log.debug(
+                    f"env_deleted: removed install history for {real_path}")
+            except Exception as e:
+                self._log.warning(f"env_deleted: install history cleanup: {e}")
             # Clear package panel launcher state
             if self.package_panel is not None:
                 self.package_panel._launcher_py_version_cache.clear()

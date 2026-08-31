@@ -584,6 +584,21 @@ class PythonMixin:
 
         scope_label = "User" if scope == "user" else "System"
 
+        # N82 (Bayram, 2026-08-30): show the terminal equivalent.
+        #
+        # Setting the default Python edits PATH, which is exactly the kind of
+        # change someone wants to be able to see, repeat and undo by hand --
+        # and it was recorded nowhere at all.
+        try:
+            from src.utils.logger import banner_command
+            _tgt = "User" if scope == "user" else "Machine"
+            banner_command(
+                f"[Environment]::SetEnvironmentVariable('Path', "
+                f"'{python_dir};{scripts_dir};' + $existing, '{_tgt}')",
+                context=f"Set {scope_label} default Python ({version})")
+        except Exception:
+            pass
+
         # Read both PATHs
         try:
             user_path = subprocess.run(

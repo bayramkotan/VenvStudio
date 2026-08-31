@@ -744,6 +744,21 @@ class AppearanceMixin:
                     ["update-alternatives", "--set", "python", python_path],
                 ]
 
+                # N82 (Bayram, 2026-08-30): show what is about to run.
+                #
+                # update-alternatives changes which python the whole system
+                # answers with -- among the most consequential things this
+                # application does, and it was recorded nowhere. Both lines
+                # are logged, since both are run.
+                try:
+                    from src.utils.logger import banner_command
+                    for _c in cmds:
+                        banner_command(
+                            "sudo " + " ".join(_c),
+                            context=f"Set default Python ({version})")
+                except Exception:
+                    pass
+
                 success = True
                 for cmd in cmds:
                     for sudo in [["pkexec"], ["sudo"]]:

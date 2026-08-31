@@ -463,6 +463,31 @@ def download_python(version_info: dict, progress_callback=None) -> Path:
             progress_callback(f"Removing stale install at {install_dir}...")
         shutil.rmtree(str(install_dir), ignore_errors=True)
 
+    # N82 (Bayram, 2026-08-30): show the terminal equivalent.
+    #
+    # Installing a Python version printed nothing to the log and nothing to
+    # Tools -> View Commands, so the one operation people are most likely to
+    # wonder about was the one the application explained least. That is the
+    # first pillar of this product inverted.
+    #
+    # There is no single shell command here -- this downloads an archive and
+    # unpacks it -- so the equivalent is spelled out as the two commands that
+    # would do the same thing by hand. It is honest about what happens rather
+    # than pretending a one-liner exists.
+    try:
+        from src.utils.logger import banner_command
+        _dest = get_pythons_dir()
+        if os.name == "nt":
+            _equiv = (f'curl -L -o "{filename}" {url}  &&  '
+                      f'tar -xf "{filename}" -C "{_dest}"')
+        else:
+            _equiv = (f'curl -L -o "/tmp/{filename}" {url} && '
+                      f'mkdir -p "{_dest}" && '
+                      f'tar -xf "/tmp/{filename}" -C "{_dest}"')
+        banner_command(_equiv, context=f"Install Python {version} ({mirror_id})")
+    except Exception:
+        pass
+
     if progress_callback:
         size_mb = total_size / (1024 * 1024) if total_size else 0
         size_str = f"{size_mb:.0f} MB" if size_mb else "size unknown"
@@ -632,6 +657,15 @@ def download_python(version_info: dict, progress_callback=None) -> Path:
 
 def remove_python(version_dir: Path, progress_callback=None) -> bool:
     """Remove an installed standalone Python."""
+
+    # N82: same reasoning as the install above.
+    try:
+        from src.utils.logger import banner_command
+        _cmd = (f'rmdir /s /q "{version_dir}"' if os.name == "nt"
+                else f'rm -rf "{version_dir}"')
+        banner_command(_cmd, context=f"Remove Python ({version_dir.name})")
+    except Exception:
+        pass
     if not version_dir.exists():
         return False
 

@@ -35,13 +35,22 @@ class LauncherUIMixin:
         _log46 = _lg.getLogger("venvstudio.gui.launcher")
         try:
             _win = self.window()
-            _page = getattr(_win, "learn_page", None)
-            if _page is None or not hasattr(_win, "_switch_page"):
+            if not hasattr(_win, "_switch_page"):
                 _log46.warning(
-                    "[Launcher] Learn link: main window has no learn_page / "
-                    "_switch_page — cannot navigate")
+                    "[Launcher] Learn link: main window has no _switch_page "
+                    "\u2014 cannot navigate")
                 return
+
+            # N83: switch FIRST, then read the page. Since v1.6.69 the Learn
+            # page is built on its first visit, so `learn_page` is None until
+            # _switch_page(3) has run -- reading it beforehand would find
+            # nothing and the button would do nothing at all.
             _win._switch_page(3)
+            _page = getattr(_win, "learn_page", None)
+            if _page is None:
+                _log46.warning(
+                    "[Launcher] Learn link: the Learn page did not build")
+                return
             if not _page.open_topic(topic_title):
                 _log46.warning(
                     f"[Launcher] Learn link: no topic titled {topic_title!r}")

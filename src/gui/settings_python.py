@@ -125,8 +125,19 @@ class PythonMixin:
         # Load custom presets
         self._load_custom_presets()
 
-        # Scan pythons
-        self._scan_pythons()
+        # N85 (Bayram, 2026-08-31): scan AFTER the page is on screen.
+        #
+        # _scan_pythons runs `<python> --version` for every interpreter it can
+        # find. That is most of the two seconds this page costs to build, and
+        # on his machine the subprocesses flashed up as little windows while
+        # everything sat frozen.
+        #
+        # Nothing here depends on the result: the table and the combo are
+        # already constructed and simply fill in a moment later. Deferring by a
+        # single tick lets the page appear first and be scanned second, which
+        # is the order the reader experiences it in anyway.
+        from PySide6.QtCore import QTimer as _QT85
+        _QT85.singleShot(0, self._scan_pythons)
 
         # Load custom categories
         self._load_custom_categories()

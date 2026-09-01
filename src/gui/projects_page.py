@@ -116,6 +116,24 @@ def find_project_env(project_dir, tool: str = "") -> str:
            (candidate / "Scripts" / "python.exe").is_file():
             return str(candidate)
 
+    # pdm can be configured for PEP 582, where there is no virtualenv at all:
+    # packages go into __pypackages__/<x.y>/lib and are found through
+    # PYTHONPATH. `pdm install` then succeeds while creating no .venv, which
+    # is why it reported success and VenvStudio found nothing.
+    #
+    # There is no interpreter to point at here, so the directory itself is
+    # returned; count_installed reads its site-packages layout, and the
+    # package panel is told about it rather than left guessing.
+    _pyp = d / "__pypackages__"
+    if _pyp.is_dir():
+        try:
+            _vers = sorted((x for x in _pyp.iterdir() if x.is_dir()),
+                           reverse=True)
+            if _vers:
+                return str(_vers[0])
+        except OSError:
+            pass
+
     if tool == "poetry":
         try:
             from src.utils.platform_utils import get_default_poetry_venvs_path
@@ -151,6 +169,73 @@ def find_project_env(project_dir, tool: str = "") -> str:
     return ""
 
 
+def ask_tool_for_env(project_dir, tool: str) -> str:
+    """Ask the tool itself where its environment is. Slow, and definitive.
+
+    The guesses above cover the common layouts, but a guess is not good enough
+    for someone who has to install packages into the thing: poetry hashes the
+    project's absolute path into its directory name, and no amount of matching
+    on the project's name will find it when the name and the folder differ, or
+    when two projects share a name.
+
+    Each tool will simply say, given the chance:
+
+        poetry env info --path
+        pdm venv --path in-project
+        hatch env find
+        pixi info --json
+
+    This runs a subprocess, which is why it is not on the refresh path -- it
+    is called once, when a project's environment could not be found, and the
+    answer is cached so it never runs for that project again.
+    """
+    import subprocess
+
+    # Verified against each tool's --help on 2026-09-01:
+    #   poetry env info -p/--path   "Only display the environment's path."
+    #   pdm venv --path PATH        "Show the path to the given virtualenv"
+    #   hatch env find [ENV_NAME]   "Locate environments."
+    _cmds = {
+        "poetry": ["poetry", "env", "info", "--path"],
+        "pdm":    ["pdm", "venv", "--path", "in-project"],
+        "hatch":  ["hatch", "env", "find"],
+    }
+    argv = _cmds.get(tool)
+    if not argv:
+        return ""
+
+    # Never by bare name -- three separate bugs in this codebase came from it.
+    try:
+        from src.core.tool_registry import ToolRegistry
+        _exe = ToolRegistry.find(argv[0])
+        if _exe:
+            argv = [str(_exe)] + argv[1:]
+    except Exception:
+        pass
+
+    try:
+        from src.utils.platform_utils import subprocess_args
+        _kw = subprocess_args()
+    except Exception:
+        _kw = {}
+
+    try:
+        _log.info(f"[Projects] asking {tool} for its env: {' '.join(argv)}")
+        r = subprocess.run(argv, cwd=str(project_dir), capture_output=True,
+                           text=True, timeout=30, **_kw)
+        _out = (r.stdout or "").strip().splitlines()
+        for line in _out:
+            line = line.strip()
+            if line and os.path.isdir(line):
+                _log.info(f"[Projects]   -> {line}")
+                return line
+    except subprocess.TimeoutExpired:
+        _log.warning(f"[Projects] {tool} did not answer within 30s")
+    except Exception as e:
+        _log.warning(f"[Projects] asking {tool} failed: {e!r}")
+    return ""
+
+
 def read_project_meta_name(project_dir) -> str:
     """The project's declared name, or the folder name if it declares none."""
     d = Path(project_dir)
@@ -176,13 +261,28 @@ def count_installed(env_path) -> int:
     if not env_path:
         return 0
     base = Path(env_path)
+    # `lib` (no python*/ level) is pdm's PEP 582 layout:
+    # __pypackages__/3.14/lib/<package>
     for site in (base.glob("lib/python*/site-packages"),
-                 [base / "Lib" / "site-packages"]):
+                 [base / "Lib" / "site-packages"],
+                 [base / "lib"]):
         for sp in site:
             if sp.is_dir():
                 try:
-                    return sum(1 for x in sp.iterdir()
-                               if x.name.endswith(".dist-info"))
+                    _n = sum(1 for x in sp.iterdir()
+                             if x.name.endswith(".dist-info"))
+                    if _n:
+                        return _n
+                    # pdm's PEP 582 tree may hold the packages without their
+                    # .dist-info directories, so fall back to counting the
+                    # importable entries: real directories and modules, minus
+                    # the bookkeeping ones.
+                    _skip = {"__pycache__", "bin", "Scripts", "_distutils_hack"}
+                    return sum(
+                        1 for x in sp.iterdir()
+                        if x.name not in _skip
+                        and not x.name.startswith((".", "_"))
+                        and (x.is_dir() or x.suffix == ".py"))
                 except OSError:
                     return 0
     return 0
@@ -333,8 +433,11 @@ class ProjectsPageMixin:
         self.projects_table.setHorizontalHeaderLabels(
             ["Project", "Tool", "Python", "Required", "Installed", "Location"])
         _h = self.projects_table.horizontalHeader()
-        _h.setSectionResizeMode(0, QHeaderView.Fixed)
-        self.projects_table.setColumnWidth(0, 240)
+        # 300, and resizable: "test_pdm_project-copy" was cut to
+        # "test_pdm_project-..." at 240, and a name you cannot read is the one
+        # column that has to be legible.
+        _h.setSectionResizeMode(0, QHeaderView.Interactive)
+        self.projects_table.setColumnWidth(0, 300)
         for _i, _w in ((1, 110), (2, 110), (3, 100), (4, 110)):
             _h.setSectionResizeMode(_i, QHeaderView.Fixed)
             self.projects_table.setColumnWidth(_i, _w)
@@ -466,6 +569,14 @@ class ProjectsPageMixin:
         _cell_font.setBold(True)
         for row, path in enumerate(paths):
             meta = read_project_meta(path)
+            # A path the tool told us about earlier counts too, so poetry and
+            # hatch projects stop showing a dash once they have been opened.
+            if not meta["has_env"]:
+                _cached = self._cached_env_for(path)
+                if _cached:
+                    meta["env_path"] = _cached
+                    meta["has_env"] = True
+                    meta["installed"] = count_installed(_cached)
             t.insertRow(row)
 
             _icon = self._TOOL_ICONS.get(meta["tool"], "\U0001f4c1")
@@ -547,13 +658,40 @@ class ProjectsPageMixin:
         # B43: the packages question, answered where the rest of the
         # application answers it. A project has an environment; that
         # environment has packages; VenvStudio already has a page for those.
-        _pkg = menu.addAction("\U0001f4e6  Packages\u2026",
-                              self._proj_open_packages)
-        _meta = read_project_meta(_path)
-        if not _meta["has_env"]:
-            _pkg.setEnabled(False)
-            _pkg.setToolTip(
-                "This project has no environment yet \u2014 run its tool first")
+        # Always enabled. Disabling it on `has_env` looked careful and was
+        # wrong: has_env only reflects the GUESS, so poetry and hatch projects
+        # -- the very ones that need the tool to be asked -- had the action
+        # greyed out, and the code that would have asked sits behind the click
+        # it could no longer receive. Clicking now either opens the packages,
+        # asks the tool, or explains what to run. All three beat a dead entry.
+        menu.addAction("\U0001f4e6  Packages\u2026", self._proj_open_packages)
+
+        # Offered on its own too, so "set this project up" does not have to be
+        # discovered by clicking something else first.
+        _meta_for_menu = read_project_meta(_path)
+        if not _meta_for_menu["has_env"] and \
+                not self._cached_env_for(_path) and \
+                _meta_for_menu["tool"] in self._ENV_CREATE:
+            _cmd = " ".join(self._ENV_CREATE[_meta_for_menu["tool"]])
+            _act = menu.addAction(
+                f"\u2699\ufe0f  Create Environment  ({_cmd})",
+                lambda: self._create_project_env(_path, _meta_for_menu))
+            if not _meta_for_menu.get("deps"):
+                # Offering it would produce nothing and say so afterwards.
+                _act.setEnabled(False)
+                _act.setToolTip(
+                    "This project declares no dependencies, so there is "
+                    "nothing to install yet")
+        # B43: adding a dependency is the thing a project is for, and the
+        # only command that does it correctly -- writing pyproject.toml AND
+        # installing -- is the tool's own `add`. pip would install the package
+        # and leave the project declaring nothing.
+        if _meta_for_menu["tool"] in self._ADD_CMD:
+            menu.addAction(
+                f"\u2795  Add Package\u2026  "
+                f"({' '.join(self._ADD_CMD[_meta_for_menu['tool']])} \u2026)",
+                lambda: self._proj_add_package(_path, _meta_for_menu))
+
         menu.addSeparator()
         menu.addAction("\U0001f4bb  Open Terminal", self._proj_open_terminal)
         menu.addAction("\U0001f4c2  Open Folder", self._proj_open_folder)
@@ -597,15 +735,40 @@ class ProjectsPageMixin:
         if not _path:
             return
         _meta = read_project_meta(_path)
-        _env = _meta.get("env_path", "")
+        _env = _meta.get("env_path", "") or self._cached_env_for(_path)
+
+        # Guessing covers uv, pdm and pixi, which keep the environment inside
+        # the project. Poetry and hatch do not, and poetry hashes the absolute
+        # path into the directory name -- so for those, ask the tool. Once.
+        # An empty dependency list means there is nothing for the tool to do,
+        # so asking it costs a subprocess to learn what pyproject.toml already
+        # said.
+        if not _env and _meta.get("deps") and \
+                _meta["tool"] in ("poetry", "hatch", "pdm"):
+            from PySide6.QtWidgets import QApplication
+            QApplication.setOverrideCursor(Qt.WaitCursor)
+            try:
+                _env = ask_tool_for_env(_path, _meta["tool"])
+            finally:
+                QApplication.restoreOverrideCursor()
+            if _env:
+                self._cache_env_for(_path, _env)
 
         if not _env:
-            QMessageBox.information(
-                self, "No environment yet",
-                f"{_meta['name']} has no environment.\n\n"
-                f"Run its tool first \u2014 `uv sync`, `poetry install` or "
-                f"`pdm install` \u2014 and its packages will appear here.")
-            return
+            # B43: create it here rather than telling the user to go and do it.
+            #
+            # The first version printed "run `poetry install` in the project
+            # folder" and Bayram's reply was the right one: why are we making
+            # the user run these? An application whose whole purpose is to keep
+            # people out of the terminal should not send them there for the one
+            # step that stands between them and the thing they asked for.
+            #
+            # It still ASKS first -- these commands download packages and can
+            # take minutes -- and it shows exactly what it will run, because
+            # that is the other half of the bargain.
+            _env = self._create_project_env(_path, _meta)
+            if not _env:
+                return
 
         _panel = getattr(self, "package_panel", None)
         if _panel is None:
@@ -614,7 +777,12 @@ class ProjectsPageMixin:
             return
 
         try:
-            _panel.set_venv(Path(_env))
+            # Tell the panel what it is looking at: the tool comes from
+            # pyproject.toml, which is better than anything the panel could
+            # infer from a directory called ".venv".
+            _panel.set_venv(Path(_env),
+                            env_type=_meta["tool"] or "venv",
+                            label=_meta["name"])
             self.selected_env = _meta["name"]
             self._switch_page(0)
             try:
@@ -626,6 +794,239 @@ class ProjectsPageMixin:
         except Exception as e:
             _log.warning(f"[Projects] could not open packages: {e!r}")
             QMessageBox.warning(self, "Packages", f"{type(e).__name__}: {e}")
+
+    _ADD_CMD = {
+        # Each tool's own way of adding a dependency: it edits pyproject.toml
+        # and installs in one step. `pip install` into the environment would
+        # do half the job and leave the project unable to describe itself.
+        "uv":     ["uv", "add"],
+        "poetry": ["poetry", "add"],
+        "pdm":    ["pdm", "add"],
+        "hatch":  ["hatch", "add"],
+        "pixi":   ["pixi", "add"],
+    }
+
+    _ENV_CREATE = {
+        # Verified against each tool's own documentation and --help output.
+        # These are the commands that resolve dependencies and build the
+        # environment; each is the one its own quickstart tells you to run.
+        "uv":     ["uv", "sync"],
+        "poetry": ["poetry", "install"],
+        "pdm":    ["pdm", "install"],
+        "hatch":  ["hatch", "env", "create"],
+        "pixi":   ["pixi", "install"],
+    }
+
+    def _proj_add_package(self, project_path, meta):
+        """Add a dependency with the project's own tool."""
+        from PySide6.QtWidgets import QInputDialog, QApplication
+        import subprocess
+
+        argv = list(self._ADD_CMD.get(meta.get("tool", ""), []))
+        if not argv:
+            return
+
+        pkgs, ok = QInputDialog.getText(
+            self, "Add Package",
+            f"Packages to add to {meta['name']}:\n\n"
+            f"    {' '.join(argv)} <packages>\n\n"
+            f"Separate several with spaces.")
+        if not ok or not pkgs.strip():
+            return
+        argv += pkgs.split()
+
+        try:
+            from src.core.tool_registry import ToolRegistry
+            _exe = ToolRegistry.find(argv[0])
+            if _exe:
+                argv = [str(_exe)] + argv[1:]
+        except Exception:
+            pass
+
+        try:
+            from src.utils.logger import banner_command
+            banner_command(" ".join(argv),
+                           context=f"Add packages ({meta['name']})")
+        except Exception:
+            pass
+
+        try:
+            from src.utils.platform_utils import subprocess_args
+            _kw = subprocess_args()
+        except Exception:
+            _kw = {}
+
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            _log.info(f"[Projects] {' '.join(argv)}")
+            r = subprocess.run(argv, cwd=str(project_path), capture_output=True,
+                               text=True, timeout=900, **_kw)
+            _log.info(f"[Projects]   -> exit={r.returncode}")
+        except Exception as e:
+            QApplication.restoreOverrideCursor()
+            QMessageBox.critical(self, "Failed", f"{type(e).__name__}: {e}")
+            return
+        finally:
+            try:
+                QApplication.restoreOverrideCursor()
+            except Exception:
+                pass
+
+        if r.returncode != 0:
+            _detail = (r.stderr or r.stdout or "").strip()
+            QMessageBox.warning(self, f"{argv[0]} failed",
+                                _detail[:1500] or f"exit code {r.returncode}")
+            return
+
+        # The environment usually appears with the first dependency.
+        _fresh = find_project_env(project_path, meta.get("tool", ""))
+        if _fresh:
+            self._cache_env_for(project_path, _fresh)
+        self._refresh_projects()
+        QMessageBox.information(
+            self, "Added",
+            f"\u2705  {pkgs.strip()}\n\nadded to {meta['name']} and written "
+            f"to its pyproject.toml.")
+
+    def _create_project_env(self, project_path, meta) -> str:
+        """Build the project's environment with its own tool. Returns the path.
+
+        Asks first: this downloads packages and can take minutes. Shows the
+        command it will run, for the same reason every other command in this
+        application is shown.
+        """
+        from PySide6.QtWidgets import QApplication
+        import subprocess
+
+        _tool = meta.get("tool", "")
+        argv = self._ENV_CREATE.get(_tool)
+        if not argv:
+            QMessageBox.information(
+                self, "No environment yet",
+                f"{meta['name']} has no environment, and VenvStudio does not "
+                f"know how to build one for a project with no recognised "
+                f"tool.\n\nRight-click \u2192 Open Terminal to do it by hand.")
+            return ""
+
+        if QMessageBox.question(
+                self, "Create the environment?",
+                f"{meta['name']} has no environment yet.\n\n"
+                f"VenvStudio can create it by running:\n\n"
+                f"    {' '.join(argv)}\n\n"
+                f"in {project_path}\n\n"
+                f"This downloads the project's dependencies and may take a "
+                f"few minutes. Continue?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes) != QMessageBox.Yes:
+            return ""
+
+        # Never by bare name -- three bugs in this codebase came from that.
+        try:
+            from src.core.tool_registry import ToolRegistry
+            _exe = ToolRegistry.find(argv[0])
+            if _exe:
+                argv = [str(_exe)] + argv[1:]
+        except Exception:
+            pass
+
+        try:
+            from src.utils.logger import banner_command
+            banner_command(" ".join(argv),
+                           context=f"Create environment ({meta['name']})")
+        except Exception:
+            pass
+
+        try:
+            from src.utils.platform_utils import subprocess_args
+            _kw = subprocess_args()
+        except Exception:
+            _kw = {}
+
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            _log.info(f"[Projects] creating env: {' '.join(argv)}")
+            r = subprocess.run(argv, cwd=str(project_path), capture_output=True,
+                               text=True, timeout=900, **_kw)
+            _log.info(f"[Projects]   -> exit={r.returncode}")
+        except subprocess.TimeoutExpired:
+            QApplication.restoreOverrideCursor()
+            QMessageBox.warning(
+                self, "Timed out",
+                f"{_tool} did not finish within fifteen minutes.\n\n"
+                f"Right-click \u2192 Open Terminal to run it there and watch "
+                f"the output.")
+            return ""
+        except Exception as e:
+            QApplication.restoreOverrideCursor()
+            QMessageBox.critical(self, "Failed", f"{type(e).__name__}: {e}")
+            return ""
+        finally:
+            try:
+                QApplication.restoreOverrideCursor()
+            except Exception:
+                pass
+
+        if r.returncode != 0:
+            _detail = (r.stderr or r.stdout or "").strip()
+            _log.warning(f"[Projects] env creation failed: {_detail[:400]}")
+            QMessageBox.warning(
+                self, f"{_tool} could not create the environment",
+                _detail[:1500] or f"{_tool} exited with code {r.returncode}.")
+            return ""
+
+        # Look again -- the tool has just made it, so the guess should find it
+        # now; if the tool keeps it elsewhere, ask the tool.
+        _fresh = find_project_env(project_path, _tool) or \
+            ask_tool_for_env(project_path, _tool)
+        if _fresh:
+            self._cache_env_for(project_path, _fresh)
+            self._refresh_projects()
+        else:
+            # B43: distinguish "made something we cannot find" from "had
+            # nothing to make". A project that declares no dependencies gives
+            # its tool nothing to install, so no environment appears -- the
+            # command succeeded and did nothing, which is correct. Reporting
+            # that as a failure sent Bayram round the same dialog repeatedly.
+            _log.info(
+                f"[Projects] {_tool} succeeded but no env exists "
+                f"(required={meta.get('deps', 0)})")
+            if not meta.get("deps"):
+                QMessageBox.information(
+                    self, "Nothing to install",
+                    f"{meta['name']} declares no dependencies, so {_tool} had "
+                    f"nothing to install and created no environment.\n\n"
+                    f"Add a dependency first \u2014 `{_tool} add requests`, "
+                    f"for example \u2014 and the environment will appear with "
+                    f"it.\n\nRight-click \u2192 Open Terminal opens the "
+                    f"project folder.")
+            else:
+                QMessageBox.information(
+                    self, "Created, but not found",
+                    f"{_tool} finished successfully, but VenvStudio could not "
+                    f"locate the environment it made.\n\nRight-click "
+                    f"\u2192 Open Terminal to look.")
+        return _fresh
+
+    def _cached_env_for(self, project_path) -> str:
+        """An environment path previously answered by the tool itself."""
+        try:
+            _m = self.config.get("project_envs", {}) or {}
+            _p = _m.get(os.path.normcase(str(project_path)), "")
+            return _p if _p and os.path.isdir(_p) else ""
+        except Exception:
+            return ""
+
+    def _cache_env_for(self, project_path, env_path):
+        """Remember it, so the tool is asked once and not on every refresh."""
+        try:
+            _m = self.config.get("project_envs", {}) or {}
+            if not isinstance(_m, dict):
+                _m = {}
+            _m[os.path.normcase(str(project_path))] = str(env_path)
+            self.config.set("project_envs", _m)
+            self.config.save()
+        except Exception as e:
+            _log.warning(f"[Projects] could not cache env path: {e!r}")
 
     def _proj_open_terminal(self):
         _path = self._selected_project_path()

@@ -21,7 +21,24 @@ from src.gui.package_panel_common import _EnvSizeWorker
 class EnvStateMixin:
     """Mixin for PackagePanel: environment state (set_venv, tab switching, selector, size calc)."""
 
-    def set_venv(self, venv_path: Path):
+    def set_venv(self, venv_path: Path, env_type: str = "", label: str = ""):
+        """Point the panel at an environment.
+
+        B43: `env_type` and `label` are for PROJECT environments, which have
+        neither of the two things this method normally relies on. There is no
+        `.venvstudio_env` marker -- VenvStudio did not create them, their tool
+        did -- and the path says nothing either: every uv, pdm and hatch
+        project keeps its environment in a directory called ".venv".
+
+        Without them a uv project was read as a plain venv and its packages
+        installed with pip, which puts them in the environment but leaves
+        pyproject.toml untouched -- the project would then declare no
+        dependency on something it needs.
+
+        `label` replaces the directory name in the header, so the strip reads
+        the project name rather than ".venv", which was true of every project
+        and identified none of them.
+        """
         # B175 perf fix: skip the entire reload if the same env is selected again.
         try:
             _prev = getattr(self, "_current_venv_path", None)
@@ -52,8 +69,14 @@ class EnvStateMixin:
 
         # Detect env type from marker FIRST — needed to choose backend
         self._current_env_type = "venv"  # default
+        # B43: a caller that already knows the type is believed. Only the
+        # Projects page passes this, and it read the tool out of
+        # pyproject.toml -- a better source than any guess from the path.
+        self._explicit_env_label = label or ""
+        if env_type:
+            self._current_env_type = env_type
         marker = venv_path / ".venvstudio_env"
-        if marker.exists():
+        if not env_type and marker.exists():
             try:
                 import json as _json
                 with open(marker) as f:
@@ -68,7 +91,7 @@ class EnvStateMixin:
                 )
             except Exception:
                 self._current_env_type = "system_tools"
-        else:
+        elif not env_type:
             # No marker — check if this is a poetry venv (inside pypoetry cache)
             _vp_str = str(venv_path).replace("\\", "/")
             if "pypoetry" in _vp_str and "virtualenvs" in _vp_str:
@@ -96,6 +119,16 @@ class EnvStateMixin:
             backend = "conda"
         elif self._current_env_type == "pipx":
             backend = "pipx"
+        # B43: pdm, hatch and pixi manage a project's dependencies with
+        # their own commands. Reaching them with pip installs the package
+        # but leaves pyproject.toml untouched, so the project ends up not
+        # declaring something it depends on.
+        elif self._current_env_type == "pdm":
+            backend = "pdm"
+        elif self._current_env_type == "hatch":
+            backend = "hatch"
+        elif self._current_env_type == "pixi":
+            backend = "pixi"
         elif self._current_env_type == "venv":
             # uv-trampoline fix: "venv" type had NO override here, so it
             # silently inherited the global `package_manager` config key.
@@ -114,12 +147,6 @@ class EnvStateMixin:
 
         self.pip_manager = PipManager(venv_path, backend=backend)
         self._current_venv_path = venv_path
-        # B31: show THIS environment's saved install output, not
-        # whatever the previous one printed.
-        try:
-            self._restore_install_log()
-        except Exception:
-            pass
         # Inject shared cache dir if enabled (pip/uv only)
         if self.pip_manager and self._current_env_type in ("venv", "uv"):
             try:
@@ -134,7 +161,10 @@ class EnvStateMixin:
         if hasattr(self, "_env_bar_terminal_btn"):
             self._env_bar_terminal_btn.setEnabled(True)
         # Select in dropdown
-        name = venv_path.name
+        # B43: a project environment is always called ".venv", which is
+        # true of every one of them and identifies none. When the caller
+        # supplies a label -- the project name -- show that instead.
+        name = getattr(self, "_explicit_env_label", "") or venv_path.name
         idx = self.env_selector.findData(str(venv_path))
         if idx < 0:
             self.env_selector.addItem(name, str(venv_path))
@@ -466,11 +496,6 @@ class EnvStateMixin:
                 backend = "pip"
 
             self.pip_manager = PipManager(venv_path, backend=backend)
-            # B31: same as the other construction site above.
-            try:
-                self._restore_install_log()
-            except Exception:
-                pass
             # B182 follow-up: remember the active backend so post-install
             # callbacks can refresh the env info bar without guessing.
             self._current_backend = backend

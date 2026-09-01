@@ -782,6 +782,8 @@ class LearnPage(QWidget):
 
         self._nav_btns = []
         self._stack = QStackedWidget()
+        # N85: which category panels have been filled in yet.
+        self._cat_built = []
 
         for i, cat in enumerate(LEARN_CATEGORIES):
             btn = QPushButton(f"  {cat['icon']}   {cat['title']}")
@@ -814,19 +816,23 @@ class LearnPage(QWidget):
             nav_layout.addWidget(btn)
             self._nav_btns.append(btn)
 
-            # Create category panel
+            # N85 (Bayram, 2026-08-31): a placeholder per category, filled on
+            # first visit.
+            #
+            # All twenty CategoryPanels used to be built here, each with every
+            # topic card inside it -- roughly 190 cards -- while the reader can
+            # only ever look at one category. That was 4.6 seconds of the
+            # startup, and moving the whole page behind a lazy build only moved
+            # the wait to the first click on Learn.
+            #
+            # Same shape as the tab and page builders elsewhere: an empty
+            # QScrollArea now, the real panel when _switch_cat first lands on
+            # it. Building one category costs a fraction of building twenty.
             panel = QScrollArea()
             panel.setWidgetResizable(True)
             panel.setStyleSheet("QScrollArea { border: none; background: transparent; }")
-            content = CategoryPanel(cat, c, bookmarks=self._bookmarks)
-            content.install_requested.connect(self.install_packages_requested)
-            content.bookmark_toggled.connect(self._on_bookmark_toggled)
-            inner = QWidget()
-            il = QVBoxLayout(inner)
-            il.setContentsMargins(24, 24, 24, 24)
-            il.addWidget(content)
-            panel.setWidget(inner)
             self._stack.addWidget(panel)
+            self._cat_built.append(False)
 
         nav_layout.addStretch()
         main.addWidget(nav_frame)
@@ -852,7 +858,31 @@ class LearnPage(QWidget):
                     return True
         return False
 
+    def _build_category(self, idx: int):
+        """Fill the placeholder for category `idx`, if it is still empty (N85)."""
+        if idx < 0 or idx >= len(self._cat_built) or self._cat_built[idx]:
+            return
+        self._cat_built[idx] = True
+        try:
+            cat = LEARN_CATEGORIES[idx]
+            panel = self._stack.widget(idx)
+            content = CategoryPanel(cat, self._c(), bookmarks=self._bookmarks)
+            content.install_requested.connect(self.install_packages_requested)
+            content.bookmark_toggled.connect(self._on_bookmark_toggled)
+            inner = QWidget()
+            il = QVBoxLayout(inner)
+            il.setContentsMargins(24, 24, 24, 24)
+            il.addWidget(content)
+            panel.setWidget(inner)
+        except Exception:
+            # Leave it marked built: retrying on every visit would give the
+            # reader a stutter instead of an empty panel they can navigate off.
+            import logging
+            logging.getLogger("venvstudio.learn").warning(
+                f"[Learn] category {idx} failed to build", exc_info=True)
+
     def _switch_cat(self, idx: int):
+        self._build_category(idx)
         self._stack.setCurrentIndex(idx)
         for i, btn in enumerate(self._nav_btns):
             btn.setChecked(i == idx)

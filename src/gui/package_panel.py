@@ -309,7 +309,11 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
         row1 = QHBoxLayout()
         row1.setSpacing(8)
 
+        # B45: the caption changes with what is selected. Calling a
+        # project "Environment:" is simply wrong, and the two are
+        # managed differently enough that the difference matters.
         env_lbl = QLabel(f"🐍 {tr('environment')}")
+        self.env_caption_label = env_lbl
         env_lbl.setStyleSheet(f"font-weight: bold; font-size: {self._c()['fs_base']}px;")
         row1.addWidget(env_lbl)
 
@@ -434,6 +438,10 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
 
         self.env_path_label = QLabel("")
         self.env_path_label.setStyleSheet(info_style)
+        # B45: no ENV/PROJECT badge here. The caption above the dropdown says
+        # "Project:" or "Environment:" already, and repeating it two
+        # centimetres below is the same fact twice -- Bayram's point when the
+        # caption started changing by itself.
         row2.addWidget(self.env_path_label)
 
         self._info_sep1 = QLabel("│")

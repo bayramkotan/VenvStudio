@@ -21,6 +21,40 @@ from src.gui.package_panel_common import _EnvSizeWorker
 class EnvStateMixin:
     """Mixin for PackagePanel: environment state (set_venv, tab switching, selector, size calc)."""
 
+    def _project_env_entries(self):
+        """(name, env_path) for every recorded project that has an environment.
+
+        B45: read from the same config the Projects page writes, so the two
+        views cannot disagree. Projects without an environment are left out --
+        there would be nothing to show if one were selected.
+        """
+        import os as _os45
+        try:
+            from src.gui.projects_page import read_project_meta
+            _entries = self.config.get("recent_projects", []) or []
+            _cached = self.config.get("project_envs", {}) or {}
+        except Exception:
+            return []
+
+        out = []
+        for _e in _entries:
+            if not isinstance(_e, dict):
+                continue
+            _path = _e.get("path", "")
+            if not _path or not _os45.path.isdir(_path):
+                continue
+            try:
+                _meta = read_project_meta(_path)
+                _env = _meta.get("env_path", "") or _cached.get(
+                    _os45.path.normcase(_path), "")
+            except Exception:
+                _env = _cached.get(_os45.path.normcase(_path), "")
+            if _env and _os45.path.isdir(_env):
+                out.append((_e.get("name") or _os45.path.basename(_path), _env))
+
+        out.sort(key=lambda x: str(x[0]).lower())
+        return out
+
     def set_venv(self, venv_path: Path, env_type: str = "", label: str = ""):
         """Point the panel at an environment.
 
@@ -389,8 +423,28 @@ class EnvStateMixin:
         current_data = self.env_selector.currentData()
         self.env_selector.clear()
         self.env_selector.addItem(tr("select_environment"), "")
-        for name, path in env_list:
+
+        # B45 (Bayram, 2026-09-01): environments above, projects below, with a
+        # line between them.
+        #
+        # Since v1.6.69 a project's environment can be opened here too, and it
+        # went into the same flat list -- so the dropdown mixed two different
+        # kinds of thing with no way to tell them apart, and a project only
+        # appeared once it had been opened from the Projects page.
+        #
+        # Both groups are sorted by name, since a list you scan should be in
+        # the order you would look things up in.
+        for name, path in sorted(env_list, key=lambda x: str(x[0]).lower()):
             self.env_selector.addItem(name, str(path))
+
+        try:
+            _projects = self._project_env_entries()
+        except Exception:
+            _projects = []
+        if _projects:
+            self.env_selector.insertSeparator(self.env_selector.count())
+            for _pname, _ppath in _projects:
+                self.env_selector.addItem(f"\U0001f5c2\ufe0f  {_pname}", _ppath)
 
         # Restore previous selection or auto-select first env
         restored = False
@@ -441,11 +495,40 @@ class EnvStateMixin:
     def _on_env_selector_changed(self, index):
         """Handle env dropdown change."""
         path_str = self.env_selector.currentData()
+
+        # B45: a project picked from the lower half of the list goes through
+        # set_venv, so it gets its tool and its name -- the two things this
+        # method cannot work out from a path called ".venv".
+        #
+        # Everything below is a second copy of set_venv's type detection, and
+        # this is why the badge would have been wrong: a project selected here
+        # would have been read as a plain venv. The copy stays for now, but a
+        # project takes the shorter road.
+        if path_str:
+            try:
+                for _pname, _ppath in self._project_env_entries():
+                    if str(_ppath) == str(path_str):
+                        from src.gui.projects_page import read_project_meta
+                        _tool = ""
+                        for _e in (self.config.get("recent_projects", []) or []):
+                            if isinstance(_e, dict) and _e.get("name") == _pname:
+                                _tool = read_project_meta(
+                                    _e.get("path", "")).get("tool", "")
+                                break
+                        self.set_venv(Path(path_str),
+                                      env_type=_tool or "venv", label=_pname)
+                        return
+            except Exception:
+                pass
+
         if path_str:
             # Same as _set_venv above: the dead `package_manager` read is gone.
             backend = "pip"
             venv_path = Path(path_str)
             self._current_venv_path = venv_path
+            # Not a project -- drop any label left by a previous one,
+            # or the badge would still read PROJECT.
+            self._explicit_env_label = ""
 
             # Detect env type from marker — same as set_venv
             self._current_env_type = "venv"
@@ -637,6 +720,17 @@ class EnvStateMixin:
         }
         backend_display = _backend_names.get(_env_type, backend.upper() if backend else "PIP")
         self.env_backend_label.setText(f"⚙️ {backend_display}")
+
+        # B45: the caption above the dropdown carries this -- "Project:" or
+        # "Environment:" -- so there is no separate badge to keep in step.
+        try:
+            _is_project = bool(getattr(self, "_explicit_env_label", ""))
+            if hasattr(self, "env_caption_label"):
+                self.env_caption_label.setText(
+                    "\U0001f5c2\ufe0f Project:" if _is_project
+                    else "\U0001f40d Environment:")
+        except Exception:
+            pass
 
         # 5) Last used (modification time of pyvenv.cfg or activate script)
         try:

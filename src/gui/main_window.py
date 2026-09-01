@@ -54,8 +54,12 @@ from .linux_fixes import LinuxFixesMixin
 _ORPHANED_WORKERS = []
 
 
+from src.gui.projects_page import ProjectsPageMixin
+
+
 class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMixin,
-                  WindowThemeMixin, WindowMenuMixin, LinuxFixesMixin, QMainWindow):
+                  WindowThemeMixin, WindowMenuMixin, LinuxFixesMixin,
+                  ProjectsPageMixin, QMainWindow):
     """Main application window."""
 
     def __init__(self):
@@ -118,6 +122,27 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
 
         from PySide6.QtCore import QTimer
         QTimer.singleShot(300, self._open_default_env)
+
+        # N84 (Bayram, 2026-08-31): build the deferred pages while nobody is
+        # waiting.
+        #
+        # Making Settings and Learn lazy took startup from 5.9s to 0.2s, but it
+        # did not remove their cost -- it moved it to the first click, where it
+        # is arguably worse: the window is up, you press a button, and nothing
+        # responds for three seconds. Bayram also saw brief console windows
+        # during that pause, which is the giveaway: the settings page runs
+        # `python --version` for every interpreter it finds, and that is where
+        # its two seconds go.
+        #
+        # So build them here instead, a moment after the window appears, while
+        # the user is still reading the environment list. Qt widgets must be
+        # constructed on the GUI thread, so this cannot go to a worker; a timer
+        # is the honest way to do it. Startup stays fast because __init__ has
+        # already returned and the window is painted before this runs.
+        # 2500ms, not 1200: refreshing the environment list takes about
+        # 2.2s of its own, and starting the pre-build on top of that put
+        # two slow things on the same thread at once.
+        QTimer.singleShot(2500, self._preload_deferred_pages)
 
         if self.config.get("check_updates", False):
             # B186 — keep timer as a member so closeEvent can stop() pending
@@ -337,7 +362,7 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         sidebar_layout.addWidget(self.btn_envs)
         self.nav_buttons.append(self.btn_envs)
 
-        self.btn_settings = SidebarButton(tr("settings"), "⚙️")
+        self.btn_settings = SidebarButton(tr("settings"), "\u2699\ufe0f")
         self.btn_settings.setToolTip(UI_TOOLTIPS.get("sidebar_settings", ""))
         self.btn_settings.clicked.connect(lambda: self._switch_page(2))
         sidebar_layout.addWidget(self.btn_settings)
@@ -348,6 +373,25 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         self.btn_learn.clicked.connect(lambda: self._switch_page(3))
         sidebar_layout.addWidget(self.btn_learn)
         self.nav_buttons.append(self.btn_learn)
+
+        # B43: Projects is the counterpart of Environments -- the same kind of
+        # page for the other kind of thing VenvStudio manages -- so it belongs
+        # directly beneath it, which is where Bayram asked for it.
+        #
+        # Where it SITS and where it LISTS are two different orders, though.
+        # nav_buttons is indexed by page number (`btn.setChecked(i == index)`),
+        # so appending here keeps it at index 4 to match page 4, while
+        # insertWidget puts it under Environments on screen. Adding it to the
+        # layout next to Environments AND to the list in that position would
+        # have shifted Settings and Learn, highlighting the wrong button on
+        # every switch.
+        self.btn_projects = SidebarButton("Projects", "\U0001f5c2\ufe0f")
+        self.btn_projects.setToolTip(
+            "Projects created with uv, poetry, hatch, pdm or pixi")
+        self.btn_projects.clicked.connect(lambda: self._switch_page(4))
+        sidebar_layout.insertWidget(
+            sidebar_layout.indexOf(self.btn_envs) + 1, self.btn_projects)
+        self.nav_buttons.append(self.btn_projects)
 
         # ── Quick Launch section (visible only on Packages page) ──
         self.quick_launch_frame = QFrame()
@@ -474,28 +518,40 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         self.stack.addWidget(self._create_env_page())       # Page 1
         _ui_step("env page")
 
-        # Settings page
-        from src.gui.settings_page import SettingsPage
-        self.settings_page = SettingsPage(self.config)
-        _ui_step("SettingsPage")
-        self.settings_page.theme_changed.connect(self._on_theme_changed)
-        self.settings_page.font_changed.connect(self._on_font_changed)
-        self.settings_page.settings_saved.connect(self._on_settings_saved)
-        self.stack.addWidget(self.settings_page)             # Page 2
+        # N83 (Bayram, 2026-08-30): build these two ON FIRST VISIT, not now.
+        #
+        # Measurement across three releases narrowed the slow startup to these
+        # exact two pages -- SettingsPage 2.0s and LearnPage 3.6s of a 5.9s
+        # _setup_ui -- and neither is looked at until someone clicks its
+        # button. Everything else here costs under 200ms.
+        #
+        # The lazy path was already written: _switch_page has had the
+        # build-on-first-visit blocks, the signal wiring and the placeholder
+        # swap for a long time. It simply never ran, because this method built
+        # both pages first, so `self.settings_page is None` was never true --
+        # and the placeholders those blocks remove were never created at all.
+        #
+        # Anything reaching for these attributes must therefore tolerate None.
+        # window_theme.py already does (it guards both), and _switch_page
+        # fills them in before the page can be seen.
+        from PySide6.QtWidgets import QWidget as _PlaceholderWidget
+        self.settings_page = None
+        self._settings_placeholder = _PlaceholderWidget()
+        self.stack.addWidget(self._settings_placeholder)     # Page 2
 
-        # Learn page
-        from src.gui.learn_page import LearnPage
-        self.learn_page = LearnPage(self._c, config=self.config)
-        _ui_step("LearnPage")
-        self.learn_page.install_packages_requested.connect(self._on_learn_install)
-        self.learn_page.bookmark_changed.connect(self._refresh_bookmarks)
-        self.stack.addWidget(self.learn_page)               # Page 3
-        _ui_step("rest of _setup_ui")
-        # Load existing bookmarks into sidebar on startup
-        from PySide6.QtCore import QTimer
-        QTimer.singleShot(200, lambda: self._refresh_bookmarks(
-            list(self.learn_page._bookmarks)
-        ))
+        self.learn_page = None
+        self._learn_placeholder = _PlaceholderWidget()
+        self.stack.addWidget(self._learn_placeholder)        # Page 3
+
+        # B43: cheap to build (a table and a header), so no placeholder
+        # is needed -- it reads recorded paths and does not touch disk
+        # until someone presses Scan.
+        self.stack.addWidget(self._create_projects_page())   # Page 4
+        _ui_step("settings + learn placeholders")
+
+        # Bookmarks live in the Learn page, which no longer exists yet. The
+        # sidebar is filled when that page is built; until then it stays empty
+        # rather than forcing the very construction this change avoids.
 
         main_layout.addWidget(self.stack, 1)
 
@@ -1054,8 +1110,89 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
                 )
         self._cmd_panel_hints.setHtml(html)
 
+    def _build_deferred_page(self, index: int, show_cursor: bool = True):
+        """Construct page 2 (Settings) or 3 (Learn) if it does not exist yet.
+
+        N84: shows a busy cursor when the user is waiting on it, because
+        building either takes seconds -- two for Settings, which runs
+        `python --version` over every interpreter it can find, and four for
+        Learn. Without it the window stops answering and reads as a crash.
+
+        `show_cursor=False` for the background pre-build: there the user has
+        asked for nothing, and a spinner over an application they are already
+        using looks like a fault rather than progress. Bayram saw exactly that
+        -- the cursor stuck from startup until he clicked something.
+        """
+        if index == 2 and self.settings_page is None:
+            if show_cursor:
+                QApplication.setOverrideCursor(Qt.WaitCursor)
+            try:
+                from src.gui.settings_page import SettingsPage
+                self.settings_page = SettingsPage(self.config)
+                self.settings_page.theme_changed.connect(self._on_theme_changed)
+                self.settings_page.font_changed.connect(self._on_font_changed)
+                self.settings_page.settings_saved.connect(self._on_settings_saved)
+                self.stack.removeWidget(self._settings_placeholder)
+                self.stack.insertWidget(2, self.settings_page)
+                self._settings_placeholder.deleteLater()
+            finally:
+                if show_cursor:
+                    QApplication.restoreOverrideCursor()
+
+        elif index == 3 and self.learn_page is None:
+            if show_cursor:
+                QApplication.setOverrideCursor(Qt.WaitCursor)
+            try:
+                from src.gui.learn_page import LearnPage
+                self.learn_page = LearnPage(self._c, config=self.config)
+                self.learn_page.install_packages_requested.connect(
+                    self._on_learn_install)
+                self.learn_page.bookmark_changed.connect(self._refresh_bookmarks)
+                self.stack.removeWidget(self._learn_placeholder)
+                self.stack.insertWidget(3, self.learn_page)
+                self._learn_placeholder.deleteLater()
+            finally:
+                if show_cursor:
+                    QApplication.restoreOverrideCursor()
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(100, lambda: self._refresh_bookmarks(
+                list(self.learn_page._bookmarks)))
+
+    def _preload_deferred_pages(self):
+        """Build the Settings and Learn pages before anyone asks for them.
+
+        N84: harmless if the user got there first -- _switch_page builds
+        whichever page is missing and this then finds nothing to do. Failures
+        are logged and swallowed: a page that cannot be pre-built will simply
+        be built on its first visit, exactly as before.
+        """
+        import time as _t84
+        from PySide6.QtCore import QTimer as _QT84
+
+        _idx, _name = (2, "Settings") if self.settings_page is None else \
+                      (3, "Learn") if self.learn_page is None else (0, "")
+        if not _idx:
+            return          # both already exist -- the user got there first
+
+        try:
+            _t = _t84.perf_counter()
+            self._build_deferred_page(_idx, show_cursor=False)
+            self._log.info(
+                f"[Startup] pre-built {_name} page: "
+                f"{(_t84.perf_counter() - _t) * 1000:.0f} ms")
+        except Exception as e:
+            self._log.warning(f"[Startup] could not pre-build {_name}: {e!r}")
+            return          # do not loop on a page that keeps failing
+
+        # One page per call, with a gap between. Building both back to back
+        # froze the window for six seconds; this way the event loop runs in
+        # between and a click during the pause is answered.
+        if self.settings_page is None or self.learn_page is None:
+            _QT84.singleShot(400, self._preload_deferred_pages)
+
     def _switch_page(self, index):
-        page_names = {0: "Packages", 1: "Environments", 2: "Settings", 3: "Learn"}
+        page_names = {0: "Packages", 1: "Environments", 2: "Settings",
+                      3: "Learn", 4: "Projects"}
         self._log.debug(f"_switch_page → {page_names.get(index, index)} (index={index})")
 
         # Leaving the page means the user has moved on from whatever the
@@ -1091,31 +1228,24 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
             from PySide6.QtWidgets import QApplication
             QApplication.processEvents()
 
-        # Lazy-build Settings page on first visit
-        if index == 2 and self.settings_page is None:
-            from src.gui.settings_page import SettingsPage
-            self.settings_page = SettingsPage(self.config)
-            self.settings_page.theme_changed.connect(self._on_theme_changed)
-            self.settings_page.font_changed.connect(self._on_font_changed)
-            self.settings_page.settings_saved.connect(self._on_settings_saved)
-            self.stack.removeWidget(self._settings_placeholder)
-            self.stack.insertWidget(2, self.settings_page)
-            self._settings_placeholder.deleteLater()
+        # N84: one construction path, used by the click and by the preloader.
+        # Two copies of this would drift, and this file has been bitten by that
+        # more than once.
+        if index in (2, 3):
+            self._build_deferred_page(index)
 
-        # Lazy-build Learn page on first visit
-        if index == 3 and self.learn_page is None:
-            from src.gui.learn_page import LearnPage
-            self.learn_page = LearnPage(self._c, config=self.config)
-            self.learn_page.install_packages_requested.connect(self._on_learn_install)
-            self.learn_page.bookmark_changed.connect(self._refresh_bookmarks)
-            self.stack.removeWidget(self._learn_placeholder)
-            self.stack.insertWidget(3, self.learn_page)
-            self._learn_placeholder.deleteLater()
-            # Load bookmarks
-            from PySide6.QtCore import QTimer
-            QTimer.singleShot(100, lambda: self._refresh_bookmarks(
-                list(self.learn_page._bookmarks)
-            ))
+        # B43: refresh the project list whenever the page is shown.
+        #
+        # A project created from File -> New Project used to need a manual
+        # Refresh before it appeared, because the menu has no idea this table
+        # exists. Rather than wiring the dialog to the page -- one more pair of
+        # places to keep in step -- the page simply re-reads its list when it
+        # comes into view. Reading is cheap; it walks no directories.
+        if index == 4:
+            try:
+                self._refresh_projects()
+            except Exception:
+                pass
 
         self.stack.setCurrentIndex(index)
         for i, btn in enumerate(self.nav_buttons):

@@ -15,6 +15,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QColor
 
 from src.utils.i18n import tr
+from src.utils.platform_utils import bold_font_from as _bold_font_from
 from src.utils.platform_utils import get_platform, get_python_executable, subprocess_args
 from src.utils.constants import PACKAGE_CATALOG, COMMAND_HINTS
 from src.gui.package_panel_common import WorkerThread
@@ -421,10 +422,13 @@ class PackageOpsMixin:
 
                 name_item = QTableWidgetItem(pkg["name"])
                 name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
-                # Copy the table's font so pointSize is valid; a bare QFont()
-                # has pointSize -1 on Windows → QFont::setPointSize(-1) warning.
-                name_font = QFont(self.catalog_table.font())
-                name_font.setBold(True)
+                # N88: copying the table's font is NOT enough on its own.
+                # When the table takes its size from a stylesheet in
+                # PIXELS, pointSize() is -1 -- Qt's "unset" marker -- and
+                # the copy carries it. Qt then warns when it draws the
+                # cell, which is why the stack pointed at setCurrentIndex
+                # rather than at any font code.
+                name_font = _bold_font_from(self.catalog_table)
                 name_item.setFont(name_font)
                 if is_installed:
                     name_item.setForeground(QColor("#a6e3a1"))

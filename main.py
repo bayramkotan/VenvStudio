@@ -25,11 +25,54 @@ import multiprocessing
 # 25s is chosen to land just before the smoke-test's own 30s `timeout`,
 # so the dump appears in the log before the process gets killed.
 import faulthandler
-faulthandler.enable()
+
+# N89 (Bayram, 2026-09-02): a windowed PyInstaller build has NO sys.stderr.
+#
+# faulthandler.enable() writes there by default and raises when it is None:
+#
+#     RuntimeError: sys.stderr is None
+#
+# The packaged VenvStudio.exe therefore died on this line before reaching a
+# single line of application code, while `vs` from a terminal was fine --
+# which is why it went unnoticed. A diagnostic must never be the reason the
+# program will not start.
+#
+# Writing to a FILE instead is also strictly better here: in a windowed build
+# nobody could have read stderr anyway, so the crash dumps this was added to
+# capture were being thrown away even when it did work.
+_fh_file = None
 try:
-    faulthandler.dump_traceback_later(25, exit=False)
+    if sys.stderr is not None:
+        faulthandler.enable()
+    else:
+        import tempfile as _tf
+        from pathlib import Path as _P
+        try:
+            # There is no get_log_dir(); the log directory is derived
+            # from the config directory (logger.py builds it the same
+            # way). Falling back to temp keeps this working even if the
+            # config directory cannot be resolved this early.
+            from src.utils.platform_utils import get_config_dir as _gcd
+            _dir = _P(_gcd()) / "logs"
+        except Exception:
+            _dir = _P(_tf.gettempdir()) / "VenvStudio"
+        _dir.mkdir(parents=True, exist_ok=True)
+        # Kept open deliberately: faulthandler writes to this handle when the
+        # process is already dying, so it must outlive this block.
+        _fh_file = open(_dir / "faulthandler.log", "a", encoding="utf-8")
+        faulthandler.enable(file=_fh_file)
 except Exception:
+    # No diagnostics is a small loss. Not starting is a total one.
     pass
+
+# The watchdog exists for CI's 30s smoke test. On a user's machine it would
+# dump every thread 25 seconds in for no reason, so it is armed only when CI
+# asks for it.
+if os.environ.get("VENVSTUDIO_WATCHDOG") or os.environ.get("CI"):
+    try:
+        faulthandler.dump_traceback_later(25, exit=False)
+    except Exception:
+        pass
 
 # ── Frozen-mode multiprocessing safety (fixes AppImage startup hang) ──
 # In a PyInstaller --onedir/AppImage build, sys.executable is VenvStudio

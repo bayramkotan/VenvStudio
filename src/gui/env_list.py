@@ -12,6 +12,7 @@ from PySide6.QtGui import QFont, QColor, QAction
 
 from src.gui.workers import EnvDetailWorker
 from src.utils.i18n import tr
+from src.utils.platform_utils import bold_font_from as _bold_font_from
 
 # N-item (Bayram, 2026-08-18): the summary row used to collapse every env
 # living outside base_dir into one vague "Other locations" chip, which sat
@@ -376,7 +377,7 @@ class EnvListMixin:
         # B174 fix: copy from table's current font (which honours QSS pixel-size).
         # Bare QFont() yields a Windows default whose pointSize() is -1, which
         # triggers QFont::setPointSize(-1) warnings during Qt's font cascade.
-        _row_font = QFont(self.env_table.font())
+        _row_font = _bold_font_from(self.env_table)
         _row_font.setBold(True)
         self._row_font = _row_font
 
@@ -592,7 +593,7 @@ class EnvListMixin:
             # above, so rows filled in later by this async callback (e.g.
             # a fresh/uncached env) visibly mismatched the rest of the
             # table. Reuse the same cached font/theme flag.
-            _font = getattr(self, "_row_font", None) or QFont(self.env_table.font())
+            _font = getattr(self, "_row_font", None) or _bold_font_from(self.env_table)
             _light = getattr(self, "_is_light_theme", False)
             _runtime_item = QTableWidgetItem(_runtime_str)
             _pkg_item = QTableWidgetItem(f"  {package_count}")

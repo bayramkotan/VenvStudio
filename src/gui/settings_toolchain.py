@@ -14,6 +14,7 @@ _log = logging.getLogger("venvstudio.gui.toolchain")
 from PySide6.QtCore import Qt, Signal, QThread
 from PySide6.QtGui import QFont, QColor
 from src.utils.platform_utils import find_system_pythons, get_platform, subprocess_args
+from src.utils.platform_utils import bold_font_from as _bold_font_from
 from src.utils.constants import APP_NAME, APP_VERSION
 from src.utils.i18n import tr
 import os, sys, subprocess, shutil
@@ -798,7 +799,10 @@ class ToolchainMixin:
         for row, (tid, pkg, lbl, icon) in enumerate(self._TC_TOOLS):
             tbl.setRowHeight(row, 42)
             name = QTableWidgetItem(f"{icon}  {lbl}")
-            _f = QFont(tbl.font()); _f.setWeight(QFont.Medium); name.setFont(_f)
+            # N88: the table's size comes from a stylesheet in PIXELS four
+            # lines above, so tbl.font().pointSize() is -1 and a plain
+            # copy carries that unset marker into every cell.
+            name.setFont(_bold_font_from(tbl, QFont.Medium))
             # N79: the row remembers which tool it is, so the context
             # menu can find its links without re-deriving them from the
             # visible label (which is "Conda" for micromamba).

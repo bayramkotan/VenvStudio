@@ -138,6 +138,42 @@ def terminal_icon() -> str:
     return "\U0001f5a5 " if _s.platform == "win32" else ">_ "
 
 
+def bold_font_from(widget, weight=None):
+    """A bold copy of a widget's font, without Qt's unset-size warning.
+
+    N88 (Bayram, 2026-09-02): the Qt message handler added in v1.6.66 finally
+    caught the long-standing
+
+        QFont::setPointSize: Point size <= 0 (-1), must be greater than 0
+
+    and its stack pointed at tabs.setCurrentIndex -- meaning the bad font was
+    on a widget INSIDE the tab, complained about only when Qt came to draw it.
+
+    The cause is this pattern, used in six places:
+
+        f = QFont(table.font()); f.setBold(True)
+
+    When the table's size comes from a stylesheet in PIXELS -- as the toolchain
+    table's does, `font-size: {fs_base}px` -- pointSize() is -1, Qt's marker
+    for "unset". The copy inherits the -1 and Qt objects when it is used.
+
+    Copying the pixel size across keeps the intent (same size as the table,
+    but bold) and leaves no unset value behind.
+    """
+    from PySide6.QtGui import QFont
+    src = widget.font()
+    out = QFont(src)
+    if src.pointSize() <= 0:
+        _px = src.pixelSize()
+        if _px > 0:
+            out.setPixelSize(_px)
+    if weight is not None:
+        out.setWeight(weight)
+    else:
+        out.setBold(True)
+    return out
+
+
 def fit_button_width(button, minimum: int = 0, padding: int = 10):
     """Widen a button when its label needs more room than `minimum`.
 

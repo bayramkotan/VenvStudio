@@ -617,9 +617,11 @@ class ProjectsPageMixin:
         # cascade lets a default win in places -- and copying the table's own
         # font rather than building a bare QFont() keeps the QSS pixel size and
         # avoids the setPointSize(-1) warning a fresh QFont produces.
-        from PySide6.QtGui import QFont
-        _cell_font = QFont(t.font())
-        _cell_font.setBold(True)
+        # N88: this table also takes its size from a stylesheet in pixels, so
+        # a plain QFont(t.font()) copy would carry pointSize -1 and Qt would
+        # warn when it came to draw the cells.
+        from src.utils.platform_utils import bold_font_from as _bold_font
+        _cell_font = _bold_font(t)
         for row, path in enumerate(paths):
             meta = read_project_meta(path)
             # A path the tool told us about earlier counts too, so poetry and

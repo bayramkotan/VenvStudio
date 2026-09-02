@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from src.utils.logger import get_logger
+from src.utils.platform_utils import terminal_icon as _terminal_icon
 
 _log = get_logger("venvstudio.projects")
 
@@ -420,6 +421,52 @@ class ProjectsPageMixin:
         header.addWidget(_new)
         layout.addLayout(header)
 
+        # B46: an action bar, as the Environments page has had all along.
+        #
+        # Everything here was reachable only by right-clicking, which is fine
+        # for the occasional action and wrong for the ones you use constantly.
+        # Four to begin with -- the ones a project needs day to day. Sync is
+        # first because it is the command you run most: it makes the
+        # environment match what the project declares.
+        #
+        # NOT copied from Environments, and why: "Make Default" means nothing
+        # for a project, and "Rename (Full)" would have to change the folder,
+        # [project] name, the src/ package directory and every
+        # [project.scripts] entry together -- doing half of that breaks the
+        # project.
+        _actions = QHBoxLayout()
+        _actions.setSpacing(8)
+
+        self._pbtn_sync = QPushButton("\u21bb  Sync")
+        self._pbtn_sync.setFixedHeight(38)
+        self._pbtn_sync.setToolTip(
+            "Install what this project declares, using its own tool")
+        self._pbtn_sync.clicked.connect(self._proj_sync)
+        _actions.addWidget(self._pbtn_sync)
+
+        self._pbtn_add = QPushButton("\u2795  Add Package")
+        self._pbtn_add.setObjectName("secondary")
+        self._pbtn_add.setFixedHeight(38)
+        self._pbtn_add.setToolTip(
+            "Add a dependency \u2014 writes pyproject.toml and installs it")
+        self._pbtn_add.clicked.connect(self._proj_add_selected)
+        _actions.addWidget(self._pbtn_add)
+
+        self._pbtn_pkgs = QPushButton("\U0001f4e6  Packages")
+        self._pbtn_pkgs.setObjectName("secondary")
+        self._pbtn_pkgs.setFixedHeight(38)
+        self._pbtn_pkgs.clicked.connect(self._proj_open_packages)
+        _actions.addWidget(self._pbtn_pkgs)
+
+        self._pbtn_term = QPushButton(f"{_terminal_icon()}Open Terminal")
+        self._pbtn_term.setObjectName("secondary")
+        self._pbtn_term.setFixedHeight(38)
+        self._pbtn_term.clicked.connect(self._proj_open_terminal)
+        _actions.addWidget(self._pbtn_term)
+
+        _actions.addStretch()
+        layout.addLayout(_actions)
+
         self.projects_info = QLabel("")
         self.projects_info.setObjectName("subheader")
         self.projects_info.setWordWrap(True)
@@ -460,11 +507,17 @@ class ProjectsPageMixin:
         self.projects_table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.projects_table.customContextMenuRequested.connect(
             self._show_project_context_menu)
+        # B46: double-click opens Packages, not a terminal. Looking at what
+        # is installed is the commoner intent, and the terminal is one
+        # right-click away.
         self.projects_table.itemDoubleClicked.connect(
-            lambda _i: self._proj_open_terminal())
+            lambda _i: self._proj_open_packages())
+        self.projects_table.itemSelectionChanged.connect(
+            self._update_project_buttons)
         layout.addWidget(self.projects_table, 1)
 
         self._refresh_projects()
+        self._update_project_buttons()
         return page
 
     def _on_new_project_clicked(self):
@@ -795,6 +848,21 @@ class ProjectsPageMixin:
             _log.warning(f"[Projects] could not open packages: {e!r}")
             QMessageBox.warning(self, "Packages", f"{type(e).__name__}: {e}")
 
+    _SYNC_CMD = {
+        # "Install what this project declares, from its lockfile."
+        # Verified against --help on 2026-09-01:
+        #   uv sync          "Update the project's environment"
+        #   poetry install   "Installs the project dependencies."
+        #   pdm install      "Install dependencies from lock file"
+        #   pixi install     resolves and installs the workspace
+        #   hatch env create builds the environment for the project
+        "uv":     ["uv", "sync"],
+        "poetry": ["poetry", "install"],
+        "pdm":    ["pdm", "install"],
+        "pixi":   ["pixi", "install"],
+        "hatch":  ["hatch", "env", "create"],
+    }
+
     _ADD_CMD = {
         # Each tool's own way of adding a dependency: it edits pyproject.toml
         # and installs in one step. `pip install` into the environment would
@@ -816,6 +884,70 @@ class ProjectsPageMixin:
         "hatch":  ["hatch", "env", "create"],
         "pixi":   ["pixi", "install"],
     }
+
+    def _proj_sync(self):
+        """Install what the selected project declares, with its own tool.
+
+        B46: the command a project needs most often. `uv sync`, `poetry
+        install`, `pdm install` -- each reads the project's lockfile and makes
+        the environment match it.
+
+        Shares _create_project_env, which already asks first, shows the
+        command, runs it and finds the environment afterwards. A second
+        implementation would drift from that one within a release.
+        """
+        _path = self._selected_project_path()
+        if not _path:
+            return
+        _meta = read_project_meta(_path)
+        if _meta.get("tool") not in self._SYNC_CMD:
+            QMessageBox.information(
+                self, "No tool",
+                f"{_meta['name']} has no recognised project tool, so "
+                f"VenvStudio does not know how to install its dependencies.")
+            return
+        self._run_project_command(
+            _path, _meta, self._SYNC_CMD[_meta["tool"]], "Sync")
+
+    def _proj_add_selected(self):
+        """Add Package for the selected row (the toolbar's version)."""
+        _path = self._selected_project_path()
+        if not _path:
+            return
+        self._proj_add_package(_path, read_project_meta(_path))
+
+    def _update_project_buttons(self):
+        """Enable the action bar only when a row is selected (B46).
+
+        Buttons that do nothing when pressed teach people not to trust them.
+        Sync is disabled further when the project has no recognised tool,
+        since there would be no command to run.
+        """
+        _path = self._selected_project_path()
+        _has = bool(_path)
+        for _b in (self._pbtn_add, self._pbtn_pkgs, self._pbtn_term):
+            _b.setEnabled(_has)
+
+        if not _has:
+            self._pbtn_sync.setEnabled(False)
+            self._pbtn_sync.setText("\u21bb  Sync")
+            return
+
+        try:
+            _meta = read_project_meta(_path)
+        except Exception:
+            self._pbtn_sync.setEnabled(False)
+            return
+        _tool = _meta.get("tool", "")
+        _cmd = self._SYNC_CMD.get(_tool)
+        self._pbtn_sync.setEnabled(bool(_cmd))
+        # Name the command on the button: this is a tool that means to teach
+        # what it runs, and "Sync" alone says nothing about which command.
+        self._pbtn_sync.setText(
+            f"\u21bb  {' '.join(_cmd)}" if _cmd else "\u21bb  Sync")
+        self._pbtn_sync.setToolTip(
+            f"Run `{' '.join(_cmd)}` in {_path}" if _cmd
+            else "No recognised project tool")
 
     def _proj_add_package(self, project_path, meta):
         """Add a dependency with the project's own tool."""
@@ -888,33 +1020,29 @@ class ProjectsPageMixin:
             f"\u2705  {pkgs.strip()}\n\nadded to {meta['name']} and written "
             f"to its pyproject.toml.")
 
-    def _create_project_env(self, project_path, meta) -> str:
-        """Build the project's environment with its own tool. Returns the path.
+    def _run_project_command(self, project_path, meta, argv, what: str) -> str:
+        """Run one of the project tool's commands, asking first.
 
-        Asks first: this downloads packages and can take minutes. Shows the
-        command it will run, for the same reason every other command in this
-        application is shown.
+        B46: shared by Sync and by Create Environment, which do the same thing
+        from different buttons -- ask, show the command, run it, then look for
+        the environment the tool has just built or updated. Two copies of this
+        would have drifted; there are enough examples of that in this codebase.
+
+        Returns the environment path afterwards, or "" if the user declined or
+        the command failed.
         """
         from PySide6.QtWidgets import QApplication
         import subprocess
 
+        argv = list(argv)
         _tool = meta.get("tool", "")
-        argv = self._ENV_CREATE.get(_tool)
-        if not argv:
-            QMessageBox.information(
-                self, "No environment yet",
-                f"{meta['name']} has no environment, and VenvStudio does not "
-                f"know how to build one for a project with no recognised "
-                f"tool.\n\nRight-click \u2192 Open Terminal to do it by hand.")
-            return ""
 
         if QMessageBox.question(
-                self, "Create the environment?",
-                f"{meta['name']} has no environment yet.\n\n"
-                f"VenvStudio can create it by running:\n\n"
-                f"    {' '.join(argv)}\n\n"
+                self, f"{what}?",
+                f"{meta['name']}\n\n"
+                f"VenvStudio will run:\n\n    {' '.join(argv)}\n\n"
                 f"in {project_path}\n\n"
-                f"This downloads the project's dependencies and may take a "
+                f"This resolves and downloads dependencies, and may take a "
                 f"few minutes. Continue?",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.Yes) != QMessageBox.Yes:
@@ -932,7 +1060,7 @@ class ProjectsPageMixin:
         try:
             from src.utils.logger import banner_command
             banner_command(" ".join(argv),
-                           context=f"Create environment ({meta['name']})")
+                           context=f"{what} ({meta['name']})")
         except Exception:
             pass
 
@@ -944,7 +1072,7 @@ class ProjectsPageMixin:
 
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
-            _log.info(f"[Projects] creating env: {' '.join(argv)}")
+            _log.info(f"[Projects] {' '.join(argv)}")
             r = subprocess.run(argv, cwd=str(project_path), capture_output=True,
                                text=True, timeout=900, **_kw)
             _log.info(f"[Projects]   -> exit={r.returncode}")
@@ -968,44 +1096,47 @@ class ProjectsPageMixin:
 
         if r.returncode != 0:
             _detail = (r.stderr or r.stdout or "").strip()
-            _log.warning(f"[Projects] env creation failed: {_detail[:400]}")
+            _log.warning(f"[Projects] {what} failed: {_detail[:400]}")
             QMessageBox.warning(
-                self, f"{_tool} could not create the environment",
+                self, f"{_tool} could not finish",
                 _detail[:1500] or f"{_tool} exited with code {r.returncode}.")
             return ""
 
-        # Look again -- the tool has just made it, so the guess should find it
-        # now; if the tool keeps it elsewhere, ask the tool.
         _fresh = find_project_env(project_path, _tool) or \
             ask_tool_for_env(project_path, _tool)
         if _fresh:
             self._cache_env_for(project_path, _fresh)
-            self._refresh_projects()
-        else:
-            # B43: distinguish "made something we cannot find" from "had
-            # nothing to make". A project that declares no dependencies gives
-            # its tool nothing to install, so no environment appears -- the
-            # command succeeded and did nothing, which is correct. Reporting
-            # that as a failure sent Bayram round the same dialog repeatedly.
-            _log.info(
-                f"[Projects] {_tool} succeeded but no env exists "
-                f"(required={meta.get('deps', 0)})")
-            if not meta.get("deps"):
-                QMessageBox.information(
-                    self, "Nothing to install",
-                    f"{meta['name']} declares no dependencies, so {_tool} had "
-                    f"nothing to install and created no environment.\n\n"
-                    f"Add a dependency first \u2014 `{_tool} add requests`, "
-                    f"for example \u2014 and the environment will appear with "
-                    f"it.\n\nRight-click \u2192 Open Terminal opens the "
-                    f"project folder.")
-            else:
-                QMessageBox.information(
-                    self, "Created, but not found",
-                    f"{_tool} finished successfully, but VenvStudio could not "
-                    f"locate the environment it made.\n\nRight-click "
-                    f"\u2192 Open Terminal to look.")
+        self._refresh_projects()
+        self._update_project_buttons()
+
+        if not _fresh and not meta.get("deps"):
+            QMessageBox.information(
+                self, "Nothing to install",
+                f"{meta['name']} declares no dependencies, so {_tool} had "
+                f"nothing to install.\n\nAdd one with the Add Package button "
+                f"and the environment will appear with it.")
         return _fresh
+
+    def _create_project_env(self, project_path, meta) -> str:
+        """Build the project's environment with its own tool.
+
+        B46: this is now a thin wrapper. Sync and Create Environment run the
+        same shape of command and used to have their own copies of the ask,
+        the run and the look-afterwards; both go through
+        _run_project_command instead. Two copies of that would have drifted
+        within a release, as several pairs in this codebase already have.
+        """
+        _tool = meta.get("tool", "")
+        argv = self._ENV_CREATE.get(_tool)
+        if not argv:
+            QMessageBox.information(
+                self, "No environment yet",
+                f"{meta['name']} has no environment, and VenvStudio does not "
+                f"know how to build one for a project with no recognised "
+                f"tool.\n\nRight-click \u2192 Open Terminal to do it by hand.")
+            return ""
+        return self._run_project_command(
+            project_path, meta, argv, "Create environment")
 
     def _cached_env_for(self, project_path) -> str:
         """An environment path previously answered by the tool itself."""

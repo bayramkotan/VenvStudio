@@ -175,6 +175,60 @@ class PythonMixin:
             self.jupyter_custom_path_label.setText(folder)
             self.jupyter_custom_path_label.setVisible(True)
 
+    def _python_version_cached(self, exe_path) -> str:
+        """`<python> --version`, remembered between runs.
+
+        N87 (Bayram, 2026-09-01): the scan ran this for every interpreter on
+        the machine, every time the settings page was built. Deferring it in
+        v1.6.69 stopped it blocking startup but did not stop it happening --
+        the little windows still flashed, now during the background pre-build.
+
+        A Python's version does not change unless its executable does, so the
+        answer is cached against the file's size and modification time. A
+        rebuilt or upgraded interpreter has a different mtime and is asked
+        again; an untouched one is never asked twice.
+
+        "Scan System" passes force=True and bypasses this entirely, which is
+        what that button is for.
+        """
+        import os as _o
+        if not exe_path or not _o.path.isfile(exe_path):
+            return "?"
+        try:
+            _st = _o.stat(exe_path)
+            _key = _o.path.normcase(_o.path.abspath(exe_path))
+            _stamp = f"{int(_st.st_mtime)}:{_st.st_size}"
+        except OSError:
+            return "?"
+
+        try:
+            _cache = self.config.get("python_versions", {}) or {}
+            if not isinstance(_cache, dict):
+                _cache = {}
+        except Exception:
+            _cache = {}
+
+        _hit = _cache.get(_key)
+        if isinstance(_hit, dict) and _hit.get("stamp") == _stamp:
+            return _hit.get("version", "?")
+
+        import subprocess as _sp
+        try:
+            r = _sp.run([exe_path, "--version"],
+                        **subprocess_args(capture_output=True, text=True,
+                                          timeout=5))
+            _ver = (r.stdout.strip() or r.stderr.strip()).replace("Python ", "")
+        except Exception:
+            return "?"
+
+        try:
+            _cache[_key] = {"stamp": _stamp, "version": _ver}
+            self.config.set("python_versions", _cache)
+            self.config.save()
+        except Exception:
+            pass
+        return _ver or "?"
+
     def _scan_pythons(self):
         """Scan system for Python installations."""
         import os
@@ -230,16 +284,9 @@ class PythonMixin:
 
         # ── System Default Python'u tabloya garanti olarak ilk satıra ekle ──
         if default_norm and os.path.isfile(default_norm):
-            try:
-                import subprocess as _sp
-                result = _sp.run(
-                    [default_norm, "--version"],
-                    capture_output=True, text=True, timeout=5,
-                    creationflags=0x08000000 if __import__('os').name == "nt" else 0
-                )
-                sys_version = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
-            except Exception:
-                sys_version = "?"
+            # N87: cached, and through subprocess_args -- this call wrote its
+            # own creationflags and so hid nothing at all on Linux.
+            sys_version = self._python_version_cached(default_norm)
             row = self.python_table.rowCount()
             self.python_table.insertRow(row)
             self.python_table.setItem(row, 0, QTableWidgetItem(sys_version))

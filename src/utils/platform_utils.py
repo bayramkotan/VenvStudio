@@ -502,6 +502,65 @@ def get_activate_command(venv_path: Path) -> str:
     return f"source {venv_path / 'bin' / 'activate'}"
 
 
+_PY_VER_CACHE = None
+
+
+def _python_version_stamp(exe_path) -> str:
+    """Size and mtime -- enough to notice an upgraded interpreter."""
+    try:
+        st = os.stat(exe_path)
+        return f"{int(st.st_mtime)}:{st.st_size}"
+    except OSError:
+        return ""
+
+
+def _python_version_from_cache(exe_path) -> str:
+    """A previously recorded version for this exact executable, or ""."""
+    global _PY_VER_CACHE
+    if _PY_VER_CACHE is None:
+        try:
+            import json
+            from pathlib import Path as _P
+            with open(_P(get_config_dir()) / "python_versions.json",
+                      "r", encoding="utf-8") as fh:
+                _PY_VER_CACHE = json.load(fh)
+            if not isinstance(_PY_VER_CACHE, dict):
+                _PY_VER_CACHE = {}
+        except Exception:
+            _PY_VER_CACHE = {}
+
+    _stamp = _python_version_stamp(exe_path)
+    if not _stamp:
+        return ""
+    hit = _PY_VER_CACHE.get(os.path.normcase(os.path.abspath(exe_path)))
+    if isinstance(hit, dict) and hit.get("stamp") == _stamp:
+        return hit.get("version", "")
+    return ""
+
+
+def _python_version_to_cache(exe_path, version: str) -> None:
+    """Record it. Best-effort: a failure costs one subprocess, nothing more."""
+    global _PY_VER_CACHE
+    _stamp = _python_version_stamp(exe_path)
+    if not _stamp or not version:
+        return
+    if _PY_VER_CACHE is None:
+        _PY_VER_CACHE = {}
+    _PY_VER_CACHE[os.path.normcase(os.path.abspath(exe_path))] = {
+        "stamp": _stamp, "version": version}
+    try:
+        import json
+        from pathlib import Path as _P
+        fp = _P(get_config_dir()) / "python_versions.json"
+        fp.parent.mkdir(parents=True, exist_ok=True)
+        tmp = str(fp) + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(_PY_VER_CACHE, fh, indent=1)
+        os.replace(tmp, fp)
+    except Exception:
+        pass
+
+
 def find_system_pythons() -> List[Tuple[str, str]]:
     """
     Find available Python installations on the system.
@@ -527,6 +586,23 @@ def find_system_pythons() -> List[Tuple[str, str]]:
         if normalized in seen_paths:
             return
         seen_paths.add(normalized)
+
+        # N87 (Bayram, 2026-09-01): ask each interpreter once, ever.
+        #
+        # This ran `<python> --version` for every Python on the machine every
+        # time the list was wanted, and each one flashed up a console window
+        # on his box. Deferring the scan in v1.6.69 moved the flashing rather
+        # than removing it.
+        #
+        # A version only changes when the executable does, so the answer is
+        # kept against the file's size and mtime. An upgraded or rebuilt
+        # interpreter has a different mtime and is asked again.
+        _cached = _python_version_from_cache(exe_path)
+        if _cached:
+            if _cached[0].isdigit():
+                pythons.append((_cached, exe_path))
+            return
+
         try:
             result = subprocess.run(
                 [exe_path, "--version"],
@@ -535,6 +611,7 @@ def find_system_pythons() -> List[Tuple[str, str]]:
             version = (result.stdout.strip() or result.stderr.strip()).replace("Python ", "")
             if version and version[0].isdigit():
                 pythons.append((version, exe_path))
+                _python_version_to_cache(exe_path, version)
         except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
             pass
 

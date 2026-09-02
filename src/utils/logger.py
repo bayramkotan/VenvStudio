@@ -383,11 +383,40 @@ def _banner_to_file(style: str, title: str, details: Optional[List[str]] = None)
         msg = f"[{style.upper()}] {title}" + \
               ((" · " + " · ".join(details)) if details else "")
         rec = lg.makeRecord("venvstudio", logging.INFO, "(banner)", 0, msg, None, None)
-        for h in lg.handlers:
-            if isinstance(h, logging.FileHandler):
-                h.handle(rec)
-    except Exception:
-        pass
+
+        # N86 (Bayram, 2026-09-01): walk UP the logger chain.
+        #
+        # This only looked at `lg.handlers` -- the handlers attached directly
+        # to "venvstudio". The file handler is attached further up, so the
+        # list was empty, the loop never ran, and every banner was silently
+        # dropped: not one COMMAND line had reached venvstudio.log.
+        #
+        # It looked like it worked, which is worse than looking broken. In
+        # v1.6.67 I added a second write to fix exactly this symptom, then
+        # removed it again in v1.6.68 on seeing this function already existed.
+        # It existed; it did nothing.
+        _written = 0
+        _node = lg
+        while _node:
+            for h in list(_node.handlers):
+                if isinstance(h, logging.FileHandler):
+                    h.handle(rec)
+                    _written += 1
+            if not getattr(_node, "propagate", True):
+                break
+            _node = _node.parent
+
+        if not _written:
+            # Never silent again. A banner that reaches no file is a fact
+            # worth knowing, and the empty log is how this went unnoticed.
+            logging.getLogger("venvstudio.banner").warning(
+                "banner not written to any log file: %s", msg[:200])
+    except Exception as e:
+        try:
+            logging.getLogger("venvstudio.banner").warning(
+                "banner_to_file failed: %r", e)
+        except Exception:
+            pass
 
 
 def _safe_print(text: str) -> None:

@@ -87,6 +87,28 @@ def main():
         app.setApplicationName(APP_NAME)
         app.setApplicationVersion(APP_VERSION)
 
+        # N91 (Bayram, 2026-09-02): set the application font, as the root
+        # main.py has always done and this entry point never did.
+        #
+        # Without it Qt keeps a default font whose pointSize() is -1 -- its
+        # "unset" marker -- and every table that copies `table.font()` inherits
+        # that, so Qt printed
+        #
+        #     QFont::setPointSize: Point size <= 0 (-1), must be greater than 0
+        #
+        # on every start of the INSTALLED copy while a source checkout was
+        # silent. Three attempts went into blaming the font-copying code, which
+        # was innocent; the two logs side by side settled it, one carrying a
+        # "UI font: ..." line and the other carrying none.
+        #
+        # The detection lives in main.py rather than being copied here, because
+        # this file being a partial copy of that one is what caused the bug.
+        try:
+            from main import setup_application_font
+            setup_application_font(app, log)
+        except Exception as _fe:
+            log.warning(f"Could not set the application font: {_fe}")
+
         config = ConfigManager()
         window = MainWindow()
         window.show()

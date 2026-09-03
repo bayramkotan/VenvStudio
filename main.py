@@ -519,105 +519,15 @@ def _check_qt_xcb_deps():
     print(f"  sudo {' '.join(full_cmd)}")
 
 
-def setup_application_font(app, logger=None):
-    """Detect the UI font, wire up emoji fallback, and apply it to `app`.
-
-    N91 (Bayram, 2026-09-02): lifted out of main() so BOTH entry points can
-    call it. `python main.py` always did this; `vs`, which comes in through
-    src/main.py, never did -- and without an application font Qt keeps a
-    default whose pointSize() is -1. Every table copying `table.font()` then
-    inherited that, and Qt printed
-
-        QFont::setPointSize: Point size <= 0 (-1), must be greater than 0
-
-    on every start of the installed copy, but never from a source checkout.
-    Three attempts went into blaming the font-copying code, which was fine;
-    the two logs side by side settled it, one showing `UI font: ...` and the
-    other showing no such line at all.
-    """
-    import sys
-    from PySide6.QtGui import QFont
-    if logger is None:
-        import logging
-        logger = logging.getLogger('venvstudio')
-
-    # ── Font setup with emoji fallback ─────────────────────────────
-    # Detect the best UI font (Segoe UI on Windows, Inter/Cantarell on Linux
-    # if available, Helvetica on macOS) and make sure at least ONE emoji
-    # font is in the fallback chain so icons like 🔄 ⭐ 📁 render.
-    from PySide6.QtGui import QFontDatabase
-
-    # QFontDatabase methods are static since Qt 6 — no instance needed.
-    try:
-        available_fonts = set(QFontDatabase.families())
-    except Exception:
-        available_fonts = set()
-
-    # Pick the best UI font for the platform
-    if sys.platform == "darwin":
-        ui_font_candidates = ["SF Pro Text", "Helvetica Neue", "Helvetica", "Arial"]
-    elif sys.platform == "win32":
-        ui_font_candidates = ["Segoe UI Variable Display", "Segoe UI", "Tahoma", "Arial"]
-    else:  # linux / bsd
-        ui_font_candidates = ["Inter", "Cantarell", "Ubuntu", "Noto Sans",
-                              "DejaVu Sans", "Liberation Sans", "Arial"]
-
-    ui_font_family = None
-    for candidate in ui_font_candidates:
-        if not available_fonts or candidate in available_fonts:
-            ui_font_family = candidate
-            break
-    ui_font_family = ui_font_family or "sans-serif"
-
-    # Detect an emoji-capable font
-    emoji_font_candidates = [
-        "Noto Color Emoji",      # Linux standard (Fedora/openSUSE may lack it)
-        "Segoe UI Emoji",        # Windows
-        "Apple Color Emoji",     # macOS
-        "Twemoji Mozilla",       # Firefox / older distros
-        "EmojiOne Color",        # Community
-        "JoyPixels",             # Community
-        "Symbola",               # Monochrome unicode fallback
-        "DejaVu Sans",           # Basic unicode (last resort, no color)
-    ]
-    emoji_font_family = None
-    for candidate in emoji_font_candidates:
-        if not available_fonts or candidate in available_fonts:
-            emoji_font_family = candidate
-            break
-
-    if not emoji_font_family:
-        logger.warning(
-            "No emoji-capable font detected. Emoji (🔄 ⭐ 📁) may render as boxes. "
-            "Install 'noto-fonts-emoji' (Linux) or equivalent."
-        )
-        # Still set Symbola as safe fallback target
-        emoji_font_family = "Symbola"
-
-    logger.info(f"UI font: {ui_font_family}  |  Emoji font: {emoji_font_family}")
-
-    # Qt font substitution: when the primary font is missing a glyph, Qt
-    # walks the substitute chain. Register emoji font as substitute for
-    # the main UI font so icons in labels/buttons fall back correctly.
-    try:
-        QFont.insertSubstitution(ui_font_family, emoji_font_family)
-        # Also register common fallbacks so Qt can find SOMETHING for any glyph
-        for fb in ("DejaVu Sans", "Noto Sans"):
-            if fb != emoji_font_family and (not available_fonts or fb in available_fonts):
-                QFont.insertSubstitution(ui_font_family, fb)
-    except Exception as _e:
-        logger.debug(f"Font substitution failed: {_e}")
-
-    # Build application font
-    font = QFont(ui_font_family, 10)
-    font.setStyleHint(QFont.SansSerif)
-    # Use PreferDefault → Qt applies substitutions; PreferMatch would skip them
-    try:
-        font.setStyleStrategy(QFont.PreferDefault)
-    except Exception:
-        pass
-    app.setFont(font)
-
+# N92 (Bayram, 2026-09-03): setup_application_font now lives in
+# platform_utils, because THIS FILE IS NOT IN THE PyPI PACKAGE.
+#
+# src/main.py called it as `from main import setup_application_font`, which
+# works from a source checkout and fails on every installed copy with
+# "No module named 'main'" -- so the font fix reached nobody who had used
+# pip. Eyup's log caught it. platform_utils ships with the package, so both
+# entry points can reach it there.
+from src.utils.platform_utils import setup_application_font
 
 def main():
     logger = None
@@ -813,7 +723,7 @@ def main():
                 f"@{screen.devicePixelRatio()}x DPI={screen.logicalDotsPerInch():.0f}"
             )
 
-        setup_application_font(app, logger)
+        available_fonts = setup_application_font(app, logger)
 
         # ── Linux-only: show a friendly warning dialog if no emoji font ──
         # Skip entirely in a frozen build: the AppImage bundles Noto Color

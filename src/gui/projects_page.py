@@ -421,51 +421,6 @@ class ProjectsPageMixin:
         header.addWidget(_new)
         layout.addLayout(header)
 
-        # B46: an action bar, as the Environments page has had all along.
-        #
-        # Everything here was reachable only by right-clicking, which is fine
-        # for the occasional action and wrong for the ones you use constantly.
-        # Four to begin with -- the ones a project needs day to day. Sync is
-        # first because it is the command you run most: it makes the
-        # environment match what the project declares.
-        #
-        # NOT copied from Environments, and why: "Make Default" means nothing
-        # for a project, and "Rename (Full)" would have to change the folder,
-        # [project] name, the src/ package directory and every
-        # [project.scripts] entry together -- doing half of that breaks the
-        # project.
-        _actions = QHBoxLayout()
-        _actions.setSpacing(8)
-
-        self._pbtn_sync = QPushButton("\u21bb  Sync")
-        self._pbtn_sync.setFixedHeight(38)
-        self._pbtn_sync.setToolTip(
-            "Install what this project declares, using its own tool")
-        self._pbtn_sync.clicked.connect(self._proj_sync)
-        _actions.addWidget(self._pbtn_sync)
-
-        self._pbtn_add = QPushButton("\u2795  Add Package")
-        self._pbtn_add.setObjectName("secondary")
-        self._pbtn_add.setFixedHeight(38)
-        self._pbtn_add.setToolTip(
-            "Add a dependency \u2014 writes pyproject.toml and installs it")
-        self._pbtn_add.clicked.connect(self._proj_add_selected)
-        _actions.addWidget(self._pbtn_add)
-
-        self._pbtn_pkgs = QPushButton("\U0001f4e6  Packages")
-        self._pbtn_pkgs.setObjectName("secondary")
-        self._pbtn_pkgs.setFixedHeight(38)
-        self._pbtn_pkgs.clicked.connect(self._proj_open_packages)
-        _actions.addWidget(self._pbtn_pkgs)
-
-        self._pbtn_term = QPushButton(f"{_terminal_icon()}Open Terminal")
-        self._pbtn_term.setObjectName("secondary")
-        self._pbtn_term.setFixedHeight(38)
-        self._pbtn_term.clicked.connect(self._proj_open_terminal)
-        _actions.addWidget(self._pbtn_term)
-
-        _actions.addStretch()
-        layout.addLayout(_actions)
 
         self.projects_info = QLabel("")
         self.projects_info.setObjectName("subheader")
@@ -515,6 +470,135 @@ class ProjectsPageMixin:
         self.projects_table.itemSelectionChanged.connect(
             self._update_project_buttons)
         layout.addWidget(self.projects_table, 1)
+
+        # ── Command Reference panel (B49) ────────────────────────────────
+        # The Environments page has had this since the beginning and Projects
+        # had nothing like it: the command a button is about to run, shown in
+        # full before it runs. That is the first pillar of this product, and
+        # leaving it off the page where the commands are least familiar --
+        # `pdm add`, `hatch env create`, `uv sync` -- was the wrong way round.
+        #
+        # Hidden until an action populates it, exactly as the other page does.
+        from PySide6.QtWidgets import QTextEdit as _QTE, QWidget as _QW
+        self._proj_cmd_panel = _QW()
+        _pcl = QVBoxLayout(self._proj_cmd_panel)
+        _pcl.setContentsMargins(0, 0, 0, 0)
+        _pcl.setSpacing(6)
+
+        _pct = QLabel("\U0001f4a1 Command Reference")
+        _pct.setStyleSheet(
+            "font-size: 14px; font-weight: bold; color: #89b4fa; "
+            "padding: 4px 2px 2px 2px;")
+        _pcl.addWidget(_pct)
+
+        self._proj_cmd_live = QLabel("\u25b6")
+        self._proj_cmd_live.setWordWrap(True)
+        self._proj_cmd_live.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self._proj_cmd_live.setStyleSheet(
+            "color: #f9e2af; font-size: 20px; font-weight: bold; "
+            "font-family: Consolas, monospace; padding: 10px 12px; "
+            "background: #181825; border: 2px solid #f9e2af; border-radius: 6px;")
+        _pcl.addWidget(self._proj_cmd_live)
+
+        self._proj_cmd_hints = _QTE()
+        self._proj_cmd_hints.setReadOnly(True)
+        self._proj_cmd_hints.setFixedHeight(160)
+        self._proj_cmd_hints.setStyleSheet(
+            "background-color: #181825; border: 1px solid #313244; "
+            "border-radius: 8px; padding: 8px; color: #cdd6f4; "
+            "font-family: Consolas, monospace; font-size: 16px; font-weight: bold;")
+        _pcl.addWidget(self._proj_cmd_hints)
+
+        self._proj_cmd_panel.setVisible(False)
+        layout.addWidget(self._proj_cmd_panel)
+
+        # B46: an action bar, as the Environments page has had all along.
+        #
+        # Everything here was reachable only by right-clicking, which is fine
+        # for the occasional action and wrong for the ones you use constantly.
+        # Four to begin with -- the ones a project needs day to day. Sync is
+        # first because it is the command you run most: it makes the
+        # environment match what the project declares.
+        #
+        # NOT copied from Environments, and why: "Make Default" means nothing
+        # for a project, and "Rename (Full)" would have to change the folder,
+        # [project] name, the src/ package directory and every
+        # [project.scripts] entry together -- doing half of that breaks the
+        # project.
+        _actions = QHBoxLayout()
+        _actions.setSpacing(8)
+
+        self._pbtn_sync = QPushButton("\u21bb  Sync")
+        self._pbtn_sync.setFixedHeight(38)
+        self._pbtn_sync.setToolTip(
+            "Install what this project declares, using its own tool")
+        self._pbtn_sync.clicked.connect(self._proj_sync)
+        _actions.addWidget(self._pbtn_sync)
+
+        self._pbtn_add = QPushButton("\u2795  Add Package")
+        self._pbtn_add.setObjectName("secondary")
+        self._pbtn_add.setFixedHeight(38)
+        self._pbtn_add.setToolTip(
+            "Add a dependency \u2014 writes pyproject.toml and installs it")
+        self._pbtn_add.clicked.connect(self._proj_add_selected)
+        _actions.addWidget(self._pbtn_add)
+
+        self._pbtn_pkgs = QPushButton("\U0001f4e6  Packages")
+        self._pbtn_pkgs.setObjectName("secondary")
+        self._pbtn_pkgs.setFixedHeight(38)
+        self._pbtn_pkgs.clicked.connect(self._proj_open_packages)
+        _actions.addWidget(self._pbtn_pkgs)
+
+        self._pbtn_term = QPushButton(f"{_terminal_icon()}Open Terminal")
+        self._pbtn_term.setObjectName("secondary")
+        self._pbtn_term.setFixedHeight(38)
+        self._pbtn_term.clicked.connect(self._proj_open_terminal)
+        _actions.addWidget(self._pbtn_term)
+
+        # B49: the rest of what Environments offers, minus what a project has
+        # no use for. "Make Default" means nothing here -- there is no default
+        # project -- and Environments' two Rename buttons collapse into one,
+        # because a project's folder name, [project] name, src/ package
+        # directory and [project.scripts] entries all refer to each other and
+        # renaming half of them leaves it broken.
+        self._pbtn_clone = QPushButton("\U0001f4cb Clone")
+        self._pbtn_clone.setObjectName("secondary")
+        self._pbtn_clone.setFixedHeight(38)
+        self._pbtn_clone.clicked.connect(self._clone_project)
+        _actions.addWidget(self._pbtn_clone)
+
+        self._pbtn_rename = QPushButton("\u270f Rename")
+        self._pbtn_rename.setObjectName("secondary")
+        self._pbtn_rename.setFixedHeight(38)
+        self._pbtn_rename.setToolTip(
+            "Rename the folder and the project name together")
+        self._pbtn_rename.clicked.connect(self._rename_project)
+        _actions.addWidget(self._pbtn_rename)
+
+        self._pbtn_export = QPushButton("\U0001f4e4 Export \u25be")
+        self._pbtn_export.setObjectName("secondary")
+        self._pbtn_export.setFixedHeight(38)
+        _emenu = QMenu(self._pbtn_export)
+        _emenu.addAction("\U0001f4c4 requirements.txt (from the environment)",
+                         lambda: self._export_project("requirements"))
+        _emenu.addAction("\U0001f4cb Copy pyproject.toml to clipboard",
+                         lambda: self._export_project("pyproject"))
+        _emenu.addSeparator()
+        _emenu.addAction("\U0001f4cb Copy the project's own commands",
+                         lambda: self._export_project("commands"))
+        self._pbtn_export.setMenu(_emenu)
+        _actions.addWidget(self._pbtn_export)
+
+        _actions.addStretch()
+
+        self._pbtn_delete = QPushButton("\U0001f5d1\ufe0f Delete")
+        self._pbtn_delete.setObjectName("danger")
+        self._pbtn_delete.setFixedHeight(38)
+        self._pbtn_delete.setToolTip("Delete the project folder from disk")
+        self._pbtn_delete.clicked.connect(self._delete_project)
+        _actions.addWidget(self._pbtn_delete)
+
+        layout.addLayout(_actions)
 
         self._refresh_projects()
         self._update_project_buttons()
@@ -927,7 +1011,9 @@ class ProjectsPageMixin:
         """
         _path = self._selected_project_path()
         _has = bool(_path)
-        for _b in (self._pbtn_add, self._pbtn_pkgs, self._pbtn_term):
+        for _b in (self._pbtn_add, self._pbtn_pkgs, self._pbtn_term,
+                   self._pbtn_clone, self._pbtn_rename, self._pbtn_export,
+                   self._pbtn_delete):
             _b.setEnabled(_has)
 
         if not _has:
@@ -968,6 +1054,12 @@ class ProjectsPageMixin:
         if not ok or not pkgs.strip():
             return
         argv += pkgs.split()
+        self._show_project_command(
+            " ".join(argv),
+            f"Runs in: {project_path}\n\n"
+            f"This writes the dependency into pyproject.toml AND installs it.\n"
+            f"`pip install` would do only the second half, leaving the project "
+            f"not declaring something it needs.")
 
         try:
             from src.core.tool_registry import ToolRegistry
@@ -1038,6 +1130,14 @@ class ProjectsPageMixin:
 
         argv = list(argv)
         _tool = meta.get("tool", "")
+
+        # B49: show it in the panel too, so it stays readable after the
+        # dialog is gone -- and stays there while the command runs.
+        self._show_project_command(
+            " ".join(argv),
+            f"Runs in: {project_path}\n\n"
+            f"Tool: {meta.get('tool') or 'unknown'}\n"
+            f"Declared dependencies: {meta.get('deps', 0)}")
 
         if QMessageBox.question(
                 self, f"{what}?",
@@ -1185,6 +1285,197 @@ class ProjectsPageMixin:
                 QMessageBox.warning(self, "Open Folder", msg)
         except Exception as e:
             QMessageBox.warning(self, "Open Folder", f"{type(e).__name__}: {e}")
+
+    def _show_project_command(self, command: str, hints: str = ""):
+        """Put a command in the reference panel and reveal it (B49).
+
+        The Environments page has shown its commands this way for a long time.
+        Doing the same here matters more, not less: `pdm add`, `hatch env
+        create` and `uv sync` are exactly the commands a reader is least
+        likely to know already.
+        """
+        try:
+            self._proj_cmd_live.setText(f"\u25b6  {command}")
+            self._proj_cmd_hints.setPlainText(hints or "")
+            self._proj_cmd_hints.setVisible(bool(hints))
+            self._proj_cmd_panel.setVisible(True)
+        except Exception:
+            pass
+
+    def _rename_project(self):
+        """Rename the folder and the declared project name together.
+
+        B49: Environments offers two kinds of rename -- folder only, or a full
+        clone-and-delete. Neither shape fits a project, where the folder name,
+        the [project] name, the src/ package directory and every
+        [project.scripts] entry refer to one another. Renaming some of them
+        leaves a project that cannot import itself.
+
+        So this renames the folder and the [project] name, and says plainly
+        what it did NOT touch, rather than pretending the job is finished.
+        """
+        from PySide6.QtWidgets import QInputDialog
+
+        _path = self._selected_project_path()
+        if not _path or not os.path.isdir(_path):
+            return
+        _meta = read_project_meta(_path)
+        _old_dir = os.path.basename(_path)
+        _parent = os.path.dirname(_path)
+
+        name, ok = QInputDialog.getText(
+            self, "Rename Project",
+            f"Current folder:  {_old_dir}\n"
+            f"Current name:    {_meta['name']}\n\n"
+            f"New name:", text=_old_dir)
+        if not ok or not name.strip() or name.strip() == _old_dir:
+            return
+        _new = name.strip()
+        _dst = os.path.join(_parent, _new)
+        if os.path.exists(_dst):
+            QMessageBox.warning(
+                self, "Already there", f"This path already exists:\n{_dst}")
+            return
+
+        self._show_project_command(
+            f'mv "{_path}" "{_dst}"' if os.name != "nt"
+            else f'move "{_path}" "{_dst}"',
+            "The [project] name in pyproject.toml is updated to match.\n\n"
+            "NOT changed, because other files import them by name:\n"
+            "  \u2022 the src/ package directory\n"
+            "  \u2022 [project.scripts] entries\n"
+            "  \u2022 the environment, which is rebuilt on the next sync")
+
+        try:
+            os.rename(_path, _dst)
+        except Exception as e:
+            QMessageBox.critical(self, "Rename failed", f"{type(e).__name__}: {e}")
+            return
+
+        try:
+            _pp = os.path.join(_dst, "pyproject.toml")
+            if os.path.isfile(_pp):
+                with open(_pp, "r", encoding="utf-8") as fh:
+                    _txt = fh.read()
+                if _meta["name"]:
+                    _txt = _txt.replace(f'name = "{_meta["name"]}"',
+                                        f'name = "{_new}"', 1)
+                    with open(_pp, "w", encoding="utf-8") as fh:
+                        fh.write(_txt)
+        except Exception as e:
+            _log.warning(f"[Projects] renamed the folder but not the name: {e!r}")
+
+        try:
+            from src.utils.logger import banner_command
+            banner_command(f'mv "{_path}" "{_dst}"',
+                           context=f"Rename project ({_old_dir} \u2192 {_new})")
+        except Exception:
+            pass
+
+        self._drop_project_record(_path)
+        self._record_project(_dst)
+        self._refresh_projects()
+        _log.info(f"[Projects] renamed {_path} -> {_dst}")
+
+    def _export_project(self, kind: str):
+        """Export something useful about the project (B49).
+
+        Not a copy of the Environments export menu: a project already declares
+        its dependencies in pyproject.toml, so a requirements.txt of what it
+        DECLARES would just be that file in a worse format. What is worth
+        exporting is what is actually INSTALLED, which is a different list.
+        """
+        from PySide6.QtWidgets import QFileDialog, QApplication
+        import subprocess
+
+        _path = self._selected_project_path()
+        if not _path:
+            return
+        _meta = read_project_meta(_path)
+
+        if kind == "pyproject":
+            _pp = os.path.join(_path, "pyproject.toml")
+            if not os.path.isfile(_pp):
+                QMessageBox.information(self, "Export",
+                                        "This project has no pyproject.toml.")
+                return
+            try:
+                QApplication.clipboard().setText(
+                    open(_pp, encoding="utf-8").read())
+                QMessageBox.information(
+                    self, "Copied", "pyproject.toml is on the clipboard.")
+            except Exception as e:
+                QMessageBox.warning(self, "Export", f"{type(e).__name__}: {e}")
+            return
+
+        if kind == "commands":
+            _tool = _meta.get("tool", "")
+            _lines = []
+            for _label, _table in (("Install", self._SYNC_CMD),
+                                   ("Add a package", self._ADD_CMD)):
+                _c = _table.get(_tool)
+                if _c:
+                    _lines.append(f"# {_label}\n{' '.join(_c)}")
+            if not _lines:
+                QMessageBox.information(
+                    self, "Export",
+                    "This project has no recognised tool, so there are no "
+                    "commands to copy.")
+                return
+            _text = f"# {_meta['name']} \u2014 {_tool}\ncd {_path}\n\n" \
+                    + "\n\n".join(_lines)
+            QApplication.clipboard().setText(_text)
+            self._show_project_command(f"cd {_path}", _text)
+            QMessageBox.information(
+                self, "Copied",
+                "The project's own commands are on the clipboard.")
+            return
+
+        # requirements: read the environment, not the declaration
+        _env = _meta.get("env_path", "") or self._cached_env_for(_path)
+        if not _env:
+            QMessageBox.information(
+                self, "No environment",
+                f"{_meta['name']} has no environment yet, so there is nothing "
+                f"installed to export.\n\nUse Sync first.")
+            return
+
+        _py = os.path.join(_env, "Scripts" if os.name == "nt" else "bin",
+                           "python.exe" if os.name == "nt" else "python")
+        if not os.path.isfile(_py):
+            QMessageBox.warning(
+                self, "Export",
+                f"No interpreter found in:\n{_env}")
+            return
+
+        _dst, _ = QFileDialog.getSaveFileName(
+            self, "Export requirements.txt",
+            os.path.join(_path, "requirements.txt"), "Text files (*.txt)")
+        if not _dst:
+            return
+
+        self._show_project_command(f'"{_py}" -m pip freeze > "{_dst}"')
+        try:
+            from src.utils.platform_utils import subprocess_args
+            _kw = subprocess_args()
+        except Exception:
+            _kw = {}
+        try:
+            r = subprocess.run([_py, "-m", "pip", "freeze"],
+                               capture_output=True, text=True, timeout=60, **_kw)
+            with open(_dst, "w", encoding="utf-8") as fh:
+                fh.write(r.stdout)
+        except Exception as e:
+            QMessageBox.warning(self, "Export failed", f"{type(e).__name__}: {e}")
+            return
+
+        try:
+            from src.utils.logger import banner_command
+            banner_command(f'pip freeze > "{_dst}"',
+                           context=f"Export requirements ({_meta['name']})")
+        except Exception:
+            pass
+        QMessageBox.information(self, "Exported", f"Written to:\n{_dst}")
 
     def _clone_project(self):
         """Copy a project to a new folder beside it.

@@ -119,6 +119,64 @@ def _project_dir_for_env(env_path, env_type: str):
     return None
 
 
+
+def install_qt_message_filter(logger=None):
+    """Route Qt's own messages into the log, dropping the known-noisy ones.
+
+    N93 (Bayram, 2026-09-03): this used to live inside main()'s body, so only
+    `python main.py` installed it. Everything started through `vs` -- which is
+    every pip installation -- ran with no handler at all.
+
+    That single fact explains a bug chased across four attempts and three
+    releases. `QFont::setPointSize: Point size <= 0 (-1)` is emitted on BOTH
+    paths, by Qt, because this application styles its tables with pixel font
+    sizes and Qt reports pointSize as -1 whenever a pixel size is set. It is
+    cosmetic and was deliberately filtered here long ago. The source checkout
+    looked clean, the installed copy did not, and the difference was never in
+    the font code at all -- it was that only one of the two entry points ever
+    installed the filter.
+
+    Four separate "fixes" went into font-copying code that was working
+    correctly. The lesson is in the handoff: an absent warning does not mean a
+    fixed bug; it can mean a filter.
+    """
+    # ── Qt message handler → route to logger ──
+    # Imported here, not at module scope: platform_utils is used by the
+    # CLI too, which must stay Qt-free and fast.
+    from PySide6.QtCore import QtMsgType, qInstallMessageHandler
+    from src.utils.logger import get_logger
+
+    qt_log = logger or get_logger("venvstudio.qt")
+
+    def _qt_message_handler(mode, context, message):
+        # Suppress noisy QFont::setPointSize warnings (caused by px-based stylesheets)
+        if "QFont::setPointSize" in message:
+            return
+        # Suppress QWindowsWindow::setGeometry positioning warnings
+        if "QWindowsWindow::setGeometry" in message:
+            qt_log.debug(f"Qt geometry: {message}")
+            return
+        # QFileSystemModel emits one of these per file every time a
+        # non-native QFileDialog closes — 18 warnings for a single Export.
+        # Nothing is wrong; the model is just tearing down its watcher
+        # nodes. Keep them at debug so the log stays readable.
+        if "No node found for item that was just removed" in message:
+            return
+
+        if mode == QtMsgType.QtDebugMsg:
+            qt_log.debug(f"Qt: {message}")
+        elif mode == QtMsgType.QtInfoMsg:
+            qt_log.info(f"Qt: {message}")
+        elif mode == QtMsgType.QtWarningMsg:
+            qt_log.warning(f"Qt: {message}")
+        elif mode == QtMsgType.QtCriticalMsg:
+            qt_log.error(f"Qt CRITICAL: {message}")
+        elif mode == QtMsgType.QtFatalMsg:
+            qt_log.critical(f"Qt FATAL: {message}")
+
+    # Install handler early — will be re-installed after QApplication
+    qInstallMessageHandler(_qt_message_handler)
+
 def setup_application_font(app, logger=None):
     """Detect the UI font, wire up emoji fallback, and apply it to `app`.
 

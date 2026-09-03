@@ -527,7 +527,10 @@ def _check_qt_xcb_deps():
 # "No module named 'main'" -- so the font fix reached nobody who had used
 # pip. Eyup's log caught it. platform_utils ships with the package, so both
 # entry points can reach it there.
-from src.utils.platform_utils import setup_application_font
+from src.utils.platform_utils import (
+    setup_application_font,
+    install_qt_message_filter,
+)
 
 def main():
     logger = None
@@ -581,37 +584,13 @@ def main():
             except Exception:
                 pass
 
-        # ── Qt message handler → route to logger ──
-        qt_log = get_logger("venvstudio.qt")
+        # N93 (Bayram, 2026-09-03): the handler lives in platform_utils now,
+        # because src/main.py never installed one and therefore never got
+        # this filtering. That is the whole reason the setPointSize warning
+        # appeared for installed copies and not from a source checkout: the
+        # warning happens on BOTH, and only this file was suppressing it.
+        install_qt_message_filter()
 
-        def _qt_message_handler(mode, context, message):
-            # Suppress noisy QFont::setPointSize warnings (caused by px-based stylesheets)
-            if "QFont::setPointSize" in message:
-                return
-            # Suppress QWindowsWindow::setGeometry positioning warnings
-            if "QWindowsWindow::setGeometry" in message:
-                qt_log.debug(f"Qt geometry: {message}")
-                return
-            # QFileSystemModel emits one of these per file every time a
-            # non-native QFileDialog closes — 18 warnings for a single Export.
-            # Nothing is wrong; the model is just tearing down its watcher
-            # nodes. Keep them at debug so the log stays readable.
-            if "No node found for item that was just removed" in message:
-                return
-
-            if mode == QtMsgType.QtDebugMsg:
-                qt_log.debug(f"Qt: {message}")
-            elif mode == QtMsgType.QtInfoMsg:
-                qt_log.info(f"Qt: {message}")
-            elif mode == QtMsgType.QtWarningMsg:
-                qt_log.warning(f"Qt: {message}")
-            elif mode == QtMsgType.QtCriticalMsg:
-                qt_log.error(f"Qt CRITICAL: {message}")
-            elif mode == QtMsgType.QtFatalMsg:
-                qt_log.critical(f"Qt FATAL: {message}")
-
-        # Install handler early — will be re-installed after QApplication
-        qInstallMessageHandler(_qt_message_handler)
 
         # ── GLOBAL EXCEPTION HOOK ─────────────────────────────────────────
         # Qt event loop (resize/move/paint) sometimes swallows Python exceptions

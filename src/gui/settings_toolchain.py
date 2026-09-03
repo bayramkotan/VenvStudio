@@ -1966,10 +1966,32 @@ class ToolchainMixin:
         d = _os.path.dirname(path) if _os.path.isfile(path) else path
         if not d or not _os.path.isdir(d):
             return True
+
+        # N94 (Eyup's machine, 2026-09-03): ask the OS before touching disk.
+        #
+        # This crashed the whole toolchain table with
+        #
+        #     PermissionError: [Errno 13] Permission denied:
+        #     'C:\\Program Files\\Python313\\.vs-wtest-en_o27fx'
+        #
+        # for a Python installed under Program Files. `except OSError` should
+        # have caught it -- PermissionError is one -- but on Windows tempfile
+        # re-raises from inside its own retry loop and it escaped anyway. So
+        # the cheap check comes first and the temp file is only a fallback.
+        #
+        # A label in the Status column is not worth a traceback: this function
+        # exists only to print "System" or "User", and now it answers rather
+        # than raising, whatever goes wrong.
+        try:
+            if not _os.access(d, _os.W_OK):
+                return False
+        except Exception:
+            pass
+
         try:
             with _tf.NamedTemporaryFile(dir=d, prefix=".vs-wtest-"):
                 return True
-        except OSError:
+        except Exception:
             return False
 
     def _tc_do_install(self, tool, pkg, scope, tbl, row):

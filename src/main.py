@@ -48,6 +48,20 @@ def main():
         log = setup_logging()
         log.info(f"Starting {APP_NAME}")
 
+        # N93: install Qt's message filter HERE too.
+        #
+        # main.py has installed one for a long time; this entry point never
+        # did, so every pip-installed copy ran with Qt's messages unfiltered.
+        # That is the entire reason `QFont::setPointSize: Point size <= 0 (-1)`
+        # appeared for installed users and not from a source checkout -- Qt
+        # emits it on both, this application styles its tables in pixels, and
+        # only one of the two entry points was suppressing it.
+        try:
+            from src.utils.platform_utils import install_qt_message_filter
+            install_qt_message_filter()
+        except Exception as _qe:
+            log.warning(f"Could not install the Qt message filter: {_qe}")
+
         # ── Version-based cache invalidation (B187 follow-up) ──
         # On version upgrade, drop the env cache so old buggy entries don't
         # survive into the new version. See src_main.py for the rationale.
@@ -103,18 +117,6 @@ def main():
         #
         # The detection lives in main.py rather than being copied here, because
         # this file being a partial copy of that one is what caused the bug.
-        # N92: imported from platform_utils, NOT from main.
-        #
-        # `from main import ...` worked from a source checkout and failed on
-        # every installed copy -- main.py is not in the PyPI package -- so the
-        # font was never set for anyone who had installed with pip. The log on
-        # Eyup's machine said it plainly: "Could not set the application font:
-        # No module named 'main'".
-        try:
-            from src.utils.platform_utils import setup_application_font
-            setup_application_font(app, log)
-        except Exception as _fe:
-            log.warning(f"Could not set the application font: {_fe}")
 
         config = ConfigManager()
         window = MainWindow()

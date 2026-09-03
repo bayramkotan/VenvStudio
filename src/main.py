@@ -58,6 +58,10 @@ def main():
         # only one of the two entry points was suppressing it.
         try:
             from src.utils.platform_utils import install_qt_message_filter
+        except Exception as _qe:
+            log.warning(f"Could not load the Qt message filter: {_qe}")
+            install_qt_message_filter = lambda: None
+        try:
             install_qt_message_filter()
         except Exception as _qe:
             log.warning(f"Could not install the Qt message filter: {_qe}")
@@ -98,6 +102,16 @@ def main():
                 pass
 
         app = QApplication(sys.argv)
+
+        # N93: install it AGAIN after QApplication. Constructing QApplication
+        # resets Qt's message handler, so the one installed above stops being
+        # called -- and the startup warnings are exactly the ones worth
+        # filtering. main.py has always done this twice for the same reason.
+        try:
+            install_qt_message_filter()
+        except Exception:
+            pass
+
         app.setApplicationName(APP_NAME)
         app.setApplicationVersion(APP_VERSION)
 

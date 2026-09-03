@@ -663,8 +663,11 @@ def main():
         )
 
         app = QApplication(sys.argv)
-        # Re-install after QApplication so startup font warnings are also suppressed
-        qInstallMessageHandler(_qt_message_handler)
+        # Re-install after QApplication so startup font warnings are also
+        # suppressed: constructing QApplication resets Qt's handler, so the
+        # one installed above stops being called. N93 moved the handler into
+        # platform_utils; this second call moved with it.
+        install_qt_message_filter()
         app.setApplicationName(APP_NAME)
 
         # ── B155: Allow Ctrl+C / Ctrl+D to close VenvStudio when launched from

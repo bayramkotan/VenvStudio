@@ -1967,21 +1967,45 @@ class ToolchainMixin:
         if not d or not _os.path.isdir(d):
             return True
 
-        # N94 (Eyup's machine, 2026-09-03): ask the OS before touching disk.
+        # N94/N95 (Eyup's machine, 2026-09-03): never touch these directories.
         #
-        # This crashed the whole toolchain table with
+        # First this crashed the whole toolchain table:
         #
         #     PermissionError: [Errno 13] Permission denied:
-        #     'C:\\Program Files\\Python313\\.vs-wtest-en_o27fx'
+        #     'C:\\Program Files\\Python313\\.vs-wtest-8wzgfclv'
         #
-        # for a Python installed under Program Files. `except OSError` should
-        # have caught it -- PermissionError is one -- but on Windows tempfile
-        # re-raises from inside its own retry loop and it escaped anyway. So
-        # the cheap check comes first and the temp file is only a fallback.
+        # Adding os.access() ahead of the temp file did not help, because
+        # tempfile calls os.access ITSELF while handling the denial -- and on
+        # his machine that call HANGS. The second log shows the application
+        # frozen there until Ctrl+C:
         #
-        # A label in the Status column is not worth a traceback: this function
-        # exists only to print "System" or "User", and now it answers rather
-        # than raising, whatever goes wrong.
+        #     tempfile.py:263  _os.access(dir, _os.W_OK)
+        #     KeyboardInterrupt
+        #
+        # Something in the way Windows answers for C:\Program Files -- a
+        # scanner, an ACL lookup, a policy -- takes forever or never returns.
+        #
+        # So: recognise the system locations by NAME and answer without going
+        # near the filesystem. Nobody writes into Program Files or System32
+        # without elevation, so the answer was always going to be False; the
+        # check was asking a question it already knew the answer to, and
+        # hanging on it.
+        _sys_roots = []
+        for _v in ("ProgramFiles", "ProgramFiles(x86)", "ProgramW6432",
+                   "SystemRoot", "windir"):
+            _p = _os.environ.get(_v)
+            if _p:
+                _sys_roots.append(_os.path.normcase(_p))
+        if _os.name != "nt":
+            _sys_roots += ["/usr", "/opt", "/bin", "/sbin", "/lib"]
+
+        _nd = _os.path.normcase(_os.path.abspath(d))
+        for _root in _sys_roots:
+            if _nd == _root or _nd.startswith(_root + _os.sep):
+                return False
+
+        # Anywhere else, the cheap question first -- and it is safe here
+        # precisely because the paths that hang have already been excluded.
         try:
             if not _os.access(d, _os.W_OK):
                 return False

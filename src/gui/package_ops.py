@@ -1305,7 +1305,59 @@ class PackageOpsMixin:
             )
             return
 
+        # B55 (Bayram, 2026-09-04): check the names before installing.
+        #
+        # The Projects page gained this first, and his reply was "tamamda
+        # diger env tipleri icin yapmamissin" -- so it belongs here too, in
+        # the same words, from the same module. Typing a typo into Manual
+        # Install used to mean waiting for pip to fail and reading its
+        # resolver output.
+        #
+        # conda environments are exempt: those packages come from conda-forge,
+        # where PyPI is not the authority.
+        try:
+            from src.core.package_check import verify_many
+            _env_type = getattr(self, "_current_env_type", "venv")
+            _checked = verify_many(cleaned, self._ask_about_package,
+                                   tool=_env_type)
+            if _checked is None:
+                return          # the user cancelled at a prompt
+            cleaned = _checked
+        except Exception as _ve:
+            # A checker that fails must not stop an install.
+            from src.utils.logger import get_logger as _gl
+            _gl("venvstudio.packages").warning(
+                f"package name check skipped: {_ve!r}")
+
         self._install_packages(cleaned)
+
+    def _ask_about_package(self, name, suggestions):
+        """A name PyPI does not know. Returns what to use, or None to abort.
+
+        B55: the same question the Projects page asks, worded the same way.
+        The checking lives in src/core/package_check.py; only the dialog is
+        here, because that module has no Qt.
+        """
+        from PySide6.QtWidgets import QInputDialog, QMessageBox
+
+        if suggestions:
+            _choices = list(suggestions) + [f"Use \u201c{name}\u201d anyway"]
+            _pick, _ok = QInputDialog.getItem(
+                self, "No such package",
+                f"\u201c{name}\u201d is not on PyPI.\n\nDid you mean:",
+                _choices, 0, False)
+            if not _ok:
+                return None
+            return name if _pick.startswith("Use ") else _pick
+
+        if QMessageBox.question(
+                self, "No such package",
+                f"\u201c{name}\u201d is not on PyPI, and nothing in the "
+                f"catalog looks close.\n\nInstall it anyway?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No) != QMessageBox.Yes:
+            return None
+        return name
 
     def _poetry_project_dir(self):
         """Return the poetry project directory (where pyproject.toml lives).

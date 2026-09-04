@@ -127,8 +127,21 @@ def find_project_env(project_dir, tool: str = "") -> str:
     # The in-project layouts, which are also poetry's when in-project venvs
     # are configured, so they are tried first regardless of tool.
     for candidate in (d / ".venv", d / ".pixi" / "envs" / "default"):
-        if (candidate / "bin" / "python").is_file() or \
-           (candidate / "Scripts" / "python.exe").is_file():
+        # B57 (Bayram, 2026-09-04): a conda environment puts python at its
+        # ROOT on Windows, not under Scripts. pixi builds conda environments,
+        # so `pixi install` succeeded, the tree existed, and this test still
+        # said no:
+        #
+        #   .pixi\envs\default\python.exe      <- pixi (conda layout)
+        #   .venv\Scripts\python.exe            <- venv layout
+        #
+        # Four candidates rather than two, and conda-meta as a last resort
+        # for an environment whose interpreter is named something else.
+        for _exe in ("bin/python", "Scripts/python.exe",
+                     "python.exe", "bin/python3"):
+            if (candidate / _exe).is_file():
+                return str(candidate)
+        if (candidate / "conda-meta").is_dir():
             return str(candidate)
 
     # pdm can be configured for PEP 582, where there is no virtualenv at all:
@@ -170,16 +183,39 @@ def find_project_env(project_dir, tool: str = "") -> str:
                 return str(_hits[0])
 
     if tool == "hatch":
-        try:
-            _root = Path.home() / ".local" / "share" / "hatch" / "env" / "virtual"
-            if _root.is_dir():
-                _slug = read_project_meta_name(d).replace("_", "-").lower()
+        # B56 (Bayram, 2026-09-04): hatch stores environments per platform, and
+        # only the Linux path was here -- so on Windows every hatch project
+        # showed an empty Env Size while its packages were counted from a
+        # cached path, which is the contradiction he spotted.
+        #
+        # The real layout, from his machine:
+        #
+        #   %LOCALAPPDATA%\hatch\env\virtual\project-hatch\RayatZqp\project-hatch
+        #                                       ^project        ^hash    ^env
+        #
+        # The hash is hatch's own, so the tree is walked rather than composed.
+        _roots = []
+        if os.name == "nt":
+            _la = os.environ.get("LOCALAPPDATA")
+            if _la:
+                _roots.append(Path(_la) / "hatch" / "env" / "virtual")
+        else:
+            _roots.append(Path.home() / ".local" / "share" / "hatch" / "env" / "virtual")
+            # macOS
+            _roots.append(Path.home() / "Library" / "Application Support"
+                          / "hatch" / "env" / "virtual")
+
+        _slug = read_project_meta_name(d).replace("_", "-").lower()
+        for _root in _roots:
+            try:
+                if not _root.is_dir():
+                    continue
                 for _e in _root.iterdir():
                     if _e.is_dir() and _e.name.lower() == _slug:
                         for _sub in _e.rglob("pyvenv.cfg"):
                             return str(_sub.parent)
-        except OSError:
-            pass
+            except OSError:
+                continue
 
     return ""
 
@@ -325,6 +361,20 @@ def count_installed(env_path) -> int:
     if not env_path:
         return 0
     base = Path(env_path)
+
+    # B57: a conda environment records every package in conda-meta, one JSON
+    # per package, and that is the honest count for pixi -- its site-packages
+    # holds only the pip-installed subset, so numpy from conda-forge would not
+    # have appeared there.
+    _cm = base / "conda-meta"
+    if _cm.is_dir():
+        try:
+            _n = sum(1 for x in _cm.iterdir() if x.suffix == ".json")
+            if _n:
+                return _n
+        except OSError:
+            pass
+
     # `lib` (no python*/ level) is pdm's PEP 582 layout:
     # __pypackages__/3.14/lib/<package>
     for site in (base.glob("lib/python*/site-packages"),
@@ -397,6 +447,22 @@ def read_project_meta(project_dir) -> dict:
     # caches; the environment is whatever the tool built, wherever it put it.
     meta["src_bytes"] = dir_size(d)
     meta["env_bytes"] = dir_size(meta["env_path"]) if meta["env_path"] else 0
+    return meta
+
+
+def apply_cached_env(meta, cached_path):
+    """Fill in an environment the guess missed but the cache remembers.
+
+    B56: the table filled `installed` from a cached path while leaving
+    `env_bytes` at zero, so a hatch project read "2 installed, — size". One
+    place now does both, and the two cannot disagree again.
+    """
+    if not cached_path or not os.path.isdir(cached_path):
+        return meta
+    meta["env_path"] = cached_path
+    meta["has_env"] = True
+    meta["installed"] = count_installed(cached_path)
+    meta["env_bytes"] = dir_size(cached_path)
     return meta
 
 
@@ -733,10 +799,7 @@ class ProjectsPageMixin:
         for _p in paths:
             _m = read_project_meta(_p)
             if not _m["has_env"]:
-                _c = self._cached_env_for(_p)
-                if _c:
-                    _m["env_path"] = _c
-                    _m["env_bytes"] = dir_size(_c)
+                apply_cached_env(_m, self._cached_env_for(_p))
             _t = _m["tool"] or "other"
             _g = _by_tool.setdefault(_t, {"n": 0, "src": 0, "env": 0})
             _g["n"] += 1
@@ -844,11 +907,7 @@ class ProjectsPageMixin:
             # A path the tool told us about earlier counts too, so poetry and
             # hatch projects stop showing a dash once they have been opened.
             if not meta["has_env"]:
-                _cached = self._cached_env_for(path)
-                if _cached:
-                    meta["env_path"] = _cached
-                    meta["has_env"] = True
-                    meta["installed"] = count_installed(_cached)
+                apply_cached_env(meta, self._cached_env_for(path))
             t.insertRow(row)
 
             _icon = self._TOOL_ICONS.get(meta["tool"], "\U0001f4c1")
@@ -1247,6 +1306,48 @@ class ProjectsPageMixin:
             " ".join(_sync) if _sync else f"cd {path}",
             "\n".join(_lines))
 
+    def _verify_packages(self, names, meta):
+        """Check each name through the shared checker (B55).
+
+        The dialogs live here because package_check has no Qt; the deciding
+        does not, so the Manual Install tab asks the same questions with the
+        same wording.
+        """
+        from PySide6.QtWidgets import QApplication
+        from src.core.package_check import verify_many
+
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            return verify_many(names, self._ask_about_package,
+                               tool=meta.get("tool", ""))
+        finally:
+            QApplication.restoreOverrideCursor()
+
+    def _ask_about_package(self, name, suggestions):
+        """A name PyPI does not know. Returns what to use, or None to abort."""
+        from PySide6.QtWidgets import QInputDialog, QMessageBox
+
+        if suggestions:
+            _choices = list(suggestions) + [f"Use \u201c{name}\u201d anyway"]
+            _pick, _ok = QInputDialog.getItem(
+                self, "No such package",
+                f"\u201c{name}\u201d is not on PyPI.\n\nDid you mean:",
+                _choices, 0, False)
+            if not _ok:
+                return None
+            return name if _pick.startswith("Use ") else _pick
+
+        # No close match: the catalog is small, so this is weak evidence --
+        # the question is asked, not the install refused.
+        if QMessageBox.question(
+                self, "No such package",
+                f"\u201c{name}\u201d is not on PyPI, and nothing in the "
+                f"catalog looks close.\n\nInstall it anyway?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No) != QMessageBox.Yes:
+            return None
+        return name
+
     def _proj_add_package(self, project_path, meta):
         """Add a dependency with the project's own tool."""
         from PySide6.QtWidgets import QInputDialog, QApplication
@@ -1263,7 +1364,19 @@ class ProjectsPageMixin:
             f"Separate several with spaces.")
         if not ok or not pkgs.strip():
             return
-        argv += pkgs.split()
+        # B55: check the names before running anything.
+        #
+        # pixi and conda projects are exempt: `pixi add` resolves against
+        # conda-forge, where the package set is different and a PyPI answer
+        # would be the wrong authority.
+        if meta.get("tool") != "pixi":
+            _resolved = self._verify_packages(pkgs.split(), meta)
+            if _resolved is None:
+                return
+            argv += _resolved
+        else:
+            argv += pkgs.split()
+
         self._show_project_command(
             " ".join(argv),
             f"Runs in: {project_path}\n\n"

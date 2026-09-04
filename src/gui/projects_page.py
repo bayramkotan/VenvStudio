@@ -70,20 +70,34 @@ def detect_tool(project_dir) -> str:
         if marker in text:
             return tool
 
-    # uv writes no [tool.uv] section for a plain project, so it needs its own
-    # test. A freshly created one looks like this:
+    # uv leaves no [tool.uv] section, so it needs its own test -- and the
+    # marker depends on HOW the project was created.
+    #
+    # `uv init --package` / `--lib` write a build backend:
     #
     #     [build-system]
     #     requires = ["uv_build>=0.12.5,<0.13.0"]
     #     build-backend = "uv_build"
     #
-    # The build backend is the reliable marker. `uv.lock` is NOT -- it appears
-    # only after `uv sync`, so a project that had just been created showed no
-    # tool at all, which is how this was found.
+    # `uv init --app` writes NONE of that. Bayram's test-uv project is the
+    # whole file, and there is not one occurrence of the word uv in it:
+    #
+    #     [project]
+    #     name = "test-uv"
+    #     version = "0.1.0"
+    #     requires-python = ">=3.14"
+    #     dependencies = []
+    #
+    # So the build backend alone was not enough, and such projects showed an
+    # empty Tool column -- the second time this detection has been wrong about
+    # a freshly created uv project.
+    #
+    # What uv DOES always leave is `.python-version`, in every mode, from the
+    # first command. poetry, pdm and hatch do not write it. `uv.lock` is not a
+    # marker either: it only appears after `uv sync`.
     if "uv_build" in text or 'requires = ["uv' in text:
         return "uv"
-    # Older uv versions used hatchling and left only this behind.
-    if (d / ".python-version").is_file() and (d / "uv.lock").is_file():
+    if (d / ".python-version").is_file():
         return "uv"
     return ""
 
@@ -223,7 +237,8 @@ def ask_tool_for_env(project_dir, tool: str) -> str:
     try:
         _log.info(f"[Projects] asking {tool} for its env: {' '.join(argv)}")
         r = subprocess.run(argv, cwd=str(project_dir), capture_output=True,
-                           text=True, timeout=30, **_kw)
+                           text=True, timeout=30,
+                           encoding="utf-8", errors="replace", **_kw)
         _out = (r.stdout or "").strip().splitlines()
         for line in _out:
             line = line.strip()
@@ -492,13 +507,26 @@ class ProjectsPageMixin:
         # 300, and resizable: "test_pdm_project-copy" was cut to
         # "test_pdm_project-..." at 240, and a name you cannot read is the one
         # column that has to be legible.
+        # Widths after the two size columns arrived: eight of them no longer
+        # fit at the old sizes and Location was cut down to "C:...", which is
+        # the one column that has to stay readable -- it is how two projects
+        # with the same declared name are told apart.
+        #
+        # The numeric columns are narrowed to what their contents need (a
+        # count, a size, a dash) and every one stays Interactive, so a wide
+        # window can be redistributed by hand rather than by a guess made
+        # here on one screen.
         _h.setSectionResizeMode(0, QHeaderView.Interactive)
-        self.projects_table.setColumnWidth(0, 300)
-        for _i, _w in ((1, 110), (2, 110), (3, 100), (4, 110),
-                       (5, 100), (6, 100)):
-            _h.setSectionResizeMode(_i, QHeaderView.Fixed)
+        self.projects_table.setColumnWidth(0, 220)
+        # Source and Env Size hold things like "1.2 MB" and "352.0 B"
+        # with a header above them that is wider still -- 85 and 90 cut
+        # them to "588...." and "352....". 120 fits the longest value
+        # these produce ("1023.9 GB") with room for the header.
+        for _i, _w in ((1, 90), (2, 95), (3, 80), (4, 85), (5, 120), (6, 120)):
+            _h.setSectionResizeMode(_i, QHeaderView.Interactive)
             self.projects_table.setColumnWidth(_i, _w)
         _h.setSectionResizeMode(7, QHeaderView.Stretch)
+        self.projects_table.horizontalHeader().setMinimumSectionSize(60)
         self.projects_table.verticalHeader().setVisible(False)
         self.projects_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.projects_table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -752,12 +780,22 @@ class ProjectsPageMixin:
         #
         # The project directory is the right default. Anywhere else, the user
         # can say so.
+        # B54: Cancel means cancel.
+        #
+        # It used to mean "scan the project folder instead", which is a second
+        # action hidden behind the button that stops the first -- and it left
+        # the summary line reading "scan found 5, 0 new" where the sizes and
+        # per-tool groups had been. Bayram pressed Cancel and lost the header.
+        #
+        # The project folder is already the default the dialog opens at, so
+        # accepting it is one keypress and needs no hidden meaning.
         from PySide6.QtWidgets import QFileDialog
         _extra = QFileDialog.getExistingDirectory(
-            self, "Scan which folder?  (Cancel to scan the project folder)",
+            self, "Scan which folder?",
             _roots[0] if _roots else os.path.expanduser("~"))
-        if _extra:
-            _roots = [_extra]
+        if not _extra:
+            return
+        _roots = [_extra]
 
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
@@ -775,9 +813,17 @@ class ProjectsPageMixin:
 
         _log.info(f"[Projects] scan: {len(found)} found, {len(_new)} new")
         self._refresh_projects()
-        self.projects_info.setText(
-            f"{len(self._known_project_paths())} projects  \u2014  "
-            f"scan found {len(found)}, {len(_new)} new")
+
+        # B54: report the scan in the STATUS BAR, not over the summary.
+        #
+        # Overwriting projects_info threw away the sizes and the per-tool
+        # groups that _refresh_projects had just computed, and nothing put
+        # them back until the next refresh.
+        try:
+            self.statusBar().showMessage(
+                f"Scan: {len(found)} found, {len(_new)} new", 8000)
+        except Exception:
+            pass
 
     def _fill_projects_table(self, paths):
         t = self.projects_table
@@ -937,7 +983,12 @@ class ProjectsPageMixin:
                 lambda: self._proj_add_package(_path, _meta_for_menu))
 
         menu.addSeparator()
-        menu.addAction("\U0001f4bb  Open Terminal", self._proj_open_terminal)
+        # N96: the same glyph the toolbar button uses. This one was
+        # written out by hand -- U+1F4BB, a laptop -- so it kept the old
+        # look after terminal_icon() was settled everywhere else. Four
+        # places now go through the one function.
+        menu.addAction(f"{_terminal_icon()} Open Terminal",
+                       self._proj_open_terminal)
         menu.addAction("\U0001f4c2  Open Folder", self._proj_open_folder)
         menu.addSeparator()
         menu.addAction("\U0001f4cb  Clone Project\u2026", self._clone_project)
@@ -1124,6 +1175,12 @@ class ProjectsPageMixin:
         if not _has:
             self._pbtn_sync.setEnabled(False)
             self._pbtn_sync.setText("\u21bb  Sync")
+            # B53: nothing selected, so the panel would be describing a
+            # project the user is no longer looking at.
+            try:
+                self._proj_cmd_panel.setVisible(False)
+            except Exception:
+                pass
             return
 
         try:
@@ -1141,6 +1198,54 @@ class ProjectsPageMixin:
         self._pbtn_sync.setToolTip(
             f"Run `{' '.join(_cmd)}` in {_path}" if _cmd
             else "No recognised project tool")
+
+        # B53 (Bayram, 2026-09-04): show the project's commands on SELECTION,
+        # not only after an action.
+        #
+        # The panel existed but stayed hidden until something was pressed, so
+        # the page looked like it had no command reference at all -- which is
+        # how Bayram read it. The Environments page fills its panel as you go
+        # too.
+        #
+        # This is the first pillar in its plainest form: select a poetry
+        # project and read what poetry would have you type, having pressed
+        # nothing and changed nothing.
+        self._show_project_commands_for(_path, _meta)
+
+    def _show_project_commands_for(self, path, meta):
+        """Fill the reference panel with this project's own commands (B53)."""
+        _tool = meta.get("tool", "")
+        if not _tool:
+            self._show_project_command(
+                f"cd {path}",
+                "No recognised project tool.\n\n"
+                "This directory has a pyproject.toml that names none of uv, "
+                "poetry, pdm, hatch or pixi, so VenvStudio can open it but "
+                "cannot drive it.")
+            return
+
+        _sync = self._SYNC_CMD.get(_tool)
+        _add = self._ADD_CMD.get(_tool)
+        _lines = [f"cd {path}", ""]
+        if _sync:
+            _lines.append(f"# Install what the project declares")
+            _lines.append(" ".join(_sync))
+            _lines.append("")
+        if _add:
+            _lines.append("# Add a dependency (writes pyproject.toml too)")
+            _lines.append(" ".join(_add) + " <package>")
+            _lines.append("")
+
+        _env = meta.get("env_path") or self._cached_env_for(path)
+        if _env:
+            _lines.append(f"# Environment")
+            _lines.append(_env)
+        else:
+            _lines.append("# No environment yet -- the first install builds it")
+
+        self._show_project_command(
+            " ".join(_sync) if _sync else f"cd {path}",
+            "\n".join(_lines))
 
     def _proj_add_package(self, project_path, meta):
         """Add a dependency with the project's own tool."""
@@ -1190,8 +1295,23 @@ class ProjectsPageMixin:
         QApplication.setOverrideCursor(Qt.WaitCursor)
         try:
             _log.info(f"[Projects] {' '.join(argv)}")
+            # B52 (Bayram, 2026-09-04): decode as UTF-8, not the console's
+            # code page.
+            #
+            # With text=True and no encoding, Windows decodes with cp1252 and
+            # pixi's error came back as
+            #
+            #     Error:   Ã— failed to solve requirements
+            #       â”‚ 64'
+            #       â”œâ”€â–¶ Request failed after 3 retries
+            #
+            # instead of ×, │ and ├─▶. Every one of these tools writes UTF-8;
+            # the box-drawing characters they use for error trees are exactly
+            # what cp1252 cannot represent. errors="replace" so a stray byte
+            # never turns a tool's message into an exception of our own.
             r = subprocess.run(argv, cwd=str(project_path), capture_output=True,
-                               text=True, timeout=900, **_kw)
+                               text=True, timeout=900,
+                               encoding="utf-8", errors="replace", **_kw)
             _log.info(f"[Projects]   -> exit={r.returncode}")
         except Exception as e:
             QApplication.restoreOverrideCursor()
@@ -1281,7 +1401,8 @@ class ProjectsPageMixin:
         try:
             _log.info(f"[Projects] {' '.join(argv)}")
             r = subprocess.run(argv, cwd=str(project_path), capture_output=True,
-                               text=True, timeout=900, **_kw)
+                               text=True, timeout=900,
+                               encoding="utf-8", errors="replace", **_kw)
             _log.info(f"[Projects]   -> exit={r.returncode}")
         except subprocess.TimeoutExpired:
             QApplication.restoreOverrideCursor()
@@ -1314,7 +1435,24 @@ class ProjectsPageMixin:
         if _fresh:
             self._cache_env_for(project_path, _fresh)
         self._refresh_projects()
+
+        # B54 (Bayram, 2026-09-04): do NOT let the refresh overwrite what just
+        # happened.
+        #
+        # _update_project_buttons re-reads the selection and refills the panel
+        # with the project's general commands, so the result of the command
+        # that had just run vanished the instant it finished -- with no click
+        # from the user, which is exactly how he described it.
+        #
+        # The buttons still need updating (the environment may exist now), so
+        # the panel is restored afterwards with the outcome rather than the
+        # generic listing.
         self._update_project_buttons()
+        _outcome = (r.stdout or "").strip()
+        self._show_project_command(
+            " ".join(argv),
+            f"\u2705 finished in {project_path}\n\n"
+            + (_outcome[-1500:] if _outcome else "(the tool printed nothing)"))
 
         if not _fresh and not meta.get("deps"):
             QMessageBox.information(
@@ -1598,7 +1736,8 @@ class ProjectsPageMixin:
             _kw = {}
         try:
             r = subprocess.run([_py, "-m", "pip", "freeze"],
-                               capture_output=True, text=True, timeout=60, **_kw)
+                               capture_output=True, text=True, timeout=60,
+                               encoding="utf-8", errors="replace", **_kw)
             with open(_dst, "w", encoding="utf-8") as fh:
                 fh.write(r.stdout)
         except Exception as e:

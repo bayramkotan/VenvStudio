@@ -290,13 +290,21 @@ def terminal_icon() -> str:
     Linux in v1.6.63. Bayram picked that last one and asked for it everywhere.
 
     Copying the string to the other two would have left four places to keep in
-    step, so it lives here instead. The choice itself: U+1F5A5 is a tidy
-    monochrome monitor in Segoe UI Symbol, while Noto Color Emoji draws a
-    full-colour picture that sits oddly among monochrome controls and is wider
-    than the space allowed for it.
+    step, so it lives here instead.
+
+    N96 (Bayram, 2026-09-04): the same glyph on every platform now.
+
+    It used to be U+1F5A5 on Windows and ">_" elsewhere, on the reasoning that
+    Segoe UI Symbol draws the monitor as tidy monochrome. Having seen both, he
+    asked for ">_" throughout, and it is the better choice for a reason beyond
+    taste: ">_" is a prompt, which is what the button opens, and it reads the
+    same in every font on every system. An emoji codepoint does not -- it is
+    monochrome in one font, full colour in another, absent in a third, and its
+    width changes with each.
+
+    Keeping the trailing space: callers concatenate this directly with a label.
     """
-    import sys as _s
-    return "\U0001f5a5 " if _s.platform == "win32" else ">_ "
+    return ">_ "
 
 
 def bold_font_from(widget, weight=None):

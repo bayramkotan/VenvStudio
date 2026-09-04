@@ -252,6 +252,54 @@ def read_project_meta_name(project_dir) -> str:
     return d.name
 
 
+def dir_size(path, cap_seconds: float = 2.0) -> int:
+    """Bytes under `path`, giving up rather than blocking the interface.
+
+    B46 (Bayram, 2026-09-03): the Environments page shows a size per row and a
+    total in its header; Projects showed neither.
+
+    Two things make this different from the environments case. First, walking
+    a tree is slow, and this runs for every project on every refresh -- so it
+    stops after `cap_seconds` and returns what it has, which is better than a
+    frozen table. Second, `.venv` directories are enormous next to the source
+    beside them, so the two are measured separately and shown in their own
+    columns; adding them together would answer neither "how big is my code"
+    nor "how much do my dependencies cost".
+
+    The environment is skipped here and measured on its own.
+    """
+    import time
+    if not path or not os.path.isdir(path):
+        return 0
+    _deadline = time.monotonic() + cap_seconds
+    _skip = {".venv", "venv", "__pycache__", ".git", ".mypy_cache",
+             ".pytest_cache", ".ruff_cache", ".tox", ".nox", "__pypackages__",
+             ".pixi"}
+    total = 0
+    try:
+        for root, dirs, files in os.walk(path):
+            dirs[:] = [d for d in dirs if d not in _skip]
+            for f in files:
+                try:
+                    total += os.path.getsize(os.path.join(root, f))
+                except OSError:
+                    pass
+            if time.monotonic() > _deadline:
+                break
+    except OSError:
+        pass
+    return total
+
+
+def fmt_size(n: float) -> str:
+    """Bytes as something a person reads, matching the environments page."""
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if n < 1024:
+            return f"{n:.1f} {unit}"
+        n /= 1024
+    return "?"
+
+
 def count_installed(env_path) -> int:
     """How many packages are installed in this environment.
 
@@ -329,6 +377,11 @@ def read_project_meta(project_dir) -> dict:
     meta["env_path"] = find_project_env(d, meta["tool"])
     meta["has_env"] = bool(meta["env_path"])
     meta["installed"] = count_installed(meta["env_path"])
+
+    # B46: the two sizes, measured apart. Source excludes .venv and the
+    # caches; the environment is whatever the tool built, wherever it put it.
+    meta["src_bytes"] = dir_size(d)
+    meta["env_bytes"] = dir_size(meta["env_path"]) if meta["env_path"] else 0
     return meta
 
 
@@ -427,23 +480,25 @@ class ProjectsPageMixin:
         self.projects_info.setWordWrap(True)
         layout.addWidget(self.projects_info)
 
-        self.projects_table = QTableWidget(0, 6)
+        self.projects_table = QTableWidget(0, 8)
         # "Required" and "Installed" rather than "Deps" and "Env": Bayram read
         # the old pair twice and could not tell what either meant, which is a
         # fair verdict on a column called "Deps" showing a number and one
         # called "Env" showing a tick.
         self.projects_table.setHorizontalHeaderLabels(
-            ["Project", "Tool", "Python", "Required", "Installed", "Location"])
+            ["Project", "Tool", "Python", "Required", "Installed",
+             "Source", "Env Size", "Location"])
         _h = self.projects_table.horizontalHeader()
         # 300, and resizable: "test_pdm_project-copy" was cut to
         # "test_pdm_project-..." at 240, and a name you cannot read is the one
         # column that has to be legible.
         _h.setSectionResizeMode(0, QHeaderView.Interactive)
         self.projects_table.setColumnWidth(0, 300)
-        for _i, _w in ((1, 110), (2, 110), (3, 100), (4, 110)):
+        for _i, _w in ((1, 110), (2, 110), (3, 100), (4, 110),
+                       (5, 100), (6, 100)):
             _h.setSectionResizeMode(_i, QHeaderView.Fixed)
             self.projects_table.setColumnWidth(_i, _w)
-        _h.setSectionResizeMode(5, QHeaderView.Stretch)
+        _h.setSectionResizeMode(7, QHeaderView.Stretch)
         self.projects_table.verticalHeader().setVisible(False)
         self.projects_table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self.projects_table.setSelectionBehavior(QAbstractItemView.SelectRows)
@@ -637,10 +692,42 @@ class ProjectsPageMixin:
         paths = self._known_project_paths()
         self._fill_projects_table(paths)
         _n = len(paths)
-        self.projects_info.setText(
-            f"{_n} project{'s' if _n != 1 else ''}"
-            + ("" if _n else "  \u2014  create one, or press Scan for Projects "
-                             "to find existing ones on disk"))
+        if not _n:
+            self.projects_info.setText(
+                "No projects  \u2014  create one, or press Scan for Projects "
+                "to find existing ones on disk")
+            return
+
+        # B46: a summary line like the Environments page has -- grouped by
+        # tool, with sizes, and a total. The sizes are already computed for
+        # the table, so this costs nothing extra.
+        _by_tool, _src_total, _env_total = {}, 0, 0
+        for _p in paths:
+            _m = read_project_meta(_p)
+            if not _m["has_env"]:
+                _c = self._cached_env_for(_p)
+                if _c:
+                    _m["env_path"] = _c
+                    _m["env_bytes"] = dir_size(_c)
+            _t = _m["tool"] or "other"
+            _g = _by_tool.setdefault(_t, {"n": 0, "src": 0, "env": 0})
+            _g["n"] += 1
+            _g["src"] += _m["src_bytes"]
+            _g["env"] += _m["env_bytes"]
+            _src_total += _m["src_bytes"]
+            _env_total += _m["env_bytes"]
+
+        _parts = [f"\U0001f5c2 {_n} project{'s' if _n != 1 else ''}"]
+        for _t in sorted(_by_tool):
+            _g = _by_tool[_t]
+            _icon = self._TOOL_ICONS.get(_t, "\U0001f4c1")
+            _parts.append(
+                f"{_icon} {_t}  \u2022  {_g['n']}  \u2022  "
+                f"{fmt_size(_g['src'] + _g['env'])}")
+        _parts.append(
+            f"\U0001f4be total  \u2022  {fmt_size(_src_total + _env_total)}  "
+            f"(source {fmt_size(_src_total)} + env {fmt_size(_env_total)})")
+        self.projects_info.setText("        ".join(_parts))
 
     def _scan_projects(self):
         """Walk the likely places and add whatever is found (B43)."""
@@ -764,13 +851,31 @@ class ProjectsPageMixin:
             _inst.setFont(_cell_font)
             t.setItem(row, 4, _inst)
 
+            _src = QTableWidgetItem(
+                fmt_size(meta["src_bytes"]) if meta["src_bytes"] else "\u2014")
+            _src.setTextAlignment(Qt.AlignCenter)
+            _src.setFont(_cell_font)
+            _src.setToolTip(
+                "The project's own files \u2014 the environment, .git and the "
+                "caches are not counted")
+            t.setItem(row, 5, _src)
+
+            _envsz = QTableWidgetItem(
+                fmt_size(meta["env_bytes"]) if meta["env_bytes"] else "\u2014")
+            _envsz.setTextAlignment(Qt.AlignCenter)
+            _envsz.setFont(_cell_font)
+            _envsz.setToolTip(
+                f"{meta['env_path']}" if meta["env_path"]
+                else "No environment yet")
+            t.setItem(row, 6, _envsz)
+
             _loc = QTableWidgetItem(path)
             _loc.setFont(_cell_font)
             try:
                 _loc.setForeground(QColor(self._c()["fg_muted"]))
             except Exception:
                 pass
-            t.setItem(row, 5, _loc)
+            t.setItem(row, 7, _loc)
 
     # ── Actions ───────────────────────────────────────────────────────────
 
@@ -1267,7 +1372,38 @@ class ProjectsPageMixin:
             return
         try:
             from src.utils.platform_utils import open_terminal_at
-            if not open_terminal_at(_path):
+
+            # B51 (Bayram, 2026-09-03): every project terminal opened with
+            # "The system cannot find the path specified".
+            #
+            # open_terminal_at defaults env_type to "venv" and this call passed
+            # nothing, so it went looking for <project>/Scripts/activate.bat --
+            # a file no project folder has. The environment is somewhere else
+            # entirely, and for poetry it is in a cache directory.
+            #
+            # The function already knows every one of these tools by name
+            # (poetry, pdm, hatch, pixi, conda) and builds the right command
+            # for each: `poetry run`, `pixi shell`, and so on. It only had to
+            # be told which one this is.
+            #
+            # An earlier attempt passed "system_tools", which cured the error
+            # by removing the activation altogether -- Bayram's objection was
+            # the right one. An activated shell is the point.
+            _meta_t = read_project_meta(_path)
+            _tool_t = _meta_t.get("tool", "")
+
+            if _tool_t in ("poetry", "pdm", "hatch", "pixi"):
+                _env_arg = _tool_t
+            elif (_meta_t.get("env_path") or self._cached_env_for(_path)):
+                # uv, or anything else keeping a plain virtualenv: the venv
+                # branch is correct, and there is one to activate.
+                _env_arg = "venv"
+            else:
+                # No environment yet -- there is nothing to activate, and
+                # asking for one is exactly how the original error happened.
+                _env_arg = "system_tools"
+
+            if not open_terminal_at(_path, env_type=_env_arg):
                 QMessageBox.warning(
                     self, "Terminal",
                     f"A terminal could not be opened at:\n{_path}")

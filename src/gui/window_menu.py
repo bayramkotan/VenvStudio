@@ -112,6 +112,18 @@ class WindowMenuMixin:
         conflict_action.triggered.connect(self._show_conflict_manager)
         tools_menu.addAction(conflict_action)
 
+        # B30: the Code Map. Reads a tree with ast and shows what is
+        # where, what calls what, and -- the part that pays for it --
+        # names defined twice, class methods hiding a mixin's, and
+        # constants held under two names. Every one of those is a bug
+        # this codebase has actually shipped.
+        code_map_action = QAction("🗺️ Code Map", self)
+        code_map_action.setToolTip(
+            "What is in a codebase and what talks to what.\n"
+            "Reads VenvStudio's own source or any project folder.")
+        code_map_action.triggered.connect(self._show_code_map)
+        tools_menu.addAction(code_map_action)
+
         tools_menu.addSeparator()
         commands_action = QAction("💻 View Commands", self)
         commands_action.setToolTip(
@@ -453,6 +465,33 @@ class WindowMenuMixin:
             f.write("#!/bin/bash\n")
             f.write(f'"{vs_exe}"\n')
         os.chmod(script, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP)
+
+    def _show_code_map(self):
+        """Open the Code Map dialog (B30)."""
+        try:
+            from src.gui.code_map_dialog import CodeMapDialog
+            # Offer the user's own projects as targets too: the same engine
+            # answers "what is in this project" for their code, not only ours.
+            _projects = []
+            try:
+                for _e in (self.config.get("recent_projects", []) or []):
+                    _p = _e.get("path") if isinstance(_e, dict) else _e
+                    if _p:
+                        _projects.append(_p)
+            except Exception:
+                pass
+            # Shown non-modally: a scan takes seconds and there is no reason
+            # to freeze the rest of the application while reading a tree.
+            # Kept on self so Python does not collect it the moment show()
+            # returns -- unlike exec(), show() comes straight back.
+            self._code_map_dlg = CodeMapDialog(parent=self,
+                                               project_paths=_projects)
+            self._code_map_dlg.show()
+            self._code_map_dlg.raise_()
+            self._code_map_dlg.activateWindow()
+        except Exception as e:
+            QMessageBox.warning(self, "Code Map",
+                                f"Could not open the Code Map:\n{e}")
 
     def _show_conflict_manager(self):
         """Open the Conflict Manager dialog."""

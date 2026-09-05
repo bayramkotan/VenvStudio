@@ -15,6 +15,7 @@ from PySide6.QtCore import Qt, Signal, QThread
 from PySide6.QtGui import QFont, QColor
 from src.utils.platform_utils import find_system_pythons, get_platform, subprocess_args
 from src.utils.platform_utils import bold_font_from as _bold_font_from
+from src.utils.platform_utils import fit_button_width as _fit_w
 from src.utils.constants import APP_NAME, APP_VERSION
 from src.utils.i18n import tr
 import os, sys, subprocess, shutil
@@ -2696,6 +2697,18 @@ class ToolchainMixin:
     # UI section builders (moved from settings_page.py)
     # ─────────────────────────────────────────────────────────────────────
 
+    # B71 (2026-09-05): these two were SHADOWED and the copy here was the
+    # stale one. settings_page.py defined the same two methods, and a
+    # class's own method beats a mixin's -- so this file's versions had
+    # never run since the day they were 'moved' here. The move happened;
+    # the deletion did not, which is the settings_editors.py failure again.
+    #
+    # They were NOT identical. _setup_cliops_section is 308 lines and the
+    # live copy carried v1.6.63's fix, `_fit_w(_detect_btn, 90)` where this
+    # one still had `setFixedWidth(90)` -- the very fix that stopped Linux
+    # buttons reading 'Detec' and 'Rese'. Preferring the mixin blindly would
+    # have reverted it. The LIVE body is what is kept below; settings_page's
+    # copies are gone.
     def _setup_toolchain_ui_section(self, layout):
         # ── 5b. TOOLCHAIN MANAGER ──────────────────────────────────────────
         if not hasattr(self, "_tc_built"):
@@ -2759,7 +2772,7 @@ class ToolchainMixin:
         if _platform == "linux":
             _detect_btn = QPushButton("🔍 Detect")
             _detect_btn.setObjectName("secondary")
-            _detect_btn.setFixedWidth(90)
+            _fit_w(_detect_btn, 90)
             _detect_btn.clicked.connect(self._detect_terminals)
             terminal_row.addWidget(_detect_btn)
 

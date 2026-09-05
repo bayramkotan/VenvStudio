@@ -559,6 +559,39 @@ def get_pipx_cmd() -> list:
     return [exe]
 
 
+def get_configured_terminal() -> str:
+    """The terminal the user chose in Settings, or "" if they chose none.
+
+    B62 (Bayram, 2026-09-05: "Open terminal'i standard bir hale getirelim!
+    Bir tip terminal tipi acilsin sadece ve settings altinda var!!!!").
+
+    The setting existed and open_terminal_at accepted it -- as a PARAMETER,
+    which meant every caller had to remember to pass it, and three of the five
+    did not:
+
+        env_list.py:969        passes it
+        package_panel.py:854   passes it
+        window_menu.py:209     does NOT
+        window_menu.py:843     does NOT
+        projects_page.py:1841  does NOT
+
+    So the same user got their chosen terminal from the Environments and
+    Packages pages and whatever auto-detection found first from the menu and
+    the Projects page -- which is exactly the inconsistency he reported. A
+    default that each caller must opt into is not a default. Reading it here
+    means a caller can still override it deliberately, but cannot forget it
+    by accident, and a sixth caller inherits the behaviour for free.
+
+    Same lazy import as _get_config_path_override above, for the same reason:
+    platform_utils is imported very early in startup.
+    """
+    try:
+        from src.core.config_manager import ConfigManager as _CM
+        return _CM().get("terminal_type", "") or ""
+    except Exception:
+        return ""
+
+
 def _get_config_path_override(key_enabled: str, key_path: str) -> Optional[str]:
     """Return a user-configured path override from VenvStudio config, or None.
 
@@ -915,6 +948,10 @@ def open_terminal_at(path: Path, terminal_type: str = "",
     # window silently did nothing while the status bar cheerfully reported
     # "Running 'poetry show'..." (Bayram, 2026-08-22). Normalise once, here.
     path = Path(path)
+    # B62: no terminal named by the caller means "use the one the user chose",
+    # not "guess". Only an explicit argument overrides the setting.
+    if not terminal_type:
+        terminal_type = get_configured_terminal()
     system = get_platform()
 
     # ── Build activation command based on env_type ────────────────────────
@@ -1518,7 +1555,17 @@ def open_terminal_at(path: Path, terminal_type: str = "",
             # Explicit terminal selected (not "default" or empty)
             if terminal_type and terminal_type not in ("", "default"):
                 if _launch_linux_terminal(terminal_type):
-                    return  # success, done
+                    # B62: this was a bare `return`, so a function annotated
+                    # `-> bool` handed back None -- and only on the branch
+                    # where the user's CHOSEN terminal succeeded. Callers
+                    # written as `if not open_terminal_at(...)` then showed a
+                    # "could not open a terminal" warning over a terminal that
+                    # had just opened, punishing exactly the people who set
+                    # the preference. env_list.py had already worked around it
+                    # locally with `if _ok is False` rather than fixing it
+                    # here; projects_page.py uses `if not`, so it still shows
+                    # the false warning. Fixed at the source.
+                    return True
 
             # Auto-detect: try common terminals in order of preference
             auto_order = [

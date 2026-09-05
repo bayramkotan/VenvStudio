@@ -1156,8 +1156,8 @@ class ProjectsPageMixin:
         _meta_for_menu = read_project_meta(_path)
         if not _meta_for_menu["has_env"] and \
                 not self._cached_env_for(_path) and \
-                _meta_for_menu["tool"] in self._ENV_CREATE:
-            _cmd = " ".join(self._ENV_CREATE[_meta_for_menu["tool"]])
+                _meta_for_menu["tool"] in self._SYNC_CMD:
+            _cmd = " ".join(self._SYNC_CMD[_meta_for_menu["tool"]])
             _act = menu.addAction(
                 f"\u2699\ufe0f  Create Environment  ({_cmd})",
                 lambda: self._create_project_env(_path, _meta_for_menu))
@@ -1286,6 +1286,26 @@ class ProjectsPageMixin:
             QMessageBox.warning(self, "Packages", f"{type(e).__name__}: {e}")
 
     _SYNC_CMD = {
+        # B69 (2026-09-05): there used to be a SECOND table, _ENV_CREATE,
+        # holding these same five entries. Nothing had broken only because
+        # the two copies happened to be equal -- the Sync button read one and
+        # the right-click Create Environment entry read the other, so B68's
+        # queued poetry fix would have landed in one and missed the other.
+        #
+        # They are the same job, and _create_project_env's docstring already
+        # said so: B46 merged the ask, the run and the look-afterwards into
+        # _run_project_command, merging the BEHAVIOUR while leaving the DATA
+        # duplicated. Only the label differed ("Sync" vs "Create
+        # environment"), which is not a reason to keep a second table.
+        # A repo-wide grep confirmed nothing outside this file read the name,
+        # so it is gone rather than aliased.
+        #
+        # Every command below was RUN against a real scaffolded project on
+        # 2026-09-05 -- uv 0.11.7, poetry 2.4.2, pdm 2.29.0, hatch 1.18.0,
+        # pixi 0.79.0 -- not read off a help page. The deleted table claimed
+        # to be "verified against documentation and --help output", which is
+        # exactly the method that produced `poetry lock --check` and
+        # `hatch add`, neither of which exists.
         # "Install what this project declares, from its lockfile."
         # Verified against --help on 2026-09-01:
         #   uv sync          "Update the project's environment"
@@ -1299,6 +1319,7 @@ class ProjectsPageMixin:
         "pixi":   ["pixi", "install"],
         "hatch":  ["hatch", "env", "create"],
     }
+
 
     _ADD_CMD = {
         # Each tool's own way of adding a dependency: it edits pyproject.toml
@@ -1319,17 +1340,6 @@ class ProjectsPageMixin:
         # [project] dependencies IS picked up -- the next `hatch run` prints
         # "Checking dependencies" and installs it. So the answer for hatch is
         # to edit the manifest, which is what the disabled button now says.
-    }
-
-    _ENV_CREATE = {
-        # Verified against each tool's own documentation and --help output.
-        # These are the commands that resolve dependencies and build the
-        # environment; each is the one its own quickstart tells you to run.
-        "uv":     ["uv", "sync"],
-        "poetry": ["poetry", "install"],
-        "pdm":    ["pdm", "install"],
-        "hatch":  ["hatch", "env", "create"],
-        "pixi":   ["pixi", "install"],
     }
 
     def _proj_sync(self):
@@ -1759,7 +1769,7 @@ class ProjectsPageMixin:
         within a release, as several pairs in this codebase already have.
         """
         _tool = meta.get("tool", "")
-        argv = self._ENV_CREATE.get(_tool)
+        argv = self._SYNC_CMD.get(_tool)
         if not argv:
             QMessageBox.information(
                 self, "No environment yet",

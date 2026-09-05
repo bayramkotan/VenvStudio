@@ -1,0 +1,81 @@
+2026-08-31 05:14:43.711 [INFO    ] VenvStudio               | [WELCOME] VenvStudio v1.6.68 · Date: 31.08.2026 05:14:43 · Session 20260831_051443_6131 · Linux 7.2.2-1-cachyos (x86_64)  ·  Python 3.14.7  ·  Qt 6.11.2  ·  PySide6 6.11.2 · Frozen: False  ·  PID: 6131
+2026-08-31 05:14:43.719 [INFO    ] VenvStudio               | Starting VenvStudio
+2026-08-31 05:14:43.796 [INFO    ] Main Window              | MainWindow.__init__ started
+2026-08-31 05:14:43.798 [INFO    ] startup                  | [Startup] _setup_window: 0 ms
+2026-08-31 05:14:43.809 [INFO    ] startup                  | [Startup] _setup_menubar: 11 ms
+2026-08-31 05:14:44.018 [INFO    ] Tabs                     | [Tabs] 'launcher' built in 144 ms, inserted in 1 ms
+2026-08-31 05:14:44.022 [INFO    ] Main Window              | [Startup]   PackagePanel: 190 ms
+2026-08-31 05:14:44.036 [INFO    ] Main Window              | [Startup]   env page: 14 ms
+2026-08-31 05:14:46.426 [INFO    ] Main Window              | [Startup]   SettingsPage: 2390 ms
+2026-08-31 05:14:51.957 [INFO    ] Main Window              | [Startup]   LearnPage: 5531 ms
+2026-08-31 05:14:51.961 [INFO    ] Main Window              | [Startup]   rest of _setup_ui: 3 ms
+2026-08-31 05:14:51.966 [INFO    ] startup                  | [Startup] _setup_ui: 8156 ms
+2026-08-31 05:14:53.454 [INFO    ] startup                  | [Startup] _apply_theme: 1489 ms
+2026-08-31 05:14:53.458 [INFO    ] startup                  | [Startup] _connect_screen_changed: 4 ms
+2026-08-31 05:14:53.461 [INFO    ] startup                  | [Startup] sync_cache_with_disk: 3 ms
+2026-08-31 05:14:53.866 [INFO    ] startup                  | [Startup] ensure_pipx_env: 405 ms
+2026-08-31 05:14:53.882 [INFO    ] startup                  | [Startup] _apply_linux_emoji_fix: 16 ms
+2026-08-31 05:14:53.955 [INFO    ] startup                  | [Startup] _check_linux_venv_module: 73 ms
+2026-08-31 05:14:53.956 [DEBUG   ] Main Window              | _refresh_env_list called (force=False)
+2026-08-31 05:14:54.182 [DEBUG   ] Env Manager              | ✅ [Cache] HIT: /home/bayram/.local/share/pipx (py=3.14.7 pkgs=2)
+2026-08-31 05:14:54.273 [INFO    ] Env Manager              | 💾 [Cache] Written: /home/bayram/.local/share/pipx → py=3.14.7 pkgs=2 size=757.1 MB
+2026-08-31 05:14:54.275 [DEBUG   ] Env Manager              | 📄 [Cache] File: /home/bayram/.config/VenvStudio/env_cache.json
+2026-08-31 05:14:54.278 [DEBUG   ] Env Manager              | ✅ [Cache] HIT: /home/bayram/.cache/pypoetry/virtualenvs/ptr-Prfhx0b6-py3.14 (py=3.14.7 pkgs=113)
+2026-08-31 05:14:54.280 [DEBUG   ] Env Manager              | ✅ [Cache] HIT: /home/bayram/venv/ml (py=3.14.7 pkgs=119)
+2026-08-31 05:14:54.282 [DEBUG   ] Env Manager              | 📝 [Poetry] cache check: venv_dir=/home/bayram/venv/nlp exists=True
+2026-08-31 05:14:54.283 [DEBUG   ] Env Manager              | ✅ [Cache] HIT: /home/bayram/venv/nlp (py=3.13.13 pkgs=144)
+2026-08-31 05:14:55.428 [DEBUG   ] Env Manager              | ✅ [Cache] HIT: /home/bayram/venv/test_pdm (py=3.13.13 pkgs=140)
+2026-08-31 05:14:55.434 [DEBUG   ] Main Window              | env_table colours: bg='#1e1e2e' → light_theme=False
+2026-08-31 05:14:55.438 [DEBUG   ] Env Manager              | ✅ [Cache] HIT: /home/bayram/venv/ml (py=3.14.7 pkgs=119)
+2026-08-31 05:14:55.455 [INFO    ] Tabs                     | [Tabs] 'installed' built in 2 ms, inserted in 8 ms
+2026-08-31 05:14:56.095 [INFO    ] Tabs                     | [Tabs] 'catalog' built in 319 ms, inserted in 318 ms
+2026-08-31 05:14:57.371 [INFO    ] Tabs                     | [Tabs] 'presets' built in 713 ms, inserted in 560 ms
+2026-08-31 05:14:57.388 [INFO    ] Tabs                     | [Tabs] 'manual' built in 3 ms, inserted in 10 ms
+2026-08-31 05:14:57.438 [DEBUG   ] Main Window              | _on_env_selected: env='ml' has_selection=True
+2026-08-31 05:14:57.441 [DEBUG   ] Package Cache            | 📦 [PkgCache] MISS key=pkg_list:/home/bayram/venv/ml force=False → starting pip list
+2026-08-31 05:14:57.444 [INFO    ] startup                  | [Startup] _refresh_env_list: 3489 ms
+2026-08-31 05:14:57.447 [INFO    ] Main Window              | MainWindow.__init__ complete
+2026-08-31 05:14:57.779 [DEBUG   ] Main Window              | _refresh_env_list called (force=False)
+2026-08-31 05:14:57.782 [DEBUG   ] Main Window              | _on_env_selected: env='(none)' has_selection=False
+2026-08-31 05:14:57.788 [DEBUG   ] Main Window              | env_table colours: bg='#1e1e2e' → light_theme=False
+2026-08-31 05:14:57.794 [DEBUG   ] Main Window              | _on_env_selected: env='ml' has_selection=True
+2026-08-31 05:14:57.800 [DEBUG   ] Env Manager              | ✅ [Cache] HIT: /home/bayram/venv/ml (py=3.14.7 pkgs=119)
+2026-08-31 05:14:58.169 [DEBUG   ] Package Cache            | 📦 [PkgCache] MISS key=pkg_list:/home/bayram/venv/ml force=False → starting pip list
+2026-08-31 05:14:58.172 [DEBUG   ] Package Cache            | 💤 [PkgCache] loader abandoned (still running, 1 pending)
+2026-08-31 05:14:58.654 [DEBUG   ] Env Manager              | ✅ [Cache] HIT: /home/bayram/.local/share/pipx (py=3.14.7 pkgs=2)
+2026-08-31 05:14:58.716 [INFO    ] Env Manager              | 💾 [Cache] Written: /home/bayram/.local/share/pipx → py=3.14.7 pkgs=2 size=757.1 MB
+2026-08-31 05:14:58.719 [DEBUG   ] Env Manager              | 📄 [Cache] File: /home/bayram/.config/VenvStudio/env_cache.json
+2026-08-31 05:14:58.722 [DEBUG   ] Env Manager              | ✅ [Cache] HIT: /home/bayram/.cache/pypoetry/virtualenvs/ptr-Prfhx0b6-py3.14 (py=3.14.7 pkgs=113)
+2026-08-31 05:14:58.725 [DEBUG   ] Env Manager              | ✅ [Cache] HIT: /home/bayram/venv/ml (py=3.14.7 pkgs=119)
+2026-08-31 05:14:58.729 [DEBUG   ] Env Manager              | 📝 [Poetry] cache check: venv_dir=/home/bayram/venv/nlp exists=True
+2026-08-31 05:14:58.732 [DEBUG   ] Env Manager              | ✅ [Cache] HIT: /home/bayram/venv/nlp (py=3.13.13 pkgs=144)
+2026-08-31 05:14:59.013 [DEBUG   ] Env Manager              | ✅ [Cache] HIT: /home/bayram/venv/test_pdm (py=3.13.13 pkgs=140)
+2026-08-31 05:14:59.014 [DEBUG   ] Toolchain                | [TC] env scan: 5 environment(s) found
+2026-08-31 05:14:59.015 [DEBUG   ] Toolchain                | [TC] env 'pipx': no interpreter under /home/bayram/.local/share/pipx
+2026-08-31 05:14:59.016 [DEBUG   ] Toolchain                | [TC] env 'ptr': adding /home/bayram/.cache/pypoetry/virtualenvs/ptr-Prfhx0b6-py3.14/bin/python3
+2026-08-31 05:14:59.017 [DEBUG   ] Toolchain                | [TC] env 'ml': adding /home/bayram/venv/ml/bin/python3
+2026-08-31 05:14:59.018 [DEBUG   ] Toolchain                | [TC] env 'nlp': adding /home/bayram/venv/nlp/bin/python3
+2026-08-31 05:14:59.018 [DEBUG   ] Toolchain                | [TC] env 'test_pdm': no interpreter under /home/bayram/venv/test_pdm
+2026-08-31 05:14:59.041 [DEBUG   ] Main Window              | _switch_page → Packages (index=0)
+2026-08-31 05:14:59.300 [DEBUG   ] Package Cache            | 📥 [PkgCache] _on_packages_loaded called count=119 loaded_for=/home/bayram/venv/ml current=/home/bayram/venv/ml
+2026-08-31 05:14:59.304 [DEBUG   ] Package Cache            | 💾 [PkgCache] SAVED key=pkg_list:/home/bayram/venv/ml count=119
+2026-08-31 05:16:06.240 [INFO    ] VenvStudio               | [COMMAND] COMMAND — New project (hatch) · Date: 31.08.2026 05:16:06 · /usr/bin/hatch new llll /home/bayram/Documents/vs_projects/llll --cli
+2026-08-31 05:16:06.246 [INFO    ] project                  | [Project] run: /usr/bin/hatch new llll /home/bayram/Documents/vs_projects/llll --cli
+2026-08-31 05:16:06.516 [INFO    ] project                  | [Project]   -> exit=0
+2026-08-31 05:16:06.518 [INFO    ] project                  | [Project] created /home/bayram/Documents/vs_projects/llll with hatch
+2026-08-31 05:16:32.597 [DEBUG   ] Main Window              | _switch_page → Environments (index=1)
+2026-08-31 05:16:33.940 [DEBUG   ] Main Window              | _on_env_selected: env='test_pdm' has_selection=True
+2026-08-31 05:16:33.955 [DEBUG   ] Env Manager              | ✅ [Cache] HIT: /home/bayram/venv/test_pdm (py=3.13.13 pkgs=140)
+2026-08-31 05:16:33.980 [DEBUG   ] Package Cache            | ✅ [PkgCache] HIT key=pkg_list:/home/bayram/venv/test_pdm count=140
+2026-08-31 05:16:33.981 [DEBUG   ] Package Cache            | 📥 [PkgCache] _on_packages_loaded called count=140 loaded_for=/home/bayram/venv/test_pdm current=/home/bayram/venv/test_pdm
+2026-08-31 05:16:33.985 [DEBUG   ] Package Cache            | 💾 [PkgCache] SAVED key=pkg_list:/home/bayram/venv/test_pdm count=140
+2026-08-31 05:16:34.329 [DEBUG   ] Main Window              | _show_env_context_menu at pos=358,134
+2026-08-31 05:16:40.052 [DEBUG   ] Main Window              | _on_env_selected: env='ptr' has_selection=True
+2026-08-31 05:16:40.066 [DEBUG   ] Env Manager              | ✅ [Cache] HIT: /home/bayram/.cache/pypoetry/virtualenvs/ptr-Prfhx0b6-py3.14 (py=3.14.7 pkgs=113)
+2026-08-31 05:16:40.123 [DEBUG   ] Package Cache            | ✅ [PkgCache] HIT key=pkg_list:/home/bayram/.cache/pypoetry/virtualenvs/ptr-Prfhx0b6-py3.14 count=113
+2026-08-31 05:16:40.125 [DEBUG   ] Package Cache            | 📥 [PkgCache] _on_packages_loaded called count=113 loaded_for=/home/bayram/.cache/pypoetry/virtualenvs/ptr-Prfhx0b6-py3.14 current=/home/bayram/.cache/pypoetry/virtualenvs/ptr-Prfhx0b6-py3.14
+2026-08-31 05:16:40.129 [DEBUG   ] Package Cache            | 💾 [PkgCache] SAVED key=pkg_list:/home/bayram/.cache/pypoetry/virtualenvs/ptr-Prfhx0b6-py3.14 count=113
+2026-08-31 05:16:40.469 [DEBUG   ] Main Window              | _show_env_context_menu at pos=268,161
+2026-08-31 05:16:47.813 [DEBUG   ] Main Window              | _switch_page → Packages (index=0)
+2026-08-31 05:16:54.606 [DEBUG   ] Main Window              | _switch_page → Settings (index=2)
+2026-08-31 05:16:55.479 [DEBUG   ] Main Window              | _switch_page → Learn (index=3)

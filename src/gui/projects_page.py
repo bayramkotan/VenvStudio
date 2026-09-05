@@ -102,6 +102,81 @@ def detect_tool(project_dir) -> str:
     return ""
 
 
+def env_location_of(project_dir, env_path: str) -> str:
+    """The directory a project's environment should be COUNTED under.
+
+    B64 (Bayram, 2026-09-04). The summary grouped projects by tool, which
+    cannot answer the question he actually asked -- where is all this disk
+    going? On his machine the answer is three places, and only one of them is
+    where the projects are:
+
+        ~/Documents/vs_projects              57 MB
+        ~/.cache/pypoetry/virtualenvs       807 MB
+        ~/.local/share/hatch/env/virtual    686 MB
+
+    env_list.py already builds these chips for the Environments page, but its
+    grouping key is the environment's immediate PARENT, and that key is wrong
+    here for two of the five tools:
+
+        poetry  .../virtualenvs/pppp-InEhWoJ9-py3.14  -> .../virtualenvs   ok
+        hatch   .../virtual/test/CcJYPC5j/test        -> .../CcJYPC5j      no
+        uv      <project>/.venv                       -> <project>         no
+
+    Hatch buries the environment two levels below its root and the in-project
+    tools put it inside the project, so the parent gives one chip per project
+    instead of one per place. The rule here instead:
+
+        environment inside the project  ->  the project's PARENT directory
+        environment outside it          ->  the tool's own environment root
+
+    The roots are not hardcoded -- they are asked for the same way
+    find_project_env asks, so a poetry configured to put its virtualenvs
+    somewhere else stays correct.
+    """
+    _proj = Path(project_dir)
+    if not env_path:
+        return str(_proj.parent)
+    _env = Path(env_path)
+    try:
+        _env.relative_to(_proj)
+        # Inside the project: group by where the PROJECTS live, not by each
+        # project, or every project becomes its own location.
+        return str(_proj.parent)
+    except ValueError:
+        pass
+
+    # Outside. Walk up to whichever known root contains it; falling back to
+    # the parent means an unrecognised layout still gets a truthful chip
+    # rather than being dropped from the total.
+    for _root in env_roots():
+        try:
+            _env.relative_to(_root)
+            return str(_root)
+        except ValueError:
+            continue
+    return str(_env.parent)
+
+
+def env_roots():
+    """The directories the tools keep out-of-project environments in (B64)."""
+    _roots = []
+    try:
+        from src.utils.platform_utils import get_default_poetry_venvs_path
+        _roots.append(Path(get_default_poetry_venvs_path()))
+    except Exception:
+        _roots.append(Path.home() / ".cache" / "pypoetry" / "virtualenvs")
+    if os.name == "nt":
+        _la = os.environ.get("LOCALAPPDATA")
+        if _la:
+            _roots.append(Path(_la) / "hatch" / "env" / "virtual")
+    else:
+        _roots.append(Path.home() / ".local" / "share" / "hatch"
+                      / "env" / "virtual")
+        _roots.append(Path.home() / "Library" / "Application Support"
+                      / "hatch" / "env" / "virtual")
+    return _roots
+
+
 def find_project_env(project_dir, tool: str = "") -> str:
     """Where this project's virtual environment actually lives, or "".
 
@@ -303,7 +378,7 @@ def read_project_meta_name(project_dir) -> str:
     return d.name
 
 
-def dir_size(path, cap_seconds: float = 2.0) -> int:
+def dir_size(path, cap_seconds: float = 2.0, skip_caches: bool = True) -> int:
     """Bytes under `path`, giving up rather than blocking the interface.
 
     B46 (Bayram, 2026-09-03): the Environments page shows a size per row and a
@@ -317,7 +392,30 @@ def dir_size(path, cap_seconds: float = 2.0) -> int:
     columns; adding them together would answer neither "how big is my code"
     nor "how much do my dependencies cost".
 
-    The environment is skipped here and measured on its own.
+    B66 (Bayram, 2026-09-05: "boyutlarin dogrulugunu kontrol etmeyecek
+    misin?"). Two bugs, both found by measuring against du rather than by
+    reading the code, and the numbers are from his machine:
+
+      SYMLINKS. os.path.getsize follows a symlink and returns the size of its
+      TARGET. A uv environment has three of them and they made a 54 MB
+      environment report 386 MB, because .venv/bin/python points at the
+      interpreter and the whole interpreter got counted. Pixi is worse in
+      count -- 1163 symlinks, conda-style, linking packages in from its own
+      store -- and reported 533 MB for 237 MB. os.lstat measures the link
+      itself, which is what du does and what "how much space is this using"
+      means. pdm and hatch have no symlinks to speak of, which is exactly why
+      those two rows already agreed with du and hid the bug.
+
+      THE SKIP LIST. It was applied to BOTH measurements, but it describes
+      the source tree: __pycache__ next to your code is derived clutter,
+      __pycache__ inside an environment is part of what the environment
+      occupies. His hatch environment reported 5.5 MB where du says 9.9 MB;
+      the missing 4.4 MB was compiled bytecode, 1.2 MB of it under pip's
+      vendored rich alone. So skip_caches is now the CALLER's decision.
+
+    Hardlinks were suspected first and measured to be innocent: every one of
+    the four environments reported nlink == 1 throughout. Recording that so
+    the theory is not resurrected.
     """
     import time
     if not path or not os.path.isdir(path):
@@ -325,14 +423,15 @@ def dir_size(path, cap_seconds: float = 2.0) -> int:
     _deadline = time.monotonic() + cap_seconds
     _skip = {".venv", "venv", "__pycache__", ".git", ".mypy_cache",
              ".pytest_cache", ".ruff_cache", ".tox", ".nox", "__pypackages__",
-             ".pixi"}
+             ".pixi"} if skip_caches else set()
     total = 0
     try:
         for root, dirs, files in os.walk(path):
-            dirs[:] = [d for d in dirs if d not in _skip]
+            if _skip:
+                dirs[:] = [d for d in dirs if d not in _skip]
             for f in files:
                 try:
-                    total += os.path.getsize(os.path.join(root, f))
+                    total += os.lstat(os.path.join(root, f)).st_size
                 except OSError:
                     pass
             if time.monotonic() > _deadline:
@@ -446,7 +545,9 @@ def read_project_meta(project_dir) -> dict:
     # B46: the two sizes, measured apart. Source excludes .venv and the
     # caches; the environment is whatever the tool built, wherever it put it.
     meta["src_bytes"] = dir_size(d)
-    meta["env_bytes"] = dir_size(meta["env_path"]) if meta["env_path"] else 0
+    # B66: an environment is measured WHOLE -- no skip list. Source keeps it.
+    meta["env_bytes"] = (dir_size(meta["env_path"], skip_caches=False)
+                         if meta["env_path"] else 0)
     return meta
 
 
@@ -462,7 +563,7 @@ def apply_cached_env(meta, cached_path):
     meta["env_path"] = cached_path
     meta["has_env"] = True
     meta["installed"] = count_installed(cached_path)
-    meta["env_bytes"] = dir_size(cached_path)
+    meta["env_bytes"] = dir_size(cached_path, skip_caches=False)
     return meta
 
 
@@ -795,7 +896,7 @@ class ProjectsPageMixin:
         # B46: a summary line like the Environments page has -- grouped by
         # tool, with sizes, and a total. The sizes are already computed for
         # the table, so this costs nothing extra.
-        _by_tool, _src_total, _env_total = {}, 0, 0
+        _by_tool, _by_loc, _src_total, _env_total = {}, {}, 0, 0
         for _p in paths:
             _m = read_project_meta(_p)
             if not _m["has_env"]:
@@ -807,6 +908,12 @@ class ProjectsPageMixin:
             _g["env"] += _m["env_bytes"]
             _src_total += _m["src_bytes"]
             _env_total += _m["env_bytes"]
+            # B64: and where that disk actually is.
+            _loc = env_location_of(_p, _m.get("env_path", ""))
+            _lg = _by_loc.setdefault(os.path.normcase(_loc),
+                                     {"disp": _loc, "n": 0, "bytes": 0})
+            _lg["n"] += 1
+            _lg["bytes"] += _m["src_bytes"] + _m["env_bytes"]
 
         _parts = [f"\U0001f5c2 {_n} project{'s' if _n != 1 else ''}"]
         for _t in sorted(_by_tool):
@@ -815,10 +922,39 @@ class ProjectsPageMixin:
             _parts.append(
                 f"{_icon} {_t}  \u2022  {_g['n']}  \u2022  "
                 f"{fmt_size(_g['src'] + _g['env'])}")
+
+        # B64: one chip per place, busiest first so the order does not follow
+        # dict insertion. Beyond three the rest folds into one chip and the
+        # tooltip lists every location in full -- the same shape env_list.py
+        # settled on in v1.6.53, and _shorten_location is borrowed from it
+        # rather than written a second time.
+        try:
+            from src.gui.env_list import _shorten_location
+        except Exception:
+            def _shorten_location(p, max_len=34):
+                return p
+        _locs = sorted(_by_loc.values(),
+                       key=lambda g: (-g["bytes"], g["disp"].lower()))
+        for _lg in _locs[:3]:
+            _parts.append(
+                f"\U0001f4cd {_shorten_location(_lg['disp'])}  \u2022  "
+                f"{_lg['n']} project(s)  \u2022  {fmt_size(_lg['bytes'])}")
+        _rest = _locs[3:]
+        if _rest:
+            _parts.append(
+                f"\U0001f4cd +{len(_rest)} more location(s)  \u2022  "
+                f"{sum(g['n'] for g in _rest)} project(s)  \u2022  "
+                f"{fmt_size(sum(g['bytes'] for g in _rest))}")
+
         _parts.append(
             f"\U0001f4be total  \u2022  {fmt_size(_src_total + _env_total)}  "
             f"(source {fmt_size(_src_total)} + env {fmt_size(_env_total)})")
         self.projects_info.setText("        ".join(_parts))
+        # B64: the row folds after three locations, so the untruncated list --
+        # full paths, not the elided form -- goes in the tooltip.
+        self.projects_info.setToolTip("\n".join(
+            f"{_lg['disp']}  \u2022  {_lg['n']} project(s)  \u2022  "
+            f"{fmt_size(_lg['bytes'])}" for _lg in _locs))
 
     def _scan_projects(self):
         """Walk the likely places and add whatever is found (B43)."""
@@ -1171,8 +1307,18 @@ class ProjectsPageMixin:
         "uv":     ["uv", "add"],
         "poetry": ["poetry", "add"],
         "pdm":    ["pdm", "add"],
-        "hatch":  ["hatch", "add"],
         "pixi":   ["pixi", "add"],
+        # B65 (Bayram, 2026-09-05): hatch is ABSENT on purpose. `hatch add`
+        # was in this table and hatch has no such command -- pressing Add
+        # Package on a hatch project produced "Error: No such command 'add'".
+        # Its full command list is build/check/clean/config/dep/env/fmt/lock/
+        # new/project/publish/python/run/self/shell/status/test/version, and
+        # `hatch dep` only does hash/lock/show/sync. Nothing adds.
+        #
+        # Verified against hatch 1.18.0: a dependency written by hand into
+        # [project] dependencies IS picked up -- the next `hatch run` prints
+        # "Checking dependencies" and installs it. So the answer for hatch is
+        # to edit the manifest, which is what the disabled button now says.
     }
 
     _ENV_CREATE = {
@@ -1226,10 +1372,30 @@ class ProjectsPageMixin:
         """
         _path = self._selected_project_path()
         _has = bool(_path)
-        for _b in (self._pbtn_add, self._pbtn_pkgs, self._pbtn_term,
+        for _b in (self._pbtn_pkgs, self._pbtn_term,
                    self._pbtn_clone, self._pbtn_rename, self._pbtn_export,
                    self._pbtn_delete):
             _b.setEnabled(_has)
+
+        # B65: Add Package needs a tool that can actually add. Removing hatch
+        # from _ADD_CMD alone would have left the button enabled and silently
+        # doing nothing, which is worse than the error message it replaced.
+        _add_tool = ""
+        if _has:
+            try:
+                _add_tool = detect_tool(Path(_path))
+            except Exception:
+                _add_tool = ""
+        _can_add = bool(self._ADD_CMD.get(_add_tool))
+        self._pbtn_add.setEnabled(_has and _can_add)
+        self._pbtn_add.setToolTip(
+            "Add a dependency with the project's own tool"
+            if _can_add else
+            "hatch has no add command \u2014 write the package into "
+            "[project] dependencies in pyproject.toml, and the next "
+            "hatch run will install it"
+            if _add_tool == "hatch" else
+            "This project has no recognised tool to add packages with")
 
         if not _has:
             self._pbtn_sync.setEnabled(False)
@@ -1293,6 +1459,14 @@ class ProjectsPageMixin:
         if _add:
             _lines.append("# Add a dependency (writes pyproject.toml too)")
             _lines.append(" ".join(_add) + " <package>")
+            _lines.append("")
+        elif _tool == "hatch":
+            # B65: hatch has no add command. Saying so beats leaving a gap
+            # where every other tool shows a line.
+            _lines.append("# hatch has no 'add' command \u2014 edit the manifest")
+            _lines.append("#   [project]")
+            _lines.append("#   dependencies = [\"<package>\"]")
+            _lines.append("# the next 'hatch run' installs it")
             _lines.append("")
 
         _env = meta.get("env_path") or self._cached_env_for(path)

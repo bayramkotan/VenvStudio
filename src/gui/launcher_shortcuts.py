@@ -11,6 +11,7 @@ from PySide6.QtWidgets import QMessageBox
 
 from src.utils.i18n import tr
 from src.utils.platform_utils import get_platform, get_python_executable, subprocess_args
+from src.gui.launcher_run import resolve_launch_workdir
 
 
 class LauncherShortcutsMixin:
@@ -38,6 +39,21 @@ class LauncherShortcutsMixin:
         # R Console). They have no "command" key, so the normal path would
         # raise KeyError and point the shortcut at python.exe. Target the
         # executable directly instead.
+        # B77: ask the SAME function the Launch button asks. Without this
+        # the shortcut got app_def["command"] raw -- no --notebook-dir, no
+        # --no-browser -- and ran in the environment folder whatever the
+        # Jupyter Working Dir setting said. `_launch_dir` is None for apps
+        # that have no opinion about a working directory, and those keep the
+        # old behaviour of starting in the environment.
+        # no_browser=False: the application opens the browser itself after
+        # reading the server URL from the process output, so it passes
+        # --no-browser. A shortcut cannot do that -- with the flag it would
+        # start a server and show nothing.
+        _launch_dir, app_def = resolve_launch_workdir(
+            getattr(self, "config", None), venv_path, app_def,
+            no_browser=False)
+        _work_dir = _launch_dir or str(venv_path)
+
         _target = python_exe
         _args = app_def.get("command")
         if _args is None:
@@ -88,17 +104,17 @@ class LauncherShortcutsMixin:
             if platform == "windows":
                 self._create_windows_shortcut(
                     desktop, shortcut_name, _target,
-                    _args, icon_path, needs_console, venv_path
+                    _args, icon_path, needs_console, _work_dir, venv_path
                 )
             elif platform == "linux":
                 self._create_linux_shortcut(
                     desktop, shortcut_name, _target,
-                    _args, icon_path, venv_path
+                    _args, icon_path, _work_dir
                 )
             elif platform == "macos":
                 self._create_macos_shortcut(
                     desktop, shortcut_name, _target,
-                    _args, icon_path, venv_path
+                    _args, icon_path, _work_dir
                 )
 
             # Show success
@@ -157,7 +173,9 @@ class LauncherShortcutsMixin:
         except Exception:
             return None
 
-    def _create_windows_shortcut(self, desktop, name, python_exe, cmd_args, icon_path, needs_console, venv_path):
+    def _create_windows_shortcut(self, desktop, name, python_exe, cmd_args,
+                                 icon_path, needs_console, work_dir,
+                                 venv_path):
         """Create Windows .lnk shortcut via PowerShell (no COM dependency)."""
         args_str = " ".join(cmd_args)
         lnk_path = desktop / f"{name}.lnk"
@@ -172,7 +190,7 @@ $ws = New-Object -ComObject WScript.Shell
 $s = $ws.CreateShortcut("{lnk_path}")
 $s.TargetPath = "{python_exe}"
 $s.Arguments = "{args_str}"
-$s.WorkingDirectory = "{venv_path}"
+$s.WorkingDirectory = "{work_dir}"
 $s.WindowStyle = {window_style}
 {icon_line}
 $s.Description = "Launched via VenvStudio"
@@ -197,10 +215,14 @@ $s.Save()
         if not needs_console:
             bat_path = venv_path / "scripts" / f"launch_{name.replace(' ', '_')}.bat"
             bat_path.parent.mkdir(parents=True, exist_ok=True)
-            bat_content = f'@echo off\nstart "" /B "{python_exe}" {args_str}\n'
+            # B77: the .lnk carried a WorkingDirectory but this wrapper
+            # did not, so the shortcut for a GUI app still started wherever
+            # cmd happened to be. It gets the same directory as the .lnk.
+            bat_content = (f'@echo off\ncd /d "{work_dir}"\n'
+                           f'start "" /B "{python_exe}" {args_str}\n')
             bat_path.write_text(bat_content, encoding="utf-8")
 
-    def _create_linux_shortcut(self, desktop, name, python_exe, cmd_args, icon_path, venv_path):
+    def _create_linux_shortcut(self, desktop, name, python_exe, cmd_args, icon_path, work_dir):
         """Create Linux .desktop file with icon."""
         desktop_file = desktop / f"{name}.desktop"
         args_str = " ".join(cmd_args)
@@ -211,7 +233,7 @@ $s.Save()
             f"Type=Application\n"
             f"Name={name}\n"
             f"Exec={python_exe} {args_str}\n"
-            f"Path={venv_path}\n"
+            f"Path={work_dir}\n"
             f"Terminal=false\n"
             f"{icon_line}\n"
             f"Comment=Launched via VenvStudio\n"
@@ -219,11 +241,11 @@ $s.Save()
         desktop_file.write_text(content, encoding="utf-8")
         os.chmod(str(desktop_file), 0o755)
 
-    def _create_macos_shortcut(self, desktop, name, python_exe, cmd_args, icon_path, venv_path):
+    def _create_macos_shortcut(self, desktop, name, python_exe, cmd_args, icon_path, work_dir):
         """Create macOS .command script."""
         sh_path = desktop / f"{name}.command"
         args_str = " ".join(cmd_args)
-        content = f'#!/bin/bash\ncd "{venv_path}"\n"{python_exe}" {args_str}\n'
+        content = f'#!/bin/bash\ncd "{work_dir}"\n"{python_exe}" {args_str}\n'
         sh_path.write_text(content, encoding="utf-8")
         os.chmod(str(sh_path), 0o755)
 

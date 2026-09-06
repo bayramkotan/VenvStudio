@@ -19,6 +19,73 @@ _log = logging.getLogger("venvstudio.gui.launcher")
 from src.gui.package_panel_common import WorkerThread
 
 
+def resolve_launch_workdir(config, venv_path, app_def, no_browser=True):
+    """Where a launcher app should run, and its command with the flags added.
+
+    Returns ``(workdir_or_None, app_def)``. `app_def` comes back unchanged
+    unless the app takes ``--notebook-dir``, in which case a COPY is returned
+    with that flag applied.
+
+    ``no_browser`` MUST be False for a desktop shortcut, and True when the
+    application launches the app itself. VenvStudio reads the server URL out
+    of the process output and opens the browser with open_url(), so it passes
+    ``--no-browser`` to stop Jupyter opening a second one. **A shortcut has
+    nobody to do that**: with ``--no-browser`` it starts a server and shows
+    the user nothing at all, which is exactly what happened when this
+    function was first shared between the two paths (Bayram, 2026-09-06:
+    "kisayol calismiyor ki! Bozdun!"). The flag is not a property of the app;
+    it is a property of who is launching it.
+
+    B77 (Bayram, 2026-09-06: "Launcher lar uzerindeki create shortcut dan
+    olusturdum bir kisayol ve oradan calistirdim ve calismadi! Yani home ya da
+    baska bir dizin olmadi"). This decision used to live INSIDE _launch_app,
+    so the Create Shortcut path never saw it: launcher_shortcuts.py took
+    ``app_def["command"]`` raw -- no ``--notebook-dir``, no ``--no-browser``
+    -- and hardcoded the shortcut's working directory to the environment
+    folder on all three platforms. The setting was honoured when you pressed
+    Launch and ignored by the shortcut you made from the same card.
+
+    One function now, called from both. Adding a third caller later gets the
+    behaviour for free, which is the point.
+    """
+    # N50: apps declare whether they honour a working directory, rather than
+    # the command being sniffed for the string "jupyter" -- Voila's command is
+    # ["-m", "voila", "--no-browser"] with no "jupyter" in it, so sniffing
+    # silently skipped it.
+    #     "flag" -> pass --notebook-dir explicitly (JupyterLab, Notebook)
+    #     "cwd"  -> just serve the process's working directory (Voila)
+    mode = app_def.get("workdir")
+    if mode is None and any(
+            "jupyter" in str(c).lower() for c in app_def.get("command", [])):
+        mode = "flag"          # safety net for entries not yet declaring it
+    if not mode:
+        return None, app_def
+
+    jwd = config.get("jupyter_workdir", "home") if config else "home"
+    jwd_custom = config.get("jupyter_workdir_custom", "") if config else ""
+    if jwd == "custom" and jwd_custom and os.path.isdir(jwd_custom):
+        workdir = jwd_custom
+    elif jwd == "env":
+        workdir = str(venv_path)
+    else:
+        workdir = os.path.expanduser("~")
+
+    if mode == "flag":
+        app_def = dict(app_def)
+        cmd = list(app_def["command"])
+        # MUST be idempotent: the post-install retry path re-enters with an
+        # already-flagged app_def, and a plain concat produced
+        #   --notebook-dir X --no-browser --notebook-dir X --no-browser
+        # which Jupyter refuses with "ServerApp.root_dir only accepts one
+        # value, got 2" (reproduced on Linux under v1.6.50).
+        if "--notebook-dir" not in cmd:
+            cmd += ["--notebook-dir", workdir]
+        if no_browser and "--no-browser" not in cmd:
+            cmd += ["--no-browser"]
+        app_def["command"] = cmd
+    return workdir, app_def
+
+
 class LauncherRunMixin:
     """Mixin for PackagePanel: launch/install/uninstall logic for launcher tools."""
 
@@ -718,52 +785,15 @@ class LauncherRunMixin:
         # never actually reached the real subprocess (Bayram,
         # 2026-08-14, caught via the launch log showing the bare
         # "python -m jupyter lab" with neither flag present).
-        self._jupyter_notebook_dir = None
-        # N50 (2026-08-19): the guard used to sniff the command for the string
-        # "jupyter", which is a poor proxy for "this app honours a working
-        # directory". Voila is the case that exposed it: its command is
-        # ["-m", "voila", "--no-browser"], no "jupyter" anywhere, so it never
-        # entered this block and the jupyter_workdir setting was silently
-        # ignored for it -- no error, just the wrong directory. Apps now say so
-        # themselves via `workdir` in launcher_ui.py:
-        #     "flag" -> pass --notebook-dir explicitly (JupyterLab, Notebook)
-        #     "cwd"  -> serve the process's working directory (Voila)
-        # Voila deliberately gets "cwd" rather than a guessed flag: it serves
-        # its cwd by default, and cwd is set from _jupyter_notebook_dir further
-        # down, so this needs no assumption about Voila's CLI surface.
-        _wd_mode = app_def.get("workdir")
-        if _wd_mode is None and any(
-                "jupyter" in str(c).lower() for c in app_def.get("command", [])):
-            _wd_mode = "flag"      # safety net for entries not yet declaring it
-        if _wd_mode:
-            jwd = self.config.get("jupyter_workdir", "home") if hasattr(self, "config") and self.config else "home"
-            jwd_custom = self.config.get("jupyter_workdir_custom", "") if hasattr(self, "config") and self.config else ""
-            if jwd == "custom" and jwd_custom and os.path.isdir(jwd_custom):
-                notebook_dir = jwd_custom
-            elif jwd == "env":
-                notebook_dir = str(venv_path)
-            else:
-                notebook_dir = os.path.expanduser("~")
-            # Setting this makes cwd=notebook_dir below, which is the whole
-            # mechanism for "cwd" apps.
-            self._jupyter_notebook_dir = notebook_dir
-        if _wd_mode == "flag":
-            app_def = dict(app_def)
-            _cmd = list(app_def["command"])
-            # MUST be idempotent: the post-install retry path (launch ->
-            # package missing -> install -> re-launch) re-enters this function
-            # with the ALREADY-flagged app_def, so the plain concat that used
-            # to live here produced
-            #   --notebook-dir X --no-browser --notebook-dir X --no-browser
-            # and Jupyter refused to start with
-            #   "ServerApp.root_dir ... only accepts one value, got 2".
-            # Reproduced on Linux under v1.6.50 (Bayram, 2026-08-17) -- the
-            # earlier "fixed" note above described an intent, not this code.
-            if "--notebook-dir" not in _cmd:
-                _cmd += ["--notebook-dir", notebook_dir]
-            if "--no-browser" not in _cmd:
-                _cmd += ["--no-browser"]
-            app_def["command"] = _cmd
+        # B77: the same decision the Create Shortcut path makes, made in
+        # the same place. Must still happen HERE, before any cmd list is
+        # built from app_def below -- the pipx branch snapshots
+        # app_def["command"] earlier than the plain-venv branch does, and an
+        # earlier attempt that mutated the dict later found it had already
+        # been copied, so --no-browser never reached the real subprocess
+        # (Bayram, 2026-08-14, caught in the launch log).
+        self._jupyter_notebook_dir, app_def = resolve_launch_workdir(
+            getattr(self, "config", None), venv_path, app_def)
 
         pkg_name = app_def["package"].lower()
         # pip normalizes package names: quarto-cli ↔ quarto_cli — check both

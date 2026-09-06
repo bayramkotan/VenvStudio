@@ -648,9 +648,40 @@ echo "OK"
         launch_layout.setSpacing(12)
 
         # Jupyter Working Directory — protected by checkbox
+        #
+        # B75 (Bayram, 2026-09-05: "JupyterLab/Notebook working directory
+        # calismiyor! settings altinda bir ayari vardi").
+        #
+        # This row was WRITE-ONLY. The checkbox was hardcoded off at creation
+        # and nothing ever restored it, while the save path in
+        # settings_advanced.py reads it:
+        #
+        #     if self.jupyter_workdir_cb.isChecked():
+        #         config.set("jupyter_workdir", combo.currentData())
+        #     else:
+        #         config.set("jupyter_workdir", "home")     # <-- wipes it
+        #
+        # So: set it, save, it works. Open Settings again for ANY reason and
+        # save ANYTHING, and the unchecked box takes the else branch and
+        # silently resets the setting to "home". The user also never saw
+        # their own choice -- the row always looked untouched.
+        #
+        # Every other row in Settings reads its state from config as it is
+        # built (see _make_pm_path_row in settings_page.py, which does exactly
+        # `cb.setChecked(bool(self.config.get(key, False)))`). This one did
+        # not; the omission is the whole bug. launcher_run.py was reading the
+        # setting correctly all along.
+        _jwd = self.config.get("jupyter_workdir", "") if self.config else ""
+        _jwd_custom = (self.config.get("jupyter_workdir_custom", "")
+                       if self.config else "")
+        # "home" is what the save path writes when the box is OFF, so it
+        # cannot be told apart from "never configured" -- treat both as off,
+        # which matches what the launcher does with it anyway.
+        _jwd_on = bool(_jwd) and _jwd != "home"
+
         jupyter_dir_row = QHBoxLayout()
         self.jupyter_workdir_cb = QCheckBox()
-        self.jupyter_workdir_cb.setChecked(False)
+        self.jupyter_workdir_cb.setChecked(_jwd_on)
         self.jupyter_workdir_cb.toggled.connect(lambda on: self.jupyter_workdir_combo.setEnabled(on))
         jupyter_dir_row.addWidget(self.jupyter_workdir_cb)
 
@@ -658,22 +689,27 @@ echo "OK"
         self.jupyter_workdir_combo.addItem("🏠 Home Directory", "home")
         self.jupyter_workdir_combo.addItem("📁 Environment Folder", "env")
         self.jupyter_workdir_combo.addItem("📂 Custom Path...", "custom")
-        self.jupyter_workdir_combo.setEnabled(False)
+        if _jwd_on:
+            _i = self.jupyter_workdir_combo.findData(_jwd)
+            if _i >= 0:
+                self.jupyter_workdir_combo.setCurrentIndex(_i)
+        self.jupyter_workdir_combo.setEnabled(_jwd_on)
         self.jupyter_workdir_combo.currentIndexChanged.connect(self._on_jupyter_workdir_changed)
         jupyter_dir_row.addWidget(self.jupyter_workdir_combo, 1)
 
         self.jupyter_custom_path_btn = QPushButton("📂")
         self.jupyter_custom_path_btn.setFixedWidth(36)
         self.jupyter_custom_path_btn.setToolTip("Pick custom folder")
-        self.jupyter_custom_path_btn.setEnabled(False)
+        self.jupyter_custom_path_btn.setEnabled(_jwd_on and _jwd == "custom")
         self.jupyter_custom_path_btn.clicked.connect(self._pick_jupyter_workdir)
         jupyter_dir_row.addWidget(self.jupyter_custom_path_btn)
 
         launch_layout.addRow("Jupyter Working Dir:", jupyter_dir_row)
 
-        self.jupyter_custom_path_label = QLabel("")
+        self.jupyter_custom_path_label = QLabel(_jwd_custom)
         self.jupyter_custom_path_label.setStyleSheet(f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;")
-        self.jupyter_custom_path_label.setVisible(False)
+        self.jupyter_custom_path_label.setVisible(
+            bool(_jwd_custom) and _jwd == "custom")
         launch_layout.addRow("", self.jupyter_custom_path_label)
 
         launch_group.setLayout(launch_layout)

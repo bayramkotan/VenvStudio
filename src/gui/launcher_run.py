@@ -19,6 +19,30 @@ _log = logging.getLogger("venvstudio.gui.launcher")
 from src.gui.package_panel_common import WorkerThread
 
 
+def env_aware_environ(venv_path, base=None):
+    """A copy of the environment with `venv_path` ACTIVATED.
+
+    B79. This is what activation actually does: the environment's script
+    directory first on PATH, VIRTUAL_ENV set, PYTHONHOME dropped in case
+    another interpreter left one behind.
+
+    It lived inside _launch_app as a closure, so only that function's
+    console-less branch had it. The three console branches called
+    launch_in_terminal with no environment at all, and the new terminal
+    inherited VenvStudio's own -- which is why `!python --version` inside a
+    launched JupyterLab answered 3.14 from /usr/bin while its kernel was
+    correctly the environment's 3.10.
+    """
+    _e = dict(os.environ if base is None else base)
+    _scripts = os.path.join(
+        str(venv_path), "Scripts" if get_platform() == "windows" else "bin")
+    if os.path.isdir(_scripts):
+        _e["PATH"] = _scripts + os.pathsep + _e.get("PATH", "")
+        _e["VIRTUAL_ENV"] = str(venv_path)
+        _e.pop("PYTHONHOME", None)
+    return _e
+
+
 def resolve_launch_workdir(config, venv_path, app_def, no_browser=True):
     """Where a launcher app should run, and its command with the flags added.
 
@@ -447,7 +471,13 @@ class LauncherRunMixin:
                 if show_console:
                     from src.gui.platform_utils import launch_in_terminal
                     terminal_type = self.config.get("terminal_type", "") if hasattr(self, "config") and self.config else ""
-                    launch_in_terminal(cmd, cwd=work_dir, terminal_type=terminal_type)
+                    # B79: conda apps already have an environment built
+                    # above for the Windows branch; give the terminal the
+                    # same one instead of nothing.
+                    launch_in_terminal(
+                        cmd, cwd=work_dir, terminal_type=terminal_type,
+                        env=(getattr(self, "_conda_launch_env", None)
+                             or env_aware_environ(self.pip_manager.venv_path)))
                 else:
                     from src.utils.platform_utils import appimage_clean_env
                     _ai_env = appimage_clean_env()
@@ -623,11 +653,16 @@ class LauncherRunMixin:
             from src.utils.platform_utils import get_platform
             import subprocess
             if get_platform() == "windows":
-                subprocess.Popen(cmd, cwd=work_dir, creationflags=subprocess.CREATE_NEW_CONSOLE)
+                subprocess.Popen(cmd, cwd=work_dir,
+                                 env=env_aware_environ(venv_path),
+                                 creationflags=subprocess.CREATE_NEW_CONSOLE)
             else:
                 from src.gui.platform_utils import launch_in_terminal
                 terminal_type = self.config.get("terminal_type", "") if hasattr(self, "config") and self.config else ""
-                launch_in_terminal(cmd, cwd=work_dir, terminal_type=terminal_type)
+                # B79: a script run in a terminal needs the environment too.
+                launch_in_terminal(cmd, cwd=work_dir,
+                                   terminal_type=terminal_type,
+                                   env=env_aware_environ(venv_path))
 
             self.status_label.setText(f"🚀 Running {os.path.basename(filepath)}")
 
@@ -1185,14 +1220,9 @@ class LauncherRunMixin:
         # for every launched app -- Jupyter is just where it surfaced first.
         _scripts_dir = str(venv_path / ("Scripts" if get_platform() == "windows" else "bin"))
 
+        # B79: one rule, shared with the shortcut and script paths.
         def _env_aware(base):
-            """Return a copy of `base` with the env's script dir first on PATH."""
-            _e = dict(base)
-            if os.path.isdir(_scripts_dir):
-                _e["PATH"] = _scripts_dir + os.pathsep + _e.get("PATH", "")
-                _e["VIRTUAL_ENV"] = str(venv_path)
-                _e.pop("PYTHONHOME", None)
-            return _e
+            return env_aware_environ(venv_path, base)
 
         _launch_env = _env_aware(os.environ)
 
@@ -1248,7 +1278,12 @@ class LauncherRunMixin:
                 if show_console:
                     from src.gui.platform_utils import launch_in_terminal
                     terminal_type = self.config.get("terminal_type", "") if hasattr(self, "config") and self.config else ""
-                    launch_in_terminal(cmd, cwd=work_dir, terminal_type=terminal_type)
+                    # B79: the SAME activated environment the console-less
+                    # branch below uses. Without it a launched JupyterLab's
+                    # shell found /usr/bin/python.
+                    launch_in_terminal(cmd, cwd=work_dir,
+                                       terminal_type=terminal_type,
+                                       env=_launch_env)
                 else:
                     from src.utils.platform_utils import appimage_clean_env
                     _ai_env = appimage_clean_env()

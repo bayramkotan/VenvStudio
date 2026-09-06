@@ -27,10 +27,23 @@ import subprocess
 from src.utils.platform_utils import get_platform, get_configured_terminal
 
 
-def launch_in_terminal(cmd: list, cwd: str = "", terminal_type: str = "") -> bool:
+def launch_in_terminal(cmd: list, cwd: str = "", terminal_type: str = "",
+                       env: dict = None) -> bool:
     """Launch a command in a new terminal window (for console apps like IPython).
     Uses the same terminal auto-detection as open_terminal_at.
     Returns True if launched successfully.
+
+    B79 (Bayram, 2026-09-06: "Launcher dan calistirdigimda eski hatayi
+    verdi"). `env` carries the ACTIVATED environment. _launch_app builds one
+    with the environment's bin directory first on PATH, VIRTUAL_ENV set and
+    PYTHONHOME dropped -- and passed it to the console-less branch only. Apps
+    launched WITH a console went through here instead and got nothing, so the
+    new terminal inherited VenvStudio's own environment: inside JupyterLab,
+    `!python --version` answered 3.14 from /usr/bin while the kernel itself
+    was correctly the environment's 3.10. One branch activated, its sibling
+    did not -- the same shape as the shortcut bug fixed alongside it.
+
+    None means "inherit", which is what every existing caller does.
     """
     # B70: same rule as open_terminal_at gained in v1.6.82 -- an empty
     # terminal_type means "use the one the user chose in Settings", not
@@ -47,6 +60,7 @@ def launch_in_terminal(cmd: list, cwd: str = "", terminal_type: str = "") -> boo
             subprocess.Popen(
                 cmd,
                 cwd=cwd or None,
+                env=env,
                 creationflags=subprocess.CREATE_NEW_CONSOLE,
             )
             return True
@@ -55,7 +69,16 @@ def launch_in_terminal(cmd: list, cwd: str = "", terminal_type: str = "") -> boo
 
     elif system == "macos":
         try:
-            script = f'tell application "Terminal" to do script "cd \'{cwd}\' && {cmd_str}"'
+            # Terminal.app starts its own login shell, so the environment
+            # has to travel inside the script rather than on osascript.
+            _exports = ""
+            if env:
+                for _k in ("VIRTUAL_ENV", "PATH"):
+                    if env.get(_k):
+                        _exports += f"export {_k}=\'{env[_k]}\' && "
+                if "PYTHONHOME" not in env:
+                    _exports = "unset PYTHONHOME && " + _exports
+            script = f'tell application "Terminal" to do script "cd \'{cwd}\' && {_exports}{cmd_str}"'
             subprocess.Popen(["osascript", "-e", script])
             return True
         except Exception:
@@ -68,7 +91,14 @@ def launch_in_terminal(cmd: list, cwd: str = "", terminal_type: str = "") -> boo
             _term_env = _ace()
         except Exception:
             _term_env = None
-        _term_kw = {"env": _term_env} if _term_env is not None else {}
+        # B79: the caller's activated environment wins; the AppImage cleanup
+        # is the fallback for when there is none.
+        if env is not None:
+            _term_kw = {"env": env}
+        elif _term_env is not None:
+            _term_kw = {"env": _term_env}
+        else:
+            _term_kw = {}
 
         def _try_term(term: str) -> bool:
             if not shutil.which(term):
@@ -109,7 +139,7 @@ def launch_in_terminal(cmd: list, cwd: str = "", terminal_type: str = "") -> boo
 
         # Last resort: run in-place (blocks but better than nothing)
         try:
-            subprocess.Popen(cmd, cwd=cwd or None)
+            subprocess.Popen(cmd, cwd=cwd or None, **_term_kw)
             return True
         except Exception:
             return False

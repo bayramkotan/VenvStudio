@@ -88,17 +88,17 @@ class LauncherShortcutsMixin:
                 _found_exe = Path(_which)
             _target = _found_exe
 
-            # A conda app needs its env on PATH: the runtime DLLs live in
-            # Library\\bin and Library\\mingw-w64\\bin, and a bare R.exe
-            # fails with "libgcc_s_seh-1.dll was not found". _launch_exe
-            # sets this up in-process; a desktop shortcut cannot, so point
-            # it at a wrapper script that exports PATH first.
-            _wrapper = self._write_conda_launch_wrapper(
-                venv_path, shortcut_name, _target, _args, platform
-            )
-            if _wrapper is not None:
-                _target = _wrapper
-                _args = []
+        # B78: every shortcut goes through the wrapper, not just conda ones.
+        # Pointing at the environment's python runs the right interpreter but
+        # activates nothing, so a shell escape inside the notebook found
+        # /usr/bin/python. The wrapper exports VIRTUAL_ENV and PATH first,
+        # which is what launcher_run.py does in-process.
+        _wrapper = self._write_launch_wrapper(
+            venv_path, shortcut_name, _target, _args, platform, _work_dir
+        )
+        if _wrapper is not None:
+            _target = _wrapper
+            _args = []
 
         try:
             if platform == "windows":
@@ -129,13 +129,35 @@ class LauncherShortcutsMixin:
                 f"Failed to create shortcut:\n{e}"
             )
 
-    def _write_conda_launch_wrapper(self, venv_path, name, exe_path,
-                                    args, platform):
-        """Write a small script that puts the conda env on PATH, then runs exe.
+    def _write_launch_wrapper(self, venv_path, name, exe_path, args,
+                              platform, work_dir=""):
+        """Write a small script that ACTIVATES the environment, then runs exe.
 
-        Mirrors the PATH set up by _launch_exe. Returns the wrapper path, or
-        None if it could not be written (caller then falls back to the bare
-        executable).
+        B78 (Bayram, 2026-09-06). A shortcut used to point straight at the
+        environment's python. That runs the right interpreter, but it does not
+        ACTIVATE anything -- so inside the notebook a shell escape found the
+        wrong one:
+
+            !python --version   ->  Python 3.14.7   (the system one)
+            !which python       ->  /usr/bin/python
+            !echo $VIRTUAL_ENV  ->  (empty)
+
+        while %pip list, which uses the KERNEL rather than the shell, listed
+        the right packages. Both were true at once and only the shell was
+        wrong, which is what made it confusing.
+
+        launcher_run.py has done this since v1.6.52 -- environment-aware PATH,
+        VIRTUAL_ENV set, PYTHONHOME dropped -- but it does it in-process, and
+        a desktop shortcut has no process to do it in. Hence a script.
+
+        This used to be conda-only (_write_conda_launch_wrapper), written so
+        R.exe could find its DLLs in Library\\bin. The conda directories are
+        still added when they exist; nothing about that case regressed. It is
+        simply no longer the only case that needs an environment.
+
+        Returns the wrapper path, or None if it could not be written -- the
+        caller then falls back to the bare executable, which is what happened
+        before this existed.
         """
         try:
             _pfx = Path(venv_path)
@@ -148,13 +170,19 @@ class LauncherShortcutsMixin:
             _args_str = " ".join(f'"{a}"' for a in (args or []))
             _wrap_dir = _pfx / "venvstudio_launchers"
             _wrap_dir.mkdir(parents=True, exist_ok=True)
+            _cd = work_dir or str(_pfx)
             if platform == "windows":
                 _wrapper = _wrap_dir / f"{_safe}.bat"
                 _path_line = ";".join(_dirs)
                 _wrapper.write_text(
                     "@echo off\r\n"
+                    f'set "VIRTUAL_ENV={_pfx}"\r\n'
                     f'set "CONDA_PREFIX={_pfx}"\r\n'
                     f'set "PATH={_path_line};%PATH%"\r\n'
+                    # PYTHONHOME set for another interpreter makes this one
+                    # load the wrong standard library.
+                    'set "PYTHONHOME="\r\n'
+                    f'cd /d "{_cd}"\r\n'
                     f'"{exe_path}" {_args_str} %*\r\n',
                     encoding="utf-8",
                 )
@@ -163,8 +191,11 @@ class LauncherShortcutsMixin:
                 _path_line = ":".join(_dirs)
                 _wrapper.write_text(
                     "#!/bin/bash\n"
+                    f'export VIRTUAL_ENV="{_pfx}"\n'
                     f'export CONDA_PREFIX="{_pfx}"\n'
                     f'export PATH="{_path_line}:$PATH"\n'
+                    "unset PYTHONHOME\n"
+                    f'cd "{_cd}"\n'
                     f'exec "{exe_path}" {_args_str} "$@"\n',
                     encoding="utf-8",
                 )

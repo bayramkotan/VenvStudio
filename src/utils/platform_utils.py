@@ -582,12 +582,42 @@ def get_configured_terminal() -> str:
     means a caller can still override it deliberately, but cannot forget it
     by accident, and a sixth caller inherits the behaviour for free.
 
+    B76 (Bayram, 2026-09-07: "Neden poetry'yi open terminal yaptigimizda cmd
+    acilirken venv'i open terminal dedigimizde powershell'i aciyor. Ya
+    arkadasim zaten ayarlar altinda default terminal yok?????????").
+
+    THE SETTING WAS NEVER READ BY ANYONE. Settings writes the key
+    `default_terminal` (settings_advanced.py) while every reader asked for
+    `terminal_type` -- env_list.py, package_panel.py, and this function as it
+    was first written for B62. Two different names, so the read always came
+    back empty and each path fell through to its own auto-detection, which is
+    exactly why one route opened cmd and another opened PowerShell. B62 made
+    the callers ask; they were asking the wrong drawer.
+
+    `default_terminal` wins because that is the name already sitting in every
+    existing user's config. `terminal_type` is still read afterwards so that
+    anyone who set it by some other route is not silently reset; it can go
+    once no config carries it.
+
+    The values line up, and that was checked rather than assumed: Settings
+    stores "powershell", "pwsh", "cmd", "wt", "git-bash", "terminal",
+    "iterm2", "default", and open_terminal_at branches on those same strings.
+
     Same lazy import as _get_config_path_override above, for the same reason:
     platform_utils is imported very early in startup.
     """
     try:
         from src.core.config_manager import ConfigManager as _CM
-        return _CM().get("terminal_type", "") or ""
+        _cfg = _CM()
+        # A MISSING key means "never configured" -> fall back to the legacy
+        # name. An EMPTY one means the user unticked the box and asked for
+        # auto-detection, and that must not be overridden by a stale value
+        # under the old name. `or` alone could not tell those two apart.
+        _sentinel = object()
+        _v = _cfg.get("default_terminal", _sentinel)
+        if _v is _sentinel:
+            _v = _cfg.get("terminal_type", "")
+        return _v or ""
     except Exception:
         return ""
 
@@ -1175,6 +1205,20 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                     return (f'start wt -d "{path}" powershell -NoExit -Command '
                             f'"& \'{activate_ps1}\'"')
                 return f'start wt -d "{path}" cmd /k "{activate_bat}"'
+            elif terminal_type == "powershell":
+                # B84 (Bayram, 2026-09-07: "ama hala cmd aciliyor!!!").
+                # This branch did not exist. Choosing "Windows PowerShell"
+                # fell through to the else below, whose first choice is
+                # Windows Terminal and whose last resort is cmd -- so the
+                # setting was honoured for pwsh and silently ignored for
+                # powershell, in the poetry branch only. Every env_type
+                # branch here handles its own subset and they were never the
+                # same subset; see B85 for the audit.
+                if activate_ps1.exists():
+                    return (f'start powershell -NoExit -Command "'
+                            f'Set-Location \'{path}\'; '
+                            f'& \'{activate_ps1}\'"')
+                return f'start cmd /k "cd /d {path} && {activate_bat}"'
             elif terminal_type == "git-bash":
                 git_bash = shutil.which("bash")
                 if git_bash:

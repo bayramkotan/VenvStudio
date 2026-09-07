@@ -962,11 +962,16 @@ class EnvListMixin:
         _proj = self._project_dir_for(name, env_type)
         if _proj and command.split()[:1] and command.split()[0] in self._PROJECT_SCOPED:
             real_path = Path(_proj)   # str here made open_terminal_at do str / str
-        terminal_type = self.config.get("terminal_type", "") if self.config else ""
+        # B76: this read the key "terminal_type" while Settings writes
+        # "default_terminal", so it always came back empty and this call
+        # passed "" -- auto-detection, not the user's choice. open_terminal_at
+        # now reads the setting itself (get_configured_terminal), correct key
+        # and all, so passing nothing here is both shorter and RIGHT: one
+        # place decides, and a caller cannot ask the wrong drawer.
         _to_run = self._resolve_command_tool(command, self._get_env_path(name))
         try:
             from src.utils.platform_utils import open_terminal_at
-            _ok = open_terminal_at(real_path, terminal_type,
+            _ok = open_terminal_at(real_path,
                                    env_type=env_type, run_after=_to_run)
             if _ok is False:
                 QMessageBox.warning(

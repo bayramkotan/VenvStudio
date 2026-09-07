@@ -543,11 +543,29 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         self._learn_placeholder = _PlaceholderWidget()
         self.stack.addWidget(self._learn_placeholder)        # Page 3
 
-        # B43: cheap to build (a table and a header), so no placeholder
-        # is needed -- it reads recorded paths and does not touch disk
-        # until someone presses Scan.
-        self.stack.addWidget(self._create_projects_page())   # Page 4
         _ui_step("settings + learn placeholders")
+
+        # B59 (Bayram, 2026-09-04: "acilista 2-3 sn beyaz" / "project
+        # sekmesine nereden gecersem geceyim bir takilma oluyor").
+        #
+        # The comment that used to sit here said Projects was cheap to build,
+        # "a table and a header", and did not touch disk until someone pressed
+        # Scan. That was wrong: _create_projects_page ends with
+        # _refresh_projects(), which reads every recorded project and walks
+        # both its source tree and its environment to size them. With 1.5 GB
+        # of environments that is seconds, and it happened HERE -- inside
+        # _setup_ui, before _apply_theme, so the window sat there unstyled.
+        # That is the white screen.
+        #
+        # It took three sessions to find because the timing step above
+        # INCLUDED this line while being named after the two placeholders
+        # beside it. Measured: "settings + learn placeholders: 2683 ms" for
+        # two empty QWidgets. The label sent me looking at Settings and Learn.
+        # Hence the split: each step now measures the thing it is named after.
+        self.projects_page = None
+        self._projects_placeholder = _PlaceholderWidget()
+        self.stack.addWidget(self._projects_placeholder)     # Page 4
+        _ui_step("projects placeholder")
 
         # Bookmarks live in the Learn page, which no longer exists yet. The
         # sidebar is filled when that page is built; until then it stays empty
@@ -1139,6 +1157,21 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
                 if show_cursor:
                     QApplication.restoreOverrideCursor()
 
+        elif index == 4 and self.projects_page is None:
+            # B59: same treatment as Settings and Learn. Building it means
+            # walking every project's tree, so it waits until someone asks to
+            # see it -- and shows the busy cursor when they do.
+            if show_cursor:
+                QApplication.setOverrideCursor(Qt.WaitCursor)
+            try:
+                self.projects_page = self._create_projects_page()
+                self.stack.removeWidget(self._projects_placeholder)
+                self.stack.insertWidget(4, self.projects_page)
+                self._projects_placeholder.deleteLater()
+            finally:
+                if show_cursor:
+                    QApplication.restoreOverrideCursor()
+
         elif index == 3 and self.learn_page is None:
             if show_cursor:
                 QApplication.setOverrideCursor(Qt.WaitCursor)
@@ -1231,7 +1264,7 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         # N84: one construction path, used by the click and by the preloader.
         # Two copies of this would drift, and this file has been bitten by that
         # more than once.
-        if index in (2, 3):
+        if index in (2, 3, 4):
             self._build_deferred_page(index)
 
         # B43: refresh the project list whenever the page is shown.

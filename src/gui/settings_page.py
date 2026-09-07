@@ -1583,67 +1583,21 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         cli_info.setTextFormat(Qt.RichText)
         cli_layout.addWidget(cli_info)
 
-        # ── Preferred terminal (used by every "Open Terminal" action) ──
-        term_row = QHBoxLayout()
-        # N17 fix: add checkbox like other settings rows so the combo is
-        # gated — unchecked = auto-detect, checked = use selected terminal.
-        self.terminal_type_cb = QCheckBox()
-        _terminal_type_enabled = bool(self.config.get("terminal_type", ""))
-        self.terminal_type_cb.setChecked(_terminal_type_enabled)
-        term_row.addWidget(self.terminal_type_cb)
-        term_row.addWidget(QLabel("Preferred terminal:"))
-        self.terminal_type_combo = QComboBox()
-        _terms = [
-            ("Auto-detect", ""),
-            ("GNOME Terminal", "gnome-terminal"),
-            ("GNOME Console (kgx)", "kgx"),
-            ("Konsole", "konsole"),
-            ("Xfce Terminal", "xfce4-terminal"),
-            ("Alacritty", "alacritty"),
-            ("Kitty", "kitty"),
-            ("WezTerm", "wezterm"),
-            ("foot", "foot"),
-            ("Tilix", "tilix"),
-            ("xterm", "xterm"),
-        ]
-        if get_platform() == "windows":
-            _terms = [
-                ("Auto-detect", ""),
-                ("Windows Terminal", "wt"),
-                ("PowerShell 7", "pwsh"),
-                ("Windows PowerShell", "powershell"),
-                ("cmd", "cmd"),
-                ("Git Bash", "git-bash"),
-            ]
-        elif get_platform() == "macos":
-            _terms = [("Auto-detect (Terminal.app)", ""), ("iTerm2", "iterm2")]
-        for _label, _val in _terms:
-            self.terminal_type_combo.addItem(_label, _val)
-        _cur = self.config.get("terminal_type", "")
-        _idx = self.terminal_type_combo.findData(_cur)
-        self.terminal_type_combo.setCurrentIndex(_idx if _idx >= 0 else 0)
-        self.terminal_type_combo.setEnabled(_terminal_type_enabled)
-
-        def _on_terminal_changed(_i):
-            self.config.set("terminal_type", self.terminal_type_combo.currentData())
-            self.config.save()
-
-        def _on_terminal_cb_toggled(on):
-            self.terminal_type_combo.setEnabled(on)
-            if not on:
-                # unchecked → revert to auto-detect
-                self.terminal_type_combo.setCurrentIndex(0)
-                self.config.set("terminal_type", "")
-                self.config.save()
-            else:
-                self.config.set("terminal_type", self.terminal_type_combo.currentData())
-                self.config.save()
-
-        self.terminal_type_combo.currentIndexChanged.connect(_on_terminal_changed)
-        self.terminal_type_cb.toggled.connect(_on_terminal_cb_toggled)
-        term_row.addWidget(self.terminal_type_combo)
-        term_row.addStretch()
-        cli_layout.addLayout(term_row)
+        # B83 (Bayram, 2026-09-07: "settings altinda 2 tane terminal
+        # dropdown'u var! Bir tane themes altinda digeri en altlara dogru").
+        #
+        # There were TWO independent terminal settings, each with its own
+        # widget, its own config key and no knowledge of the other:
+        #
+        #   this one    terminal_type_combo  -> key "terminal_type"
+        #   Themes one  terminal_combo       -> key "default_terminal"
+        #
+        # Both were platform-aware, so both looked right; the user set one
+        # and the other kept its own answer. This one is gone. The Themes
+        # one survives because its list is not hardcoded -- it comes from
+        # TERMINAL_APPS and includes terminals the user added themselves,
+        # which a fixed list cannot. get_configured_terminal() still reads
+        # "terminal_type" as a fallback so nobody's existing choice is lost.
 
         cli_row = QHBoxLayout()
         self.cli_status_label = QLabel("")

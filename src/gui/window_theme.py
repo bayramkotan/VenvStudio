@@ -14,6 +14,13 @@ from src.gui.styles import get_theme
 class WindowThemeMixin:
     """Mixin for MainWindow: theme/font application and screen-change handling."""
 
+    # B81: False until the first _apply_theme has been through its deferred
+    # env sweep. A class attribute so it is always readable, whether or not
+    # the composed class remembered to set it in __init__ -- this codebase
+    # has been bitten before by a mixin reaching for state the class never
+    # created.
+    _theme_env_refresh_done = False
+
     def _set_theme(self, theme_name):
         # B184 fix: ConfigManager.set() already auto-saves to disk, but
         # call save() explicitly anyway as a belt-and-suspenders move.
@@ -106,7 +113,23 @@ class WindowThemeMixin:
                             f"QHeaderView::section {{ font-size: 15px; "
                             f"font-weight: bold; padding: 10px; }}"
                         )
-                        self._refresh_env_list(force=False)
+                        # B81 (2026-09-07). Rebuilding the list is right when
+                        # the user CHANGES the theme -- the row colours are
+                        # baked into the items, as the note above says. It is
+                        # pure waste on the FIRST call, which is startup:
+                        # _apply_theme runs before _refresh_env_list, but this
+                        # closure is deferred to the next event-loop tick, so
+                        # by the time it fires the list has already been built
+                        # -- with this very theme. Measured on Bayram's
+                        # machine: 3.4 to 4.5 seconds, spent twice, the second
+                        # time immediately after the window appeared.
+                        #
+                        # The stylesheet above still runs every time; it is
+                        # cheap and the table needs it.
+                        if self._theme_env_refresh_done:
+                            self._refresh_env_list(force=False)
+                        else:
+                            self._theme_env_refresh_done = True
                     except Exception:
                         pass
 

@@ -2767,6 +2767,41 @@ class ToolchainMixin:
             if self.terminal_combo.findData(_tid) < 0 and get_terminal_version(_tid):
                 self.terminal_combo.addItem(_tdata["name"], _tid)
 
+        # B76 (Bayram, 2026-09-07: "hala ayni birsey degismemis!"). This row
+        # was WRITE-ONLY, exactly like the Jupyter one in B75. The checkbox
+        # was hardcoded off above and nothing restored it, while the save path
+        # in settings_advanced.py reads it:
+        #
+        #     if self.terminal_cb.isChecked():
+        #         config.set("default_terminal", combo.currentData())
+        #     else:
+        #         config.set("default_terminal", "")      # <-- wipes it
+        #
+        # So the setting survived until the next time Settings was opened and
+        # anything at all was saved. Measured on Bayram's machine after all
+        # the reader-side fixes were in place: default_terminal = ''. Which is
+        # why making open_terminal_at read the right key changed nothing --
+        # there was nothing left to read.
+        #
+        # This runs AFTER every addItem above on purpose: findData cannot
+        # match an entry that has not been added yet, and the list is built
+        # per platform.
+        _dt = self.config.get("default_terminal", "") if self.config else ""
+        if _dt:
+            _i = self.terminal_combo.findData(_dt)
+            if _i >= 0:
+                self.terminal_combo.setCurrentIndex(_i)
+                self.terminal_cb.setChecked(True)
+                self.terminal_combo.setEnabled(True)
+            else:
+                # Saved a terminal that is no longer installed. Say so rather
+                # than silently reverting to auto-detection.
+                self.terminal_combo.addItem(f"{_dt}  (not found)", _dt)
+                self.terminal_combo.setCurrentIndex(
+                    self.terminal_combo.count() - 1)
+                self.terminal_cb.setChecked(True)
+                self.terminal_combo.setEnabled(True)
+
         terminal_row.addWidget(self.terminal_combo, 1)
 
         if _platform == "linux":
@@ -2989,9 +3024,32 @@ class ToolchainMixin:
         launch_layout = QFormLayout()
         launch_layout.setSpacing(12)
 
+        # B75 (Bayram, 2026-09-05: "JupyterLab/Notebook working directory
+        # calismiyor! settings altinda bir ayari vardi").
+        #
+        # This row was WRITE-ONLY: the checkbox was hardcoded off and nothing
+        # restored it, while the save path in settings_advanced.py reads it --
+        # `if checked: save the choice, else: write "home"`. So it worked
+        # once, and the next time Settings was opened and anything at all was
+        # saved, the unchecked box took the else branch and erased it.
+        #
+        # ⚠️ THE FIX FIRST WENT INTO THE WRONG COPY. settings_python_download
+        # has this same block, and it sits INSIDE _remove_selected -- a method
+        # that deletes a downloaded Python and then, after _fetch_versions(),
+        # starts building a group box. That code never runs when Settings is
+        # drawn. THIS is the copy _setup_cliops_section builds and the user
+        # sees. See B82: the dead one should be deleted.
+        _jwd = self.config.get("jupyter_workdir", "") if self.config else ""
+        _jwd_custom = (self.config.get("jupyter_workdir_custom", "")
+                       if self.config else "")
+        # "home" is also what the save path writes when the box is OFF, so it
+        # cannot be told apart from "never configured" -- both mean off, which
+        # is what the launcher does with it anyway.
+        _jwd_on = bool(_jwd) and _jwd != "home"
+
         jupyter_dir_row = QHBoxLayout()
         self.jupyter_workdir_cb = QCheckBox()
-        self.jupyter_workdir_cb.setChecked(False)
+        self.jupyter_workdir_cb.setChecked(_jwd_on)
         self.jupyter_workdir_cb.toggled.connect(lambda on: self.jupyter_workdir_combo.setEnabled(on))
         jupyter_dir_row.addWidget(self.jupyter_workdir_cb)
 
@@ -2999,24 +3057,29 @@ class ToolchainMixin:
         self.jupyter_workdir_combo.addItem("🏠 Home Directory", "home")
         self.jupyter_workdir_combo.addItem("📁 Environment Folder", "env")
         self.jupyter_workdir_combo.addItem("📂 Custom Path...", "custom")
-        self.jupyter_workdir_combo.setEnabled(False)
+        if _jwd_on:
+            _i = self.jupyter_workdir_combo.findData(_jwd)
+            if _i >= 0:
+                self.jupyter_workdir_combo.setCurrentIndex(_i)
+        self.jupyter_workdir_combo.setEnabled(_jwd_on)
         self.jupyter_workdir_combo.currentIndexChanged.connect(self._on_jupyter_workdir_changed)
         jupyter_dir_row.addWidget(self.jupyter_workdir_combo, 1)
 
         self.jupyter_custom_path_btn = QPushButton("📂")
         self.jupyter_custom_path_btn.setFixedWidth(36)
         self.jupyter_custom_path_btn.setToolTip("Pick custom folder")
-        self.jupyter_custom_path_btn.setEnabled(False)
+        self.jupyter_custom_path_btn.setEnabled(_jwd_on and _jwd == "custom")
         self.jupyter_custom_path_btn.clicked.connect(self._pick_jupyter_workdir)
         jupyter_dir_row.addWidget(self.jupyter_custom_path_btn)
 
         launch_layout.addRow("Jupyter Working Dir:", jupyter_dir_row)
 
-        self.jupyter_custom_path_label = QLabel("")
+        self.jupyter_custom_path_label = QLabel(_jwd_custom)
         self.jupyter_custom_path_label.setStyleSheet(
             f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;"
         )
-        self.jupyter_custom_path_label.setVisible(False)
+        self.jupyter_custom_path_label.setVisible(
+            bool(_jwd_custom) and _jwd == "custom")
         launch_layout.addRow("", self.jupyter_custom_path_label)
 
         launch_group.setLayout(launch_layout)

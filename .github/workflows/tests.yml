@@ -1,0 +1,45 @@
+name: Tests
+
+# B34. The suite runs on every push and every pull request, not only on a
+# tag, because its whole purpose is to fail BEFORE a release is cut. Until
+# now every fix in this project was verified by Bayram running the
+# application by hand, which is why several of them shipped broken and had
+# to be reverted.
+#
+# Deliberately separate from build.yml: that workflow builds installers for
+# four platforms and takes minutes. This takes seconds, and a broken test
+# should be visible immediately rather than after a Windows build.
+
+on:
+  push:
+    branches: [main]
+    tags-ignore: ["**"]      # tag pushes already run the build workflow
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The oldest supported version and the one Bayram develops on. The
+        # project declares requires-python >= 3.10.
+        python-version: ["3.10", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install pytest
+        # PySide6 is NOT installed on purpose. conftest.py stubs it, and the
+        # suite covers decisions rather than widgets -- which is where every
+        # bug it was written for actually lived. Installing Qt here would add
+        # a minute to every run and buy nothing these tests can check.
+        run: python -m pip install --upgrade pip pytest
+
+      - name: Run tests
+        run: python -m pytest -q

@@ -985,16 +985,125 @@ def open_terminal_at(path: Path, terminal_type: str = "",
     system = get_platform()
 
     # ── Build activation command based on env_type ────────────────────────
+    def _find_git_bash() -> Optional[str]:
+        """Git Bash's bash.exe -- NOT whatever `bash` resolves to.
+
+        B87 (Bayram, 2026-09-08: "git bash calismadi"). shutil.which("bash")
+        on his machine returns
+
+            C:\\Users\\...\\AppData\\Local\\Microsoft\\WindowsApps\\bash.exe
+
+        which is the WSL launcher stub, not Git Bash. Running it opens WSL or
+        prints an install prompt, and the activation written for Git Bash
+        means nothing there. Git Bash is at C:\\Program Files\\Git\\bin\\bash.exe
+        and was present all along.
+
+        This is the same trap v1.6.58 hit with the WindowsApps alias for
+        powershell during the pixi install. WindowsApps entries are execution
+        aliases, on PATH ahead of real programs, and which() cannot tell the
+        difference -- so the known install locations are checked FIRST and
+        that directory is refused outright.
+        """
+        import os as _o
+        _cands = []
+        for _root in (_o.environ.get("ProgramFiles", r"C:\Program Files"),
+                      _o.environ.get("ProgramFiles(x86)", ""),
+                      _o.environ.get("LOCALAPPDATA", "")):
+            if not _root:
+                continue
+            _cands += [Path(_root) / "Git" / "bin" / "bash.exe",
+                       Path(_root) / "Git" / "usr" / "bin" / "bash.exe",
+                       Path(_root) / "Programs" / "Git" / "bin" / "bash.exe"]
+        for _c in _cands:
+            try:
+                if _c.is_file():
+                    return str(_c)
+            except OSError:
+                pass
+        _w = shutil.which("bash")
+        # Refuse the alias: it is a stub for WSL, not a shell we can activate in.
+        if _w and "windowsapps" not in _w.replace("/", "\\").lower():
+            return _w
+        return None
+
+    def _wrap_windows(terminal_type: str, cd_dir, cmd_act: str = "",
+                      ps_act: str = "", sh_act: str = "") -> str:
+        """Wrap an ACTIVATION in the terminal the user chose.
+
+        B85 (Bayram, 2026-09-07: "Birini powershell de aciyor digerini cmd
+        de!!!!!"). Each env_type used to dispatch on terminal_type itself, and
+        no two did it the same way. Measured across the six branches:
+
+            conda           wt · git-bash · pwsh · powershell · (cmd default)
+            poetry          wt · pwsh                      -> everything else cmd
+            pipx/system     wt · git-bash                  -> everything else cmd
+            hatch/pdm/pixi  wt · pwsh · powershell · git-bash
+            venv/uv         cmd · pwsh · wt · powershell · git-bash
+
+        So "Windows PowerShell" was honoured for a venv and ignored for a
+        poetry env -- one screenshot, two terminals, one setting. Six copies
+        of one decision, five of them incomplete.
+
+        The two questions are separate and are now separated: WHICH SHELL is
+        this function, WHAT TO RUN IN IT is the env_type's business. Adding a
+        terminal is one edit here; adding an env type touches nothing here.
+
+        THE CHOICE ALWAYS WINS. If an activation script is missing, the chosen
+        terminal still opens -- unactivated -- rather than silently becoming
+        cmd. Picking a shell and getting a different one is worse than picking
+        a shell and having to activate by hand, and the old code did the
+        former in five branches out of six.
+        """
+        _sep_cmd = f" && {cmd_act}" if cmd_act else ""
+        _sep_ps = f"; {ps_act}" if ps_act else ""
+
+        if terminal_type == "cmd":
+            return f'start cmd /k "cd /d {cd_dir}{_sep_cmd}"'
+
+        if terminal_type in ("powershell", "pwsh"):
+            _exe = "powershell"
+            if terminal_type == "pwsh":
+                # pwsh is a separate install; falling back to powershell is
+                # closer to what was asked for than dropping to cmd.
+                _exe = "pwsh" if shutil.which("pwsh") else "powershell"
+            return (f'start {_exe} -NoExit -Command '
+                    f'"Set-Location \'{cd_dir}\'{_sep_ps}"')
+
+        if terminal_type == "wt" and shutil.which("wt"):
+            if ps_act:
+                return (f'start wt -d "{cd_dir}" powershell -NoExit -Command '
+                        f'"{ps_act}"')
+            if cmd_act:
+                return f'start wt -d "{cd_dir}" cmd /k "{cmd_act}"'
+            return f'start wt -d "{cd_dir}"'
+
+        if terminal_type == "git-bash" and _find_git_bash():
+            _bash = _find_git_bash()
+            _inner = f"cd '{cd_dir}'"
+            if sh_act:
+                _inner += f" && {sh_act}"
+            return f'start "" "{_bash}" --login -c "{_inner} && exec bash"'
+
+        # No explicit choice (or one whose program is not installed):
+        # Windows Terminal, then PowerShell, then cmd.
+        if shutil.which("wt"):
+            if ps_act:
+                return (f'start wt -d "{cd_dir}" powershell -NoExit -Command '
+                        f'"{ps_act}"')
+            if cmd_act:
+                return f'start wt -d "{cd_dir}" cmd /k "{cmd_act}"'
+            return f'start wt -d "{cd_dir}"'
+        if ps_act:
+            return (f'start powershell -NoExit -Command '
+                    f'"Set-Location \'{cd_dir}\'{_sep_ps}"')
+        return f'start cmd /k "cd /d {cd_dir}{_sep_cmd}"'
+
     def _make_cmd_windows(path: Path, terminal_type: str) -> str:
         if env_type in ("system_tools", "pipx"):
-            # No activate script — just open shell at the folder
-            if terminal_type == "wt" and shutil.which("wt"):
-                return f'start wt -d "{path}"'
-            elif terminal_type == "git-bash" and shutil.which("bash"):
-                git_bash = shutil.which("bash")
-                return f'start "" "{git_bash}" --login -c "cd \'{path}\' && exec bash"'
-            else:
-                return f'start cmd /k "cd /d {path}"'
+            # B85: no activation exists for these -- just the folder. The
+            # terminal choice is still honoured, which it was not before:
+            # anything other than wt or git-bash became cmd.
+            return _wrap_windows(terminal_type, path)
 
         elif env_type == "conda":
             from src.core.micromamba_installer import get_micromamba_exe
@@ -1077,32 +1186,17 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                 f'micromamba activate \'{path}\''
             )
 
-            if terminal_type == "wt" and shutil.which("wt"):
-                # Windows Terminal with cmd (uses mamba_hook.bat which is most reliable)
-                if mamba_hook_bat:
-                    return f'start wt -d "{path}" cmd /k "{cmd_activate}"'
-                return f'start wt -d "{path}" powershell -NoExit -Command "{ps_activate}"'
-            elif terminal_type == "git-bash" and shutil.which("bash"):
-                git_bash = shutil.which("bash")
-                # Git-Bash: use bash-style hook
-                bash_activate = (
-                    f"export MAMBA_ROOT_PREFIX='{mamba_root}'; "
-                    f"eval \"$('{mamba_str}' shell hook -s bash)\"; "
-                    f"micromamba activate '{path}'"
-                )
-                return (f'start "" "{git_bash}" --login -c '
-                        f'"cd \'{path}\' && {bash_activate} && exec bash"')
-            elif terminal_type == "pwsh":
-                # PowerShell 7+ — same activation hook as Windows PowerShell,
-                # just launched through pwsh instead of powershell.
-                return (f'start pwsh -NoExit -Command '
-                        f'"Set-Location \'{path}\'; {ps_activate}"')
-            elif terminal_type == "powershell":
-                return (f'start powershell -NoExit -Command '
-                        f'"Set-Location \'{path}\'; {ps_activate}"')
-            else:
-                # Default: cmd.exe via mamba_hook.bat (most reliable on Windows)
-                return f'start cmd /k "cd /d {path} && {cmd_activate}"'
+            bash_activate = (
+                f"export MAMBA_ROOT_PREFIX='{mamba_root}'; "
+                f"eval \"$('{mamba_str}' shell hook -s bash)\"; "
+                f"micromamba activate '{path}'"
+            )
+            # B85: conda was the ONE branch that already covered every
+            # terminal, so nothing is lost here -- it just says it once.
+            return _wrap_windows(terminal_type, path,
+                                 cmd_act=cmd_activate,
+                                 ps_act=ps_activate,
+                                 sh_act=bash_activate)
 
         elif env_type in ("hatch", "pdm", "pixi"):
             # Hatch/PDM/Pixi: cd into project dir and run the tool's shell command.
@@ -1132,17 +1226,11 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                 _tool = _sh2.which("pdm") or "pdm"
                 _shell_cmd = f'"{_tool}" run {run_after}' if run_after else f'"{_tool}" run cmd'
 
-            if terminal_type == "wt" and shutil.which("wt"):
-                return f'start wt -d "{_pdir}" cmd /k "{_shell_cmd}"'
-            elif terminal_type == "pwsh":
-                return f'start pwsh -NoExit -Command "Set-Location \'{_pdir}\'; {_shell_cmd}"'
-            elif terminal_type == "powershell":
-                return f'start powershell -NoExit -Command "Set-Location \'{_pdir}\'; {_shell_cmd}"'
-            elif terminal_type == "git-bash" and shutil.which("bash"):
-                git_bash = shutil.which("bash")
-                return f'start "" "{git_bash}" --login -c "cd \'{_pdir}\' && {_shell_cmd} && exec bash"'
-            else:
-                return f'start cmd /k "cd /d {_pdir} && {_shell_cmd}"'
+            # B85: the same tool command works in every shell, so it is
+            # passed as all three.
+            return _wrap_windows(terminal_type, _pdir,
+                                 cmd_act=_shell_cmd, ps_act=_shell_cmd,
+                                 sh_act=_shell_cmd)
 
         elif env_type == "poetry":
             # Same self-heal as POSIX: the marker may lack poetry_venv_path
@@ -1181,61 +1269,32 @@ def open_terminal_at(path: Path, terminal_type: str = "",
             # the POSIX branch below for why. Poetry's commands read
             # pyproject.toml from the working directory.
             _cd = Path(_proj_dir) if _proj_dir and Path(_proj_dir).is_dir() else _pv
-            if terminal_type == "pwsh" and activate_ps1.exists():
-                return (f'start pwsh -NoExit -Command '
-                        f'"Set-Location \'{_cd}\'; & \'{activate_ps1}\'"')
-            if terminal_type == "wt" and shutil.which("wt") and activate_ps1.exists():
-                return f'start wt -d "{_cd}" powershell -NoExit -Command "& \'{activate_ps1}\'"'
-            if activate_bat.exists():
-                return f'start cmd /k "cd /d {_cd} && {activate_bat}"'
-            return f'start cmd /k "cd /d {_cd}"'
-        else:  # venv
+            # B85: THIS is the branch in Bayram's screenshot. It knew only
+            # pwsh and wt, so "Windows PowerShell" -- and cmd, and git-bash --
+            # all ended at `start cmd /k`, while the venv branch beside it
+            # honoured the same setting. Activate the venv but SIT IN the
+            # project (see N59 and the POSIX branch): poetry reads
+            # pyproject.toml from the working directory.
+            return _wrap_windows(
+                terminal_type, _cd,
+                # No inner quotes: this lands inside cmd /k "..." and a
+                # nested quote closes the outer one early.
+                cmd_act=str(activate_bat) if activate_bat.exists() else "",
+                ps_act=f"& '{activate_ps1}'" if activate_ps1.exists() else "",
+                sh_act=(f"source '{_pv / 'Scripts' / 'activate'}'"
+                        if (_pv / "Scripts" / "activate").exists() else ""))
+        else:  # venv / uv
+            # B85: this branch was the most complete of the six, which is
+            # why a venv opened the right terminal while a poetry env did
+            # not. It now says the same thing in two lines.
             activate_bat = path / "Scripts" / "activate.bat"
             activate_ps1 = path / "Scripts" / "Activate.ps1"
-            if terminal_type == "cmd":
-                return f'start cmd /k "cd /d {path} && {activate_bat}"'
-            elif terminal_type == "pwsh":
-                # PowerShell 7+ via pwsh.exe; activate through Activate.ps1
-                if activate_ps1.exists():
-                    return (f'start pwsh -NoExit -Command '
-                            f'"Set-Location \'{path}\'; & \'{activate_ps1}\'"')
-                return f'start cmd /k "cd /d {path} && {activate_bat}"'
-            elif terminal_type == "wt":
-                if activate_ps1.exists():
-                    return (f'start wt -d "{path}" powershell -NoExit -Command '
-                            f'"& \'{activate_ps1}\'"')
-                return f'start wt -d "{path}" cmd /k "{activate_bat}"'
-            elif terminal_type == "powershell":
-                # B84 (Bayram, 2026-09-07: "ama hala cmd aciliyor!!!").
-                # This branch did not exist. Choosing "Windows PowerShell"
-                # fell through to the else below, whose first choice is
-                # Windows Terminal and whose last resort is cmd -- so the
-                # setting was honoured for pwsh and silently ignored for
-                # powershell, in the poetry branch only. Every env_type
-                # branch here handles its own subset and they were never the
-                # same subset; see B85 for the audit.
-                if activate_ps1.exists():
-                    return (f'start powershell -NoExit -Command "'
-                            f'Set-Location \'{path}\'; '
-                            f'& \'{activate_ps1}\'"')
-                return f'start cmd /k "cd /d {path} && {activate_bat}"'
-            elif terminal_type == "git-bash":
-                git_bash = shutil.which("bash")
-                if git_bash:
-                    activate_sh = path / "Scripts" / "activate"
-                    return f'start "" "{git_bash}" --login -c "cd \'{path}\' && source \'{activate_sh}\' && exec bash"'
-                return f'start cmd /k "cd /d {path} && {activate_bat}"'
-            else:
-                if shutil.which("wt"):
-                    if activate_ps1.exists():
-                        return (f'start wt -d "{path}" powershell -NoExit -Command '
-                                f'"& \'{activate_ps1}\'"')
-                    return f'start wt -d "{path}" cmd /k "{activate_bat}"'
-                elif activate_ps1.exists():
-                    return (f'start powershell -NoExit -Command "'
-                            f'Set-Location \'{path}\'; '
-                            f'& \'{activate_ps1}\'"')
-                return f'start cmd /k "cd /d {path} && {activate_bat}"'
+            _act_sh = path / "Scripts" / "activate"
+            return _wrap_windows(
+                terminal_type, path,
+                cmd_act=str(activate_bat) if activate_bat.exists() else "",
+                ps_act=f"& '{activate_ps1}'" if activate_ps1.exists() else "",
+                sh_act=f"source '{_act_sh}'" if _act_sh.exists() else "")
 
     def _make_cmd_posix(path: Path) -> str:
         if env_type in ("system_tools", "pipx"):

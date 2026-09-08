@@ -470,7 +470,11 @@ class LauncherRunMixin:
             else:
                 if show_console:
                     from src.gui.platform_utils import launch_in_terminal
-                    terminal_type = self.config.get("terminal_type", "") if hasattr(self, "config") and self.config else ""
+                    # B86: one reader, right key. This asked for
+                    # "terminal_type", which a deleted second dropdown
+                    # used to write, so a stale value beat the setting.
+                    from src.utils.platform_utils import get_configured_terminal
+                    terminal_type = get_configured_terminal()
                     # B79: conda apps already have an environment built
                     # above for the Windows branch; give the terminal the
                     # same one instead of nothing.
@@ -658,7 +662,9 @@ class LauncherRunMixin:
                                  creationflags=subprocess.CREATE_NEW_CONSOLE)
             else:
                 from src.gui.platform_utils import launch_in_terminal
-                terminal_type = self.config.get("terminal_type", "") if hasattr(self, "config") and self.config else ""
+                # B86: one reader, right key -- see the note above.
+                from src.utils.platform_utils import get_configured_terminal
+                terminal_type = get_configured_terminal()
                 # B79: a script run in a terminal needs the environment too.
                 launch_in_terminal(cmd, cwd=work_dir,
                                    terminal_type=terminal_type,
@@ -1277,7 +1283,11 @@ class LauncherRunMixin:
             else:
                 if show_console:
                     from src.gui.platform_utils import launch_in_terminal
-                    terminal_type = self.config.get("terminal_type", "") if hasattr(self, "config") and self.config else ""
+                    # B86: one reader, right key. This asked for
+                    # "terminal_type", which a deleted second dropdown
+                    # used to write, so a stale value beat the setting.
+                    from src.utils.platform_utils import get_configured_terminal
+                    terminal_type = get_configured_terminal()
                     # B79: the SAME activated environment the console-less
                     # branch below uses. Without it a launched JupyterLab's
                     # shell found /usr/bin/python.

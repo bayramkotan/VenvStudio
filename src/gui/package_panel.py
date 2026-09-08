@@ -808,7 +808,20 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
         try:
             from src.utils.platform_utils import open_terminal_at, list_pipx_apps
             from src.core.config_manager import ConfigManager
-            terminal_type = self._get_config("terminal_type", "")
+            # B86 (Bayram, 2026-09-08: "settings altinda CMD secince bu
+            # sefer hepsi PowerShell de kaliyor!!!!!"). This read the
+            # key "terminal_type", which the second, now-deleted
+            # dropdown used to write. Settings writes "default_terminal",
+            # so with default_terminal='cmd' and a stale
+            # terminal_type='powershell' still in the config, this line
+            # handed the old value straight to open_terminal_at and it
+            # won. Measured exactly that way on his machine.
+            #
+            # get_configured_terminal() is the ONE reader: right key,
+            # legacy fallback only when the new key is absent. Asking it
+            # rather than passing "" keeps the log line below truthful.
+            from src.utils.platform_utils import get_configured_terminal
+            terminal_type = get_configured_terminal()
             env_type = getattr(self, "_current_env_type", "venv")
             target_path = self._current_venv_path
             target_env_type = env_type

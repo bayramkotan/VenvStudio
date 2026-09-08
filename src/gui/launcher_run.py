@@ -340,6 +340,32 @@ class LauncherRunMixin:
         return any("spyder" in str(c).lower()
                    for c in app_def.get("command", []) or [])
 
+    def apply_spyder_conf(self, cmd, app_def, venv_path):
+        """Add --conf-dir for Spyder, preparing the config if it is missing.
+
+        B93 (Bayram, 2026-09-08: "Spyder'i launcher calistirdigimizda config
+        dosyasindan Python Interpreter cekerken, olusturulan kisa yolda
+        yok"). This decision used to live inside _launch_app, so the Create
+        Shortcut path never made it: pressing Launch gave Spyder a config
+        pinned to the environment's interpreter, and the shortcut built from
+        the same card gave it nothing, so Spyder fell back to the shared
+        ~/.config/spyder-py3 and came up with an empty interpreter box.
+
+        The fourth time this shape has appeared in two days -- the working
+        directory (B77), the environment activation (B78, B79) and now this.
+        A decision written inside the launch function is invisible to every
+        other way of launching. Anything both paths must agree on belongs
+        out here.
+
+        Returns the command, unchanged for apps that are not Spyder.
+        """
+        if not self._is_spyder_app(app_def):
+            return cmd
+        _conf = self._prepare_spyder_conf(venv_path)
+        if _conf and "--conf-dir" not in cmd:
+            return list(cmd) + ["--conf-dir", str(_conf)]
+        return cmd
+
     def _prepare_spyder_conf(self, venv_path):
         """Write a Spyder config dir inside the env, pinned to its Python.
 
@@ -1183,10 +1209,7 @@ class LauncherRunMixin:
         # environment shares ~/.config/spyder-py3 and the interpreter box
         # comes up empty, leaving the user to browse for a path VenvStudio
         # already knows.
-        if self._is_spyder_app(app_def):
-            _conf = self._prepare_spyder_conf(venv_path)
-            if _conf and "--conf-dir" not in cmd:
-                cmd = list(cmd) + ["--conf-dir", str(_conf)]
+        cmd = self.apply_spyder_conf(cmd, app_def, venv_path)
 
         _log.debug(f"🚀 [Launcher] command: {' '.join(_fmt_path(c) for c in cmd)}")
         self._log_launch_command(cmd, app_def)

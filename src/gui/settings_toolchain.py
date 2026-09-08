@@ -3048,32 +3048,27 @@ class ToolchainMixin:
         launch_layout = QFormLayout()
         launch_layout.setSpacing(12)
 
-        # B75 (Bayram, 2026-09-05: "JupyterLab/Notebook working directory
-        # calismiyor! settings altinda bir ayari vardi").
+        # B75 was diagnosed here and the diagnosis was WRONG. This row was
+        # called write-only -- built with the checkbox hardcoded off and never
+        # restored -- and a restore was added. It was already there:
+        # settings_python.py::_load_current_settings reads jupyter_workdir and
+        # sets the checkbox when it is not "home", and that method IS called,
+        # from settings_page.py:258 and from three places in
+        # settings_advanced.py. The added copy was removed again.
         #
-        # This row was WRITE-ONLY: the checkbox was hardcoded off and nothing
-        # restored it, while the save path in settings_advanced.py reads it --
-        # `if checked: save the choice, else: write "home"`. So it worked
-        # once, and the next time Settings was opened and anything at all was
-        # saved, the unchecked box took the else branch and erased it.
+        # The lesson is the one this file is full of: the terminal setting was
+        # measured on disk first (default_terminal = '' proved it was being
+        # erased) and the fix was right; this one was matched to the pattern
+        # without measuring, and was not. Bayram's actual complaint had a
+        # different cause -- the shortcut never saw the working-directory
+        # decision at all, and neither the shortcut nor the console launch
+        # activated the environment (B77, B78, B79).
         #
-        # ⚠️ THE FIX FIRST WENT INTO THE WRONG COPY. settings_python_download
-        # has this same block, and it sits INSIDE _remove_selected -- a method
-        # that deletes a downloaded Python and then, after _fetch_versions(),
-        # starts building a group box. That code never runs when Settings is
-        # drawn. THIS is the copy _setup_cliops_section builds and the user
-        # sees. See B82: the dead one should be deleted.
-        _jwd = self.config.get("jupyter_workdir", "") if self.config else ""
-        _jwd_custom = (self.config.get("jupyter_workdir_custom", "")
-                       if self.config else "")
-        # "home" is also what the save path writes when the box is OFF, so it
-        # cannot be told apart from "never configured" -- both mean off, which
-        # is what the launcher does with it anyway.
-        _jwd_on = bool(_jwd) and _jwd != "home"
-
+        # The widgets below are still built here; only the duplicate restore
+        # is gone. _load_current_settings runs after this and sets their state.
         jupyter_dir_row = QHBoxLayout()
         self.jupyter_workdir_cb = QCheckBox()
-        self.jupyter_workdir_cb.setChecked(_jwd_on)
+        self.jupyter_workdir_cb.setChecked(False)
         self.jupyter_workdir_cb.toggled.connect(lambda on: self.jupyter_workdir_combo.setEnabled(on))
         jupyter_dir_row.addWidget(self.jupyter_workdir_cb)
 
@@ -3081,29 +3076,24 @@ class ToolchainMixin:
         self.jupyter_workdir_combo.addItem("🏠 Home Directory", "home")
         self.jupyter_workdir_combo.addItem("📁 Environment Folder", "env")
         self.jupyter_workdir_combo.addItem("📂 Custom Path...", "custom")
-        if _jwd_on:
-            _i = self.jupyter_workdir_combo.findData(_jwd)
-            if _i >= 0:
-                self.jupyter_workdir_combo.setCurrentIndex(_i)
-        self.jupyter_workdir_combo.setEnabled(_jwd_on)
+        self.jupyter_workdir_combo.setEnabled(False)
         self.jupyter_workdir_combo.currentIndexChanged.connect(self._on_jupyter_workdir_changed)
         jupyter_dir_row.addWidget(self.jupyter_workdir_combo, 1)
 
         self.jupyter_custom_path_btn = QPushButton("📂")
         self.jupyter_custom_path_btn.setFixedWidth(36)
         self.jupyter_custom_path_btn.setToolTip("Pick custom folder")
-        self.jupyter_custom_path_btn.setEnabled(_jwd_on and _jwd == "custom")
+        self.jupyter_custom_path_btn.setEnabled(False)
         self.jupyter_custom_path_btn.clicked.connect(self._pick_jupyter_workdir)
         jupyter_dir_row.addWidget(self.jupyter_custom_path_btn)
 
         launch_layout.addRow("Jupyter Working Dir:", jupyter_dir_row)
 
-        self.jupyter_custom_path_label = QLabel(_jwd_custom)
+        self.jupyter_custom_path_label = QLabel("")
         self.jupyter_custom_path_label.setStyleSheet(
             f"color: {self._c()['fg_muted']}; font-size: {self._c()['fs_tiny']}px;"
         )
-        self.jupyter_custom_path_label.setVisible(
-            bool(_jwd_custom) and _jwd == "custom")
+        self.jupyter_custom_path_label.setVisible(False)
         launch_layout.addRow("", self.jupyter_custom_path_label)
 
         launch_group.setLayout(launch_layout)

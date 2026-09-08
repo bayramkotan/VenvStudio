@@ -52,6 +52,19 @@ class LauncherShortcutsMixin:
         _launch_dir, app_def = resolve_launch_workdir(
             getattr(self, "config", None), venv_path, app_def,
             no_browser=False)
+
+        # B93: Spyder needs --conf-dir pointing at a config whose interpreter
+        # is this environment. That was decided inside _launch_app, so the
+        # shortcut never got it and Spyder opened against the shared
+        # ~/.config/spyder-py3 with an empty interpreter box. Both paths now
+        # ask the same function. PackagePanel composes LauncherRunMixin, so
+        # it is reachable from here; the getattr guard is for the case where
+        # this mixin is used on a class that does not.
+        _apply_conf = getattr(self, "apply_spyder_conf", None)
+        if callable(_apply_conf) and app_def.get("command"):
+            app_def = dict(app_def)
+            app_def["command"] = _apply_conf(
+                app_def["command"], app_def, venv_path)
         _work_dir = _launch_dir or str(venv_path)
 
         _target = python_exe
@@ -94,7 +107,8 @@ class LauncherShortcutsMixin:
         # /usr/bin/python. The wrapper exports VIRTUAL_ENV and PATH first,
         # which is what launcher_run.py does in-process.
         _wrapper = self._write_launch_wrapper(
-            venv_path, shortcut_name, _target, _args, platform, _work_dir
+            venv_path, shortcut_name, _target, _args, platform, _work_dir,
+            needs_console=needs_console
         )
         if _wrapper is not None:
             _target = _wrapper
@@ -130,7 +144,7 @@ class LauncherShortcutsMixin:
             )
 
     def _write_launch_wrapper(self, venv_path, name, exe_path, args,
-                              platform, work_dir=""):
+                              platform, work_dir="", needs_console=True):
         """Write a small script that ACTIVATES the environment, then runs exe.
 
         B78 (Bayram, 2026-09-06). A shortcut used to point straight at the
@@ -172,6 +186,24 @@ class LauncherShortcutsMixin:
             _wrap_dir.mkdir(parents=True, exist_ok=True)
             _cd = work_dir or str(_pfx)
             if platform == "windows":
+                # B94 (Bayram, 2026-09-08: "kisa yoldan calistirdigimizda
+                # terminalin gorunmesine gerek yok"). A .bat always opens a
+                # console window. Before B78 the shortcut pointed straight at
+                # python.exe with WindowStyle 7, so nothing showed; making the
+                # wrapper mandatory brought a console with it, which is a
+                # regression I introduced.
+                #
+                # Two changes for apps that do not want a console. pythonw.exe
+                # instead of python.exe, so the interpreter itself does not
+                # allocate one -- swapped only when the target really is
+                # python.exe, since a system app like R.exe must be left
+                # alone. And a one-line .vbs that runs the .bat with window
+                # style 0, which the shortcut targets instead: the batch file
+                # still does the environment work, it simply does it unseen.
+                if not needs_console and Path(exe_path).name.lower() == "python.exe":
+                    _pw = Path(exe_path).with_name("pythonw.exe")
+                    if _pw.is_file():
+                        exe_path = _pw
                 _wrapper = _wrap_dir / f"{_safe}.bat"
                 _path_line = ";".join(_dirs)
                 _wrapper.write_text(
@@ -186,6 +218,20 @@ class LauncherShortcutsMixin:
                     f'"{exe_path}" {_args_str} %*\r\n',
                     encoding="utf-8",
                 )
+                if not needs_console:
+                    _vbs = _wrap_dir / f"{_safe}.vbs"
+                    # 0 = hidden window, False = do not wait for it to finish.
+                    _vbs.write_text(
+                        'CreateObject("WScript.Shell").Run '
+                        # THREE quotes each side, not four. In VBScript a
+                        # doubled quote inside a literal is an escaped one, so
+                        # """path""" is the string "path" -- what Run needs
+                        # for a path with spaces. Four quotes would close the
+                        # literal early and leave the path as a bare token.
+                        f'"""{_wrapper}""", 0, False\r\n',
+                        encoding="utf-8",
+                    )
+                    return _vbs
             else:
                 _wrapper = _wrap_dir / f"{_safe}.sh"
                 _path_line = ":".join(_dirs)

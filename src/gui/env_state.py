@@ -179,7 +179,16 @@ class EnvStateMixin:
         # callbacks can refresh the env info bar without guessing.
         self._current_backend = backend
 
-        self.pip_manager = PipManager(venv_path, backend=backend)
+        # B44: pass the env type. PipManager routes poetry/pdm/pixi to
+        # their own add/remove commands -- the ones that write
+        # pyproject.toml -- and falls back to plain pip without it. Both
+        # call sites omitted it, so every poetry project was managed with
+        # `pip install`: the package reached the environment and the
+        # manifest never heard about it. _current_env_type is already
+        # worked out above.
+        self.pip_manager = PipManager(
+            venv_path, backend=backend,
+            env_type=self._current_env_type)
         self._current_venv_path = venv_path
         # Inject shared cache dir if enabled (pip/uv only)
         if self.pip_manager and self._current_env_type in ("venv", "uv"):
@@ -578,7 +587,11 @@ class EnvStateMixin:
                 # A stdlib venv must always be managed with pip.
                 backend = "pip"
 
-            self.pip_manager = PipManager(venv_path, backend=backend)
+            # B44: pass the env type -- see the note at the other call
+            # site. Without it poetry/pdm/pixi fall back to pip.
+            self.pip_manager = PipManager(
+                venv_path, backend=backend,
+                env_type=self._current_env_type)
             # B182 follow-up: remember the active backend so post-install
             # callbacks can refresh the env info bar without guessing.
             self._current_backend = backend

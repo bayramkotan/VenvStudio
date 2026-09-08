@@ -331,6 +331,8 @@ class PipManager:
             return self._install_pdm(packages, upgrade=upgrade, callback=callback)
         if self.env_type == "pixi":
             return self._install_pixi(packages, upgrade=upgrade, callback=callback)
+        if self.env_type == "poetry":
+            return self._install_poetry(packages, upgrade=upgrade, callback=callback)
 
         # conda envs may ship without pip (e.g. `micromamba create python=3.13`).
         # Installing a pip app (Gradio, Streamlit...) then failed with
@@ -405,10 +407,190 @@ class PipManager:
                         cwd=str(self.venv_path), **_spa())
             out = r.stdout + r.stderr
             if r.returncode == 0:
+                # B44: this installs into the environment and writes NOTHING
+                # to pyproject.toml, because hatch has no `add` command to
+                # route to. Half a job is acceptable here -- refusing would
+                # take away a capability that works -- but only if it is
+                # SAID. Silent half-jobs are what this whole item is about.
+                out += (
+                    "\n\n--- note ---\n"
+                    "Installed into the environment only. hatch has no 'add'\n"
+                    "command, so pyproject.toml was NOT updated: this package\n"
+                    "will be gone the next time the environment is rebuilt.\n"
+                    "To keep it, add it to [project] dependencies by hand --\n"
+                    "the next 'hatch run' installs it from there.")
                 return True, out
             return False, f"hatch install failed:\n{out}"
         except Exception as e:
             return False, f"Error: {e}"
+
+    def _uninstall_with_tool(self, tool: str, args: list, packages,
+                             callback=None):
+        """Remove packages with the project tool, so pyproject.toml is updated.
+
+        B44. `pip uninstall` empties the environment and leaves the manifest
+        saying the package is still required, which is how a removed package
+        reappears on the next install.
+        """
+        import shutil, subprocess as _sp, os as _o
+        from src.utils.platform_utils import subprocess_args as _spa
+        _exe = shutil.which(tool)
+        if not _exe and tool == "pixi":
+            _cand = _o.path.expanduser("~/.pixi/bin/pixi")
+            _exe = _cand if _o.path.isfile(_cand) else None
+        if not _exe:
+            return False, (f"{tool} not found on PATH — cannot remove the "
+                           f"package from pyproject.toml. Install {tool}, or "
+                           f"edit the manifest by hand.")
+        cmd = [_exe] + list(args) + list(packages)
+        if callback:
+            callback(f"Removing via {tool}: {', '.join(packages)}...")
+        try:
+            r = _sp.run(cmd, capture_output=True, text=True, timeout=600,
+                        cwd=self._project_dir(), **_spa())
+            out = r.stdout + r.stderr
+            if r.returncode == 0:
+                return True, out
+            return False, f"{tool} {args[0]} failed:\n{out}"
+        except Exception as e:
+            return False, f"Error: {e}"
+
+    def _uninstall_hatch_note(self, packages, callback=None):
+        """hatch has no remove command, so say what to do instead.
+
+        B44/B65. Verified against hatch 1.18.0: there is no `hatch remove`
+        and no `hatch add`. A dependency is added or removed by editing
+        [project] dependencies in pyproject.toml, and hatch installs the
+        change itself on the next `hatch run` -- it prints "Checking
+        dependencies" and fetches it, which was measured.
+
+        Running `pip uninstall` here would empty the environment while
+        leaving the manifest asking for the package, and hatch would put it
+        straight back. Doing nothing and saying why is the honest answer.
+        """
+        _names = ", ".join(packages)
+        if callback:
+            callback(f"hatch has no remove command — {_names} left alone")
+        return False, (
+            f"hatch has no 'remove' command, so VenvStudio will not touch "
+            f"this environment.\n\n"
+            f"Remove {_names} from [project] dependencies in the project's "
+            f"pyproject.toml. The next 'hatch run' applies the change.\n\n"
+            f"Uninstalling with pip instead would empty the environment while "
+            f"the manifest still asked for the package, and hatch would "
+            f"reinstall it.")
+
+    def _install_poetry(self, packages, upgrade=False, callback=None):
+        """Install packages via `poetry add`.
+
+        B44. This branch did not exist: a poetry environment fell through to
+        plain `pip install`, which puts the package in the environment and
+        writes NOTHING to pyproject.toml. Measured on a fresh `poetry new`
+        project -- after `pip install packaging` the module imports fine and
+        pyproject.toml still has an empty `dependencies = []`. The package is
+        then absent from the project on the next machine, and nothing warned
+        anyone. `poetry add` records `packaging (>=26.3,<27.0)` as well as
+        installing it.
+
+        There is a second, sharper reason not to let pip loose in a
+        tool-managed environment: while measuring this, `pip install` into
+        poetry's OWN environment replaced a dependency and broke poetry
+        outright (ModuleNotFoundError: cleo). pip does not know what the tool
+        pinned; the tool does.
+        """
+        import shutil, subprocess as _sp
+        from src.utils.platform_utils import subprocess_args as _spa
+        poetry = shutil.which("poetry")
+        if not poetry:
+            return False, "poetry not found on PATH"
+        cmd = [poetry, "add"] + list(packages)
+        if callback:
+            callback(f"Installing via poetry: {', '.join(packages)}...")
+        try:
+            r = _sp.run(cmd, capture_output=True, text=True, timeout=600,
+                        cwd=self._project_dir(), **_spa())
+            out = r.stdout + r.stderr
+            if r.returncode == 0:
+                return True, out
+            return False, f"poetry add failed:\n{out}"
+        except Exception as e:
+            return False, f"Error: {e}"
+
+    def _project_dir(self) -> str:
+        """Where the project lives, which is not always where the env lives.
+
+        B44. poetry, hatch and pdm keep the project files and the real
+        environment in two separate places, and their commands read
+        pyproject.toml from the WORKING DIRECTORY. The marker written at
+        creation time records the project; without it the env path is the
+        best guess available.
+        """
+        import json as _j
+        _m = self.venv_path / ".venvstudio_env"
+        if _m.exists():
+            try:
+                _d = _j.loads(_m.read_text(encoding="utf-8"))
+                for _k in ("poetry_project_dir", "project_dir"):
+                    _p = _d.get(_k, "")
+                    if _p and Path(_p).is_dir():
+                        return str(_p)
+            except Exception:
+                pass
+
+        # B44 second pass. The marker is written when VenvStudio creates the
+        # environment, and Bayram's poetry envs were not created by it -- his
+        # `ptr-project-fm2xxDZ4-py3.14` has no marker at all, so `poetry add`
+        # ran in the virtualenvs directory and answered "could not find a
+        # pyproject.toml file ... or its parents".
+        #
+        # Poetry names an environment after its project, so the mapping runs
+        # backwards: `<name>-<8-char hash>-py<version>` yields `ptr-project`.
+        # That name is then matched against the projects VenvStudio already
+        # knows about, comparing pyproject's own `name` first, because the
+        # directory on disk is `ptr_project` while poetry calls it
+        # `ptr-project` -- underscores and hyphens are interchangeable to
+        # poetry and not to the filesystem.
+        _pname = self._poetry_project_name()
+        if _pname:
+            for _cand in self._known_project_dirs():
+                if self._pyproject_name(_cand) == _pname:
+                    return _cand
+                if Path(_cand).name.replace("_", "-").lower() == _pname:
+                    return _cand
+        return str(self.venv_path)
+
+    def _poetry_project_name(self) -> str:
+        """`ptr-project` from `ptr-project-fm2xxDZ4-py3.14`, or ""."""
+        import re as _re
+        _m = _re.match(r"^(?P<name>.+)-[A-Za-z0-9_-]{8}-py\d+\.\d+$",
+                       self.venv_path.name)
+        return _m.group("name").lower() if _m else ""
+
+    @staticmethod
+    def _pyproject_name(project_dir: str) -> str:
+        """The `name` a project calls itself, normalised the way poetry does."""
+        try:
+            _t = (Path(project_dir) / "pyproject.toml").read_text(
+                encoding="utf-8", errors="replace")
+        except OSError:
+            return ""
+        import re as _re
+        _m = _re.search(r'^\s*name\s*=\s*["\']([^"\']+)["\']', _t, _re.M)
+        return _m.group(1).replace("_", "-").lower() if _m else ""
+
+    @staticmethod
+    def _known_project_dirs() -> list:
+        """Projects VenvStudio has recorded, newest first."""
+        try:
+            from src.core.config_manager import ConfigManager as _CM
+            _out = []
+            for _e in (_CM().get("recent_projects", []) or []):
+                _p = _e.get("path") if isinstance(_e, dict) else _e
+                if _p and Path(_p).is_dir():
+                    _out.append(str(_p))
+            return _out
+        except Exception:
+            return []
 
     def _install_pdm(self, packages, upgrade=False, callback=None):
         """Install packages via pdm add."""
@@ -465,11 +647,45 @@ class PipManager:
         - uv:   does NOT accept ``-y`` (it's already non-interactive;
                 ``uv pip uninstall -y …`` errors out with
                 "unexpected argument '-y' found"). This was B-uv-uninst.
-        Other backends (poetry, pipx, conda) are handled outside
-        PipManager — see package_panel.py command templates.
+        B44: that last sentence used to read "Other backends (poetry, pipx,
+        conda) are handled outside PipManager — see package_panel.py command
+        templates." A grep of package_panel.py for `poetry add`, `poetry
+        remove`, `pdm remove` and `pixi remove` returns NOTHING. They were
+        not handled anywhere; every one of them ran `pip uninstall`.
+
+        Installing already routed hatch, pdm and pixi to their own tools
+        while removing routed none of them -- so a package added with
+        `pdm add` (which writes pyproject.toml) was removed with `pip
+        uninstall` (which does not). The dependency line survived, and the
+        package came back on the next install. Verified on real projects:
+        after `poetry remove` and `pdm remove` the line is gone from
+        pyproject.toml; after `pip uninstall` it is still there.
         """
         if not packages:
             return False, "No packages specified"
+
+        # Same routing as install_packages. hatch is deliberately absent from
+        # both: it has no add and no remove command -- its whole command list
+        # is build/check/clean/config/dep/env/fmt/lock/new/project/publish/
+        # python/run/self/shell/status/test/version -- so there is nothing to
+        # route to. See _uninstall_hatch_note.
+        _tool_removers = {
+            "poetry": ("poetry", ["remove"]),
+            "pdm": ("pdm", ["remove"]),
+            "pixi": ("pixi", ["remove", "--pypi"]),
+            # NOT uv: env_type "uv" is a plain venv that uv happened to
+            # create, and it need not have a pyproject.toml at all -- `uv
+            # remove` would fail there. install_packages does not use `uv
+            # add` either, and the two must stay symmetric: removing with a
+            # manifest-editing command what was installed without one is the
+            # exact mismatch this whole item is about.
+        }
+        if self.env_type in _tool_removers:
+            return self._uninstall_with_tool(
+                *_tool_removers[self.env_type], packages=packages,
+                callback=callback)
+        if self.env_type == "hatch":
+            return self._uninstall_hatch_note(packages, callback=callback)
 
         cmd = ["uninstall"]
         if self._backend != "uv":

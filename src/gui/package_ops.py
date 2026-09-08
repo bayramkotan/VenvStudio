@@ -1388,6 +1388,24 @@ class PackageOpsMixin:
         # Legacy fallback: marker dir itself might be the project dir
         if (_P(_vp) / "pyproject.toml").exists():
             return str(_vp)
+
+        # B44: the docstring above says "`poetry env info` in reverse is not
+        # possible". It is, and PipManager does it: poetry names an
+        # environment after its project, so `ptr-project-fm2xxDZ4-py3.14`
+        # yields `ptr-project`, which is matched against the projects
+        # VenvStudio has recorded. Bayram's poetry envs have no marker at all
+        # -- they were not created here -- so this file gave up, printed
+        # "Poetry project dir unknown; falling back to pip install", and
+        # handed the job to PipManager, which quietly did it properly. The
+        # message was wrong and the fallback was doing the real work.
+        #
+        # Asking PipManager keeps ONE answer to "where is this project".
+        try:
+            _pd = self.pip_manager._project_dir()
+            if _pd and (_P(_pd) / "pyproject.toml").exists():
+                return _pd
+        except Exception:
+            pass
         return None
 
     def _make_uninstall_worker(self, packages):

@@ -2756,12 +2756,36 @@ class ToolchainMixin:
             self.terminal_combo.addItem("Terminal", "terminal")
             self.terminal_combo.addItem("iTerm2", "iterm2")
         else:
+            import shutil as _sh3
             self.terminal_combo.addItem("System Default", "default")
+            # B91 (Bayram, 2026-09-08: "Linux de ne yaparsam yapayim hep Mate
+            # terminal cikiyor"). This list used to be added WHOLE, with no
+            # check that any of it was installed. On his machine only
+            # mate-terminal and alacritty exist, yet the menu offered xterm,
+            # GNOME Terminal and Konsole; picking one left open_terminal_at
+            # unable to find it, and it fell through to auto-detection, which
+            # found mate-terminal. The setting looked ignored when it was in
+            # fact impossible.
+            #
+            # The TERMINAL_APPS loop below always did check
+            # (get_terminal_version), so one menu was applying two different
+            # rules to its own entries.
+            #
+            # Not installed is not the same as not offered: the entry stays,
+            # labelled, so someone who installs Konsole later can see it was
+            # recognised -- but it cannot be chosen by accident.
             for _t in [("GNOME Terminal","gnome-terminal"),("Konsole","konsole"),
                        ("Xfce4 Terminal","xfce4-terminal"),("Tilix","tilix"),
                        ("Mate Terminal","mate-terminal"),("Alacritty","alacritty"),
                        ("Kitty","kitty"),("WezTerm","wezterm"),("xterm","xterm")]:
-                self.terminal_combo.addItem(_t[0], _t[1])
+                if _sh3.which(_t[1]):
+                    self.terminal_combo.addItem(_t[0], _t[1])
+                else:
+                    self.terminal_combo.addItem(f"{_t[0]}  (not installed)", _t[1])
+                    _mi = self.terminal_combo.model().item(
+                        self.terminal_combo.count() - 1)
+                    if _mi is not None:
+                        _mi.setEnabled(False)
 
         for _tid, _tdata in TERMINAL_APPS.items():
             if self.terminal_combo.findData(_tid) < 0 and get_terminal_version(_tid):

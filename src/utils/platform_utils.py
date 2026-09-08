@@ -1657,6 +1657,23 @@ def open_terminal_at(path: Path, terminal_type: str = "",
 
             # Explicit terminal selected (not "default" or empty)
             if terminal_type and terminal_type not in ("", "default"):
+                # B91: say so when the chosen terminal is not there. It used
+                # to fall through to auto-detection without a word, so the
+                # setting looked ignored -- Bayram picked xterm, then
+                # gnome-terminal, then konsole, and got mate-terminal every
+                # time, because none of the three were installed on that
+                # machine and mate-terminal is what auto-detect found. The
+                # Settings list now greys out what is missing, but a terminal
+                # can be uninstalled after it was chosen, so this stays.
+                if not _find_terminal(terminal_type):
+                    try:
+                        from src.utils.logger import get_logger as _gl
+                        _gl("Terminal").warning(
+                            f"[Terminal] '{terminal_type}' is set in Settings "
+                            f"but is not installed - falling back to "
+                            f"auto-detection")
+                    except Exception:
+                        pass
                 if _launch_linux_terminal(terminal_type):
                     # B62: this was a bare `return`, so a function annotated
                     # `-> bool` handed back None -- and only on the branch

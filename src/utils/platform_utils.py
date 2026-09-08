@@ -1687,7 +1687,51 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                     # the false warning. Fixed at the source.
                     return True
 
-            # Auto-detect: try common terminals in order of preference
+            # B92 (Bayram, 2026-09-08: "System Default kismi en son kalan
+            # terminali gosteriyor. Aslinda Mate Desktop icin mate olmasi
+            # gerekmiyor mu? KDE icin konsole... gibi").
+            #
+            # "System Default" used to mean "the first entry of the fixed list
+            # below that happens to be installed" -- which is not the system's
+            # default, it is ours. On a MATE desktop with GNOME Terminal also
+            # installed it opened GNOME Terminal. It looked right on his
+            # machine only because none of the earlier entries existed.
+            #
+            # The desktop knows its own terminal, so it is asked first.
+            # XDG_CURRENT_DESKTOP can hold several colon-separated names
+            # ("ubuntu:GNOME"), so each is matched in turn.
+            #
+            # NOTE: Debian's x-terminal-emulator / xdg-terminal alternatives
+            # would be the more portable answer and are tried first, but on
+            # Arch -- measured on his CachyOS box -- neither exists, so the
+            # desktop variable is the only thing left to ask.
+            for _sysdef in ("x-terminal-emulator", "xdg-terminal"):
+                if _find_terminal(_sysdef) and _launch_linux_terminal(_sysdef):
+                    return True
+
+            _desktop_terminals = {
+                "MATE": "mate-terminal",
+                "KDE": "konsole",
+                "PLASMA": "konsole",
+                "GNOME": "gnome-terminal",
+                "XFCE": "xfce4-terminal",
+                "X-CINNAMON": "cinnamon-terminal",
+                "CINNAMON": "cinnamon-terminal",
+                "LXQT": "qterminal",
+                "LXDE": "lxterminal",
+                "DEEPIN": "deepin-terminal",
+                "PANTHEON": "io.elementary.terminal",
+                "BUDGIE": "gnome-terminal",
+                "COSMIC": "gnome-terminal",
+            }
+            for _d in os.environ.get("XDG_CURRENT_DESKTOP", "").split(":"):
+                _pref = _desktop_terminals.get(_d.strip().upper())
+                if _pref and _find_terminal(_pref):
+                    if _launch_linux_terminal(_pref):
+                        return True
+
+            # Last resort: a fixed order of what is common. Reached only when
+            # the desktop is unknown or its own terminal is not installed.
             auto_order = [
                 # GNOME
                 "gnome-terminal",   # Ubuntu, Fedora, Debian GNOME

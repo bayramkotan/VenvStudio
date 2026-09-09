@@ -293,6 +293,176 @@ class LauncherUIMixin:
                 "open_browser": "http://localhost:8001",
                 "browser_delay": 3,
                             },
+            # B108: three cards added 2026-09-09, each one RUN before it was
+            # written. Eighteen candidates became three, because the test was
+            # "does it start with no arguments" and most do not: netron wants
+            # a model file, optuna-dashboard a storage URL, dagster-webserver
+            # a [tool.dagster] block, `aim up` asks an interactive question,
+            # label-studio/open-webui/pgadmin4/superset ship 70-139 MB wheels,
+            # napari and fiftyone are desktop apps, and langflow, solara,
+            # voici, kedro-viz and thonny carry no console_scripts at all.
+            {
+                "name": "Prefect",
+                "icon": "\U0001f30a",
+                "icon_key": "prefect",
+                "package": "prefect",
+                "env_types": ["venv", "uv", "hatch", "pdm", "poetry"],
+                "min_python": "3.9",
+                "command": ["-c", "import sys; sys.argv=['prefect','server','start']; from prefect.cli import app; app()"],
+                "desc": "Workflow orchestration \u2014 runs the Prefect server UI",
+                "needs_console": True,
+                "open_browser": "http://127.0.0.1:4200",
+                "browser_delay": 6,
+                            },
+            {
+                "name": "Evidently",
+                "icon": "\U0001f4c9",
+                "icon_key": "evidently",
+                "package": "evidently",
+                "env_types": ["venv", "uv", "hatch", "pdm", "poetry"],
+                "min_python": "3.9",
+                "command": ["-c", "import sys; sys.argv=['evidently','ui']; from evidently.cli import app; app()"],
+                "desc": "Data & model monitoring \u2014 drift, quality, performance",
+                "needs_console": True,
+                "open_browser": "http://127.0.0.1:8000",
+                "browser_delay": 5,
+                            },
+            {
+                "name": "Notebook (classic)",
+                "icon": "\U0001f4d3",
+                "icon_key": "nbclassic",
+                "package": "nbclassic",
+                "env_types": ["venv", "uv", "hatch", "pdm", "poetry"],
+                "min_python": "3.9",
+                "command": ["-m", "nbclassic", "--no-browser"],
+                "desc": "The classic Jupyter Notebook interface on modern Jupyter Server",
+                "needs_console": True,
+                "open_browser": "http://localhost:8888",
+                "browser_delay": 4,
+                            },
+            # B110: conda-forge apps. Each package was checked with
+            # micromamba 2.9.0 on 2026-09-09 (--dry-run against
+            # conda-forge) and the download size in each note is that
+            # run's own figure, not an estimate.
+            {
+                "name": "napari",
+                "icon": "🔬",
+                "icon_key": "napari",
+                "env_types": ["conda"],
+                "package": "__system__",
+                "system_app": True,
+                "conda_packages": ["napari"],
+                "conda_channels": ["conda-forge"],
+                "system_commands": {
+                    "windows": ["napari.exe"],
+                    "linux":   ["napari"],
+                    "macos":   ["napari"],
+                },
+                "desc": "n-dimensional image viewer for scientific data",
+                "note": "conda-forge install: 149 MB, 175 packages.",
+                            },
+            {
+                "name": "Glue",
+                "icon": "🔗",
+                "icon_key": "glueviz",
+                "env_types": ["conda"],
+                "package": "__system__",
+                "system_app": True,
+                "conda_packages": ["glueviz"],
+                "conda_channels": ["conda-forge"],
+                "system_commands": {
+                    "windows": ["glue.exe"],
+                    "linux":   ["glue"],
+                    "macos":   ["glue"],
+                },
+                "desc": "Linked-view exploration of related datasets",
+                "note": "conda-forge install: 340 MB, 265 packages.",
+                            },
+            {
+                "name": "Veusz",
+                "icon": "📐",
+                "icon_key": "veusz",
+                "env_types": ["conda"],
+                "package": "__system__",
+                "system_app": True,
+                "conda_packages": ["veusz"],
+                "conda_channels": ["conda-forge"],
+                "system_commands": {
+                    "windows": ["veusz.exe"],
+                    "linux":   ["veusz"],
+                    "macos":   ["veusz"],
+                },
+                "desc": "Scientific plotting and graphing",
+                "note": "conda-forge install: 148 MB, 17 packages.",
+                            },
+            {
+                "name": "OpenRefine",
+                "icon": "🧹",
+                "icon_key": "openrefine",
+                "env_types": ["conda"],
+                "package": "__system__",
+                "system_app": True,
+                "conda_packages": ["openrefine"],
+                "conda_channels": ["conda-forge"],
+                "system_commands": {
+                    "windows": ["refine.exe"],
+                    "linux":   ["refine"],
+                    "macos":   ["refine"],
+                },
+                "desc": "Clean and transform messy data",
+                "note": "conda-forge install: 328 MB, 3 packages.",
+                            },
+            {
+                "name": "ParaView",
+                "icon": "🌐",
+                "icon_key": "paraview",
+                "env_types": ["conda"],
+                "package": "__system__",
+                "system_app": True,
+                "conda_packages": ["paraview"],
+                "conda_channels": ["conda-forge"],
+                "system_commands": {
+                    "windows": ["paraview.exe"],
+                    "linux":   ["paraview"],
+                    "macos":   ["paraview"],
+                },
+                "desc": "Large-scale scientific visualisation",
+                "note": "conda-forge install: 272 MB, 102 packages.",
+                            },
+            {
+                "name": "JupyterHub",
+                "icon": "🎛️",
+                "icon_key": "jupyterhub",
+                "env_types": ["conda"],
+                "package": "__system__",
+                "system_app": True,
+                "conda_packages": ["jupyterhub"],
+                "conda_channels": ["conda-forge"],
+                "system_commands": {
+                    "windows": ["jupyterhub.exe"],
+                    "linux":   ["jupyterhub"],
+                    "macos":   ["jupyterhub"],
+                },
+                "desc": "Multi-user Jupyter server",
+                "note": "conda-forge install: 55 MB, 78 packages.",
+                            },
+            {
+                "name": "MinIO",
+                "icon": "🪣",
+                "icon_key": "minio-server",
+                "env_types": ["conda"],
+                "package": "__system__",
+                "system_app": True,
+                "conda_packages": ["minio-server"],
+                "conda_channels": ["conda-forge"],
+                "system_commands": {
+                    "windows": ["minio.exe"],
+                    "linux":   ["minio"],
+                    "macos":   ["minio"],
+                },
+                "desc": "S3-compatible object storage server",
+                "note": "conda-forge install: 33 MB, 1 package.",
+                            },
             # ── pip-based: Marimo ─────────────────────────────────────────────
             {
                 "name": "Marimo",
@@ -344,7 +514,8 @@ class LauncherUIMixin:
                 # conda-forge package is "rstudio-desktop" (not "rstudio");
                 # list r-base first so the R interpreter RStudio needs is
                 # present in the same env.
-                "conda_packages": ["r-base", "rstudio-desktop"],
+                "download_url": "https://posit.co/download/rstudio-desktop/",
+                "install_note": "rstudio-desktop exists in no channel. Plain rstudio exists ONLY in the Anaconda defaults channel, which requires a licence for commercial use. R itself IS installable and the R Console card does that, from conda-forge r-base.",
                 "conda_channels": ["conda-forge"],
                 "system_commands": {
                     "windows": ["rstudio.exe"],
@@ -371,6 +542,12 @@ class LauncherUIMixin:
                 "env_types": ["conda"],
                 "package": "__system__",
                 "system_app": True,
+                # B111 (Bayram): the conda-forge package resolves but the
+                # install does not give a working Ollama here, so this
+                # card sends people to the official installer instead of
+                # pretending. Moved to Tools -> External Apps.
+                "download_url": "https://ollama.com/download",
+                "install_note": "The conda-forge package did not give a working install, so VenvStudio points at the official installer rather than leaving you with something half-installed.",
                 "system_commands": {
                     "windows": ["ollama.exe", "serve"],
                     "linux":   ["ollama", "serve"],
@@ -388,7 +565,8 @@ class LauncherUIMixin:
                 "env_types": ["conda"],
                 "package": "__system__",
                 "system_app": True,
-                "conda_packages": ["dbeaver-ce"],
+                "download_url": "https://dbeaver.io/download/",
+                "install_note": "Neither dbeaver-ce nor plain dbeaver exists in any conda channel (same check).",
                 "conda_channels": ["conda-forge"],
                 "system_commands": {
                     "windows": ["dbeaver.exe"],
@@ -426,7 +604,8 @@ class LauncherUIMixin:
                 "env_types": ["conda"],
                 "package": "__system__",
                 "system_app": True,
-                "conda_packages": ["jamovi"],
+                "download_url": "https://www.jamovi.org/download.html",
+                "install_note": "Not in ANY conda channel. Checked with micromamba 2.9.0 on 2026-09-09 against conda-forge, bioconda, defaults, r and anaconda: jamovi exists in none of them.",
                 "conda_channels": ["conda-forge"],
                 "system_commands": {
                     "windows": ["jamovi.exe"],
@@ -442,7 +621,8 @@ class LauncherUIMixin:
                 "env_types": ["conda"],
                 "package": "__system__",
                 "system_app": True,
-                "conda_packages": ["jasp"],
+                "download_url": "https://jasp-stats.org/download/",
+                "install_note": "Not in any conda channel -- same check as jamovi, same result.",
                 "conda_channels": ["conda-forge"],
                 "system_commands": {
                     "windows": ["JASP.exe"],
@@ -512,7 +692,12 @@ class LauncherUIMixin:
         self.launcher_cards = {}
         self.launcher_grid_widget = QWidget()
         self.launcher_grid_widget.setLayout(self.launcher_grid)
-        for i, app in enumerate(self.app_definitions):
+        # B107: cards whose button only opens a download page moved to
+        # Tools -> External Apps. The definitions stay in this ONE list and
+        # the dialog reads them from here.
+        self.launcher_grid_apps = [a for a in self.app_definitions
+                                   if not a.get("download_url")]
+        for i, app in enumerate(self.launcher_grid_apps):
             card = self._create_app_card(app)
             self.launcher_grid.addWidget(card, i // 3, i % 3)
             self.launcher_cards[app["name"]] = card
@@ -521,6 +706,21 @@ class LauncherUIMixin:
         layout.addStretch()
 
         scroll.setWidget(container)
+        # B109 (Bayram: "launcher da gorunmuyor"). The tab opened showing the
+        # LAST cards -- DBeaver, jamovi, JASP, Bokeh, Chainlit -- with the
+        # first eighteen above the fold and no obvious sign the view was
+        # scrolled. Measured: 25 cards in the grid, all visible, container
+        # 1964px tall in a ~900px viewport, so nothing was missing; the
+        # scrollbar simply started at the bottom.
+        #
+        # Qt puts a fresh QScrollArea at the top, but this one is filled after
+        # the widget is set and inside a tab that is built before it is shown,
+        # and the position ends up at the end. Keeping a reference and pinning
+        # it to 0 is the whole fix -- and the reference is what _update_...
+        # needs anyway if the view should ever return to the top after a
+        # rebuild.
+        self.launcher_scroll = scroll
+        scroll.verticalScrollBar().setValue(0)
         return scroll
 
     def _create_app_card(self, app_def: dict) -> QFrame:

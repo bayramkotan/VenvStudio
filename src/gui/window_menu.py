@@ -117,6 +117,26 @@ class WindowMenuMixin:
         # names defined twice, class methods hiding a mixin's, and
         # constants held under two names. Every one of those is a bug
         # this codebase has actually shipped.
+        # B80: a launched JupyterLab outlives the click that started it,
+        # and with --no-browser it never had a window at all. This says
+        # what is actually running and stops it.
+        # B107: apps VenvStudio cannot install -- they are in no conda
+        # channel -- moved off the Launch tab, which is about running
+        # things inside an environment.
+        ext_apps_action = QAction("📊 External Apps…", self)
+        ext_apps_action.setToolTip(
+            "RStudio, DBeaver, jamovi, JASP — launch them if they are\n"
+            "on this system, or go to their download page.")
+        ext_apps_action.triggered.connect(self._show_external_apps)
+        tools_menu.addAction(ext_apps_action)
+
+        jupyter_action = QAction("📓 Running Jupyter Servers", self)
+        jupyter_action.setToolTip(
+            "Jupyter servers that are still running, wherever they were\n"
+            "started from. Open them, or stop them.")
+        jupyter_action.triggered.connect(self._show_jupyter_servers)
+        tools_menu.addAction(jupyter_action)
+
         code_map_action = QAction("🗺️ Code Map", self)
         code_map_action.setToolTip(
             "What is in a codebase and what talks to what.\n"
@@ -465,6 +485,42 @@ class WindowMenuMixin:
             f.write("#!/bin/bash\n")
             f.write(f'"{vs_exe}"\n')
         os.chmod(script, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP)
+
+    def _show_external_apps(self):
+        """Tools -> External Apps (B107)."""
+        try:
+            from src.gui.external_apps_dialog import ExternalAppsDialog
+            _defs = getattr(self.package_panel, "app_definitions", []) \
+                if getattr(self, "package_panel", None) else []
+            if not _defs:
+                QMessageBox.information(
+                    self, "External Apps",
+                    "The app list is not ready yet \u2014 open the Packages "
+                    "tab once, then try again.")
+                return
+            # Kept on self so Python does not collect it when show() returns.
+            self._ext_apps_dlg = ExternalAppsDialog(_defs, parent=self)
+            self._ext_apps_dlg.show()
+            self._ext_apps_dlg.raise_()
+            self._ext_apps_dlg.activateWindow()
+        except Exception as e:
+            QMessageBox.warning(self, "External Apps",
+                                f"Could not open the list:\n{e}")
+
+    def _show_jupyter_servers(self):
+        """Open the Running Jupyter Servers dialog (B80)."""
+        try:
+            from src.gui.jupyter_servers_dialog import JupyterServersDialog
+            # Non-modal: a scan is a network round trip per server and a stop
+            # waits for the process to leave. Kept on self so Python does not
+            # collect it the moment show() returns.
+            self._jupyter_dlg = JupyterServersDialog(parent=self)
+            self._jupyter_dlg.show()
+            self._jupyter_dlg.raise_()
+            self._jupyter_dlg.activateWindow()
+        except Exception as e:
+            QMessageBox.warning(self, "Running Jupyter Servers",
+                                f"Could not open the server list:\n{e}")
 
     def _show_code_map(self):
         """Open the Code Map dialog (B30)."""

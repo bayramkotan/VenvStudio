@@ -207,6 +207,15 @@ Or download the standalone binary — **no Python required:**
 <tr>
 <td width="50%" valign="top">
 
+### 📁 Projects
+
+- **One table for every project**, whichever tool built it — uv, Poetry, PDM, Hatch and Pixi side by side
+- **Scan for Projects** finds existing ones on disk; **New Project** scaffolds one with the tool you pick
+- **Source and environment sized separately**, so you can see that 900 MB of a project is its environment and 20 KB is your code
+- **Command Reference** shows the exact commands behind every button — `poetry install`, `pdm add <package>` — because the point is that you learn them
+- **Add Package** goes through the project's own tool, so `pyproject.toml` is updated rather than bypassed
+- Right-click for Packages, Open Terminal, Open Folder, Clone, Rename, Export, and removal that distinguishes *from the list* from *from disk*
+
 ### 🚀 Quick Launch
 - Sidebar shows installed apps for active env
 - **26 one-click launchers** — [see full list below](#-supported-launchers)
@@ -278,6 +287,16 @@ Each environment is tracked with a `.venvstudio_env` marker file, and the **Runt
 
 ---
 
+## 🧰 Tools
+
+| | What it does |
+|:--|:--|
+| **🗺️ Code Map** | Reads the codebase and reports what is defined twice, which mixin methods are shadowed, which constants are twins and which definitions nothing calls. Written because the same fix kept having to be applied in two places. |
+| **📓 Running Jupyter Servers** | A launched notebook server outlives the click that started it, and with `--no-browser` it never had a window at all. This lists what is actually running — wherever it was started from — with its port, working directory, kernel count and last activity, and stops it properly rather than killing it. |
+| **📊 External Apps** | Applications VenvStudio cannot install because they are in no conda channel. Launches them if they are already on the system, opens the vendor's download page if not. |
+
+---
+
 ## 🧩 Conflict Manager
 
 VenvStudio checks packages against a curated compatibility list **before** installing them — every install path (Catalog, Presets, Manual Install, Install Launcher) goes through the same check, so nothing slips through.
@@ -315,6 +334,14 @@ VenvStudio checks packages against a curated compatibility list **before** insta
 <br>
 <p align="center">
   <img src="assets/screenshots/launch_apps.png" alt="Launch Applications — Links expanded" width="800">
+</p>
+</details>
+
+<details>
+<summary><b>📁 Projects</b></summary>
+<br>
+<p align="center">
+  <img src="assets/screenshots/projects.png" alt="Projects — five tools side by side, with the command reference and the right-click menu" width="800">
 </p>
 </details>
 
@@ -480,19 +507,43 @@ Learning (PyTorch/JAX)**, **Data Engineering (Polars/DuckDB)**,
 | ![Shiny](https://img.shields.io/badge/-4E9BCD?style=flat-square) | **Shiny** | Python web apps for data science, R-inspired | 🌐 Web Apps | [shiny.posit.co](https://shiny.posit.co/py/) |
 | ![NiceGUI](https://img.shields.io/badge/-5898D4?style=flat-square) | **NiceGUI** | Python-only web UIs, no HTML/CSS/JS needed | 🌐 Web Apps | [nicegui.io](https://nicegui.io/) |
 | ![Bokeh](https://img.shields.io/badge/-2E7D9E?style=flat-square) | **Bokeh** | Interactive visualization for modern browsers | 📊 ML Ops | [bokeh.org](https://bokeh.org/) |
+| ![Prefect](https://img.shields.io/badge/-070E10?style=flat-square) | **Prefect** | Workflow orchestration — runs the Prefect server UI | 🔀 Orchestration | [prefect.io](https://www.prefect.io/) |
+| ![Evidently](https://img.shields.io/badge/-ED0400?style=flat-square) | **Evidently** | Data and model monitoring — drift, quality, performance | 📉 Monitoring | [evidentlyai.com](https://www.evidentlyai.com/) |
+| ![Jupyter](https://img.shields.io/badge/-F37626?style=flat-square&logo=jupyter&logoColor=white) | **Notebook (classic)** | The classic notebook interface on modern Jupyter Server | 📓 Notebooks | [jupyter.org](https://jupyter.org/) |
 
-### 🛠️ System Tools (Conda / Portable)
+### 🛠️ Conda Applications
 
-*Available in Conda environments — installed via conda-forge or detected on system.*
+*Available in Conda environments, installed from conda-forge into the environment itself.*
 
-| Tool | Description | Install Method |
-|:-----|:-----------|:--------------|
-| **R** | Statistical computing language | Conda (`r-base`) or system NSIS installer |
-| **RStudio** | IDE for R | Conda (`rstudio-desktop`) or portable download |
-| **Ollama** | Run large language models locally | Portable binary |
-| **DBeaver** | Universal database tool | Conda or portable ZIP |
-| **jamovi** | Statistical spreadsheet | Conda or AppImage (Linux) |
-| **JASP** | Bayesian statistics | Conda or AppImage (Linux) |
+| Tool | Description | conda-forge package | Download size |
+|:-----|:-----------|:--------------------|:--------------|
+| **R Console** | R statistical computing language | `r-base` | — |
+| **napari** | n-dimensional image viewer | `napari` | 149 MB |
+| **Glue** | Linked-view exploration of related datasets | `glueviz` | 340 MB |
+| **Veusz** | Scientific plotting and graphing | `veusz` | 148 MB |
+| **OpenRefine** | Clean and transform messy data | `openrefine` | 328 MB |
+| **ParaView** | Large-scale scientific visualisation | `paraview` | 272 MB |
+| **JupyterHub** | Multi-user Jupyter server | `jupyterhub` | 55 MB |
+| **MinIO** | S3-compatible object storage server | `minio-server` | 33 MB |
+| **Quarto** | Publishing system for notebooks | `quarto` | — |
+
+Sizes are what `micromamba install --dry-run` reported on 2026-09-09, not estimates.
+
+### 🌐 External Applications
+
+*Not available from any conda channel. Tools → External Apps launches them if
+they are already on the system, and opens the vendor's download page if not.*
+
+| Tool | Description | Why not installed here |
+|:-----|:-----------|:-----------------------|
+| **RStudio** | IDE for R | `rstudio-desktop` exists in no channel; plain `rstudio` only in Anaconda's `defaults`, which needs a licence for commercial use |
+| **jamovi** | Statistical spreadsheet | In no conda channel |
+| **JASP** | Bayesian statistics | In no conda channel |
+| **DBeaver** | Universal database tool | Neither `dbeaver` nor `dbeaver-ce` in any channel |
+| **Ollama** | Run large language models locally | Official installer gives a working setup; the conda package did not |
+
+Checked with micromamba 2.9.0 against conda-forge, bioconda, defaults, r and
+anaconda. R itself **is** installable — see the R Console card above.
 
 ---
 

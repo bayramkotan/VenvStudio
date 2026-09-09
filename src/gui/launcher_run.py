@@ -159,6 +159,29 @@ class LauncherRunMixin:
                 _wb.open("https://posit.co/download/rstudio-desktop/")
             return
 
+        # B107: an app with a download_url is one that exists in NO conda
+        # channel -- jamovi, JASP, DBeaver and RStudio, each checked with
+        # micromamba 2.9.0 on 2026-09-09 against conda-forge, bioconda,
+        # defaults, r and anaconda. They used to carry a conda_packages entry,
+        # so Launch promised an install and answered with the solver saying
+        # the package does not exist. The card now says the button opens the
+        # download page; this makes it do that, and asks first so a browser
+        # never opens unannounced.
+        _dl = app_def.get("download_url", "")
+        if _dl:
+            import webbrowser as _wb2
+            _msg = app_def.get("install_note", "")
+            _r2 = QMessageBox.question(
+                self, f"Get {name}",
+                f"{name} is not available from any conda channel, so "
+                f"VenvStudio cannot install it.\n\n"
+                + (f"{_msg}\n\n" if _msg else "")
+                + f"Open the download page?\n{_dl}",
+                QMessageBox.Yes | QMessageBox.No)
+            if _r2 == QMessageBox.Yes:
+                _wb2.open(_dl)
+            return
+
         # ── Conda env: use micromamba to install ─────────────────────────
         if env_type == "conda" and env_path:
             conda_pkgs = app_def.get("conda_packages", [])

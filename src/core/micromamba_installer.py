@@ -860,6 +860,36 @@ def install_conda_packages(env_path: Path, packages: list,
         return False
 
 
+def _packages_from_json(data):
+    """The package list out of `micromamba list --json`, whichever shape it is.
+
+    B106 (2026-09-09). This used to `return json.loads(...)` and trust the
+    result to be a list. Newer micromamba wraps it:
+
+        {"log_history": [...], "packages": [{"name": ..., "version": ...}]}
+
+    A dict iterates over its KEYS, so every caller doing `p.get("name")` got
+    a string and raised AttributeError. It crashed VenvStudio on startup for
+    anyone whose last environment was a conda one -- the Launch tab reads
+    this to decide which cards are installed, and there was no way back into
+    the app without editing the config by hand.
+
+    Both shapes are accepted rather than the new one alone: micromamba has
+    changed this once and can change it again, and the older form is still
+    what an older binary returns. Anything unrecognised gives an empty list,
+    which shows every card as not-installed -- wrong, but harmless, and far
+    better than taking the window down.
+    """
+    if isinstance(data, list):
+        return [p for p in data if isinstance(p, dict)]
+    if isinstance(data, dict):
+        for _key in ("packages", "actions", "result"):
+            _v = data.get(_key)
+            if isinstance(_v, list):
+                return [p for p in _v if isinstance(p, dict)]
+    return []
+
+
 def list_conda_packages(env_path: Path) -> list[dict]:
     """List packages installed in a conda env. Returns [{name, version, channel}]."""
     exe = get_micromamba_exe()
@@ -874,7 +904,7 @@ def list_conda_packages(env_path: Path) -> list[dict]:
         )
         if result.returncode == 0:
             import json
-            return json.loads(result.stdout)
+            return _packages_from_json(json.loads(result.stdout))
     except Exception:
         pass
     return []

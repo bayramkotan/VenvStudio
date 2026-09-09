@@ -386,13 +386,38 @@ class EnvStateMixin:
                 self.launcher_grid.removeWidget(card)
 
             # Re-add only visible cards in order (no gaps)
+            #
+            # B107: `idx` used to come from enumerate(visible_apps), so an app
+            # with no card still consumed a grid position and left a hole.
+            # That is exactly what happened when RStudio, DBeaver, jamovi and
+            # JASP moved to Tools -> External Apps: they are still in
+            # app_definitions -- the dialog reads them from there -- but no
+            # card is built for them, .get() returns None, the `if` skips, and
+            # four cells stayed empty. The position now counts CARDS PLACED,
+            # not apps considered.
+            #
+            # Worth noting for the next time the Launch tab looks wrong: THIS
+            # is the code that lays the grid out at runtime, not the loop in
+            # launcher_ui.py that builds it once. Two turns were spent fixing
+            # alignment in the wrong file.
             col_count = 3
-            for idx, app in enumerate(visible_apps):
+            _placed = 0
+            for app in visible_apps:
                 card = self.launcher_cards.get(app["name"])
                 if card:
-                    row, col = divmod(idx, col_count)
+                    row, col = divmod(_placed, col_count)
                     self.launcher_grid.addWidget(card, row, col)
                     card.setVisible(True)
+                    _placed += 1
+
+            # B109: back to the top after a rebuild. The grid is emptied and
+            # refilled here on every environment change, and the scroll
+            # position survives that -- so the tab reopened showing the last
+            # row, which is what "the launcher does not show anything" turned
+            # out to mean.
+            _sc = getattr(self, "launcher_scroll", None)
+            if _sc is not None:
+                _sc.verticalScrollBar().setValue(0)
 
         # Keep the Quick Launch sidebar in sync with the newly built grid
         # (previously it only refreshed via the card-status path, so an env

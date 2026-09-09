@@ -63,7 +63,7 @@ Or download the standalone binary — **no Python required:**
 | ⚡ | **uv** | `uv venv` | Rust-powered — 10–100× faster than pip |
 | 📜 | **Poetry** | `poetry new` | Dependency management with lock file |
 | 📦 | **pipx** | `pipx install` | Isolated CLI applications |
-| 🦎 | **Conda** | micromamba | conda-forge — R, RStudio, jamovi, JASP, DBeaver and 25,000+ packages |
+| 🦎 | **Conda** | micromamba | conda-forge — R, napari, ParaView, JupyterHub, MinIO and 25,000+ packages |
 | 🏗️ | **Hatch** | `hatch new` | Modern Python project manager by PyPA with pyproject.toml |
 | 📦 | **PDM** | `pdm init` | PEP 582 / pyproject.toml based package manager |
 | 🌊 | **Pixi** | `pixi init` | conda-forge + PyPI, blazing fast Rust-powered environment |
@@ -95,11 +95,20 @@ Install Launcher) goes through the same check, so nothing slips through.
 - **Manual Install** tab — paste package names or version specs (`numpy==1.24`, `pandas>=2.0`)
 - pip or **uv** backend (uv is 10–100× faster)
 
+### 📁 Projects
+
+- **One table for every project**, whichever tool built it — uv, Poetry, PDM, Hatch and Pixi side by side
+- **Scan for Projects** finds existing ones on disk; **New Project** scaffolds one with the tool you pick
+- **Source and environment sized separately**, so a 900 MB project turns out to be 20 KB of code and the rest environment
+- **Command Reference** shows the exact commands behind every button — `poetry install`, `pdm add <package>`
+- **Add Package** goes through the project's own tool, so `pyproject.toml` is updated rather than bypassed
+
 ### 🚀 Quick Launch
 - Sidebar shows installed apps for the active environment
 - **26 one-click launchers** — see full list below
 - **Install Launcher** (File menu) — pick any app, VenvStudio finds a compatible environment automatically or offers to create one
-- **System tools** — R, RStudio, Ollama, DBeaver, jamovi, JASP via Conda
+- **Conda applications** — R, napari, Glue, Veusz, OpenRefine, ParaView, JupyterHub and MinIO, installed from conda-forge into the environment
+- **External applications** — RStudio, jamovi, JASP, DBeaver and Ollama are in no conda channel, so Tools → External Apps launches them if they are on the system and opens the vendor's download page if not
 - **Jupyter Working Directory** — configurable (Home / Env Folder / Custom Path)
 - **Create Desktop Shortcut** for any app
 - Instant sync between sidebar dropdown, environment table, and package panel
@@ -120,6 +129,14 @@ Install Launcher) goes through the same check, so nothing slips through.
 - Custom terminal, catalog categories, and packages
 - CLI/TUI Tools: **Starship** (preset preview, inline config editor, test terminal), **Oh My Posh**, **Nerd Fonts**
 - Auto-check for updates on startup
+
+---
+
+## 🧰 Tools
+
+- **🗺️ Code Map** — reads the codebase and reports what is defined twice, which mixin methods are shadowed, which constants are twins and which definitions nothing calls
+- **📓 Running Jupyter Servers** — lists the notebook servers actually running, wherever they were started from, with port, working directory, kernel count and last activity; stops them properly rather than killing them
+- **📊 External Apps** — applications that are in no conda channel: launches them if present, opens the download page if not
 
 ---
 
@@ -151,19 +168,32 @@ Install Launcher) goes through the same check, so nothing slips through.
 | ![Shiny](https://img.shields.io/badge/-4E9BCD?style=flat-square) | **Shiny** | Python web apps for data science, R-inspired | 🌐 Web Apps | [shiny.posit.co](https://shiny.posit.co/py/) |
 | ![NiceGUI](https://img.shields.io/badge/-5898D4?style=flat-square) | **NiceGUI** | Python-only web UIs, no HTML/CSS/JS needed | 🌐 Web Apps | [nicegui.io](https://nicegui.io/) |
 | ![Bokeh](https://img.shields.io/badge/-2E7D9E?style=flat-square) | **Bokeh** | Interactive visualization for modern browsers | 📊 ML Ops | [bokeh.org](https://bokeh.org/) |
+| ![Prefect](https://img.shields.io/badge/-070E10?style=flat-square) | **Prefect** | Workflow orchestration — runs the Prefect server UI | 🔀 Orchestration | [prefect.io](https://www.prefect.io/) |
+| ![Evidently](https://img.shields.io/badge/-ED0400?style=flat-square) | **Evidently** | Data and model monitoring — drift, quality, performance | 📉 Monitoring | [evidentlyai.com](https://www.evidentlyai.com/) |
+| ![Jupyter](https://img.shields.io/badge/-F37626?style=flat-square&logo=jupyter&logoColor=white) | **Notebook (classic)** | The classic notebook interface on modern Jupyter Server | 📓 Notebooks | [jupyter.org](https://jupyter.org/) |
 
-### 🛠️ System Tools (Conda / Portable)
+### 🛠️ Conda Applications
 
-*Available in Conda environments — installed via conda-forge or detected on system.*
+*Installed from conda-forge into the environment itself.*
 
-| Tool | Description | Install Method |
-|:-----|:-----------|:--------------|
-| **R** | Statistical computing language | Conda (`r-base`) or system installer |
-| **RStudio** | IDE for R | Conda (`rstudio-desktop`) or portable download |
-| **Ollama** | Run large language models locally | Portable binary |
-| **DBeaver** | Universal database tool | Conda or portable ZIP |
-| **jamovi** | Statistical spreadsheet | Conda or AppImage (Linux) |
-| **JASP** | Bayesian statistics | Conda or AppImage (Linux) |
+| Tool | Description | conda-forge package |
+|:-----|:-----------|:--------------------|
+| **R Console** | R statistical computing language | `r-base` |
+| **napari** | n-dimensional image viewer | `napari` |
+| **Glue** | Linked-view exploration of related datasets | `glueviz` |
+| **Veusz** | Scientific plotting and graphing | `veusz` |
+| **OpenRefine** | Clean and transform messy data | `openrefine` |
+| **ParaView** | Large-scale scientific visualisation | `paraview` |
+| **JupyterHub** | Multi-user Jupyter server | `jupyterhub` |
+| **MinIO** | S3-compatible object storage server | `minio-server` |
+
+### 🌐 External Applications
+
+*In no conda channel — Tools → External Apps launches them if present, or
+opens the download page. Checked against conda-forge, bioconda, defaults, r
+and anaconda.*
+
+RStudio · jamovi · JASP · DBeaver · Ollama
 
 ---
 

@@ -12,3 +12,6 @@ VenvStudio_Handoff.md*.bak
 
 VenvStudio_Handoff.md
 VENVSTUDIO_TODO.md
+
+# Temporary diagnostic scripts (see v1.6.92)
+_*.py

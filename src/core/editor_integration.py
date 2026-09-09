@@ -242,6 +242,44 @@ def resolve_editor_binary(editor_id: str = "") -> tuple:
     return "", ""
 
 
+_NAME_CACHE: dict = {}
+
+
+def editor_display_name(editor_id: str = "") -> str:
+    """The name of the editor that WOULD open a file right now, or "".
+
+    B74 (Bayram: Learn's "Open in Editor" button does not say which editor
+    it means). The button can now name it, which matters because
+    resolve_editor_binary falls back to any editor that resolves -- so the
+    one that opens is not always the one that was chosen, and a label that
+    says "Open in Editor" hides that entirely.
+
+    CACHED, and the cache is why this function exists rather than the button
+    calling resolve_editor_binary directly. That call runs shutil.which over
+    every known editor: measured at 3.3 ms here, and Learn builds a button
+    per snippet card -- 200 cards would be two thirds of a second scanning
+    PATH for an answer that does not change while the app is open.
+
+    An editor installed mid-session will not be noticed until restart. That
+    is the trade; clear_editor_name_cache() is there for the Settings page
+    to call when the default changes, which is the case that actually
+    happens.
+    """
+    if editor_id in _NAME_CACHE:
+        return _NAME_CACHE[editor_id]
+    try:
+        _, name = resolve_editor_binary(editor_id)
+    except Exception:
+        name = ""
+    _NAME_CACHE[editor_id] = name
+    return name
+
+
+def clear_editor_name_cache() -> None:
+    """Forget the resolved names. Call after changing the default editor."""
+    _NAME_CACHE.clear()
+
+
 def open_file(file_path, editor_id: str = "") -> tuple:
     """Open `file_path` in an editor. Returns (ok, message).
 

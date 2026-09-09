@@ -116,6 +116,10 @@ class CodeMap:
     shadowed: List[dict] = field(default_factory=list)
     twin_constants: List[dict] = field(default_factory=list)
     errors: List[Tuple[str, str]] = field(default_factory=list)
+    # B73: names seen in entry points outside the mapped tree (main.py,
+    # tests/, tools/). They are not part of the map -- their own definitions
+    # are not listed -- but a name they use is a name that is reached.
+    extra_names: Set[str] = field(default_factory=set)
 
     @property
     def total_loc(self) -> int:
@@ -322,6 +326,12 @@ def _find_unreached(cmap: CodeMap):
             if users:
                 continue
             if n in blob:          # appears inside a string or literal
+                continue
+            # B73: main.py, tests/ and tools/ are outside the mapped tree but
+            # calling from them is still calling. Without this, an entry
+            # point read as dead -- which is exactly the false positive the
+            # older gen_project_map.py existed to avoid.
+            if n in cmap.extra_names:
                 continue
             cmap.unreached.append((f.path, d.qualname))
 
@@ -536,11 +546,34 @@ def fetch_source(version: str = "", dest=None,
         f"Could not download the source ({last or 'no release found'})")
 
 
-def scan(root, skip_dirs: Optional[Set[str]] = None) -> CodeMap:
-    """Read every .py file under `root` and work out what connects to what."""
+DEFAULT_ALSO = ("main.py", "tests", "tools", "setup.py")
+
+
+def scan(root, skip_dirs: Optional[Set[str]] = None,
+         also: Optional[List[str]] = None) -> CodeMap:
+    """Read every .py file under `root` and work out what connects to what.
+
+    `also` names extra paths, relative to root's PARENT, to read for
+    references only.
+
+    B73. tools/gen_project_map.py did this and said why: "counting only src/
+    would report those entry points as dead code". It was right, and this
+    file did not do it -- so anything called from main.py or from tests/
+    appeared in "no caller found", and a real caller looked like none. The
+    older script is being retired in favour of this one, so its two good
+    ideas come across first: this, and the --check mode below.
+    """
     root = Path(root).resolve()
     skip = SKIP_DIRS if skip_dirs is None else set(skip_dirs)
     cmap = CodeMap(root=str(root))
+    _extra: List[Path] = []
+    for _rel in (also if also is not None else DEFAULT_ALSO):
+        _p = root.parent / _rel
+        if _p.is_file() and _p.suffix == ".py":
+            _extra.append(_p)
+        elif _p.is_dir():
+            _extra += [q for q in sorted(_p.rglob("*.py"))
+                       if not set(q.parts) & skip]
     for dirpath, dirnames, filenames in os.walk(root):
         dirnames[:] = [d for d in dirnames if d not in skip]
         for fn in sorted(filenames):
@@ -554,6 +587,20 @@ def scan(root, skip_dirs: Optional[Set[str]] = None) -> CodeMap:
                 continue
             if info:
                 cmap.files.append(info)
+    # B73: read the extra files for their REFERENCES only -- they are not
+    # part of the map and their own definitions are not listed. main.py
+    # calling a function is what makes that function alive.
+    for _p in _extra:
+        try:
+            _info = _read_file(_p, root.parent)
+        except Exception:
+            continue
+        if _info:
+            cmap.extra_names |= _info.imported_names
+            for _d in _info.defs:
+                cmap.extra_names |= set(_d.calls)
+            cmap.extra_names |= {_w for _v in _info.constants.values()
+                                 for _w in str(_v).split()}
     _find_duplicates(cmap)
     _find_unreached(cmap)
     _find_shadowed(cmap)

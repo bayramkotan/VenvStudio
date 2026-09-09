@@ -335,12 +335,43 @@ class TopicCard(QFrame):
             # editor. Copy already exists, but "copy, open an editor, make a
             # file, paste" is four steps for something the reader wants to try
             # right now -- and the point of Learn is that they try it.
-            open_btn = QPushButton("\U0001f4dd Open in Editor")
+            # B74 (Bayram): the button used to say "Open in Editor" and
+            # nothing else, so there was no way to know WHICH editor would
+            # open until it did. That matters more than it sounds:
+            # resolve_editor_binary falls back to any editor it can find when
+            # the chosen one is missing, so the one that opens is not always
+            # the one that was picked in Settings.
+            #
+            # The name comes from the same resolver the click uses, so the
+            # label cannot claim one editor and the click open another. It is
+            # cached in editor_integration -- resolving costs 3.3 ms of PATH
+            # scanning and there is one of these buttons per snippet card.
+            _ed_name = ""
+            try:
+                from src.core.editor_integration import editor_display_name
+                _cfg_e = getattr(self, "config", None)
+                if _cfg_e is None:
+                    from src.core.config_manager import ConfigManager
+                    _cfg_e = ConfigManager()
+                _ed_name = editor_display_name(
+                    _cfg_e.get("default_editor", "") or "")
+            except Exception:
+                _ed_name = ""
+
+            open_btn = QPushButton(
+                f"\U0001f4dd Open in {_ed_name}" if _ed_name
+                else "\U0001f4dd Open in Editor")
             open_btn.setFixedHeight(28)
             open_btn.setStyleSheet(copy_btn.styleSheet())
             open_btn.setCursor(Qt.PointingHandCursor)
             open_btn.setToolTip(
-                "Write this snippet to a file and open it in your editor")
+                f"Write this snippet to a file and open it in {_ed_name}.\n"
+                f"Change it in Settings \u2192 Editor Integration."
+                if _ed_name else
+                "Write this snippet to a file and open it.\n"
+                "No editor found on PATH \u2014 the file will be handed to "
+                "the system's default application for .py files.\n"
+                "Pick one in Settings \u2192 Editor Integration.")
             open_btn.clicked.connect(self._open_snippet_in_editor)
             sh_layout.addWidget(open_btn)
             sf_layout.addWidget(snippet_header)

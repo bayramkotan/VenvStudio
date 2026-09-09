@@ -323,6 +323,18 @@ class EditorsMixin:
         try:
             self.config.set("default_editor", editor.id)
             self.config.save()
+            # B74: Learn's "Open in Editor" button now carries the editor's
+            # NAME, and that name is cached -- resolving it scans PATH for
+            # every known editor, 3.3 ms a time, once per snippet card.
+            # Changing the default here is the one moment the cached answer
+            # becomes wrong, so it is dropped here rather than left to expire
+            # on restart. A stale label would say one editor and open
+            # another, which is the whole thing B74 was about.
+            try:
+                from src.core.editor_integration import clear_editor_name_cache
+                clear_editor_name_cache()
+            except Exception:
+                pass
         except Exception as e:
             QMessageBox.warning(
                 self, "Could not save",

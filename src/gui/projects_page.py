@@ -501,6 +501,63 @@ def count_installed(env_path) -> int:
     return 0
 
 
+_PROJ_CACHE = None          # {path: {"src_mtime", "env_mtime", "src_bytes", "env_bytes"}}
+
+
+def _proj_cache_file():
+    """Where the size cache lives, beside env_cache.json."""
+    from src.utils.platform_utils import get_config_dir
+    return Path(get_config_dir()) / "projects_cache.json"
+
+
+def load_project_cache() -> dict:
+    """Sizes remembered from last time, keyed by project path.
+
+    B103 (Bayram: "Bu json olarak tutulmuyor mu?"). It was not. Environments
+    have had env_cache.json for a long time; projects had nothing, so every
+    visit to the tab walked every project's source tree AND its environment
+    from scratch. Measured on his machine: 1.85 seconds per visit, five
+    projects, one of them 845 MB.
+
+    Freshness is the directory's own mtime. That is not perfect -- a file
+    changed deep inside a tree does not touch the top -- but the sizes here
+    are informational, the Refresh and Scan buttons force a re-read, and an
+    approximate number shown instantly beats an exact one that freezes the
+    tab. The same trade the dependency count above already makes.
+    """
+    global _PROJ_CACHE
+    if _PROJ_CACHE is not None:
+        return _PROJ_CACHE
+    try:
+        import json as _j
+        _PROJ_CACHE = _j.loads(_proj_cache_file().read_text(encoding="utf-8"))
+        if not isinstance(_PROJ_CACHE, dict):
+            _PROJ_CACHE = {}
+    except Exception:
+        _PROJ_CACHE = {}
+    return _PROJ_CACHE
+
+
+def save_project_cache() -> None:
+    """Write the cache out. Failure is not worth reporting -- it is a cache."""
+    if _PROJ_CACHE is None:
+        return
+    try:
+        import json as _j
+        _f = _proj_cache_file()
+        _f.parent.mkdir(parents=True, exist_ok=True)
+        _f.write_text(_j.dumps(_PROJ_CACHE), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _dir_mtime(path) -> float:
+    try:
+        return Path(path).stat().st_mtime
+    except OSError:
+        return -1.0
+
+
 def read_project_meta(project_dir) -> dict:
     """Name, tool, python and dependency count for one project directory."""
     d = Path(project_dir)
@@ -544,10 +601,27 @@ def read_project_meta(project_dir) -> dict:
 
     # B46: the two sizes, measured apart. Source excludes .venv and the
     # caches; the environment is whatever the tool built, wherever it put it.
+    # B103: the two walks below are the whole cost of this function --
+    # everything above is reading one small file. They are skipped when the
+    # cache has an entry whose recorded mtimes still match.
+    _cache = load_project_cache()
+    _key = str(d)
+    _src_m = _dir_mtime(d)
+    _env_m = _dir_mtime(meta["env_path"]) if meta["env_path"] else 0.0
+    _hit = _cache.get(_key)
+    if (_hit and _hit.get("src_mtime") == _src_m
+            and _hit.get("env_mtime") == _env_m):
+        meta["src_bytes"] = _hit.get("src_bytes", 0)
+        meta["env_bytes"] = _hit.get("env_bytes", 0)
+        return meta
+
     meta["src_bytes"] = dir_size(d)
     # B66: an environment is measured WHOLE -- no skip list. Source keeps it.
     meta["env_bytes"] = (dir_size(meta["env_path"], skip_caches=False)
                          if meta["env_path"] else 0)
+    _cache[_key] = {"src_mtime": _src_m, "env_mtime": _env_m,
+                    "src_bytes": meta["src_bytes"],
+                    "env_bytes": meta["env_bytes"]}
     return meta
 
 
@@ -883,9 +957,32 @@ class ProjectsPageMixin:
         return out
 
     def _refresh_projects(self):
-        """Redraw the table from what is already recorded -- no disk walk."""
+        """Redraw the table from what is already recorded -- no disk walk.
+
+        B103: that sentence is not true and the timing below is here to prove
+        it. read_project_meta() walks both the source tree and the
+        environment of every project, and it runs twice per refresh: once in
+        _fill_projects_table and again in the summary loop underneath. With
+        845 MB in pixi_project_1 alone that is not free. Nothing measured it,
+        so "the Projects tab feels slow" stayed an opinion for three
+        sessions -- exactly what happened with the startup step whose label
+        named the two placeholders beside the work instead of the work.
+        """
+        # NOT _t: line 933 below does `for _t in sorted(_by_tool)` and would
+        # shadow the module, leaving _t a string by the time the total is
+        # computed. Measured the hard way -- this crashed the Projects page.
+        import time as _perf
+        _p0 = _perf.perf_counter()
         paths = self._known_project_paths()
-        self._fill_projects_table(paths)
+        # B58/B103: read each project ONCE and hand the result to both the
+        # table and the summary below. Reading twice was half the cost of
+        # this function, and the disk cache underneath makes the remaining
+        # read nearly free when nothing changed.
+        metas = {_pp: read_project_meta(_pp) for _pp in paths}
+        save_project_cache()
+        _p_paths = _perf.perf_counter()
+        self._fill_projects_table(paths, metas)
+        _p_table = _perf.perf_counter()
         _n = len(paths)
         if not _n:
             self.projects_info.setText(
@@ -898,7 +995,7 @@ class ProjectsPageMixin:
         # the table, so this costs nothing extra.
         _by_tool, _by_loc, _src_total, _env_total = {}, {}, 0, 0
         for _p in paths:
-            _m = read_project_meta(_p)
+            _m = metas[_p]
             if not _m["has_env"]:
                 apply_cached_env(_m, self._cached_env_for(_p))
             _t = _m["tool"] or "other"
@@ -955,6 +1052,13 @@ class ProjectsPageMixin:
         self.projects_info.setToolTip("\n".join(
             f"{_lg['disp']}  \u2022  {_lg['n']} project(s)  \u2022  "
             f"{fmt_size(_lg['bytes'])}" for _lg in _locs))
+
+        _p_end = _perf.perf_counter()
+        _log.info(
+            f"[Projects] refresh: {(_p_end - _p0) * 1000:.0f} ms total  "
+            f"({_n} project(s))  |  paths {(_p_paths - _p0) * 1000:.0f} ms  "
+            f"| table {(_p_table - _p_paths) * 1000:.0f} ms  "
+            f"| summary {(_p_end - _p_table) * 1000:.0f} ms")
 
     def _scan_projects(self):
         """Walk the likely places and add whatever is found (B43)."""
@@ -1024,7 +1128,14 @@ class ProjectsPageMixin:
         except Exception:
             pass
 
-    def _fill_projects_table(self, paths):
+    def _fill_projects_table(self, paths, metas=None):
+        """B58: `metas` lets the caller hand over what it already read.
+
+        _refresh_projects used to call this, which reads every project, and
+        then read every project AGAIN for the summary line underneath.
+        Measured: table 1025 ms, summary 901 ms -- the same disk walk twice,
+        which is why the two halves were almost exactly equal.
+        """
         t = self.projects_table
         t.setRowCount(0)
 
@@ -1039,7 +1150,7 @@ class ProjectsPageMixin:
         from src.utils.platform_utils import bold_font_from as _bold_font
         _cell_font = _bold_font(t)
         for row, path in enumerate(paths):
-            meta = read_project_meta(path)
+            meta = (metas or {}).get(path) or read_project_meta(path)
             # A path the tool told us about earlier counts too, so poetry and
             # hatch projects stop showing a dash once they have been opened.
             if not meta["has_env"]:

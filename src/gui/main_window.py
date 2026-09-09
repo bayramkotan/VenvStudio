@@ -1226,6 +1226,16 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
     def _switch_page(self, index):
         page_names = {0: "Packages", 1: "Environments", 2: "Settings",
                       3: "Learn", 4: "Projects"}
+        # B103 (Bayram: "Project sekmesine basinca ya da cikinca bir yavaslik
+        # ve takilma var"). The old line logged only that a switch happened,
+        # so the gap between two of them mixed the freeze with the time the
+        # user spent reading the page -- unmeasurable. This times the switch
+        # itself, and names the page being LEFT as well as the one being
+        # entered, because the complaint is about both directions and nothing
+        # so far could tell them apart.
+        import time as _t_sw
+        _sw_t0 = _t_sw.perf_counter()
+        _from = page_names.get(getattr(self, "_current_page_index", -1), "?")
         self._log.debug(f"_switch_page → {page_names.get(index, index)} (index={index})")
 
         # Leaving the page means the user has moved on from whatever the
@@ -1295,6 +1305,14 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         # Educational cmd panel — hide on any tab switch (re-shown on next action)
         if hasattr(self, "_hide_cmd_panel"):
             self._hide_cmd_panel()
+
+        # B103: how long the switch itself took, and which way it went.
+        self._current_page_index = index
+        _sw_ms = (_t_sw.perf_counter() - _sw_t0) * 1000
+        if _sw_ms >= 100:          # only when it is actually noticeable
+            self._log.info(
+                f"[Tabs] {_from} → {page_names.get(index, index)}: "
+                f"{_sw_ms:.0f} ms")
 
     def _on_learn_install(self, packages: list):
         """Called when Learn page requests package install — show LearnInstallDialog."""

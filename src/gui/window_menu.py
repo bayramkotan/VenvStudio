@@ -686,10 +686,22 @@ class WindowMenuMixin:
         recommended env type/Python version, install into a matching
         existing env or create a new one."""
         apps = getattr(self.package_panel, "app_definitions", []) if hasattr(self, "package_panel") else []
-        # Scoped to pip-installable apps for now -- system_app entries
-        # (RStudio, Ollama, DBeaver, R Console, jamovi, JASP) install via
-        # a system package manager, not pip/venv, and need a separate flow.
-        apps = [a for a in apps if not a.get("system_app")]
+        # B114 (Bayram): conda applications belong here too. The old filter
+        # dropped every system_app entry, on the reasoning that they "install
+        # via a system package manager, not pip/venv". Half of that was true
+        # and half was not: R Console, napari, Glue, Veusz, OpenRefine,
+        # ParaView, JupyterHub and MinIO install from conda-forge INTO the
+        # environment, exactly like a pip app installs into a venv -- the
+        # only difference is which tool does it.
+        #
+        # What genuinely cannot be installed is an app with a download_url:
+        # measured on 2026-09-09, jamovi, JASP, DBeaver, RStudio and Ollama
+        # exist in no conda channel at all. Those stay out, and Tools ->
+        # External Apps is where they live.
+        #
+        # So the test is no longer "is it a system app" but "can we install
+        # it" -- which is what this dialog is for.
+        apps = [a for a in apps if not a.get("download_url")]
         if not apps:
             QMessageBox.information(self, "Install Launcher", "No installable apps found.")
             return
@@ -795,7 +807,14 @@ class WindowMenuMixin:
             target_info = env_pick_combo.currentData() if len(matches) > 1 else matches[0]
             if target_info is None:
                 return
-            packages = app_def.get("install_packages", [app_def.get("package")])
+            # B114: a conda application carries package == "__system__" and
+            # its real names in conda_packages. Without this the dialog asked
+            # _install_packages for a package literally called "__system__".
+            if app_def.get("system_app") and app_def.get("conda_packages"):
+                packages = list(app_def["conda_packages"])
+            else:
+                packages = app_def.get("install_packages",
+                                       [app_def.get("package")])
             target = target_info.name
             for row in range(self.env_table.rowCount()):
                 _ni = self.env_table.item(row, 0)

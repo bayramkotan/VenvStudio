@@ -776,13 +776,7 @@ class ProjectsPageMixin:
         # Same treatment as the environments table (B183 there): 16px, bold,
         # roomy rows. Two tables of the same kind should not read differently.
         self.projects_table.verticalHeader().setDefaultSectionSize(48)
-        self.projects_table.setStyleSheet(
-            f"QTableWidget {{ font-size: 16px; color: {self._c()['fg']}; }}"
-            f"QTableWidget::item {{ padding: 8px 12px; font-weight: bold; "
-            f"font-size: 16px; }}"
-            f"QHeaderView::section {{ font-size: 15px; font-weight: bold; "
-            f"padding: 10px; }}"
-        )
+        self._restyle_projects_table()
         self.projects_table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.projects_table.customContextMenuRequested.connect(
             self._show_project_context_menu)
@@ -809,28 +803,21 @@ class ProjectsPageMixin:
         _pcl.setContentsMargins(0, 0, 0, 0)
         _pcl.setSpacing(6)
 
-        _pct = QLabel("\U0001f4a1 Command Reference")
-        _pct.setStyleSheet(
-            "font-size: 14px; font-weight: bold; color: #89b4fa; "
-            "padding: 4px 2px 2px 2px;")
-        _pcl.addWidget(_pct)
+        # B115: these three carried hard-coded Catppuccin Mocha hex values --
+        # #89b4fa, #f9e2af, #181825, #cdd6f4 -- so the panel stayed dark
+        # whatever theme was chosen. They read the palette now, and
+        # _restyle_projects_table re-applies them on every theme change.
+        self._proj_cmd_title = QLabel("\U0001f4a1 Command Reference")
+        _pcl.addWidget(self._proj_cmd_title)
 
         self._proj_cmd_live = QLabel("\u25b6")
         self._proj_cmd_live.setWordWrap(True)
         self._proj_cmd_live.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        self._proj_cmd_live.setStyleSheet(
-            "color: #f9e2af; font-size: 20px; font-weight: bold; "
-            "font-family: Consolas, monospace; padding: 10px 12px; "
-            "background: #181825; border: 2px solid #f9e2af; border-radius: 6px;")
         _pcl.addWidget(self._proj_cmd_live)
 
         self._proj_cmd_hints = _QTE()
         self._proj_cmd_hints.setReadOnly(True)
         self._proj_cmd_hints.setFixedHeight(160)
-        self._proj_cmd_hints.setStyleSheet(
-            "background-color: #181825; border: 1px solid #313244; "
-            "border-radius: 8px; padding: 8px; color: #cdd6f4; "
-            "font-family: Consolas, monospace; font-size: 16px; font-weight: bold;")
         _pcl.addWidget(self._proj_cmd_hints)
 
         self._proj_cmd_panel.setVisible(False)
@@ -1127,6 +1114,48 @@ class ProjectsPageMixin:
                 f"Scan: {len(found)} found, {len(_new)} new", 8000)
         except Exception:
             pass
+
+    def _restyle_projects_table(self):
+        """Re-apply the table's own stylesheet for the current theme.
+
+        B115: this used to run once, inside _create_projects_page, with the
+        colours of whatever theme was active then. Switching to a light theme
+        repainted everything around the table and left the table itself
+        holding the dark theme's greys on white -- Bayram could not read his
+        own project list.
+
+        Called from _apply_theme as well as at build time, so there is one
+        place that decides what this table looks like.
+        """
+        if not hasattr(self, "projects_table"):
+            return
+        self.projects_table.setStyleSheet(
+            f"QTableWidget {{ font-size: 16px; color: {self._c()['fg']}; }}"
+            f"QTableWidget::item {{ padding: 8px 12px; font-weight: bold; "
+            f"font-size: 16px; }}"
+            f"QHeaderView::section {{ font-size: 15px; font-weight: bold; "
+            f"padding: 10px; }}"
+        )
+
+        # The Command Reference panel, same story (B115).
+        _c = self._c()
+        if hasattr(self, "_proj_cmd_title"):
+            self._proj_cmd_title.setStyleSheet(
+                f"font-size: 14px; font-weight: bold; color: {_c['accent']}; "
+                f"padding: 4px 2px 2px 2px;")
+        if hasattr(self, "_proj_cmd_live"):
+            self._proj_cmd_live.setStyleSheet(
+                f"color: {_c['fg']}; font-size: 20px; font-weight: bold; "
+                f"font-family: Consolas, monospace; padding: 10px 12px; "
+                f"background: {_c['input_bg']}; "
+                f"border: 2px solid {_c['accent']}; border-radius: 6px;")
+        if hasattr(self, "_proj_cmd_hints"):
+            self._proj_cmd_hints.setStyleSheet(
+                f"background-color: {_c['input_bg']}; "
+                f"border: 1px solid {_c['border']}; "
+                f"border-radius: 8px; padding: 8px; color: {_c['fg']}; "
+                f"font-family: Consolas, monospace; font-size: 16px; "
+                f"font-weight: bold;")
 
     def _fill_projects_table(self, paths, metas=None):
         """B58: `metas` lets the caller hand over what it already read.

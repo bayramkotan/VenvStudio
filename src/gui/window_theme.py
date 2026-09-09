@@ -136,6 +136,27 @@ class WindowThemeMixin:
             QTimer.singleShot(0, _deferred_learn_refresh)
             QTimer.singleShot(0, _deferred_env_refresh)
             self._refresh_sidebar_styles()
+
+            # B115 (Bayram, light themes): two places burned the theme's
+            # colours into a stylesheet at BUILD time and never revisited
+            # them, so switching to a light theme left dark-theme greys on a
+            # white background -- unreadable, while everything around them
+            # changed correctly.
+            #
+            # The Projects table sets its own font-size and colour in
+            # _create_projects_page; the bookmark buttons set theirs as each
+            # button is built. Both are rebuilt here rather than made
+            # theme-aware in place, because a rebuild is what already exists
+            # and a second colour path is what caused this.
+            try:
+                if getattr(self, "projects_page", None) is not None:
+                    self._restyle_projects_table()
+            except Exception:
+                pass
+            try:
+                self._refresh_bookmarks()
+            except Exception:
+                pass
         except RuntimeError:
             # Widget may be in an unstable state during screen transition
             pass

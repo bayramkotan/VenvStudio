@@ -75,6 +75,39 @@ def test_sync_and_env_create_are_not_two_tables():
 # suite doing its job: it caught me asserting against code that was not there.
 
 
+def test_pixi_has_no_build():
+    """`pixi build` is deprecated and produces a CONDA package.
+
+    B46. Measured against pixi 0.79.0: it prints "will be removed in a future
+    release, use `pixi publish`" and what comes out is not a wheel. Behind
+    the same button as uv, Poetry, PDM and Hatch it would claim the five do
+    the same thing.
+    """
+    assert "pixi" not in pp.ProjectsPageMixin._BUILD_CMD
+
+
+def test_pixi_update_not_upgrade():
+    """`pixi upgrade` rewrites the manifest; `update` does not.
+
+    B46. update resolves inside the ranges the project declares, which is
+    what every other tool's Update button does. upgrade loosens pixi.toml
+    itself -- a different act, and not one a button labelled Update should
+    perform.
+    """
+    assert pp.ProjectsPageMixin._UPDATE_CMD["pixi"] == ["pixi", "update"]
+
+
+def test_uv_update_upgrades_the_lock():
+    """uv has no `update`; the equivalent is `lock --upgrade`."""
+    assert pp.ProjectsPageMixin._UPDATE_CMD["uv"] == ["uv", "lock", "--upgrade"]
+
+
+@pytest.mark.parametrize("tool", ["uv", "poetry", "pdm", "hatch"])
+def test_every_builder_is_present(tool):
+    """Four tools build; the fifth is absent for a reason of its own."""
+    assert tool in pp.ProjectsPageMixin._BUILD_CMD
+
+
 # ── Install/uninstall routing (pip_manager) ──────────────────────────────
 
 class _Recorder(pm.PipManager):

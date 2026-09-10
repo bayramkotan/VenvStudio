@@ -679,6 +679,21 @@ def scan_for_projects(roots, depth: int = _SCAN_DEPTH) -> list:
     return found
 
 
+# B46: why a tool is missing from a table, in the user's words rather than
+# the solver's. Measured on 2026-09-04 against the real tools.
+_UPDATE_NOTES = {}
+
+_BUILD_NOTES = {
+    "pixi": (
+        "pixi has no build command that belongs here.\n\n"
+        "`pixi build` is deprecated -- it says so itself: \"will be removed "
+        "in a future release, use `pixi publish`\" -- and it produces a "
+        "CONDA package, not a wheel or a source distribution.\n\n"
+        "Putting it behind the same button as uv, Poetry, PDM and Hatch "
+        "would suggest the five do the same thing. They do not."),
+}
+
+
 class ProjectsPageMixin:
     """Mixin for MainWindow: the Projects page."""
 
@@ -850,6 +865,23 @@ class ProjectsPageMixin:
             "Install what this project declares, using its own tool")
         self._pbtn_sync.clicked.connect(self._proj_sync)
         _actions.addWidget(self._pbtn_sync)
+
+        # B46: Update and Build, next to Sync because they are the same kind
+        # of act -- run the project's own tool in the project's directory.
+        self._pbtn_update = QPushButton("\u2b06  Update")
+        self._pbtn_update.setObjectName("secondary")
+        self._pbtn_update.setFixedHeight(38)
+        self._pbtn_update.setToolTip(
+            "Upgrade dependencies within the ranges the project declares")
+        self._pbtn_update.clicked.connect(self._proj_update)
+        _actions.addWidget(self._pbtn_update)
+
+        self._pbtn_build = QPushButton("\U0001f4e6  Build")
+        self._pbtn_build.setObjectName("secondary")
+        self._pbtn_build.setFixedHeight(38)
+        self._pbtn_build.setToolTip("Build a wheel and a source distribution")
+        self._pbtn_build.clicked.connect(self._proj_build)
+        _actions.addWidget(self._pbtn_build)
 
         self._pbtn_add = QPushButton("\u2795  Add Package")
         self._pbtn_add.setObjectName("secondary")
@@ -1457,6 +1489,42 @@ class ProjectsPageMixin:
     }
 
 
+    # B46. Every command here was RUN against a real scaffolded project on
+    # 2026-09-04 -- hatch 1.18.0, pdm 2.29.0, poetry 2.4.2, uv 0.11.7,
+    # pixi 0.79.0 -- not read off a --help page. Four of them came back
+    # different from what had been written before that session, which is why
+    # the measurement is worth more than the guess.
+    _UPDATE_CMD = {
+        "uv":     ["uv", "lock", "--upgrade"],
+        "poetry": ["poetry", "update"],
+        "pdm":    ["pdm", "update"],
+        # hatch refuses unless the environment is configured with
+        # locked = true: "Environment `default` is not configured with
+        # `locked = true`". The button stays enabled and the message says so,
+        # because the fix is one line in pyproject.toml and the user should
+        # learn that rather than wonder why a button is grey.
+        "hatch":  ["hatch", "lock", "-U"],
+        # NOT `pixi upgrade`. update stays inside the declared ranges;
+        # upgrade loosens the manifest and REWRITES pixi.toml, which is a
+        # different act than what this button offers everywhere else.
+        "pixi":   ["pixi", "update"],
+    }
+
+    _BUILD_CMD = {
+        "uv":     ["uv", "build"],
+        "poetry": ["poetry", "build"],
+        # pdm refuses on the default scaffold: "tool.pdm.distribution must be
+        # `true` to be built" -- `pdm init -n` makes an application, not a
+        # package. Kept, with the reason surfaced.
+        "pdm":    ["pdm", "build"],
+        "hatch":  ["hatch", "build"],
+        # pixi is DELIBERATELY absent. `pixi build` is deprecated ("will be
+        # removed in a future release, use `pixi publish`") and it produces a
+        # CONDA package, not a wheel -- putting it behind the same button as
+        # the other four would tell the user they are the same thing. 5th
+        # pillar: do not offer what does not do what it appears to do.
+    }
+
     _ADD_CMD = {
         # Each tool's own way of adding a dependency: it edits pyproject.toml
         # and installs in one step. `pip install` into the environment would
@@ -1502,6 +1570,45 @@ class ProjectsPageMixin:
         self._run_project_command(
             _path, _meta, self._SYNC_CMD[_meta["tool"]], "Sync")
 
+    def _proj_update(self):
+        """Upgrade dependencies with the project's own tool (B46).
+
+        Not the same as Sync: sync installs what the lock file already says,
+        update goes looking for newer versions inside the ranges the manifest
+        declares. Which is why `pixi upgrade` is NOT what this runs -- that
+        one rewrites the manifest itself.
+        """
+        self._proj_run_table(self._UPDATE_CMD, "Update", _UPDATE_NOTES)
+
+    def _proj_build(self):
+        """Build a distribution with the project's own tool (B46)."""
+        self._proj_run_table(self._BUILD_CMD, "Build", _BUILD_NOTES)
+
+    def _proj_run_table(self, table, label, notes):
+        """Shared body for Update and Build.
+
+        Both do the same three things -- find the selected project, look its
+        tool up in a table, run it -- and the only difference is which table
+        and what to say when the tool is missing from it. Writing that twice
+        is how this file ended up with _SYNC_CMD and _ENV_CREATE holding the
+        same five entries (B69).
+        """
+        _path = self._selected_project_path()
+        if not _path:
+            return
+        _meta = read_project_meta(_path)
+        _tool = _meta.get("tool") or ""
+        _cmd = table.get(_tool)
+        if not _cmd:
+            QMessageBox.information(
+                self, f"{label} not available",
+                notes.get(_tool)
+                or f"{_meta.get('name', 'This project')} uses "
+                   f"{_tool or 'no recognised tool'}, which has no "
+                   f"{label.lower()} command.")
+            return
+        self._run_project_command(_path, _meta, _cmd, label)
+
     def _proj_add_selected(self):
         """Add Package for the selected row (the toolbar's version)."""
         _path = self._selected_project_path()
@@ -1534,6 +1641,55 @@ class ProjectsPageMixin:
                 _add_tool = ""
         _can_add = bool(self._ADD_CMD.get(_add_tool))
         self._pbtn_add.setEnabled(_has and _can_add)
+
+        # B46: Update and Build follow the same rule -- a button that does
+        # nothing when pressed teaches people not to trust the toolbar. Both
+        # also show WHICH command they will run, as Sync does, because
+        # "Build" alone says nothing and this is a teaching application.
+        # B46 (Bayram: "pasif olmasi yerine gizlesen?"). Two different
+        # situations, two different answers:
+        #
+        #   no row selected      -> the button is VISIBLE but disabled. There
+        #                           is something to press, just nothing to
+        #                           press it on yet.
+        #   tool has no such     -> the button is HIDDEN. `pixi build` is not
+        #   command                 a thing that exists; showing it greyed
+        #                           out implies it might come back.
+        #
+        # The reason still has to reach the user, or hiding just makes it a
+        # mystery -- so when a button is hidden, _show_project_command writes
+        # the explanation into the Command Reference panel below.
+        _up = self._UPDATE_CMD.get(_add_tool)
+        self._pbtn_update.setVisible(bool(_up) or not _has)
+        self._pbtn_update.setEnabled(_has and bool(_up))
+        self._pbtn_update.setText(
+            f"\u2b06  {' '.join(_up)}" if _up else "\u2b06  Update")
+        self._pbtn_update.setToolTip(
+            "Upgrade dependencies within the ranges the project declares")
+
+        _bd = self._BUILD_CMD.get(_add_tool)
+        self._pbtn_build.setVisible(bool(_bd) or not _has)
+        self._pbtn_build.setEnabled(_has and bool(_bd))
+        self._pbtn_build.setText(
+            f"\U0001f4e6  {' '.join(_bd)}" if _bd else "\U0001f4e6  Build")
+        self._pbtn_build.setToolTip(
+            "Build a wheel and a source distribution")
+
+        # The reason a button vanished goes on the Sync button's tooltip --
+        # NOT into the Command Reference panel. This method also runs right
+        # after a command finishes (line ~2037), and writing there would wipe
+        # the output the user just asked for.
+        _why = []
+        if _has and not _up:
+            _why.append(_UPDATE_NOTES.get(
+                _add_tool, f"No update command for {_add_tool}."))
+        if _has and not _bd:
+            _why.append(_BUILD_NOTES.get(
+                _add_tool, f"No build command for {_add_tool}."))
+        if _why:
+            self._pbtn_sync.setToolTip(
+                "Install what this project declares, using its own tool\n\n"
+                + "\n\n".join(_why))
         self._pbtn_add.setToolTip(
             "Add a dependency with the project's own tool"
             if _can_add else

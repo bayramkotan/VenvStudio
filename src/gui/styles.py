@@ -472,7 +472,8 @@ QComboBox::drop-down {{
 # ═══════════════════════════════════════════════════════════════════════════════
 
 _DARK_CATPPUCCIN = {
-    'bg': '#1e1e2e', 'fg': '#cdd6f4', 'fg_muted': '#a6adc8',
+    'bg': '#1e1e2e', 'fg': '#cdd6f4', 'fg_muted': '#a6adc8',
+    'warning': '#f9e2af',
     'sidebar': '#181825', 'border': '#313244',
     'hover': '#313244', 'active': '#45475a',
     'card': '#1e1e2e', 'input_bg': '#313244',
@@ -486,7 +487,8 @@ _DARK_CATPPUCCIN = {
 }
 
 _LIGHT_LATTE = {
-    'bg': '#eff1f5', 'fg': '#4c4f69', 'fg_muted': '#6c6f85',
+    'bg': '#eff1f5', 'fg': '#4c4f69', 'fg_muted': '#6c6f85',
+    'warning': '#df8e1d',
     'sidebar': '#e6e9ef', 'border': '#ccd0da',
     'hover': '#dce0e8', 'active': '#bcc0cc',
     'card': '#ffffff', 'input_bg': '#ffffff',
@@ -500,7 +502,8 @@ _LIGHT_LATTE = {
 }
 
 _LIGHT_GITHUB = {
-    'bg': '#ffffff', 'fg': '#1f2328', 'fg_muted': '#656d76',
+    'bg': '#ffffff', 'fg': '#1f2328', 'fg_muted': '#656d76',
+    'warning': '#9a6700',
     'sidebar': '#f6f8fa', 'border': '#d1d9e0',
     'hover': '#eaeef2', 'active': '#ddf4ff',
     'card': '#ffffff', 'input_bg': '#ffffff',
@@ -514,7 +517,8 @@ _LIGHT_GITHUB = {
 }
 
 _LIGHT_VSCODE = {
-    'bg': '#f3f3f3', 'fg': '#333333', 'fg_muted': '#616161',
+    'bg': '#f3f3f3', 'fg': '#333333', 'fg_muted': '#616161',
+    'warning': '#b58900',
     'sidebar': '#e8e8e8', 'border': '#c8c8c8',
     'hover': '#e0e0e0', 'active': '#d6ebff',
     'card': '#ffffff', 'input_bg': '#ffffff',
@@ -528,7 +532,8 @@ _LIGHT_VSCODE = {
 }
 
 _DARK_DRACULA = {
-    'bg': '#282a36', 'fg': '#f8f8f2', 'fg_muted': '#6272a4',
+    'bg': '#282a36', 'fg': '#f8f8f2', 'fg_muted': '#6272a4',
+    'warning': '#f1fa8c',
     'sidebar': '#21222c', 'border': '#44475a',
     'hover': '#44475a', 'active': '#44475a',
     'card': '#282a36', 'input_bg': '#44475a',
@@ -542,7 +547,8 @@ _DARK_DRACULA = {
 }
 
 _DARK_TOKYO_NIGHT = {
-    'bg': '#1a1b26', 'fg': '#c0caf5', 'fg_muted': '#565f89',
+    'bg': '#1a1b26', 'fg': '#c0caf5', 'fg_muted': '#565f89',
+    'warning': '#e0af68',
     'sidebar': '#16161e', 'border': '#292e42',
     'hover': '#292e42', 'active': '#364a82',
     'card': '#1a1b26', 'input_bg': '#292e42',
@@ -556,7 +562,8 @@ _DARK_TOKYO_NIGHT = {
 }
 
 _DARK_ONE_DARK = {
-    'bg': '#282c34', 'fg': '#abb2bf', 'fg_muted': '#5c6370',
+    'bg': '#282c34', 'fg': '#abb2bf', 'fg_muted': '#5c6370',
+    'warning': '#e5c07b',
     'sidebar': '#21252b', 'border': '#3e4451',
     'hover': '#2c313c', 'active': '#3e4451',
     'card': '#282c34', 'input_bg': '#3e4451',
@@ -570,7 +577,8 @@ _DARK_ONE_DARK = {
 }
 
 _DARK_GRUVBOX = {
-    'bg': '#282828', 'fg': '#ebdbb2', 'fg_muted': '#a89984',
+    'bg': '#282828', 'fg': '#ebdbb2', 'fg_muted': '#a89984',
+    'warning': '#fabd2f',
     'sidebar': '#1d2021', 'border': '#3c3836',
     'hover': '#3c3836', 'active': '#504945',
     'card': '#282828', 'input_bg': '#3c3836',
@@ -584,7 +592,8 @@ _DARK_GRUVBOX = {
 }
 
 _DARK_SOLARIZED = {
-    'bg': '#002b36', 'fg': '#839496', 'fg_muted': '#657b83',
+    'bg': '#002b36', 'fg': '#839496', 'fg_muted': '#657b83',
+    'warning': '#b58900',
     'sidebar': '#073642', 'border': '#073642',
     'hover': '#073642', 'active': '#0d4f63',
     'card': '#002b36', 'input_bg': '#073642',
@@ -598,7 +607,8 @@ _DARK_SOLARIZED = {
 }
 
 _DARK_MATERIAL = {
-    'bg': '#212121', 'fg': '#eeffff', 'fg_muted': '#546e7a',
+    'bg': '#212121', 'fg': '#eeffff', 'fg_muted': '#546e7a',
+    'warning': '#ffcb6b',
     'sidebar': '#1a1a1a', 'border': '#2d2d2d',
     'hover': '#2d2d2d', 'active': '#3d3d3d',
     'card': '#212121', 'input_bg': '#2d2d2d',
@@ -612,7 +622,8 @@ _DARK_MATERIAL = {
 }
 
 _LIGHT_SOLARIZED = {
-    'bg': '#fdf6e3', 'fg': '#657b83', 'fg_muted': '#93a1a1',
+    'bg': '#fdf6e3', 'fg': '#657b83', 'fg_muted': '#93a1a1',
+    'warning': '#b58900',
     'sidebar': '#eee8d5', 'border': '#ddd6bf',
     'hover': '#e8e2cf', 'active': '#cfc9b8',
     'card': '#fdf6e3', 'input_bg': '#ffffff',
@@ -626,7 +637,8 @@ _LIGHT_SOLARIZED = {
 }
 
 _DARK_ROSE_PINE = {
-    'bg': '#191724', 'fg': '#e0def4', 'fg_muted': '#6e6a86',
+    'bg': '#191724', 'fg': '#e0def4', 'fg_muted': '#6e6a86',
+    'warning': '#f6c177',
     'sidebar': '#1f1d2e', 'border': '#26233a',
     'hover': '#26233a', 'active': '#403d52',
     'card': '#191724', 'input_bg': '#26233a',
@@ -641,7 +653,8 @@ _DARK_ROSE_PINE = {
 
 
 _LIGHT_NORD = {
-    'bg': '#eceff4', 'fg': '#2e3440', 'fg_muted': '#4c566a',
+    'bg': '#eceff4', 'fg': '#2e3440', 'fg_muted': '#4c566a',
+    'warning': '#b48c33',
     'sidebar': '#e5e9f0', 'border': '#d8dee9',
     'hover': '#dde1e9', 'active': '#d2d8e4',
     'card': '#ffffff', 'input_bg': '#ffffff',
@@ -717,6 +730,124 @@ def _get_theme_cached(name: str, font_family: str, font_size: int,
     return _build_theme(palette, font_family=font_family, font_size=font_size,
                         primary_family=primary_family, primary_size=primary_size,
                         tertiary_family=tertiary_family, tertiary_size=tertiary_size)
+
+
+def _strip_bg(base: str) -> str:
+    """A background one step away from `base`, for a command strip.
+
+    B120. The Environments panel put each command on #11111b against a
+    #181825 panel -- a strip slightly DARKER than what surrounds it, so the
+    commands read as separate blocks. Substituting the palette's `bg` for
+    that hex reversed it: #1e1e2e is lighter than the panel, and the strips
+    stopped looking like strips.
+
+    No palette carries a "one shade darker than the input background" key,
+    so it is derived: darken on a dark theme, lighten on a light one. That
+    keeps the effect the same whichever way round the theme runs, which a
+    fixed second hex could not.
+    """
+    try:
+        _h = base.lstrip("#")
+        _r, _g, _b = (int(_h[i:i + 2], 16) for i in (0, 2, 4))
+    except Exception:
+        return base
+    _light = (0.299 * _r + 0.587 * _g + 0.114 * _b) > 128
+    # -7 matches the original pair exactly: #181825 -> #11111b was seven
+    # points of luminance, not fourteen.
+    _d = -7 if not _light else 6
+    return "#" + "".join(
+        f"{max(0, min(255, _v + _d)):02x}" for _v in (_r, _g, _b))
+
+
+def cmd_html(c: dict, size: int = 18) -> dict:
+    """HTML fragment builders for a Command Reference panel.
+
+    B120 (Bayram: the Projects panel is "renksiz, hic anlasilmiyor"). He was
+    right and the difference was not the stylesheet: the Environments panel
+    builds coloured HTML -- command in blue, arguments in green, placeholders
+    in mauve, comments in grey italics, each line on its own dark strip --
+    while Projects called setPlainText and got a wall of one colour.
+
+    These used to be six local functions inside a method in main_window, with
+    the colours written in as Catppuccin hex, which is why nothing else could
+    reuse them and why they did not follow a light theme. Returned as a dict
+    of callables so a caller can do `h = cmd_html(self._c())` and then
+    `h["cmd"]("poetry")`.
+
+    Keys:
+      cmd    the executable          arg   an argument or path
+      ph     a <placeholder>         title a heading with icon and colour
+      line   one command line        note  an italic explanation
+    """
+    _mono = "font-family: Consolas, monospace"
+    return {
+        "cmd": lambda t: (
+            f"<span style='color:{c['accent']};{_mono};font-size:{size}px;"
+            f"font-weight:bold;'>{t}</span>"),
+        "arg": lambda t: (
+            f"<span style='color:{c['success']};{_mono};font-size:{size}px;"
+            f"font-weight:bold;'>{t}</span>"),
+        "ph": lambda t: (
+            f"<span style='color:{c.get('warning', c['accent'])};{_mono};"
+            f"font-weight:bold;font-size:{size}px;'>{t}</span>"),
+        "title": lambda icon, txt, col=None: (
+            f"<p style='font-size:{size}px;font-weight:bold;"
+            f"color:{col or c['accent']};margin:6px 0 4px 0;'>"
+            f"{icon}&nbsp; {txt}</p>"),
+        "line": lambda t: (
+            f"<p style='margin:3px 0;font-size:{size - 1}px;font-weight:bold;{_mono};"
+            f"color:{c['fg']};background:{_strip_bg(c['input_bg'])};"
+            f"padding:5px 10px;"
+            f"border-radius:4px;'>{t}</p>"),
+        "note": lambda t: (
+            f"<p style='margin:6px 0 2px 0;font-size:12px;"
+            f"color:{c['fg_muted']};font-style:italic;'>{t}</p>"),
+        # The palette itself, so a caller that needs a heading colour can
+        # name the MEANING -- success, danger, warning -- instead of pasting
+        # a hex value that belongs to one theme.
+        "c": c,
+    }
+
+
+def cmd_panel_styles(c: dict) -> tuple:
+    """(title, live, hints) stylesheets for a Command Reference panel.
+
+    B120 (Bayram: the Projects panel "bir tuhaf cikiyor" -- not the same font
+    or size as the Environments one). It was not: the hints box was 18px
+    under Environments and 16px under Projects. Two panels showing the same
+    thing, written out twice, drifted.
+
+    They also carried hard-coded Catppuccin values -- #89b4fa, #f9e2af,
+    #181825, #cdd6f4 -- so neither followed a light theme. Projects was fixed
+    for that and Environments was missed, which is the same two-copies
+    problem in its other form.
+
+    This lives in styles.py rather than in either page: projects_page is a
+    mixin that MainWindow composes, so importing one from the other would
+    invite a circular import.
+    """
+    return (
+        f"font-size: 14px; font-weight: bold; color: {c['accent']}; "
+        f"padding: 4px 2px 2px 2px;",
+
+        # The live command keeps the yellow it always had. Bayram: "virtual
+        # env'in fontunda backcolor'unda bir problem yoktu!! neden
+        # degistirdin!!!" -- he was right; swapping it for the accent colour
+        # changed something that was working. Every palette now carries its
+        # own 'warning', taken from that theme's published palette, so the
+        # dark themes keep their yellow and the light ones get one that can
+        # actually be read on a pale background.
+        f"color: {c['warning']}; font-size: 20px; font-weight: bold; "
+        f"font-family: Consolas, monospace; padding: 10px 12px; "
+        f"background: {c['input_bg']}; "
+        f"border: 2px solid {c['warning']}; border-radius: 6px;",
+
+        f"background-color: {c['input_bg']}; "
+        f"border: 1px solid {c['border']}; "
+        f"border-radius: 8px; padding: 8px; color: {c['fg']}; "
+        f"font-family: Consolas, monospace; font-size: 18px; "
+        f"font-weight: bold;",
+    )
 
 
 def get_colors(name: str = "dark", font_size: int = 13,

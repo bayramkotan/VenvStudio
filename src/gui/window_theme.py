@@ -154,7 +154,17 @@ class WindowThemeMixin:
             except Exception:
                 pass
             try:
-                self._refresh_bookmarks()
+                # B115: this was called with no arguments and _refresh_bookmarks
+                # takes the list, so it raised TypeError into the except below
+                # and the bookmarks kept their old theme's colours. The list
+                # lives on the Learn page, which may not be built yet.
+                _lp = getattr(self, "learn_page", None)
+                if _lp is not None and hasattr(_lp, "_bookmarks"):
+                    self._refresh_bookmarks(list(_lp._bookmarks))
+            except Exception:
+                pass
+            try:
+                self._restyle_cmd_panel()      # B120: Environments panel
             except Exception:
                 pass
         except RuntimeError:

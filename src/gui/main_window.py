@@ -693,9 +693,15 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         self.loading_label.setAlignment(Qt.AlignCenter)
         self.loading_label.setFixedHeight(40)
         self.loading_label.setStyleSheet(
-            f"color: {self._c()['fg']}; font-size: {self._c()['fs_base']}px; font-weight: bold; padding: 8px; "
-            "background-color: #f9e2af; "
-            "border-radius: 6px;"
+            # B120: the background was a hard-coded Catppuccin yellow with the
+            # theme's foreground on top, so in a dark theme this was pale grey
+            # text on yellow. It uses the palette's own warning colour now,
+            # with the page background as the text colour so the contrast
+            # holds whichever way round the theme runs.
+            f"color: {self._c()['bg']}; font-size: {self._c()['fs_base']}px; "
+            f"font-weight: bold; padding: 8px; "
+            f"background-color: {self._c()['warning']}; "
+            f"border-radius: 6px;"
         )
         self.loading_label.setVisible(False)
         layout.addWidget(self.loading_label)
@@ -708,31 +714,28 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         _panel_layout.setContentsMargins(0, 0, 0, 0)
         _panel_layout.setSpacing(6)
 
+        # B120 (Bayram: the Projects panel "bir tuhaf cikiyor", not the same
+        # font or size as this one). It was not: the hints box is 18px here
+        # and was 16px there. Both panels show the same thing and should look
+        # the same, so both now take their numbers from _cmd_panel_style().
+        #
+        # And B115 again: these were hard-coded Catppuccin values -- #89b4fa,
+        # #f9e2af, #181825, #cdd6f4 -- so this panel stayed dark under a light
+        # theme. Projects was fixed for that yesterday and this one was
+        # missed, which is the two-copies problem in its usual form.
         self._cmd_panel_title = QLabel("💡 Command Reference")
-        self._cmd_panel_title.setStyleSheet(
-            "font-size: 14px; font-weight: bold; color: #89b4fa; "
-            "padding: 4px 2px 2px 2px;"
-        )
         _panel_layout.addWidget(self._cmd_panel_title)
 
         self._cmd_panel_live = QLabel("▶")
         self._cmd_panel_live.setWordWrap(True)
-        self._cmd_panel_live.setStyleSheet(
-            "color: #f9e2af; font-size: 20px; font-weight: bold; "
-            "font-family: Consolas, monospace; padding: 10px 12px; "
-            "background: #181825; border: 2px solid #f9e2af; border-radius: 6px;"
-        )
         _panel_layout.addWidget(self._cmd_panel_live)
 
         self._cmd_panel_hints = _QTE()
         self._cmd_panel_hints.setReadOnly(True)
         self._cmd_panel_hints.setFixedHeight(200)
-        self._cmd_panel_hints.setStyleSheet(
-            "background-color: #181825; border: 1px solid #313244; "
-            "border-radius: 8px; padding: 8px; color: #cdd6f4; "
-            "font-family: Consolas, monospace; font-size: 18px; font-weight: bold;"
-        )
         _panel_layout.addWidget(self._cmd_panel_hints)
+
+        self._restyle_cmd_panel()
 
         self._cmd_panel_widget.setVisible(False)
         layout.addWidget(self._cmd_panel_widget)
@@ -977,18 +980,25 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
                 pass
 
         # HTML helpers
-        def _c(t): return f"<span style='color:#89b4fa;font-family:Consolas,monospace;font-size:18px;font-weight:bold;'>{t}</span>"
-        def _p(t): return f"<span style='color:#a6e3a1;font-family:Consolas,monospace;font-size:18px;font-weight:bold;'>{t}</span>"
-        def _k(t): return f"<span style='color:#cba6f7;font-family:Consolas,monospace;font-weight:bold;font-size:18px;'>{t}</span>"
-        def _ttl(icon, txt, col): return f"<p style='font-size:18px;font-weight:bold;color:{col};margin:6px 0 4px 0;'>{icon}&nbsp; {txt}</p>"
-        def _ln(t): return f"<p style='margin:3px 0;font-size:17px;font-weight:bold;font-family:Consolas,monospace;color:#cdd6f4;background:#11111b;padding:5px 10px;border-radius:4px;'>{t}</p>"
-        def _nt(t): return f"<p style='margin:6px 0 2px 0;font-size:12px;color:#6c7086;font-style:italic;'>{t}</p>"
+        # B120: these six were local functions with Catppuccin hex written
+        # into them, which is why nothing else could reuse them and why this
+        # panel did not follow a light theme. They live in styles.cmd_html
+        # now and take their colours from the palette; the Projects panel
+        # uses the same ones, so the two cannot look different again.
+        from src.gui.styles import cmd_html as _cmd_html
+        _H = _cmd_html(self._c())
+        _c = _H["cmd"]
+        _p = _H["arg"]
+        _k = _H["ph"]
+        _ttl = _H["title"]
+        _ln = _H["line"]
+        _nt = _H["note"]
 
         html = ""
         if action == "delete":
             if env_type == "pipx":
                 html = (
-                    _ttl("📦", "Reset pipx environment", "#a6e3a1") +
+                    _ttl("📦", "Reset pipx environment", _H["c"]["success"]) +
                     _nt("Uninstall ALL pipx apps:") +
                     _ln(_c("pipx") + " uninstall-all") +
                     _nt("Ensure PATH is set up (fresh pipx):") +
@@ -1000,7 +1010,7 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
                 )
             elif env_type == "conda":
                 html = (
-                    _ttl("🦎", f"Remove conda env '{name}'", "#89dceb") +
+                    _ttl("🦎", f"Remove conda env '{name}'", _H["c"]["accent"]) +
                     _nt("Remove by path:") +
                     _ln(_c("micromamba") + " env remove -p " + _p(env_path) + " --yes") +
                     _nt("Clean cache + unused packages:") +
@@ -1016,7 +1026,7 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
                     rm_alt_note = "Verbose (show each deleted file):"
                     rm_alt = _c("rm") + " -rfv " + _p(env_path)
                 html = (
-                    _ttl("🗑️", f"Delete {env_type} env '{name}'", "#f38ba8") +
+                    _ttl("🗑️", f"Delete {env_type} env '{name}'", _H["c"]["danger"]) +
                     _nt("Deactivate first (if active):") +
                     _ln(_c("deactivate")) +
                     _nt("Delete the environment folder:") +
@@ -1027,7 +1037,7 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         elif action == "clone":
             if env_type == "pipx":
                 html = (
-                    _ttl("📦", f"Clone pipx app '{name}' — Not directly supported", "#f9e2af") +
+                    _ttl("📦", f"Clone pipx app '{name}' — Not directly supported", _H["c"]["warning"]) +
                     _nt("pipx apps are isolated per CLI tool. To replicate on another machine:") +
                     _ln(_c("pipx") + " install " + _k(name)) +
                     _nt("Or reinstall everything (e.g. after Python upgrade):") +
@@ -1037,7 +1047,7 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
                 )
             elif env_type == "poetry":
                 html = (
-                    _ttl("📜", f"Clone Poetry env '{name}' — Not directly supported", "#f9e2af") +
+                    _ttl("📜", f"Clone Poetry env '{name}' — Not directly supported", _H["c"]["warning"]) +
                     _nt("Poetry envs are tied to pyproject.toml. To replicate:") +
                     _ln(_c("cd") + " " + _p("<your-project-dir>")) +
                     _ln(_c("poetry") + " lock") +
@@ -1047,7 +1057,7 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
                 )
             elif env_type == "conda":
                 html = (
-                    _ttl("🦎", f"Clone conda env '{name}'", "#89dceb") +
+                    _ttl("🦎", f"Clone conda env '{name}'", _H["c"]["accent"]) +
                     _nt("What VenvStudio runs:") +
                     _ln(_c("micromamba") + " create -p " + _p("<new_path>") + " --clone " + _p(env_path) + " --yes") +
                     _nt("Alternative — export/import via YAML:") +
@@ -1062,7 +1072,7 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
                     _src_py = f"{env_path}/bin/python"
                     _tgt_py = "<new_path>/bin/python"
                 html = (
-                    _ttl("⚡", f"Clone uv env '{name}'", "#f9e2af") +
+                    _ttl("⚡", f"Clone uv env '{name}'", _H["c"]["warning"]) +
                     _nt("What VenvStudio runs:") +
                     _ln(_c("uv") + " pip freeze --python " + _p(_src_py) + " &gt; req.txt") +
                     _ln(_c("uv") + " venv " + _p("<new_path>") + " --python " + _p(_src_py)) +
@@ -1070,7 +1080,7 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
                 )
             elif is_win:
                 html = (
-                    _ttl("📋", f"Clone env '{name}'", "#89b4fa") +
+                    _ttl("📋", f"Clone env '{name}'", _H["c"]["accent"]) +
                     _nt("PowerShell:") +
                     _ln(_c("Copy-Item") + " -Recurse " + _p(f'"{env_path}"') + " " + _p(f'"{env_path}-clone"')) +
                     _nt("Reinstall packages after clone (recommended):") +
@@ -1079,7 +1089,7 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
                 )
             else:
                 html = (
-                    _ttl("📋", f"Clone env '{name}'", "#89b4fa") +
+                    _ttl("📋", f"Clone env '{name}'", _H["c"]["accent"]) +
                     _nt("Copy the folder:") +
                     _ln(_c("cp") + " -r " + _p(env_path) + " " + _p(f"{env_path}-clone")) +
                     _nt("Reinstall packages after clone (recommended):") +
@@ -1089,14 +1099,14 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         elif action == "rename":
             if env_type == "pipx":
                 html = (
-                    _ttl("📦", f"Rename pipx app '{name}' — Not directly supported", "#f9e2af") +
+                    _ttl("📦", f"Rename pipx app '{name}' — Not directly supported", _H["c"]["warning"]) +
                     _nt("pipx apps are identified by their package name. To 'rename', uninstall and reinstall:") +
                     _ln(_c("pipx") + " uninstall " + _k(name)) +
                     _ln(_c("pipx") + " install " + _p("<new_name>"))
                 )
             elif env_type == "poetry":
                 html = (
-                    _ttl("📜", f"Rename Poetry env '{name}' — Not directly supported", "#f9e2af") +
+                    _ttl("📜", f"Rename Poetry env '{name}' — Not directly supported", _H["c"]["warning"]) +
                     _nt("Poetry env names come from pyproject.toml. Edit the 'name' field, then:") +
                     _ln(_c("poetry") + " env remove --all") +
                     _ln(_c("poetry") + " install") +
@@ -1104,7 +1114,7 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
                 )
             elif env_type == "conda":
                 html = (
-                    _ttl("🦎", f"Rename conda env '{name}'", "#89dceb") +
+                    _ttl("🦎", f"Rename conda env '{name}'", _H["c"]["accent"]) +
                     _nt("micromamba can't rename in place. Export → recreate → remove:") +
                     _ln(_c("micromamba") + " env export -n " + _p(name) + " &gt; env.yml") +
                     _ln(_c("micromamba") + " create -n " + _p("<new_name>") + " --file env.yml") +
@@ -1112,7 +1122,7 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
                 )
             elif is_win:
                 html = (
-                    _ttl("✏️", f"Rename env '{name}'", "#f9e2af") +
+                    _ttl("✏️", f"Rename env '{name}'", _H["c"]["warning"]) +
                     _nt("Rename folder (fast — but pip/python paths may break):") +
                     _ln(_c("Rename-Item") + " " + _p(f'"{env_path}"') + " " + _p('"<new_name>"')) +
                     _nt("Safer: clone with new name + delete old:") +
@@ -1120,7 +1130,7 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
                 )
             else:
                 html = (
-                    _ttl("✏️", f"Rename env '{name}'", "#f9e2af") +
+                    _ttl("✏️", f"Rename env '{name}'", _H["c"]["warning"]) +
                     _nt("Rename folder (fast — but pip/python paths may break):") +
                     _ln(_c("mv") + " " + _p(env_path) + " " + _p("<new_path>")) +
                     _nt("Safer: clone with new name + delete old:") +
@@ -1398,6 +1408,20 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
             self._switch_page(0)
         if hasattr(self, "package_panel"):
             QTimer.singleShot(400, lambda: self.package_panel._install_packages(packages) if self.package_panel else None)
+
+    def _restyle_cmd_panel(self):
+        """Apply the current theme to this window's Command Reference panel.
+
+        B120: the styles come from styles.cmd_panel_styles, which the Projects
+        panel uses too, so the two cannot drift apart again.
+        """
+        if not hasattr(self, "_cmd_panel_title"):
+            return
+        from src.gui.styles import cmd_panel_styles
+        _t, _l, _h = cmd_panel_styles(self._c())
+        self._cmd_panel_title.setStyleSheet(_t)
+        self._cmd_panel_live.setStyleSheet(_l)
+        self._cmd_panel_hints.setStyleSheet(_h)
 
     def _refresh_bookmarks(self, bookmarks: list):
         """Update Quick Launch bookmark buttons."""

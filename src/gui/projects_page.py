@@ -776,7 +776,6 @@ class ProjectsPageMixin:
         # Same treatment as the environments table (B183 there): 16px, bold,
         # roomy rows. Two tables of the same kind should not read differently.
         self.projects_table.verticalHeader().setDefaultSectionSize(48)
-        self._restyle_projects_table()
         self.projects_table.setContextMenuPolicy(Qt.CustomContextMenu)
         self.projects_table.customContextMenuRequested.connect(
             self._show_project_context_menu)
@@ -822,6 +821,12 @@ class ProjectsPageMixin:
 
         self._proj_cmd_panel.setVisible(False)
         layout.addWidget(self._proj_cmd_panel)
+
+        # B120: styled HERE, not at line 779 where the table is built. The
+        # call used to sit up there and the panel widgets do not exist yet at
+        # that point, so hasattr() was False and the panel got no styles at
+        # all -- which is why it looked nothing like the Environments one.
+        self._restyle_projects_table()
 
         # B46: an action bar, as the Environments page has had all along.
         #
@@ -1137,25 +1142,16 @@ class ProjectsPageMixin:
             f"padding: 10px; }}"
         )
 
-        # The Command Reference panel, same story (B115).
-        _c = self._c()
+        # B120: the same styles as the Environments panel, from the same
+        # function. They were written out twice and drifted -- the hints box
+        # was 16px here and 18px there, which is what Bayram saw as the two
+        # panels not matching.
         if hasattr(self, "_proj_cmd_title"):
-            self._proj_cmd_title.setStyleSheet(
-                f"font-size: 14px; font-weight: bold; color: {_c['accent']}; "
-                f"padding: 4px 2px 2px 2px;")
-        if hasattr(self, "_proj_cmd_live"):
-            self._proj_cmd_live.setStyleSheet(
-                f"color: {_c['fg']}; font-size: 20px; font-weight: bold; "
-                f"font-family: Consolas, monospace; padding: 10px 12px; "
-                f"background: {_c['input_bg']}; "
-                f"border: 2px solid {_c['accent']}; border-radius: 6px;")
-        if hasattr(self, "_proj_cmd_hints"):
-            self._proj_cmd_hints.setStyleSheet(
-                f"background-color: {_c['input_bg']}; "
-                f"border: 1px solid {_c['border']}; "
-                f"border-radius: 8px; padding: 8px; color: {_c['fg']}; "
-                f"font-family: Consolas, monospace; font-size: 16px; "
-                f"font-weight: bold;")
+            from src.gui.styles import cmd_panel_styles
+            _t, _l, _h = cmd_panel_styles(self._c())
+            self._proj_cmd_title.setStyleSheet(_t)
+            self._proj_cmd_live.setStyleSheet(_l)
+            self._proj_cmd_hints.setStyleSheet(_h)
 
     def _fill_projects_table(self, paths, metas=None):
         """B58: `metas` lets the caller hand over what it already read.
@@ -2007,11 +2003,44 @@ class ProjectsPageMixin:
         """
         try:
             self._proj_cmd_live.setText(f"\u25b6  {command}")
-            self._proj_cmd_hints.setPlainText(hints or "")
+            # B120: setPlainText was why this panel looked "renksiz, hic
+            # anlasilmiyor" next to the Environments one. That panel builds
+            # coloured HTML -- executable, arguments, comments each their own
+            # colour, every command on its own strip -- and this one printed
+            # a wall of single-colour text. The hints arrive as plain text
+            # from a dozen call sites, so rather than rewrite all of them,
+            # they are marked up here from the same builders the Environments
+            # panel uses.
+            self._proj_cmd_hints.setHtml(self._hints_to_html(hints or ""))
             self._proj_cmd_hints.setVisible(bool(hints))
             self._proj_cmd_panel.setVisible(True)
         except Exception:
             pass
+
+    def _hints_to_html(self, hints: str) -> str:
+        """Colour a block of plain-text command hints.
+
+        The convention the callers already follow: a line starting with # is
+        a comment, everything else is a command whose first word is the
+        executable. That is enough to colour without changing a single call
+        site.
+        """
+        from src.gui.styles import cmd_html
+        import html as _h
+        _b = cmd_html(self._c())
+        _out = []
+        for _raw in (hints or "").splitlines():
+            _line = _raw.rstrip()
+            if not _line.strip():
+                continue
+            if _line.lstrip().startswith("#"):
+                _out.append(_b["note"](_h.escape(_line.lstrip("# ").rstrip())))
+                continue
+            _parts = _line.split(None, 1)
+            _exe = _b["cmd"](_h.escape(_parts[0]))
+            _rest = _b["arg"](_h.escape(_parts[1])) if len(_parts) > 1 else ""
+            _out.append(_b["line"](_exe + (" " + _rest if _rest else "")))
+        return "".join(_out)
 
     def _rename_project(self):
         """Rename the folder and the declared project name together.

@@ -167,6 +167,19 @@ class EnvCreateDialog(QDialog):
     _modern_done_signal  = Signal()      # N7: Hatch/PDM/Pixi success
     _modern_error_signal = Signal(str)   # N7: Hatch/PDM/Pixi failure
 
+    def _status_style(self, kind: str = "accent", size: int = 15) -> str:
+        """Stylesheet for status_label, from the palette.
+
+        B120: this label was styled in eight places with two Catppuccin hex
+        values between them, so it stayed blue-on-anything under a light
+        theme. `kind` names the meaning -- accent, success, warning, danger,
+        fg_muted -- and the theme supplies the colour.
+        """
+        from src.gui.styles import get_colors as _gc
+        _c = _gc(self.config.get("theme", "dark"))
+        return (f"color: {_c.get(kind, _c['accent'])}; font-size: {size}px; "
+                f"font-weight: bold;")
+
     def __init__(self, venv_manager, config_manager, parent=None):
         super().__init__(parent)
         self.venv_manager = venv_manager
@@ -258,6 +271,12 @@ class EnvCreateDialog(QDialog):
         self._on_python_changed(0)
 
     def _setup_ui(self):
+        # B120: imported at the TOP of this method, not halfway down.
+        # A name assigned anywhere in a function is local to the whole
+        # function, so widgets styled before the import line raised
+        # UnboundLocalError -- which is exactly how the Create
+        # Environment dialog crashed once already.
+        from src.gui.styles import get_colors as _gc_ui
         root = QVBoxLayout(self)
         root.setSpacing(14)
         root.setContentsMargins(24, 20, 24, 20)
@@ -300,7 +319,9 @@ class EnvCreateDialog(QDialog):
         loc_layout = QHBoxLayout()
         loc_layout.setSpacing(8)
         self.location_label = QLabel(str(self.config.get_venv_base_dir()))
-        self.location_label.setStyleSheet("color: #a6adc8; font-size: 12px;")
+        self.location_label.setStyleSheet(
+            f"color: {_gc_ui(self.config.get('theme', 'dark'))['fg_muted']}; "
+            f"font-size: 12px;")
         self.location_label.setMinimumWidth(120)
         loc_layout.addWidget(self.location_label, 1)
         change_btn = QPushButton("Browse")
@@ -404,7 +425,9 @@ class EnvCreateDialog(QDialog):
             "JASP, DBeaver and 25,000+ scientific packages.\n"
             "micromamba (~10 MB) will be downloaded automatically."
         )
-        _conda_note.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        _conda_note.setStyleSheet(
+            f"color: {_gc_ui(self.config.get('theme', 'dark'))['fg_muted']}; "
+            f"font-size: 11px;")
         _conda_note.setWordWrap(True)
         _conda_layout.addWidget(_conda_note)
 
@@ -429,7 +452,9 @@ class EnvCreateDialog(QDialog):
         _py_inner_layout.addWidget(self.python_combo)
 
         self.python_path_label = QLabel("")
-        self.python_path_label.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        self.python_path_label.setStyleSheet(
+            f"color: {_gc_ui(self.config.get('theme', 'dark'))['fg_muted']}; "
+            f"font-size: 11px;")
         self.python_path_label.setWordWrap(False)
         self.python_path_label.setTextInteractionFlags(Qt.TextSelectableByMouse)
         _py_inner_layout.addWidget(self.python_path_label)
@@ -447,7 +472,7 @@ class EnvCreateDialog(QDialog):
         _ts_layout.setSpacing(8)
 
         self.tool_status_label = QLabel("")
-        self.tool_status_label.setStyleSheet("font-size: 11px; color: #f9e2af;")
+        self.tool_status_label.setStyleSheet(self._status_style("warning", 11))
         _ts_layout.addWidget(self.tool_status_label, 1)
 
         self.tool_install_user_btn = QPushButton("Install")
@@ -495,7 +520,8 @@ class EnvCreateDialog(QDialog):
         right_inner.setSpacing(8)
 
         self.status_label = QLabel("Ready.")
-        self.status_label.setStyleSheet("color: #585b70; font-size: 14px; font-weight: bold; padding: 2px 0;")
+        self.status_label.setStyleSheet(
+            self._status_style("fg_muted", 14) + " padding: 2px 0;")
         right_inner.addWidget(self.status_label)
 
         self.progress_bar = QProgressBar()
@@ -506,8 +532,10 @@ class EnvCreateDialog(QDialog):
         # Progress message label (above hints)
         self.progress_msg_label = QLabel("")
         self.progress_msg_label.setWordWrap(True)
+        _PC = _gc_ui(self.config.get("theme", "dark"))
         self.progress_msg_label.setStyleSheet(
-            "color: #89b4fa; font-size: 16px; font-weight: bold; padding: 3px 4px;"
+            f"color: {_PC['accent']}; font-size: 16px; font-weight: bold; "
+            f"padding: 3px 4px;"
         )
         self.progress_msg_label.setVisible(False)
         right_inner.addWidget(self.progress_msg_label)
@@ -516,13 +544,14 @@ class EnvCreateDialog(QDialog):
         self.cmd_label = QTextEdit()
         self.cmd_label.setReadOnly(True)
         self.cmd_label.setStyleSheet(
-            "background-color: #181825; border: 1px solid #313244; "
-            "border-radius: 8px; padding: 4px; color: #cdd6f4; "
-            "font-family: Consolas, monospace; font-size: 15px;"
+            f"background-color: {_PC['input_bg']}; "
+            f"border: 1px solid {_PC['border']}; "
+            f"border-radius: 8px; padding: 4px; color: {_PC['fg']}; "
+            f"font-family: Consolas, monospace; font-size: 17px;"
         )
         self.cmd_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.cmd_label.setHtml(
-            "<p style='color:#585b70;font-size:12px;padding:8px;'>"
+            f"<p style='color:{_PC['fg_muted']};font-size:12px;padding:8px;'>"
             "💡 Select an environment type to see terminal commands.</p>"
         )
         right_inner.addWidget(self.cmd_label, stretch=1)
@@ -678,16 +707,29 @@ class EnvCreateDialog(QDialog):
                     _sel_ver = _mv.group(1)
         except Exception:
             pass
-        def _cmd(t): return f"<span style='color:#89b4fa;font-family:Consolas,monospace;font-size:15px;'>{t}</span>"
-        def _path(t): return f"<span style='color:#a6e3a1;font-family:Consolas,monospace;font-size:15px;'>{t}</span>"
-        def _kw(t): return f"<span style='color:#cba6f7;font-family:Consolas,monospace;font-weight:bold;font-size:15px;'>{t}</span>"
-        def _ver(t): return f"<span style='color:#f9e2af;font-family:Consolas,monospace;font-size:15px;'>{t}</span>"
-        def _title(icon, text, color='#cdd6f4'): return f"<p style='font-size:20px;font-weight:bold;color:{color};margin:10px 0 6px 0;letter-spacing:0.5px;'>{icon}&nbsp; {text}</p>"
-        def _line(t): return f"<p style='margin:4px 0;font-size:15px;font-family:Consolas,monospace;color:#cdd6f4;background:#11111b;padding:4px 10px;border-radius:4px;'>{t}</p>"
-        def _note(t): return f"<p style='margin:10px 0 2px 0;font-size:12px;color:#6c7086;font-style:italic;'>{t}</p>"
+        # B120: seven local helpers with Catppuccin hex written into them, so
+        # this preview stayed dark under a light theme -- the same six
+        # functions that already existed in main_window and projects_page.
+        # They come from styles.cmd_html now, at the 15px this dialog uses.
+        from src.gui.styles import cmd_html as _cmd_html, get_colors as _gc
+        # B120: 18, not the 15 this dialog used to use. Bayram: "neden size'i
+        # kucultuyorsun???? Educational olacagi icin formdaki Educational
+        # kisimlar digerlerine oranla buyuk olacak ki ilgi ceksinler". The
+        # preview is the teaching part of this dialog; it should not be the
+        # smallest text on screen.
+        _H = _cmd_html(_gc(self.config.get("theme", "dark")), 18)
+        _cmd = _H["cmd"]
+        _path = _H["arg"]
+        _kw = _H["ph"]
+        _ver = _H["arg"]
+        _line = _H["line"]
+        _note = _H["note"]
+
+        def _title(icon, text, color=None):
+            return _H["title"](icon, text, color or _H["c"]["fg"])
         hints = {
             "venv": (
-                _title("🐍", "Python venv", "#89b4fa") +
+                _title("🐍", "Python venv", _H["c"]["accent"]) +
                 _note("Standard library virtual environment") +
                 _line(_kw("python") + " -m " + _cmd("venv") + " " + _path(_name)) +
                 _note("Activate — Linux/macOS:") +
@@ -700,7 +742,7 @@ class EnvCreateDialog(QDialog):
                 _line(_cmd("deactivate"))
             ),
             "uv": (
-                _title("⚡", "uv — Ultra Fast", "#f9e2af") +
+                _title("⚡", "uv — Ultra Fast", _H["c"]["warning"]) +
                 _note("10-100x faster than pip. Rust-powered.") +
                 _line(_cmd("uv") + " venv " + _path(_name)) +
                 _note("With specific Python version:") +
@@ -711,7 +753,7 @@ class EnvCreateDialog(QDialog):
                 _line(_cmd("uv") + " run " + _kw("python") + " script.py")
             ),
             "poetry": (
-                _title("📜", "Poetry", "#cba6f7") +
+                _title("📜", "Poetry", _H["c"]["accent"]) +
                 _note("Dependency management + virtual environments") +
                 _line(_cmd("pip") + " install " + _kw("poetry")) +
                 _note("Create new project:") +
@@ -723,7 +765,7 @@ class EnvCreateDialog(QDialog):
                 _line(_cmd("poetry") + " run " + _kw("python") + " script.py")
             ),
             "pipx": (
-                _title("📦", "pipx", "#a6e3a1") +
+                _title("📦", "pipx", _H["c"]["success"]) +
                 _note("Install Python CLI apps in isolated environments") +
                 _line(_cmd("pip") + " install --user " + _kw("pipx")) +
                 _line(_cmd("pipx") + " ensurepath") +
@@ -735,7 +777,7 @@ class EnvCreateDialog(QDialog):
                 _line(_cmd("pipx") + " run " + _kw("cowsay") + " Hello!")
             ),
             "conda": (
-                _title("🦎", "Conda (micromamba)", "#89dceb") +
+                _title("🦎", "Conda (micromamba)", _H["c"]["accent"]) +
                 _note("conda-forge — 25,000+ packages incl. R, RStudio") +
                 _line(_cmd("micromamba") + " create -n " + _path(_name) + " python=" + _ver(_sel_ver)) +
                 _note("Activate:") +
@@ -746,7 +788,7 @@ class EnvCreateDialog(QDialog):
                 _line(_cmd("micromamba") + " env list")
             ),
             "hatch": (
-                _title("🏗️", "Hatch", "#f38ba8") +
+                _title("🏗️", "Hatch", _H["c"]["danger"]) +
                 _note("Modern Python project manager by PyPA") +
                 _line(_cmd("pip") + " install " + _kw("hatch")) +
                 _note("Create new project:") +
@@ -758,7 +800,7 @@ class EnvCreateDialog(QDialog):
                 _line(_cmd("hatch") + " run " + _kw("python") + " script.py")
             ),
             "pdm": (
-                _title("📦", "PDM", "#89b4fa") +
+                _title("📦", "PDM", _H["c"]["accent"]) +
                 _note("Python package manager with pyproject.toml") +
                 _line(_cmd("pip") + " install " + _kw("pdm")) +
                 _note("Create new project:") +
@@ -769,7 +811,7 @@ class EnvCreateDialog(QDialog):
                 _line(_cmd("pdm") + " run " + _kw("python") + " script.py")
             ),
             "pixi": (
-                _title("🌊", "Pixi", "#94e2d5") +
+                _title("🌊", "Pixi", _H["c"]["success"]) +
                 _note("conda-forge + PyPI, blazing fast (Rust-powered)") +
                 _line(_cmd("pixi") + " init " + _path(_name)) +
                 _note("Add conda-forge packages:") +
@@ -815,14 +857,14 @@ class EnvCreateDialog(QDialog):
                 pass
         if found:
             self.tool_status_label.setText(f"✅ {env_type} found")
-            self.tool_status_label.setStyleSheet("font-size: 11px; color: #a6e3a1;")
+            self.tool_status_label.setStyleSheet(self._status_style("success", 11))
             if hasattr(self, "tool_install_user_btn"):
                 self.tool_install_user_btn.setVisible(False)
             if hasattr(self, "tool_install_system_btn"):
                 self.tool_install_system_btn.setVisible(False)
         else:
             self.tool_status_label.setText(f"⚠️ {env_type} not found")
-            self.tool_status_label.setStyleSheet("font-size: 11px; color: #f9e2af;")
+            self.tool_status_label.setStyleSheet(self._status_style("warning", 11))
             if hasattr(self, "tool_install_user_btn"):
                 self.tool_install_user_btn.setText(f"Install {env_type}")
                 self.tool_install_user_btn.setVisible(True)
@@ -915,7 +957,7 @@ class EnvCreateDialog(QDialog):
         if hasattr(self, "tool_status_label"):
             self.tool_status_label.setText(
                 f"⏳ Installing {env_type} (user)...")
-            self.tool_status_label.setStyleSheet("font-size: 11px; color: #89b4fa;")
+            self.tool_status_label.setStyleSheet(self._status_style("accent", 11))
 
         def _do_install(callback=None):
             import subprocess, shutil, os, site
@@ -1128,7 +1170,7 @@ class EnvCreateDialog(QDialog):
             if success:
                 if hasattr(self, "tool_status_label"):
                     self.tool_status_label.setText(f"✅ {env_type} installed")
-                    self.tool_status_label.setStyleSheet("font-size: 11px; color: #a6e3a1;")
+                    self.tool_status_label.setStyleSheet(self._status_style("success", 11))
                 for btn_name in ("tool_install_user_btn", "tool_install_system_btn"):
                     btn = getattr(self, btn_name, None)
                     if btn:
@@ -1141,7 +1183,7 @@ class EnvCreateDialog(QDialog):
             else:
                 if hasattr(self, "tool_status_label"):
                     self.tool_status_label.setText(f"❌ {result}")
-                    self.tool_status_label.setStyleSheet("font-size: 11px; color: #f38ba8;")
+                    self.tool_status_label.setStyleSheet(self._status_style("danger", 11))
                 for btn_name in ("tool_install_user_btn", "tool_install_system_btn"):
                     btn = getattr(self, btn_name, None)
                     if btn:
@@ -1262,8 +1304,7 @@ class EnvCreateDialog(QDialog):
             # plain venv creation already has.
             if not _confirm_existing_path(self, name, env_path):
                 self.progress_bar.setVisible(False)
-                self.status_label.setStyleSheet(
-                    "color: #f38ba8; font-size: 15px; font-weight: bold;")
+                self.status_label.setStyleSheet(self._status_style("danger"))
                 self.status_label.setText(
                     f"❌ Cancelled — '{name}' already exists at {env_path}")
                 self.status_label.setToolTip(str(env_path))
@@ -1276,7 +1317,7 @@ class EnvCreateDialog(QDialog):
             self.create_btn.setText("Creating...")
             self.name_input.setEnabled(False)
             self.env_type_combo.setEnabled(False)
-            self.status_label.setStyleSheet("color: #89b4fa; font-size: 15px; font-weight: bold;")
+            self.status_label.setStyleSheet(self._status_style("accent"))
             self.status_label.setText("⚙️ Preparing micromamba...")
 
             # Terminal banner — conda env creation start
@@ -1333,7 +1374,7 @@ class EnvCreateDialog(QDialog):
                             f"Python: {python_version or 'none'}",
                         ],
                     )
-                    self.status_label.setStyleSheet("color: #a6e3a1; font-size: 15px; font-weight: bold;")
+                    self.status_label.setStyleSheet(self._status_style("success"))
                     self.status_label.setText(f"✅ {message}")
                     self._maybe_register_custom_location(name, env_path, "conda")
                     self.env_created.emit(name)
@@ -1341,7 +1382,7 @@ class EnvCreateDialog(QDialog):
                     self.cancel_btn.setText("Close")
                 else:
                     banner_error(f"Could not create '{name}'", details=[str(message)])
-                    self.status_label.setStyleSheet("color: #f38ba8; font-size: 15px; font-weight: bold;")
+                    self.status_label.setStyleSheet(self._status_style("danger"))
                     self.status_label.setText(f"❌ {message}")
                     self.cancel_btn.setText("Close")
 
@@ -1405,8 +1446,7 @@ class EnvCreateDialog(QDialog):
                     # create failures are shown -- a popup dialog on top
                     # of the progress bar read as "is it still running?"
                     self.progress_bar.setVisible(False)
-                    self.status_label.setStyleSheet(
-                        "color: #f38ba8; font-size: 15px; font-weight: bold;")
+                    self.status_label.setStyleSheet(self._status_style("danger"))
                     self.status_label.setText(
                         f"❌ Cancelled — '{name}' already exists at {env_path}")
                     self.status_label.setToolTip(str(env_path))
@@ -1501,7 +1541,7 @@ class EnvCreateDialog(QDialog):
             self.create_btn.setText("Creating...")
             self.name_input.setEnabled(False)
             self.env_type_combo.setEnabled(False)
-            self.status_label.setStyleSheet("color: #89b4fa; font-size: 15px; font-weight: bold;")
+            self.status_label.setStyleSheet(self._status_style("accent"))
             self.status_label.setText(f"⚙️ Creating {env_type} environment...")
 
             # Terminal banner — uv/poetry/pipx env creation start
@@ -1984,7 +2024,7 @@ class EnvCreateDialog(QDialog):
                             f"Path: {_env_path}",
                         ],
                     )
-                    self.status_label.setStyleSheet("color: #a6e3a1; font-size: 15px; font-weight: bold;")
+                    self.status_label.setStyleSheet(self._status_style("success"))
                     self.status_label.setText(f"✅ {message}")
                     self._maybe_register_custom_location(_name, _env_path, _etype)
                     self.env_created.emit(_name)
@@ -1992,7 +2032,7 @@ class EnvCreateDialog(QDialog):
                     self.cancel_btn.setText("Close")
                 else:
                     banner_error(f"Could not create '{_name}'", details=[str(message)])
-                    self.status_label.setStyleSheet("color: #f38ba8; font-size: 15px; font-weight: bold;")
+                    self.status_label.setStyleSheet(self._status_style("danger"))
                     self.status_label.setText(f"❌ Failed")
                     self.cancel_btn.setText("Close")
 
@@ -2017,8 +2057,7 @@ class EnvCreateDialog(QDialog):
         # a popup dialog, and it wasn't clear whether creation was still
         # running. Same inline pattern as uv/poetry/conda now use.
         if not _confirm_existing_path(self, name, venv_path):
-            self.status_label.setStyleSheet(
-                "color: #f38ba8; font-size: 15px; font-weight: bold;")
+            self.status_label.setStyleSheet(self._status_style("danger"))
             self.status_label.setText(
                 f"❌ Cancelled — '{name}' already exists at {venv_path}")
             self.status_label.setToolTip(str(venv_path))
@@ -2029,19 +2068,22 @@ class EnvCreateDialog(QDialog):
         self.create_btn.setText("Creating...")
         self.name_input.setEnabled(False)
         self.python_combo.setEnabled(False)
-        self.status_label.setStyleSheet("color: #89b4fa; font-size: 15px; font-weight: bold;")
+        self.status_label.setStyleSheet(self._status_style("accent"))
         self.status_label.setText("⚙️ Initializing...")
         self.cancel_btn.setText("Cancel")
         self.cancel_btn.setObjectName("danger")
         self.cancel_btn.setStyleSheet("")
 
         from src.utils.platform_utils import get_platform
-        def _c(t): return f"<span style='color:#89b4fa;font-family:Consolas,monospace;font-size:15px;'>{t}</span>"
-        def _p(t): return f"<span style='color:#a6e3a1;font-family:Consolas,monospace;font-size:15px;'>{t}</span>"
-        def _k(t): return f"<span style='color:#cba6f7;font-family:Consolas,monospace;font-weight:bold;font-size:15px;'>{t}</span>"
-        def _ln(t): return f"<p style='margin:4px 0;font-size:15px;font-family:Consolas,monospace;color:#cdd6f4;background:#11111b;padding:4px 10px;border-radius:4px;'>{t}</p>"
-        def _nt(t): return f"<p style='margin:10px 0 2px 0;font-size:12px;color:#6c7086;font-style:italic;'>{t}</p>"
-        def _ttl(icon,txt,col): return f"<p style='font-size:20px;font-weight:bold;color:{col};margin:10px 0 6px 0;'>{icon}&nbsp; {txt}</p>"
+        # B120: the second copy in this same file, differing only in names.
+        from src.gui.styles import cmd_html as _cmd_html2, get_colors as _gc2
+        _H2 = _cmd_html2(_gc2(self.config.get("theme", "dark")), 18)   # B120: see above
+        _c = _H2["cmd"]
+        _p = _H2["arg"]
+        _k = _H2["ph"]
+        _ln = _H2["line"]
+        _nt = _H2["note"]
+        _ttl = _H2["title"]
         if get_platform() == "windows":
             activate_cmd = _ln(_p(venv_path + "\\Scripts\\Activate.ps1"))
             activate_note = _nt("Activate (Windows PowerShell):")
@@ -2049,7 +2091,7 @@ class EnvCreateDialog(QDialog):
             activate_cmd = _ln(_c("source") + " " + _p(f"{venv_path}/bin/activate"))
             activate_note = _nt("Activate (Linux/macOS):")
         html = (
-            _ttl("🐍", "Python venv", "#89b4fa") +
+            _ttl("🐍", "Python venv", _H2["c"]["accent"]) +
             _nt("Create virtual environment:") +
             _ln(_k("python") + " -m " + _c("venv") + " " + _p(venv_path)) +
             activate_note +
@@ -2250,7 +2292,7 @@ class EnvCreateDialog(QDialog):
         self.create_btn.setText("Creating...")
         self.name_input.setEnabled(False)
         self.env_type_combo.setEnabled(False)
-        self.status_label.setStyleSheet("color: #89b4fa; font-size: 15px; font-weight: bold;")
+        self.status_label.setStyleSheet(self._status_style("accent"))
         self.status_label.setText(f"⚙️ Creating {env_type} environment...")
 
         _etype = env_type
@@ -2436,7 +2478,7 @@ class EnvCreateDialog(QDialog):
             f"{self._modern_etype} environment '{self._modern_name}' created",
             details=[f"Path: {self._modern_path}"]
         )
-        self.status_label.setStyleSheet("color: #a6e3a1; font-size: 15px; font-weight: bold;")
+        self.status_label.setStyleSheet(self._status_style("success"))
         self.status_label.setText(
             f"✅ {self._modern_etype} environment '{self._modern_name}' created!")
         self._maybe_register_custom_location(self._modern_name, self._modern_path, self._modern_etype)
@@ -2461,6 +2503,6 @@ class EnvCreateDialog(QDialog):
             f"Failed to create {self._modern_etype} environment '{self._modern_name}'",
             details=[self._modern_error]
         )
-        self.status_label.setStyleSheet("color: #f38ba8; font-size: 15px; font-weight: bold;")
+        self.status_label.setStyleSheet(self._status_style("danger"))
         self.status_label.setText(f"❌ Error: {self._modern_error[:80]}")
         self.cancel_btn.setText("Close")

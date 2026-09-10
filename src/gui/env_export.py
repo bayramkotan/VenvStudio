@@ -64,7 +64,10 @@ class EnvExportMixin:
             if suffix:
                 return "poetry export -f requirements.txt --without-hashes" + suffix
             return "poetry export -f requirements.txt --without-hashes"
-        _base = "uv pip freeze" if _et == "uv" else "pip freeze"
+        # B119: --all so pip, setuptools and wheel are included. The command
+        # shown here must be the command that runs, or the panel teaches
+        # something the app does not do.
+        _base = "uv pip freeze" if _et == "uv" else "pip freeze --all"
         return f"{_base}{suffix}"
 
     def _get_env_freeze_and_version(self):
@@ -76,7 +79,9 @@ class EnvExportMixin:
             return None, None
         freeze = pm.freeze()
         if not freeze:
-            QMessageBox.warning(self, "Warning", "No packages to export.")
+            QMessageBox.information(
+                self, "Nothing to export",
+                "This environment has no packages installed yet.")
             return None, None
         py_ver = "3.12"
         try:

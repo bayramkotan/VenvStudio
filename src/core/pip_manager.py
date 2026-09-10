@@ -434,6 +434,24 @@ class PipManager:
         """
         import shutil, subprocess as _sp, os as _o
         from src.utils.platform_utils import subprocess_args as _spa
+        # B121: same guard as _install_poetry. poetry, pdm and pixi all run
+        # in a project directory, and _project_dir() falls back to the
+        # environment's own path when there is no project -- which is exactly
+        # the case for a cloned environment. Without this the tool answers
+        # with its own message about a missing manifest in a virtualenvs
+        # cache directory, which tells the user nothing.
+        _pdir = self._project_dir()
+        if not any((Path(_pdir) / _f).is_file()
+                   for _f in ("pyproject.toml", "pixi.toml")):
+            return False, (
+                f"Could not find the project this environment belongs to.\n\n"
+                f"A {tool} environment always serves a project directory, "
+                f"and `{tool} remove` takes the package out of that "
+                f"project's manifest as well as out of the environment. "
+                f"VenvStudio looked for that directory and did not find "
+                f"one.\n\n"
+                f"If the project is somewhere else, open it once from the "
+                f"Projects tab and try again.")
         _exe = shutil.which(tool)
         if not _exe and tool == "pixi":
             _cand = _o.path.expanduser("~/.pixi/bin/pixi")
@@ -447,7 +465,7 @@ class PipManager:
             callback(f"Removing via {tool}: {', '.join(packages)}...")
         try:
             r = _sp.run(cmd, capture_output=True, text=True, timeout=600,
-                        cwd=self._project_dir(), **_spa())
+                        cwd=_pdir, **_spa())
             out = r.stdout + r.stderr
             if r.returncode == 0:
                 return True, out
@@ -500,6 +518,31 @@ class PipManager:
         """
         import shutil, subprocess as _sp
         from src.utils.platform_utils import subprocess_args as _spa
+        # B121 (Bayram: add package fails on a CLONED environment).
+        # `poetry add` runs in a project directory, and _project_dir() falls
+        # back to the environment's own path when it cannot find one. For a
+        # cloned environment there IS no project: cloning copies the packages,
+        # not the pyproject.toml that a poetry environment exists to serve.
+        # Poetry then answered with its own message about not finding a
+        # pyproject.toml in a virtualenvs cache directory, which explains
+        # nothing to someone who just pressed Add Package.
+        _pdir = self._project_dir()
+        if not (Path(_pdir) / "pyproject.toml").is_file():
+            return False, (
+                f"Could not find the project this environment belongs to.\n\n"
+                f"A Poetry environment is never standalone: it always serves "
+                f"a directory containing pyproject.toml, and `poetry add` "
+                f"writes the dependency there as well as installing it. "
+                f"VenvStudio looked for that directory and did not find "
+                f"one.\n\n"
+                f"Searched under:\n  \u2022 the projects you have opened\n"
+                f"  \u2022 your environment directory\n"
+                f"  \u2022 your projects directory\n\n"
+                f"If the project is somewhere else, open it once from the "
+                f"Projects tab and try again.")
+        # Checked AFTER the project, because a missing project is the reason
+        # this cannot work at all -- whether poetry is installed is a
+        # secondary question.
         poetry = shutil.which("poetry")
         if not poetry:
             return False, "poetry not found on PATH"
@@ -508,7 +551,7 @@ class PipManager:
             callback(f"Installing via poetry: {', '.join(packages)}...")
         try:
             r = _sp.run(cmd, capture_output=True, text=True, timeout=600,
-                        cwd=self._project_dir(), **_spa())
+                        cwd=_pdir, **_spa())
             out = r.stdout + r.stderr
             if r.returncode == 0:
                 return True, out
@@ -588,6 +631,34 @@ class PipManager:
                 _p = _e.get("path") if isinstance(_e, dict) else _e
                 if _p and Path(_p).is_dir():
                     _out.append(str(_p))
+
+            # B121: VenvStudio creates poetry projects in the ENVIRONMENT
+            # directory -- `poetry new C:\venv\ptr-clone` -- and does not add
+            # them to recent_projects, which is a Projects-tab list. So the
+            # project it made itself was invisible here, and `poetry add` on
+            # a perfectly good environment answered that there was no
+            # project. Look there too.
+            try:
+                _cm = _CM()
+                _envdir = ""
+                if hasattr(_cm, "get_venv_base_dir"):
+                    _envdir = _cm.get_venv_base_dir() or ""
+                if not _envdir:
+                    _envdir = _cm.get("venv_base_dir", "") or ""
+                if _envdir and Path(_envdir).is_dir():
+                    for _d in sorted(Path(_envdir).iterdir()):
+                        if (_d / "pyproject.toml").is_file():
+                            _out.append(str(_d))
+                # And where new projects are made from the Projects tab: a
+                # project can exist on disk without having been opened since,
+                # which is enough for recent_projects not to know it.
+                _pdir = _cm.get("last_project_dir", "") or ""
+                if _pdir and Path(_pdir).is_dir():
+                    for _d in sorted(Path(_pdir).iterdir()):
+                        if (_d / "pyproject.toml").is_file():
+                            _out.append(str(_d))
+            except Exception:
+                pass
             return _out
         except Exception:
             return []
@@ -840,7 +911,12 @@ class PipManager:
         if _kind == "poetry":
             return self._freeze_poetry()
         try:
-            result = self._run_pip(["freeze"])
+            # B119 (Bayram: "Ne varsa export etsin"). Plain `pip freeze`
+            # leaves out pip, setuptools and wheel, so an environment holding
+            # only those exported an empty file while the table said it had a
+            # package. --all lists them, which is what he asked for: export
+            # what is in the environment, not what pip judges worth listing.
+            result = self._run_pip(["freeze", "--all"])
             if result.returncode == 0:
                 return result.stdout
         except (subprocess.TimeoutExpired, Exception):

@@ -3,7 +3,7 @@ VenvStudio - Constants and Popular Package Catalog
 """
 
 APP_NAME = "VenvStudio"
-APP_VERSION = "1.6.93"
+APP_VERSION = "1.6.94"
 
 # ─── Shared Package Cache ─────────────────────────────────────────────────────
 # Default path for pip/uv shared download cache.
@@ -570,6 +570,13 @@ PACKAGE_CATALOG = {
     "🛠️ Development Tools": {
         "icon": "🛠️",
         "packages": [
+            # B119 (Bayram: "Catalog kismina pip'i de ekle"). These three are
+            # in every environment and were in the catalogue nowhere, so a uv
+            # environment -- which ships without pip at all -- gave no way to
+            # install it except by typing the name into Manual Install.
+            {"name": "pip", "desc": "The Python package installer itself"},
+            {"name": "setuptools", "desc": "Build backend older packages still expect"},
+            {"name": "wheel", "desc": "Builds .whl distributions"},
             {"name": "pytest", "desc": "Testing framework"},
             {"name": "black", "desc": "Code formatter"},
             {"name": "flake8", "desc": "Linting tool"},

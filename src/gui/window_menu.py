@@ -23,6 +23,46 @@ from src.gui.package_ops import _check_pypi_wheel_availability
 import os as _os_pm      # N55: used by the Recent Projects menu
 
 
+def _compatible_pythons(min_py: str, max_py: str) -> list:
+    """Installed Python versions inside [min_py, max_py], newest first.
+
+    B130. The Install Launcher dialog already computed the range an app
+    needs; what it never did was cross it with what is on the machine. A
+    range is a constraint, a version number is an instruction.
+
+    Returns short versions ("3.12"), de-duplicated -- two interpreters of the
+    same minor are one choice as far as this message is concerned.
+    """
+    try:
+        from src.utils.platform_utils import find_system_pythons
+        _all = find_system_pythons() or []
+    except Exception:
+        return []
+
+    def _tup(v):
+        try:
+            _p = str(v).split(".")
+            return (int(_p[0]), int(_p[1]))
+        except Exception:
+            return None
+
+    _mn = _tup(min_py) if min_py else None
+    _mx = _tup(max_py) if max_py else None
+    _out = []
+    for _v, _path in _all:
+        _t = _tup(_v)
+        if _t is None:
+            continue
+        if _mn and _t < _mn:
+            continue
+        if _mx and _t > _mx:
+            continue
+        _short = f"{_t[0]}.{_t[1]}"
+        if _short not in _out:
+            _out.append(_short)
+    return sorted(_out, key=lambda s: _tup(s) or (0, 0), reverse=True)
+
+
 class WindowMenuMixin:
     """Mixin for MainWindow: menu bar, desktop shortcuts, recent-envs menu."""
 
@@ -786,9 +826,30 @@ class WindowMenuMixin:
             else:
                 env_pick_label.setVisible(False)
                 env_pick_combo.setVisible(False)
+                # B130 (Bayram: "eger yoksa create env'a basmadan once ayni
+                # sekilde sunlar ve su python versiyonlar olur seklinde
+                # asagida not olabilir"). The dialog knew the answer and did
+                # not say it: it printed the required RANGE -- "Python
+                # 3.9-latest" -- and left the user to work out which of their
+                # own Pythons fit, or that none did.
+                #
+                # Naming the versions actually installed turns a constraint
+                # into an instruction, which is what the 5th pillar asks for:
+                # say what is needed before anything is run.
+                _fit = _compatible_pythons(min_py, max_py)
+                if _fit:
+                    _hint = ("\n\U0001f4a1 Create one of: "
+                             + " or ".join(rec_types)
+                             + "  \u2022  with Python "
+                             + " / ".join(_fit))
+                else:
+                    _hint = ("\n\U0001f4a1 None of your installed Pythons fit "
+                             "this range. Settings \u2192 Python has a "
+                             "downloader.")
                 status_label.setText(
                     f"Compatible with: {rec_txt}{py_txt}{note_txt}\n"
                     f"⚠️ No compatible existing environment found."
+                    f"{_hint}"
                 )
                 install_btn.setEnabled(False)
                 install_btn.setText("Install")

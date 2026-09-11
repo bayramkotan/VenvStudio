@@ -868,6 +868,14 @@ class ProjectsPageMixin:
 
         # B46: Update and Build, next to Sync because they are the same kind
         # of act -- run the project's own tool in the project's directory.
+        self._pbtn_run = QPushButton("\u25b6  Run")
+        self._pbtn_run.setObjectName("secondary")
+        self._pbtn_run.setFixedHeight(38)
+        self._pbtn_run.setToolTip(
+            "Run a command inside this project's environment, in a terminal")
+        self._pbtn_run.clicked.connect(self._proj_run)
+        _actions.addWidget(self._pbtn_run)
+
         self._pbtn_update = QPushButton("\u2b06  Update")
         self._pbtn_update.setObjectName("secondary")
         self._pbtn_update.setFixedHeight(38)
@@ -1494,6 +1502,28 @@ class ProjectsPageMixin:
     # pixi 0.79.0 -- not read off a --help page. Four of them came back
     # different from what had been written before that session, which is why
     # the measurement is worth more than the guess.
+    # B46. `uv run`, `poetry run`, `pdm run`, `hatch run` and `pixi run` all
+    # take a command and execute it inside the project's environment. What
+    # differs is nothing -- which is why this is a table and not a branch.
+    # B46. Which file records the resolved versions, per tool.
+    _LOCK_FILE = {
+        "uv":     "uv.lock",
+        "poetry": "poetry.lock",
+        "pdm":    "pdm.lock",
+        "pixi":   "pixi.lock",
+        # hatch has no lock file unless the environment is configured with
+        # locked = true, and then it is hatch.lock. Absent by default, so
+        # absence here means "nothing to compare", not "out of date".
+    }
+
+    _RUN_CMD = {
+        "uv":     ["uv", "run"],
+        "poetry": ["poetry", "run"],
+        "pdm":    ["pdm", "run"],
+        "hatch":  ["hatch", "run"],
+        "pixi":   ["pixi", "run"],
+    }
+
     _UPDATE_CMD = {
         "uv":     ["uv", "lock", "--upgrade"],
         "poetry": ["poetry", "update"],
@@ -1569,6 +1599,141 @@ class ProjectsPageMixin:
             return
         self._run_project_command(
             _path, _meta, self._SYNC_CMD[_meta["tool"]], "Sync")
+
+    @classmethod
+    def _lock_state(cls, project_dir, tool: str) -> tuple:
+        """(state, explanation) for the project's lock file.
+
+        B46. Running the tool's own check costs a subprocess per project and
+        the table redraws often, so this compares modification times instead:
+        a lock file older than the manifest did not see the manifest's last
+        edit.
+
+        MEASURED on 2026-09-04, which is what makes the comparison safe:
+        writing a dependency leaves the lock NEWER than pyproject by a margin
+        that is small but never negative -- uv add +4 ms, pdm add +1 ms,
+        poetry add 0 ms. So "older" really does mean stale, and equal
+        timestamps are treated as fresh.
+
+        States: "ok", "stale", "missing", "n/a".
+        """
+        _name = cls._LOCK_FILE.get(tool)
+        if not _name:
+            return ("n/a", f"{tool or 'This tool'} keeps no lock file.")
+        _proj = Path(project_dir) / "pyproject.toml"
+        _lock = Path(project_dir) / _name
+        if not _lock.is_file():
+            return ("missing",
+                    f"No {_name}. Sync writes one, and until it exists the "
+                    f"versions this project installs are whatever resolves "
+                    f"today.")
+        try:
+            _lm, _pm = _lock.stat().st_mtime, _proj.stat().st_mtime
+        except OSError:
+            return ("n/a", "")
+        if _lm + 0.001 < _pm:
+            return ("stale",
+                    f"{_name} is older than pyproject.toml \u2014 the "
+                    f"manifest changed after the versions were resolved. "
+                    f"Sync brings them back in step.")
+        return ("ok", f"{_name} is up to date with pyproject.toml.")
+
+    @staticmethod
+    def _project_scripts(project_dir) -> list:
+        """Console scripts the project declares, from pyproject.toml.
+
+        B46. "Run" with nothing to run is a button that opens a dialog asking
+        what to run -- the project already says, in [project.scripts] and in
+        Poetry's older [tool.poetry.scripts]. Reading them turns a prompt
+        into a menu.
+
+        Returns names only; the value (module:function) is what the tool
+        resolves, not us.
+        """
+        _f = Path(project_dir) / "pyproject.toml"
+        if not _f.is_file():
+            return []
+        try:
+            try:
+                import tomllib as _t
+            except ModuleNotFoundError:                        # Python < 3.11
+                import tomli as _t                             # type: ignore
+            _d = _t.loads(_f.read_text(encoding="utf-8"))
+        except Exception:
+            return []
+        _out = []
+        for _sec in (_d.get("project", {}).get("scripts", {}),
+                     _d.get("tool", {}).get("poetry", {}).get("scripts", {})):
+            if isinstance(_sec, dict):
+                _out += [k for k in _sec if k not in _out]
+        return _out
+
+    def _proj_run(self):
+        """Run something inside the project's environment, IN A TERMINAL.
+
+        B46. This cannot go through _run_project_command: that captures
+        output and waits up to 900 seconds, so `uv run` on anything that
+        serves -- a dev server, a notebook, a REPL -- would freeze the window
+        for a quarter of an hour with nothing on screen.
+
+        A terminal is also the honest place for it. The output belongs to the
+        program being run, not to VenvStudio, and Ctrl-C has to reach it.
+        """
+        _path = self._selected_project_path()
+        if not _path:
+            return
+        _meta = read_project_meta(_path)
+        _tool = _meta.get("tool") or ""
+        _base = self._RUN_CMD.get(_tool)
+        if not _base:
+            QMessageBox.information(
+                self, "Run not available",
+                f"{_tool or 'This project'} has no run command.")
+            return
+
+        from PySide6.QtWidgets import QInputDialog
+        _scripts = self._project_scripts(_path)
+        _what, _ok = QInputDialog.getItem(
+            self, f"{' '.join(_base)} \u2026",
+            "What should run inside this project's environment?\n\n"
+            + ("Declared in pyproject.toml:" if _scripts
+               else "This project declares no scripts \u2014 type a command:"),
+            _scripts + ["python", "python -i", "pytest"],
+            0, True)
+        if not _ok or not str(_what).strip():
+            return
+
+        import shlex
+        _argv = list(_base) + shlex.split(str(_what).strip())
+        try:
+            from src.gui.platform_utils import launch_in_terminal
+            _env = None
+            _envp = _meta.get("env_path")
+            if _envp:
+                try:
+                    from src.gui.launcher_run import env_aware_environ
+                    _env = env_aware_environ(Path(_envp))
+                except Exception:
+                    _env = None
+            _ok2 = launch_in_terminal(_argv, cwd=str(_path), env=_env)
+        except Exception as _e:
+            _ok2 = False
+            _log.warning(f"[Projects] run failed: {_e}")
+        if not _ok2:
+            QMessageBox.warning(
+                self, "Run",
+                "The terminal could not be opened.\n\n"
+                "Settings \u2192 Command Line has a terminal setting; on "
+                "Linux the one chosen there has to actually be installed.")
+            return
+        self._show_project_command(
+            " ".join(_argv),
+            f"cd {_path}\n"
+            f"# Runs inside this project's environment, in a terminal:\n"
+            f"{' '.join(_argv)}\n"
+            f"\n"
+            f"# The terminal is not decoration -- the program's output is its\n"
+            f"# own, and Ctrl-C has to be able to reach it.")
 
     def _proj_update(self):
         """Upgrade dependencies with the project's own tool (B46).
@@ -1659,6 +1824,12 @@ class ProjectsPageMixin:
         # The reason still has to reach the user, or hiding just makes it a
         # mystery -- so when a button is hidden, _show_project_command writes
         # the explanation into the Command Reference panel below.
+        _rn = self._RUN_CMD.get(_add_tool)
+        self._pbtn_run.setVisible(bool(_rn) or not _has)
+        self._pbtn_run.setEnabled(_has and bool(_rn))
+        self._pbtn_run.setText(
+            f"\u25b6  {' '.join(_rn)} \u2026" if _rn else "\u25b6  Run")
+
         _up = self._UPDATE_CMD.get(_add_tool)
         self._pbtn_update.setVisible(bool(_up) or not _has)
         self._pbtn_update.setEnabled(_has and bool(_up))
@@ -1686,10 +1857,23 @@ class ProjectsPageMixin:
         if _has and not _bd:
             _why.append(_BUILD_NOTES.get(
                 _add_tool, f"No build command for {_add_tool}."))
-        if _why:
+        # B46: lock file state. Sync is what fixes it, so it goes on Sync --
+        # and when the lock is stale the button says so in its label, because
+        # a tooltip nobody hovers over is not a warning.
+        _lock_note = ""
+        if _has:
+            _p = self._selected_project_path()
+            if _p:
+                _state, _expl = self._lock_state(_p, _add_tool)
+                _lock_note = _expl
+                if _state == "stale":
+                    self._pbtn_sync.setText("\u21bb  Sync  \u26a0")
+                elif _state == "missing":
+                    self._pbtn_sync.setText("\u21bb  Sync")
+        if _why or _lock_note:
             self._pbtn_sync.setToolTip(
                 "Install what this project declares, using its own tool\n\n"
-                + "\n\n".join(_why))
+                + "\n\n".join([x for x in ([_lock_note] + _why) if x]))
         self._pbtn_add.setToolTip(
             "Add a dependency with the project's own tool"
             if _can_add else

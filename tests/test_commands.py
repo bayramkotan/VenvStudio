@@ -108,6 +108,64 @@ def test_every_builder_is_present(tool):
     assert tool in pp.ProjectsPageMixin._BUILD_CMD
 
 
+@pytest.mark.parametrize("tool,name", [
+    ("uv", "uv.lock"), ("poetry", "poetry.lock"),
+    ("pdm", "pdm.lock"), ("pixi", "pixi.lock"),
+])
+def test_lock_file_names(tool, name):
+    assert pp.ProjectsPageMixin._LOCK_FILE[tool] == name
+
+
+def test_hatch_has_no_lock_by_default():
+    """hatch writes hatch.lock only when the env sets locked = true.
+
+    B46. Absent from the table means "nothing to compare", which is a
+    different answer from "out of date" -- and showing a stale warning on a
+    project that was never going to have a lock file would be noise.
+    """
+    assert "hatch" not in pp.ProjectsPageMixin._LOCK_FILE
+
+
+def test_lock_equal_mtime_counts_as_fresh(tmp_path):
+    """A lock written in the same instant as the manifest is not stale.
+
+    B46. Measured on 2026-09-04: adding a dependency leaves the lock newer
+    than pyproject by a margin that is small but never negative -- uv add
+    +4 ms, pdm add +1 ms, poetry add 0 ms. Treating equal as stale would
+    flag every project that poetry had just touched.
+    """
+    import os
+    (tmp_path / "pyproject.toml").write_text("x")
+    (tmp_path / "uv.lock").write_text("y")
+    _t = (tmp_path / "pyproject.toml").stat().st_mtime
+    os.utime(tmp_path / "uv.lock", (_t, _t))
+    assert pp.ProjectsPageMixin._lock_state(tmp_path, "uv")[0] == "ok"
+
+
+def test_lock_older_than_manifest_is_stale(tmp_path):
+    import os
+    (tmp_path / "pyproject.toml").write_text("x")
+    (tmp_path / "uv.lock").write_text("y")
+    _t = (tmp_path / "pyproject.toml").stat().st_mtime
+    os.utime(tmp_path / "uv.lock", (_t - 5, _t - 5))
+    assert pp.ProjectsPageMixin._lock_state(tmp_path, "uv")[0] == "stale"
+
+
+def test_missing_lock_is_not_stale(tmp_path):
+    """No lock file is its own state: Sync writes one, nothing is out of step."""
+    (tmp_path / "pyproject.toml").write_text("x")
+    assert pp.ProjectsPageMixin._lock_state(tmp_path, "uv")[0] == "missing"
+
+
+def test_scripts_read_from_both_tables(tmp_path):
+    """[project.scripts] and Poetry's older [tool.poetry.scripts] (B46)."""
+    (tmp_path / "pyproject.toml").write_text(
+        '[project]\nname = "d"\n'
+        '[project.scripts]\ncli = "d:main"\n'
+        '[tool.poetry.scripts]\nlegacy = "d:old"\n', encoding="utf-8")
+    assert pp.ProjectsPageMixin._project_scripts(tmp_path) == ["cli", "legacy"]
+
+
 # ── Install/uninstall routing (pip_manager) ──────────────────────────────
 
 class _Recorder(pm.PipManager):

@@ -388,6 +388,39 @@ def get_default_venv_base_dir() -> Path:
         return Path.home() / "venv"
 
 
+def browse_start_dir(path: str) -> str:
+    """A directory QFileDialog will actually honour as a starting point.
+
+    B138 (Bayram: Settings shows ~/.venvstudio/pkg-cache but Browse opens
+    somewhere else entirely). The path was passed correctly -- it simply did
+    not EXIST yet. QFileDialog silently ignores a starting directory that is
+    not there and falls back to whatever it used last, which looks like the
+    setting being ignored.
+
+    Measured on his machine: ~/.venvstudio had never been created, because
+    the shared cache is only made when it is first used.
+
+    Walks up to the nearest directory that does exist, so a cache path of
+    ~/.venvstudio/pkg-cache opens at the home directory rather than at the
+    last folder someone happened to visit.
+    """
+    from pathlib import Path as _P
+    _s = (path or "").strip()
+    if not _s:
+        return str(_P.home())
+    try:
+        _p = _P(_s).expanduser()
+    except Exception:
+        return str(_P.home())
+    for _cand in [_p] + list(_p.parents):
+        try:
+            if _cand.is_dir():
+                return str(_cand)
+        except OSError:
+            break
+    return str(_P.home())
+
+
 def get_config_dir() -> Path:
     """Return the platform-appropriate config directory."""
     system = get_platform()

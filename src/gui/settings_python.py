@@ -168,9 +168,10 @@ class PythonMixin:
 
     def _pick_jupyter_workdir(self):
         """Open folder picker for custom Jupyter working directory."""
+        from src.utils.platform_utils import browse_start_dir
         import os
         current = self.jupyter_custom_path_label.text() or os.path.expanduser("~")
-        folder = QFileDialog.getExistingDirectory(self, "Select Jupyter Working Directory", current)
+        folder = QFileDialog.getExistingDirectory(self, "Select Jupyter Working Directory", browse_start_dir(current))
         if folder:
             self.jupyter_custom_path_label.setText(folder)
             self.jupyter_custom_path_label.setVisible(True)
@@ -893,9 +894,10 @@ try {{
 
     def _browse_venv_dir(self):
         """Browse for environment base directory."""
+        from src.utils.platform_utils import browse_start_dir
         directory = QFileDialog.getExistingDirectory(
             self, "Select Base Directory for Environments",
-            self.venv_dir_input.text(),
+            browse_start_dir(self.venv_dir_input.text()),
         )
         if directory:
             self.venv_dir_input.setText(directory)

@@ -902,8 +902,9 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
                 self.config.save()
 
             def _on_browse():
+                from src.utils.platform_utils import browse_start_dir
                 folder = QFileDialog.getExistingDirectory(
-                    self, "Select Directory", edit.text() or str(Path.home())
+                    self, "Select Directory", browse_start_dir(edit.text()) or str(Path.home())
                 )
                 if folder:
                     edit.setText(folder)

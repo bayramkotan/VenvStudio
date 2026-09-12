@@ -1094,6 +1094,7 @@ class ProjectsPageMixin:
 
     def _scan_projects(self):
         """Walk the likely places and add whatever is found (B43)."""
+        from src.utils.platform_utils import browse_start_dir
         from PySide6.QtWidgets import QApplication
 
         _roots = []
@@ -1127,7 +1128,7 @@ class ProjectsPageMixin:
         from PySide6.QtWidgets import QFileDialog
         _extra = QFileDialog.getExistingDirectory(
             self, "Scan which folder?",
-            _roots[0] if _roots else os.path.expanduser("~"))
+            browse_start_dir(_roots[0] if _roots else ""))
         if not _extra:
             return
         _roots = [_extra]

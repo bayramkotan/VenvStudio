@@ -169,3 +169,30 @@ def test_marker_wins_over_name_matching(tmp_path, fake_config):
         json.dumps({"poetry_project_dir": str(proj)}), encoding="utf-8")
     pm = PipManager(env, env_type="poetry")
     assert pm._project_dir() == str(proj)
+
+
+# ── the project a tool-managed environment belongs to ────────────────────
+
+def test_poetry_env_outside_the_project_tree(tmp_path, fake_config):
+    """B137. Poetry keeps its environments in a cache far from the project.
+
+    Bayram's case: right-clicking a poetry environment and asking for the
+    command list answered
+
+        Poetry could not find a pyproject.toml file in
+        ~/.cache/pypoetry/virtualenvs/pppp-InEhWoJ9-py3.14 or its parents
+
+    because the command ran in the environment. The environment name carries
+    the project name, and the project is findable from it -- which is what
+    _project_dir does, and what the Environments page now asks rather than
+    working out again for itself.
+    """
+    from src.core.pip_manager import PipManager
+
+    projects = tmp_path / "projects"
+    _make_project(projects, "pppp", "pppp")
+    fake_config.data = {"recent_projects": [{"path": str(projects / "pppp")}]}
+
+    env = tmp_path / ".cache" / "pypoetry" / "virtualenvs" / "pppp-InEhWoJ9-py3.14"
+    env.mkdir(parents=True)
+    assert PipManager(env, env_type="poetry")._project_dir() == str(projects / "pppp")

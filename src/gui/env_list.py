@@ -938,12 +938,184 @@ class EnvListMixin:
         found = _from_marker(cand)
         if found:
             return found
-        # Last resort: the plain convention, but only if it really is a
-        # project -- never cd into an unrelated folder that shares the name.
+        # The plain convention, but only if it really is a project --
+        # never cd into an unrelated folder that shares the name.
         for f in ("pyproject.toml", "pixi.toml"):
             if (cand / f).is_file():
                 return str(cand)
+
+        # B137: everything above needs the project to sit under
+        # base_dir or to have left a marker. Neither is true for an
+        # environment poetry made on its own, and then this returned
+        # "" and the command ran in the virtualenvs cache:
+        #
+        #   "Poetry could not find a pyproject.toml file in
+        #    ~/.cache/pypoetry/virtualenvs/pppp-InEhWoJ9-py3.14 or its
+        #    parents"
+        #
+        # PipManager._project_dir() already solves that case: it
+        # derives `pppp` from the environment name and searches the
+        # recorded projects, the environment directory and the
+        # projects directory (B121, v1.6.94). Asking it rather than
+        # repeating it -- this file and pip_manager disagreeing about
+        # where a project lives IS the bug being fixed.
+        try:
+            from src.core.pip_manager import PipManager
+            _pm = PipManager(Path(env_path or cand), env_type=env_type)
+            _found = _pm._project_dir()
+            if _found and str(_found) != str(env_path):
+                for f in ("pyproject.toml", "pixi.toml"):
+                    if (Path(_found) / f).is_file():
+                        return str(_found)
+        except Exception:
+            pass
         return ""
+
+    def _offer_project_for_env(self, name: str, env_type: str,
+                               tool: str) -> str:
+        """Offer to create the project this environment is missing (B137).
+
+        Bayram: the environment `pppp` exists, its project does not -- there
+        is no pyproject.toml named pppp anywhere under his home. Refusing was
+        honest but not useful: what he wants is for VenvStudio to make one.
+
+        Only poetry is offered, and that is not an oversight. Linking an
+        EXISTING environment to a NEW project is a per-tool act:
+
+          poetry  `poetry env use <python>` -- verified, it is what the
+                  clone flow already runs
+          pdm     `pdm use <python>` exists but has never been run here
+          hatch   manages its own environment directory; a new project gets
+                  a new environment rather than adopting this one
+          pixi    same, and the environment lives inside the project
+
+        Offering an unverified command would mean a project that looks right
+        and installs into a different environment than the one on screen --
+        worse than saying so.
+
+        Returns the project directory, or "" if nothing was created.
+        """
+        if tool != "poetry":
+            QMessageBox.information(
+                self, f"{tool} needs a project",
+                f"'{name}' has no project directory, and {tool} reads and "
+                f"writes pyproject.toml with the project rather than with "
+                f"the environment.\n\n"
+                f"For {tool}, a new project comes with its own environment "
+                f"rather than adopting this one, so creating it here would "
+                f"leave you with two. Use the Projects tab \u2192 New "
+                f"Project, or Open Terminal to work in this environment "
+                f"directly.")
+            return ""
+
+        try:
+            _base = self.venv_manager.base_dir
+        except Exception:
+            _base = str(Path.home())
+        _suggest = str(Path(_base) / name)
+
+        if QMessageBox.question(
+                self, "Create a project?",
+                f"'{name}' is a poetry environment with no project.\n\n"
+                f"poetry keeps environments in a cache and the project "
+                f"somewhere else; this one's project is gone \u2014 deleted, "
+                f"moved, or never made.\n\n"
+                f"Create one at\n  {_suggest}?\n\n"
+                f"Note: poetry will build its OWN environment for the new "
+                f"project the first time you install into it. This one "
+                f"cannot be adopted \u2014 `poetry env use` takes an "
+                f"interpreter and makes a fresh environment from it, which "
+                f"was measured rather than assumed. You will want to delete "
+                f"'{name}' afterwards.",
+                QMessageBox.Yes | QMessageBox.No) != QMessageBox.Yes:
+            return ""
+
+        # No file picker. The location is not a question: projects go under
+        # the environment directory with the environment's own name, which is
+        # where VenvStudio puts every project it creates. Asking would be a
+        # dialog whose answer is already on screen in the one above.
+        _target = Path(_base) / name
+
+        import shutil as _sh
+        import subprocess as _sp
+        from src.utils.platform_utils import subprocess_args
+        _poetry = _sh.which("poetry")
+        if not _poetry:
+            QMessageBox.warning(self, "poetry not found",
+                                "poetry is not on PATH.")
+            return ""
+
+        _env_path = self._get_env_path(name) or ""
+        try:
+            # `poetry new` refuses to write into a non-empty directory, so an
+            # existing one gets `poetry init -n` instead.
+            if _target.exists() and any(_target.iterdir()):
+                _target.mkdir(parents=True, exist_ok=True)
+                _r = _sp.run([_poetry, "init", "-n"], cwd=str(_target),
+                             capture_output=True, text=True, timeout=120,
+                             **subprocess_args())
+            else:
+                _r = _sp.run([_poetry, "new", str(_target)],
+                             capture_output=True, text=True, timeout=120,
+                             **subprocess_args())
+            if _r.returncode != 0:
+                QMessageBox.warning(
+                    self, "Could not create the project",
+                    (_r.stdout or "") + (_r.stderr or ""))
+                return ""
+
+            # A project straight out of `poetry new` has no poetry.lock, and
+            # the very next command fails on it. MEASURED with poetry 2.4.3:
+            #
+            #   poetry show   -> "Error: poetry.lock not found.
+            #                     Run `poetry lock` to create it."
+            #   poetry check --lock -> "poetry.lock was not found."
+            #   poetry install -> works, and writes the lock itself
+            #
+            # So the lock is written here rather than leaving the user to
+            # meet that error the second after VenvStudio said the project
+            # was ready. It costs one resolve of an empty dependency list.
+            _sp.run([_poetry, "lock"], cwd=str(_target),
+                    capture_output=True, text=True, timeout=300,
+                    **subprocess_args())
+
+            # NO env-use step. MEASURED on 2026-09-11: pointing
+            # `poetry env use` at an existing virtualenv's python does NOT
+            # adopt that virtualenv -- poetry takes the interpreter and
+            # builds a NEW environment in its cache:
+            #
+            #   $ poetry env use /tmp/pt2/existing-env/bin/python
+            #   Creating virtualenv proj-c4-F1Hct-py3.12 in ~/.cache/...
+            #
+            # So the orphaned environment cannot be adopted. Saying that
+            # plainly is better than quietly leaving the user with two.
+        except Exception as _e:
+            QMessageBox.warning(self, "Could not create the project", str(_e))
+            return ""
+
+        # Leave a marker so the next lookup does not have to search at all.
+        try:
+            import json as _j
+            _m = Path(_env_path) / ".venvstudio_env" if _env_path else None
+            if _m:
+                _d = {}
+                if _m.exists():
+                    try:
+                        _d = _j.loads(_m.read_text(encoding="utf-8"))
+                    except Exception:
+                        _d = {}
+                _d["poetry_project_dir"] = str(_target)
+                _m.write_text(_j.dumps(_d), encoding="utf-8")
+        except Exception:
+            pass
+
+        QMessageBox.information(
+            self, "Project created",
+            f"{_target}\n\nThe command will run there.\n\n"
+            f"poetry will create its own environment for this project on the "
+            f"first install; '{name}' is now an orphan and can be deleted "
+            f"from this page.")
+        return str(_target)
 
     def _run_env_command(self, name: str, env_type: str, command: str):
         """N34: activate the given environment in a real terminal and
@@ -960,8 +1132,31 @@ class EnvListMixin:
 
         # Project-scoped tools need the project, not the venv (see N59).
         _proj = self._project_dir_for(name, env_type)
-        if _proj and command.split()[:1] and command.split()[0] in self._PROJECT_SCOPED:
-            real_path = Path(_proj)   # str here made open_terminal_at do str / str
+        _first = (command.split()[:1] or [""])[0]
+        if _first in self._PROJECT_SCOPED:
+            if _proj:
+                real_path = Path(_proj)   # str here made open_terminal_at do str / str
+            else:
+                # B137 (Bayram): the environment has no project. This used to
+                # fall through and run the command in the environment itself,
+                # where poetry answered with its own message:
+                #
+                #   "Poetry could not find a pyproject.toml file in
+                #    ~/.cache/pypoetry/virtualenvs/pppp-InEhWoJ9-py3.14 or
+                #    its parents"
+                #
+                # Measured on his machine: there is no pyproject.toml named
+                # pppp anywhere under $HOME. The search was not failing --
+                # the project genuinely does not exist, and the environment
+                # outlived it.
+                #
+                # Running anyway and letting the tool complain is the worst
+                # of both: the message names a cache directory the user never
+                # chose, and says nothing about what to do.
+                _made = self._offer_project_for_env(name, env_type, _first)
+                if not _made:
+                    return
+                real_path = Path(_made)
         # B76: this read the key "terminal_type" while Settings writes
         # "default_terminal", so it always came back empty and this call
         # passed "" -- auto-detection, not the user's choice. open_terminal_at

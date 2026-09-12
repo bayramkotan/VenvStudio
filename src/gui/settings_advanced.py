@@ -740,9 +740,13 @@ class AdvancedMixin:
     def _browse_cache_dir(self):
         """Browse for shared cache directory."""
         from PySide6.QtWidgets import QFileDialog
+        # B138: the path is passed correctly; what was missing is that it
+        # may not exist yet. QFileDialog ignores a starting directory that
+        # is not there, which looks exactly like the setting being ignored.
+        from src.utils.platform_utils import browse_start_dir
         path = QFileDialog.getExistingDirectory(
             self, "Select Shared Cache Directory",
-            self.shared_cache_input.text() or str(Path.home()),
+            browse_start_dir(self.shared_cache_input.text()),
         )
         if path:
             self.shared_cache_input.setText(path)

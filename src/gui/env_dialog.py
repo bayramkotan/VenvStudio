@@ -1203,9 +1203,10 @@ class EnvCreateDialog(QDialog):
         (see _maybe_register_custom_location) so they still show up
         in the Environments list without needing to live under the
         default folder."""
+        from src.utils.platform_utils import browse_start_dir
         directory = QFileDialog.getExistingDirectory(
             self, "Select Location for This Environment",
-            str(self.config.get_venv_base_dir()),
+            browse_start_dir(str(self.config.get_venv_base_dir())),
         )
         if directory:
             # Qt's file dialogs return "/"-separated paths on Windows

@@ -695,6 +695,23 @@ def main():
             logger.info("Another instance is already running — exiting")
             sys.exit(0)
         app.setApplicationVersion(APP_VERSION)
+
+        # B132: the same three lines as src/main.py. Kept in both because
+        # both are entry points -- and this file's twin already carries two
+        # comments (N91, N93) about bugs caused by one of them having
+        # something the other did not.
+        try:
+            from src.utils.platform_utils import find_app_icon
+            _icon = find_app_icon()
+            if _icon:
+                from PySide6.QtGui import QIcon
+                app.setWindowIcon(QIcon(_icon))
+            if sys.platform == "win32":
+                import ctypes
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                    f"BayramKotan.VenvStudio.{APP_VERSION}")
+        except Exception:
+            pass
         app.setOrganizationName("VenvStudio")
 
         # ── Log screen info after QApplication creation ──

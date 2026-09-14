@@ -388,6 +388,44 @@ def get_default_venv_base_dir() -> Path:
         return Path.home() / "venv"
 
 
+def find_app_icon(ext: str = ".png") -> str:
+    """Where this installation's icon actually is, or "" (B132).
+
+    Searched in the order a running application should trust:
+
+      sys.prefix/share/...   what pip installed, system or venv alike
+      repository assets/     a source checkout, for development
+
+    Returns "" rather than guessing. MEASURED: the wheel shipped no image at
+    all, because package-data paths resolve inside packages and assets/ sits
+    at the repository root -- so the shortcut code fell back to using the
+    ELF binary as an icon, which no desktop can render. Fixed in
+    pyproject.toml with data-files; this is the other half.
+
+    Lives here, not in window_menu or main, because THREE places want it:
+    the window icon, the taskbar icon and the .desktop file. src/main.py
+    already carries a comment about being a partial copy of main.py and the
+    bugs that caused.
+    """
+    import sys as _sys
+    from pathlib import Path as _P
+    _here = _P(__file__).resolve()
+    _n = f"icon{ext}"
+    for _c in (
+        _P(_sys.prefix) / "share" / "pixmaps" / _n,
+        _P(_sys.prefix) / "share" / "icons" / "hicolor" / "512x512"
+        / "apps" / _n,
+        _here.parent.parent.parent / "assets" / _n,
+        _here.parent.parent / "assets" / _n,
+    ):
+        try:
+            if _c.is_file():
+                return str(_c)
+        except OSError:
+            continue
+    return ""
+
+
 def browse_start_dir(path: str) -> str:
     """A directory QFileDialog will actually honour as a starting point.
 

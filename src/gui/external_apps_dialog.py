@@ -15,8 +15,17 @@ a tab about running things inside an environment. But removing them outright
 would have cost something real: the card also DETECTED an app already on the
 system and launched it. This window keeps that half and drops the pretence:
 
-    installed      ->  Launch it
-    not installed  ->  open the vendor's download page
+    B116 follow-up (Bayram, 2026-09-10): the detect-and-launch half was
+    removed. It reported VS Code, Jan, Code::Blocks, GPT4All, jamovi and
+    JASP as missing while all of them were installed, because the executable
+    name was a guess -- on Windows most of these never reach PATH at all --
+    and a launcher that cannot find installed software is worse than no
+    launcher. What is left is honest: the download page, and the reason the
+    application cannot be installed from here.
+
+    Detection is worth doing properly later: registry lookups on Windows,
+    .app bundles on macOS, .desktop files on Linux. Guessing an executable
+    name is not that.
 
 The definitions are NOT copied here. They come from PackagePanel's
 app_definitions, filtered by `download_url`, so this window and the Launch
@@ -32,32 +41,6 @@ from PySide6.QtCore import Qt
 from src.utils.logger import get_logger
 
 _log = get_logger("venvstudio.external_apps")
-
-
-def _detect(app_def) -> str:
-    """Path to the app's executable if it is on this system, else "".
-
-    Uses the same system_commands table the Launch tab uses, so a change
-    there is picked up here without a second list to maintain.
-    """
-    import shutil
-    from src.utils.platform_utils import get_platform
-    cmds = app_def.get("system_commands", {})
-    entry = cmds.get(get_platform()) or cmds.get("linux") or []
-    if not entry:
-        return ""
-    exe = entry[0]
-    # macOS entries are `open -a Something`; `open` always resolves and would
-    # report every app as installed, so the app name is what matters there.
-    if exe == "open" and len(entry) > 2:
-        exe = entry[2]
-        from pathlib import Path
-        for _p in (Path("/Applications") / f"{exe}.app",
-                   Path.home() / "Applications" / f"{exe}.app"):
-            if _p.exists():
-                return str(_p)
-        return ""
-    return shutil.which(exe) or ""
 
 
 class ExternalAppsDialog(QDialog):
@@ -76,9 +59,12 @@ class ExternalAppsDialog(QDialog):
         root = QVBoxLayout(self)
         intro = QLabel(
             "Applications VenvStudio cannot install, because they are not "
-            "published in any conda channel. If one is already on this "
-            "system it can be started from here; otherwise this opens the "
-            "vendor's download page.")
+            "published in any conda channel or on PyPI as the application "
+            "itself.\n\n"
+            "These open the vendor's download page. Detecting which of them "
+            "are already on this machine is a separate job \u2014 the "
+            "executable name is not the application name on Windows, and "
+            "guessing it reported installed software as missing.")
         intro.setWordWrap(True)
         root.addWidget(intro)
 
@@ -90,10 +76,6 @@ class ExternalAppsDialog(QDialog):
         root.addWidget(scroll, 1)
 
         btns = QHBoxLayout()
-        self.refresh_btn = QPushButton("\u21bb  Re-check")
-        self.refresh_btn.setObjectName("secondary")
-        self.refresh_btn.clicked.connect(self._fill)
-        btns.addWidget(self.refresh_btn)
         btns.addStretch()
         close_btn = QPushButton("Close")
         close_btn.clicked.connect(self.close)
@@ -109,7 +91,6 @@ class ExternalAppsDialog(QDialog):
                 _it.widget().deleteLater()
 
         for app in self._apps:
-            found = _detect(app)
             row = QFrame()
             row.setFrameShape(QFrame.StyledPanel)
             rl = QVBoxLayout(row)
@@ -122,13 +103,6 @@ class ExternalAppsDialog(QDialog):
             desc.setWordWrap(True)
             rl.addWidget(desc)
 
-            state = QLabel(f"\u2705 Found: {found}" if found
-                           else "\u2b07\ufe0f Not installed on this system")
-            state.setWordWrap(True)
-            rl.addWidget(state)
-
-            # Why it is not installable is worth saying once, here, rather
-            # than leaving the user to wonder why this window exists.
             note = app.get("install_note", "")
             if note:
                 nl = QLabel(note)
@@ -137,36 +111,14 @@ class ExternalAppsDialog(QDialog):
                 rl.addWidget(nl)
 
             act = QHBoxLayout()
-            if found:
-                b = QPushButton(f"\u25b6 Launch {app['name']}")
-                b.clicked.connect(lambda _=None, a=app: self._launch(a))
-            else:
-                b = QPushButton(f"\u2b07\ufe0f Download {app['name']}")
-                b.clicked.connect(lambda _=None, a=app: self._download(a))
+            b = QPushButton(f"\u2b07\ufe0f Download {app['name']}")
+            b.clicked.connect(lambda _=None, a=app: self._download(a))
             act.addWidget(b)
             act.addStretch()
             rl.addLayout(act)
 
             self._rows.addWidget(row)
         self._rows.addStretch()
-
-    def _launch(self, app_def):
-        import subprocess
-        from src.utils.platform_utils import get_platform, subprocess_args
-        cmds = app_def.get("system_commands", {})
-        cmd = list(cmds.get(get_platform()) or cmds.get("linux") or [])
-        if not cmd:
-            QMessageBox.warning(self, app_def["name"],
-                                "No launch command is defined for this "
-                                "platform.")
-            return
-        try:
-            _log.info(f"[External] launching {app_def['name']}: {cmd}")
-            subprocess.Popen(cmd, **subprocess_args())
-        except Exception as e:
-            QMessageBox.warning(
-                self, app_def["name"],
-                f"{app_def['name']} could not be started:\n{e}")
 
     def _download(self, app_def):
         url = app_def.get("download_url", "")

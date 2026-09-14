@@ -440,8 +440,16 @@ class WindowMenuMixin:
         lnk_path = os.path.join(desktop, f"{app_name}.lnk")
         scripts_dir = os.path.dirname(vs_exe)
 
-        icon_candidate = os.path.join(scripts_dir, "venvstudio.ico")
-        icon_line = f'$s.IconLocation = "{icon_candidate}";' if os.path.isfile(icon_candidate) else ""
+        # B132: this looked for venvstudio.ico beside the executable, which
+        # the package never shipped -- the same fault as the Linux branch.
+        # With no IconLocation the shortcut inherits the icon of
+        # venvstudio.exe, and that file is a wrapper pip generates: it
+        # carries PYTHON's icon, which is what appeared on Bayram's desktop.
+        from src.utils.platform_utils import find_app_icon
+        icon_candidate = find_app_icon(".ico") or os.path.join(
+            scripts_dir, "venvstudio.ico")
+        icon_line = (f'$s.IconLocation = "{icon_candidate}";'
+                     if os.path.isfile(icon_candidate) else "")
 
         ps = (
             f'$ws = New-Object -ComObject WScript.Shell; '
@@ -456,19 +464,65 @@ class WindowMenuMixin:
                        check=True, timeout=15, capture_output=True)
 
 
+    def _install_xdg_icon(self) -> str:
+        """Put the icon where XDG looks, and return the name to reference.
+
+        B132. `Icon=` in a .desktop file may be either an absolute path or a
+        bare NAME that the icon theme resolves. The name is the better one
+        here: a pip install into a venv leaves share/ inside that venv, which
+        no desktop environment scans, so pointing at it would work today and
+        break when the venv moves.
+
+        Returns "venvstudio" once the file is in place, or "" if there is no
+        icon to install -- and then the caller writes no Icon line at all.
+        """
+        import os
+        import shutil as _sh
+        from src.utils.platform_utils import find_app_icon
+        _src = find_app_icon()
+        if not _src:
+            return ""
+        _dest_dir = os.path.expanduser(
+            "~/.local/share/icons/hicolor/512x512/apps")
+        try:
+            os.makedirs(_dest_dir, exist_ok=True)
+            _sh.copyfile(_src, os.path.join(_dest_dir, "venvstudio.png"))
+        except OSError:
+            return ""
+        # Refresh the theme cache when the tool is there; without it some
+        # desktops keep showing the old (missing) icon until next login.
+        try:
+            import subprocess as _sp
+            _sp.run(["gtk-update-icon-cache", "-f", "-t",
+                     os.path.expanduser("~/.local/share/icons/hicolor")],
+                    timeout=10, capture_output=True)
+        except Exception:
+            pass
+        return "venvstudio"
+
     def _create_shortcut_linux(self, vs_exe, app_name):
         """Create a .desktop file on Linux — Terminal=false."""
         import os, subprocess
 
-        # Find icon
-        icon_path = vs_exe  # fallback
-        for candidate in [
-            os.path.join(os.path.dirname(vs_exe), "..", "share", "pixmaps", "venvstudio.png"),
-            os.path.expanduser("~/.local/share/icons/venvstudio.png"),
-        ]:
-            if os.path.isfile(candidate):
-                icon_path = os.path.abspath(candidate)
-                break
+        # B132 (Bayram: the shortcut does not work on Linux, "bir de icon
+        # olsa guzel olur"). Both halves were the same fault.
+        #
+        # This used to fall back to `icon_path = vs_exe` -- the ELF binary
+        # itself as an icon. That is not an image, so the desktop could not
+        # render it and the launcher showed as broken. An entry with NO Icon
+        # line gets the generic application icon, which is honest; an entry
+        # pointing at a binary gets nothing.
+        #
+        # It also looked for venvstudio.png, which the package never shipped:
+        # measured with `pip wheel .`, the wheel contained no image at all,
+        # because package-data paths resolve inside packages and assets/ is
+        # at the repository root. Fixed in pyproject.toml; the icon now
+        # installs under sys.prefix/share.
+        #
+        # The icon is COPIED into the XDG icon directory rather than
+        # referenced where it lies: a pip install into a venv puts share/
+        # inside that venv, and XDG does not look there.
+        icon_name = self._install_xdg_icon()
 
         content = (
             "[Desktop Entry]\n"
@@ -476,8 +530,8 @@ class WindowMenuMixin:
             f"Name={app_name}\n"
             "Comment=Python Virtual Environment Manager\n"
             f"Exec={vs_exe}\n"
-            f"Icon={icon_path}\n"
-            "Terminal=false\n"
+            + (f"Icon={icon_name}\n" if icon_name else "")
+            + "Terminal=false\n"
             "Type=Application\n"
             "Categories=Development;\n"
             "StartupNotify=true\n"

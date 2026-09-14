@@ -1804,17 +1804,47 @@ class LauncherRunMixin:
         if not icon_key:
             return None
 
-        # Determine base dir: frozen (PyInstaller) vs source
-        if getattr(sys, 'frozen', False):
-            base = Path(sys._MEIPASS) / "assets" / "app_icons"
-        else:
-            base = Path(__file__).resolve().parent.parent.parent / "assets" / "app_icons"
-
+        # B132. Two bases were checked -- a PyInstaller bundle and the
+        # repository -- and neither exists for someone who ran
+        # `pip install venvstudio`, which is how everyone but the author gets
+        # this application. The icons were not merely unfound: they were
+        # never packaged. MEASURED with `pip wheel .`: the wheel contained no
+        # image at all, because the package-data entries pointed at
+        # assets/ and setuptools resolves those inside packages, while
+        # assets/ sits at the repository root.
+        #
+        # pyproject.toml installs them under sys.prefix/share now, which is
+        # where a pip install puts data whether it went to the system or into
+        # a venv. That directory is listed FIRST here, so an installed copy
+        # finds its own files rather than a checkout that may be lying
+        # around.
         platform = get_platform()
-        if platform == "windows":
-            icon = base / f"{icon_key}.ico"
-        else:
-            icon = base / f"{icon_key}_256.png"
+        name = f"{icon_key}.ico" if platform == "windows" else f"{icon_key}_256.png"
 
-        return str(icon) if icon.exists() else None
+        bases = [Path(sys.prefix) / "share" / "venvstudio" / "app_icons"]
+        if getattr(sys, "frozen", False):
+            bases.append(Path(sys._MEIPASS) / "assets" / "app_icons")
+        bases.append(
+            Path(__file__).resolve().parent.parent.parent / "assets" / "app_icons")
+
+        for base in bases:
+            icon = base / name
+            try:
+                if icon.is_file():
+                    return str(icon)
+            except OSError:
+                continue
+
+        # A 256px PNG is the Linux/macOS name, but the .ico is what ships for
+        # Windows; on a platform whose own file is missing, the other one is
+        # better than nothing for anything that can read it.
+        alt = f"{icon_key}_256.png" if platform == "windows" else f"{icon_key}.ico"
+        for base in bases:
+            icon = base / alt
+            try:
+                if icon.is_file():
+                    return str(icon)
+            except OSError:
+                continue
+        return None
 

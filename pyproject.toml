@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "venvstudio"
-version = "1.6.96"
+version = "1.6.97"
 description = "Lightweight Python Virtual Environment Manager with modern GUI"
 readme = "README_PYPI.md"
 license = {text = "LGPL-3.0-or-later"}
@@ -71,14 +71,38 @@ vs-gui = "src.main:main"
 packages = ["src", "src.core", "src.gui", "src.utils"]
 
 [tool.setuptools.package-data]
-"*" = [
-    "assets/*.ico",
-    "assets/*.icns",
-    "assets/*.png",
-    "assets/app_icons/*.ico",
+# B132. The old list had "assets/*.png" and friends under "*", which
+# setuptools resolves RELATIVE TO EACH PACKAGE DIRECTORY -- and assets/ sits
+# at the repository root, inside no package at all. Nothing was ever copied.
+# Measured: `pip wheel .` produced a wheel containing no .png whatsoever, and
+# on Bayram's machine the installed package had no assets directory.
+#
+# Only paths that really are inside a package belong here.
+"src.utils" = ["*.json"]
+
+# The application icon, installed where an icon belongs rather than inside
+# the Python package. Both a pip install into the system and one into a venv
+# put these under sys.prefix, so the code can find them either way.
+#
+# XDG does not scan a venv's share/ directory, which is why the shortcut code
+# copies the icon into ~/.local/share/icons/ when it makes a .desktop file
+# rather than pointing at this path.
+[tool.setuptools.data-files]
+# icon.ico as well as icon.png: a Windows .lnk takes an .ico, and without
+# one the shortcut inherits the icon of venvstudio.exe -- which is a wrapper
+# pip generated, carrying PYTHON's icon. That is what Bayram's desktop
+# showed.
+"share/pixmaps" = ["assets/icon.png", "assets/icon.ico"]
+"share/icons/hicolor/512x512/apps" = ["assets/icon.png"]
+
+# The launcher card icons -- Jupyter, Orange3, Spyder and the rest. Same
+# fault as the application icon: they were listed under package-data, which
+# never copied them, so every pip install shipped without them and the cards
+# fell back to nothing. Globs work here; measured, eight of eight landed in
+# the wheel.
+"share/venvstudio/app_icons" = [
     "assets/app_icons/*.png",
-    "config/*.json",
-    "src/utils/*.json",
+    "assets/app_icons/*.ico",
 ]
 
 [tool.ruff]

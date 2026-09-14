@@ -115,6 +115,38 @@ def main():
         app.setApplicationName(APP_NAME)
         app.setApplicationVersion(APP_VERSION)
 
+        # B132 (Bayram: "bir de icon olsa guzel olur"). There was no
+        # window icon at all -- setWindowIcon appeared nowhere in the
+        # codebase, so the title bar, the taskbar and the alt-tab switcher
+        # all showed whatever generic shape the desktop uses for a program
+        # with nothing to show.
+        #
+        # It was also never possible before now: the icon did not ship.
+        # Measured with `pip wheel .` -- the wheel contained no image,
+        # because package-data paths resolve inside packages and assets/ is
+        # at the repository root. pyproject.toml installs it under
+        # sys.prefix/share now, and find_app_icon looks there.
+        #
+        # On Windows the taskbar groups by AppUserModelID rather than by
+        # executable, and without setting one explicitly a pythonw-launched
+        # application inherits Python's own identity -- which means Python's
+        # icon on the taskbar no matter what is set here.
+        try:
+            from src.utils.platform_utils import find_app_icon
+            _icon = find_app_icon()
+            if _icon:
+                from PySide6.QtGui import QIcon
+                app.setWindowIcon(QIcon(_icon))
+                log.info(f"App icon: {_icon}")
+            else:
+                log.warning("No application icon found for this install")
+            if sys.platform == "win32":
+                import ctypes
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(
+                    f"BayramKotan.VenvStudio.{APP_VERSION}")
+        except Exception as _ie:
+            log.warning(f"Could not set the application icon: {_ie}")
+
         # N91 (Bayram, 2026-09-02): set the application font, as the root
         # main.py has always done and this entry point never did.
         #

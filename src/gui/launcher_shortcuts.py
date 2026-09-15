@@ -110,6 +110,10 @@ class LauncherShortcutsMixin:
             venv_path, shortcut_name, _target, _args, platform, _work_dir,
             needs_console=needs_console
         )
+        # B142c: keep what the wrapper WRAPS, for the command strip. Once
+        # _target becomes the wrapper there is no way back to the real
+        # executable, and the wrapper is not what anyone would type.
+        _real_target, _real_args = _target, list(_args or [])
         if _wrapper is not None:
             _target = _wrapper
             _args = []
@@ -130,6 +134,31 @@ class LauncherShortcutsMixin:
                     desktop, shortcut_name, _target,
                     _args, icon_path, _work_dir
                 )
+
+            # B142c (Bayram): every other button on these cards writes what
+            # it did into the header strip. This one opened a message box and
+            # left the strip showing whatever ran before it, so the card that
+            # teaches how an application is STARTED said nothing about the
+            # shortcut it had just written.
+            #
+            # ⚠️ NOT the wrapper script. The first version of this showed
+            # .../venvstudio_launchers/Orange_Data_Mining__dl_.sh, and Bayram
+            # was right to call it nonsense: that file is VenvStudio's own
+            # plumbing, written seconds earlier, and the user has no reason to
+            # know it exists. Showing it teaches nothing and invites someone
+            # to go looking for a file that is an implementation detail.
+            #
+            # What belongs here is the line the wrapper CONTAINS -- the
+            # environment's own executable, which is what a person would type
+            # to start the same program by hand.
+            try:
+                _shown = str(_real_target)
+                if _real_args:
+                    _shown += " " + " ".join(str(a) for a in _real_args)
+                self._show_command_hint(
+                    f"Shortcut \u2192 {shortcut_name}", _shown)
+            except Exception:
+                pass
 
             # Show success
             QMessageBox.information(

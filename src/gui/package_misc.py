@@ -596,11 +596,19 @@ class PackageMiscMixin:
         self.status_label.setText(f"📋 {tr('command_copied')}")
 
     def _copy_launcher_commands(self, install_cmd: str, run_cmd: str, app_name: str):
-        """Copy both install and run commands to clipboard."""
+        """Copy both install and run commands, and SHOW them (B142c).
+
+        Bayram: the clipboard button said "Copied" and nothing else. Copying
+        a command the user cannot see is the one case where this application
+        teaches least -- they have to paste it somewhere to find out what
+        they took.
+        """
         from PySide6.QtWidgets import QApplication
         full_cmd = f"{install_cmd}\n{run_cmd}"
         QApplication.clipboard().setText(full_cmd)
         self.status_label.setText(f"📋 Copied install + run commands for {app_name}")
+        self._show_command_hint(f"{app_name}", run_cmd,
+                                vs_equivalent=install_cmd)
 
     def _uninstall_preset(self, packages: list, preset_name: str):
         """Uninstall all packages in a preset with confirmation."""

@@ -1178,6 +1178,34 @@ class EnvListMixin:
             # Show the SHORT form: the absolute path is an implementation
             # detail, and these menus double as teaching material.
             self.statusBar().showMessage(f"Running '{command}' in '{name}'…")
+
+            # B142b (Bayram): "these menus double as teaching material" was
+            # written here long ago and nothing acted on it -- the command
+            # ran in a terminal that opens, scrolls past and is gone, while
+            # the panel built for exactly this stayed empty.
+            #
+            # Order matters: what was ENTERED first, then what VenvStudio had
+            # to do around it. Someone learning needs the first line; the
+            # second explains why the same command typed into a plain shell
+            # would not work.
+            try:
+                from src.utils.platform_utils import last_terminal_command
+                _ran = last_terminal_command()
+                _where = _proj or real_path
+                self.show_command(command, context=f"{command} (env: {name})")
+                self._fill_cmd_hints([
+                    ("\U0001f4a1", command, f"Run inside '{name}'."),
+                    ("", "", f"cd {_where}"),
+                    ("", "", command),
+                    ("\u2139\ufe0f", "Why a terminal opened first",
+                     "The command needs the environment active, and "
+                     "activation belongs to a shell -- it cannot be done to "
+                     "a process from outside. VenvStudio opened one, "
+                     "activated it, and handed the command over:"),
+                    ("", "", _ran or f"cd {_where}"),
+                ])
+            except Exception:
+                pass
         except Exception as e:
             QMessageBox.warning(self, "Command Failed", f"Could not run '{command}' in '{name}':\n{e}")
 

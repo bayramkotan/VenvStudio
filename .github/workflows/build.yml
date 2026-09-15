@@ -9,7 +9,38 @@ permissions:
   contents: write
 
 jobs:
+  # B34 + Bayram 2026-09-15. The suite used to live in its own workflow, so
+  # every release showed TWO runs in the Actions list -- one for the tag and
+  # one for the branch push. Bayram asked for one.
+  #
+  # It is a JOB here rather than a deleted file: the point of the suite is to
+  # fail before a release is cut, and every build job below waits on it. A
+  # release with failing tests is now impossible rather than merely
+  # embarrassing.
+  #
+  # Seconds, not minutes: PySide6 is NOT installed on purpose. conftest.py
+  # stubs it, and the suite covers decisions rather than widgets -- which is
+  # where every bug it was written for actually lived.
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The oldest supported version and the one Bayram develops on.
+        # The project declares requires-python >= 3.10.
+        python-version: ["3.10", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install pytest
+        run: python -m pip install --upgrade pip pytest
+      - name: Run tests
+        run: python -m pytest -q
+
   build-windows:
+    needs: [tests]
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
@@ -34,6 +65,7 @@ jobs:
           if-no-files-found: warn
 
   build-macos-arm:
+    needs: [tests]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
@@ -53,6 +85,7 @@ jobs:
           if-no-files-found: warn
 
   build-macos:
+    needs: [tests]
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
@@ -72,6 +105,7 @@ jobs:
           if-no-files-found: warn
 
   build-linux-appimage:
+    needs: [tests]
     runs-on: ubuntu-22.04
     # Without a cap this job can sit forever: on 2026-08-19 (v1.6.55, run #285)
     # `apt-get install` hung and the job burned the full 6-hour GitHub default

@@ -912,6 +912,40 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
             except Exception:
                 pass
 
+    def _fill_cmd_hints(self, rows):
+        """Write the explanation box under the live command (B142).
+
+        `rows` is (icon, title, body). An empty icon AND title means the body
+        is a command line and gets the command styling; otherwise it is a
+        heading with prose under it.
+
+        The colours and fonts come from styles.cmd_html, the same builders
+        the rest of this panel uses -- the point of B120 was that there
+        should be one of those, not one per caller.
+        """
+        if not hasattr(self, "_cmd_panel_hints"):
+            return
+        try:
+            from src.gui.styles import cmd_html
+            import html as _h
+            _b = cmd_html(self._c())
+            _out = []
+            for _icon, _title, _body in rows:
+                if not _icon and not _title:
+                    _parts = str(_body).split(None, 1)
+                    _line = _b["cmd"](_h.escape(_parts[0]))
+                    if len(_parts) > 1:
+                        _line += " " + _b["arg"](_h.escape(_parts[1]))
+                    _out.append(_b["line"](_line))
+                else:
+                    _out.append(_b["title"](_icon, _h.escape(_title)))
+                    if _body:
+                        _out.append(_b["note"](_h.escape(str(_body))))
+            self._cmd_panel_hints.setHtml("".join(_out))
+            self._cmd_panel_hints.setVisible(True)
+        except Exception:
+            pass
+
     def _update_cmd_panel(self, action, env_type, name, env_path=""):
         """Update the persistent educational command panel on the env page."""
         if not hasattr(self, "_cmd_panel_live"):
@@ -1505,6 +1539,40 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         if self.package_panel is not None: self.package_panel._open_terminal_here()
         self.statusBar().showMessage(f"Opened terminal for '{name}'")
 
+        # B142 (Bayram): opening a terminal is a teaching moment and this one
+        # was silent. Every other action in this window writes what it ran to
+        # the Command Reference panel; these two did not, so the one action
+        # that shows HOW an environment is entered explained nothing.
+        #
+        # The line shown is the one that actually ran -- open_terminal_at
+        # records it -- rather than a second copy written for display. There
+        # are already six branches building that command, one per platform and
+        # terminal, and a seventh would drift from the six that matter.
+        try:
+            from src.utils.platform_utils import last_terminal_command
+            _ran = last_terminal_command()
+            if _ran:
+                self.show_command(
+                    _ran,
+                    context=f"Open Terminal (env: {name})")
+                self._fill_cmd_hints([
+                    ("\U0001f4a1", f"Entering '{name}'",
+                     "What VenvStudio just ran:"),
+                    ("", "", _ran),
+                    ("\u2139\ufe0f", "What changes",
+                     "The prompt gains the environment's name, and `python` "
+                     "and `pip` stop meaning the system ones -- they mean "
+                     "this environment's copies for as long as the shell "
+                     "lives."),
+                    ("\U0001f6aa", "Leaving it again", "deactivate"),
+                    ("\u26a0\ufe0f", "Only this shell",
+                     "Activation is not global. Another terminal, and any "
+                     "program started from one, still uses the system Python "
+                     "until it is activated there too."),
+                ])
+        except Exception:
+            pass
+
     def _open_env_folder(self):
         """Open the selected environment's folder in the system file manager."""
         name = self._get_selected_env_name()
@@ -1517,6 +1585,29 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
             ok, msg = open_folder(real_path)
             if ok:
                 self.statusBar().showMessage(f"📁 {msg}")
+                # B142: say WHICH folder, and what is in it. "Opened folder"
+                # on its own tells someone learning nothing at all.
+                import sys as _sys
+                _opener = ("explorer" if _sys.platform == "win32"
+                           else "open" if _sys.platform == "darwin"
+                           else "xdg-open")
+                self.show_command(
+                    f'{_opener} "{real_path}"',
+                    context=f"Open Folder (env: {name})")
+                _bin = "Scripts" if _sys.platform == "win32" else "bin"
+                self._fill_cmd_hints([
+                    ("\U0001f4c1", f"Where '{name}' lives", str(real_path)),
+                    ("", "", f'{_opener} "{real_path}"'),
+                    ("\u2139\ufe0f", "What is inside",
+                     f"{_bin}/ holds this environment's own python and pip. "
+                     f"lib/ holds the packages installed into it. "
+                     f"pyvenv.cfg records which interpreter it was built "
+                     f"from."),
+                    ("\u26a0\ufe0f", "Not for editing",
+                     "Everything here is written by the tool that made the "
+                     "environment. Change packages through it, not by moving "
+                     "files."),
+                ])
             else:
                 self._log.warning(f"_open_env_folder failed: {msg}")
                 QMessageBox.warning(self, "Open Folder", msg)

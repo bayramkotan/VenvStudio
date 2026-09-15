@@ -196,3 +196,26 @@ def test_poetry_env_outside_the_project_tree(tmp_path, fake_config):
     env = tmp_path / ".cache" / "pypoetry" / "virtualenvs" / "pppp-InEhWoJ9-py3.14"
     env.mkdir(parents=True)
     assert PipManager(env, env_type="poetry")._project_dir() == str(projects / "pppp")
+
+
+# ── poetry environment directory names ───────────────────────────────────
+
+@pytest.mark.parametrize("dirname,expected", [
+    # The ordinary shape.
+    ("ptr-project-fm2xxDZ4-py3.14", "ptr-project"),
+    ("ptr-1-iQsBVXx5-py3.14", "ptr-1"),
+    ("ptr-project-copy-LpmC3EnV-py3.14", "ptr-project-copy"),
+    # B141: poetry sometimes emits a DOUBLE hyphen. rsplit("-", 2) split this
+    # into ['pppp-GwxGrfX', '', 'py3.14'] and the environment table showed the
+    # hash, while its sibling above showed the plain name.
+    ("pppp-GwxGrfX--py3.14", "pppp"),
+    ("pppp-InEhWoJ9-py3.14", "pppp"),
+    # Not a poetry environment: returned untouched. rsplit turned this into
+    # "tuhaf", cutting a name that was never a hash.
+    ("tuhaf-bir-ad", "tuhaf-bir-ad"),
+    ("venv", "venv"),
+    ("", ""),
+])
+def test_poetry_display_name(dirname, expected):
+    from src.utils.platform_utils import poetry_env_display_name
+    assert poetry_env_display_name(dirname) == expected

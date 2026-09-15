@@ -784,9 +784,15 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
                 for _penv in sorted(_poetry_base.iterdir()):
                     if not _penv.is_dir():
                         continue
-                    # Name: strip hash suffix e.g. poetryenv-0KHIYmlT-py3.14 → poetryenv
-                    _parts = _penv.name.rsplit("-", 2)
-                    _pname = _parts[0] if len(_parts) >= 3 else _penv.name
+                    # B141: rsplit("-", 2) broke on the double hyphen
+                    # poetry sometimes produces -- pppp-GwxGrfX--py3.14 split
+                    # into ['pppp-GwxGrfX', '', 'py3.14'] and the table showed
+                    # the hash. It also cut names that are not poetry
+                    # environments at all. One pattern, shared with
+                    # pip_manager, in platform_utils.
+                    from src.utils.platform_utils import (
+                        poetry_env_display_name as _pedn)
+                    _pname = _pedn(_penv.name)
                     # Apply display name override if user set one
                     _display_override = _penv / ".venvstudio_display_name"
                     if _display_override.exists():

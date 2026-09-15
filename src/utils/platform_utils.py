@@ -388,6 +388,31 @@ def get_default_venv_base_dir() -> Path:
         return Path.home() / "venv"
 
 
+def poetry_env_display_name(dir_name: str) -> str:
+    """`pppp` from `pppp-InEhWoJ9-py3.14`, or the name unchanged.
+
+    B141. venv_manager derived this with `rsplit("-", 2)`, which breaks on
+    the DOUBLE HYPHEN poetry sometimes produces:
+
+        pppp-GwxGrfX--py3.14  ->  ['pppp-GwxGrfX', '', 'py3.14']
+
+    so the table showed `pppp-GwxGrfX` while the same environment's sibling
+    showed `pppp`. Measured against five real directory names from Bayram's
+    machine: rsplit got two of them wrong, the pattern got all five right.
+
+    The second thing rsplit got wrong was a directory that is not a poetry
+    environment at all -- `tuhaf-bir-ad` became `tuhaf`. A name that does not
+    match the shape is returned untouched, because cutting an unrelated
+    folder's name is worse than leaving a long one.
+
+    pip_manager._poetry_project_name already carried this pattern; this is
+    the one place now, rather than a second copy that could drift.
+    """
+    import re as _re
+    _m = _re.match(r"^(?P<n>.+)-[A-Za-z0-9_-]{8}-py\d+\.\d+$", dir_name or "")
+    return _m.group("n") if _m else (dir_name or "")
+
+
 def find_app_icon(ext: str = ".png") -> str:
     """Where this installation's icon actually is, or "" (B132).
 
@@ -1032,6 +1057,22 @@ def find_system_pythons() -> List[Tuple[str, str]]:
             return (0,)
     pythons.sort(key=_ver_key, reverse=True)
     return pythons
+# B142. What open_terminal_at actually ran, so the Command Reference panel
+# can show it instead of an invented example.
+#
+# Recorded rather than re-derived: the activation line differs by platform,
+# by terminal and by environment type, and there are already six branches
+# producing it. A seventh that only builds a string to display would drift
+# from the six that matter -- which is the failure this codebase produces
+# most often.
+_LAST_TERMINAL_CMD: str = ""
+
+
+def last_terminal_command() -> str:
+    """The command the most recent open_terminal_at launched, or ""."""
+    return _LAST_TERMINAL_CMD
+
+
 def open_terminal_at(path: Path, terminal_type: str = "",
                      env_type: str = "venv", run_after: str = "") -> bool:
     """Open a terminal/console at the given path.
@@ -1041,6 +1082,7 @@ def open_terminal_at(path: Path, terminal_type: str = "",
       "conda"        → micromamba activate <path>
       "system_tools" → just cd into the folder, no activation
     """
+    global _LAST_TERMINAL_CMD
     # Callers hand us whatever they have -- a Path, a str from a config file,
     # a str read out of a marker. Everything below composes paths with `/`, so
     # a str argument blew up with
@@ -1553,10 +1595,12 @@ def open_terminal_at(path: Path, terminal_type: str = "",
                             cmd = cmd[:_idx] + _sep + run_after + cmd[_idx:]
             else:
                 cmd = _make_cmd_windows(path, terminal_type)
+            _LAST_TERMINAL_CMD = cmd if isinstance(cmd, str) else " ".join(map(str, cmd))
             subprocess.Popen(cmd, shell=True)
 
         elif system == "macos":
             posix_cmd = _make_cmd_posix(path)
+            _LAST_TERMINAL_CMD = posix_cmd
             # hatch/pdm/pixi already bake run_after into their own
             # "run <command>" mode inside _make_cmd_posix (instead of
             # "enter shell") -- appending it again here would duplicate it.
@@ -1576,6 +1620,7 @@ def open_terminal_at(path: Path, terminal_type: str = "",
 
         else:  # linux
             posix_cmd = _make_cmd_posix(path)
+            _LAST_TERMINAL_CMD = posix_cmd
             # hatch/pdm/pixi already bake run_after into their own
             # "run <command>" mode inside _make_cmd_posix (instead of
             # "enter shell") -- appending it again here would duplicate it.

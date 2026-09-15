@@ -2319,6 +2319,31 @@ class ProjectsPageMixin:
                 QMessageBox.warning(
                     self, "Terminal",
                     f"A terminal could not be opened at:\n{_path}")
+                return
+
+            # B142: the Environments page explains this and Projects did not.
+            # The line shown is the one that ran -- open_terminal_at records
+            # it -- not a second copy written for display.
+            from src.utils.platform_utils import last_terminal_command
+            _ran = last_terminal_command()
+            _name = _meta_t.get("name") or Path(_path).name
+            if _ran:
+                self._show_project_command(
+                    _ran,
+                    f"cd {_path}\n"
+                    f"# What VenvStudio just ran to enter this project:\n"
+                    f"{_ran}\n"
+                    f"\n"
+                    f"# The shell now sits in the PROJECT while the "
+                    f"ENVIRONMENT is active.\n"
+                    f"# {_tool_t or 'This tool'} reads pyproject.toml from the "
+                    f"working directory,\n"
+                    f"# so both have to be true at once -- which is why this "
+                    f"is not simply\n"
+                    f"# cd into the environment folder.\n"
+                    f"\n"
+                    f"# Leaving it again:\n"
+                    f"deactivate")
         except Exception as e:
             QMessageBox.warning(self, "Terminal", f"{type(e).__name__}: {e}")
 
@@ -2331,6 +2356,29 @@ class ProjectsPageMixin:
             ok, msg = open_folder(_path)
             if not ok:
                 QMessageBox.warning(self, "Open Folder", msg)
+                return
+
+            # B142: which folder, and what is in it.
+            import sys as _sys
+            _opener = ("explorer" if _sys.platform == "win32"
+                       else "open" if _sys.platform == "darwin"
+                       else "xdg-open")
+            _m = read_project_meta(_path)
+            _tool = _m.get("tool") or ""
+            self._show_project_command(
+                f'{_opener} "{_path}"',
+                f"{_opener} \"{_path}\"\n"
+                f"\n"
+                f"# This is the PROJECT, not the environment.\n"
+                f"# pyproject.toml declares what the project needs;\n"
+                f"# the packages themselves live in the environment, which "
+                f"{_tool or 'the tool'}\n"
+                f"# keeps somewhere else -- often a cache directory far from "
+                f"here.\n"
+                f"\n"
+                f"# Worth reading:\n"
+                f"#   pyproject.toml   the dependencies you asked for\n"
+                f"#   *.lock           the exact versions that resolved to")
         except Exception as e:
             QMessageBox.warning(self, "Open Folder", f"{type(e).__name__}: {e}")
 

@@ -603,11 +603,16 @@ class PipManager:
         return str(self.venv_path)
 
     def _poetry_project_name(self) -> str:
-        """`ptr-project` from `ptr-project-fm2xxDZ4-py3.14`, or ""."""
-        import re as _re
-        _m = _re.match(r"^(?P<name>.+)-[A-Za-z0-9_-]{8}-py\d+\.\d+$",
-                       self.venv_path.name)
-        return _m.group("name").lower() if _m else ""
+        """`ptr-project` from `ptr-project-fm2xxDZ4-py3.14`, or "".
+
+        B141: the pattern lives in platform_utils now, because venv_manager
+        needed the same answer and had derived it differently -- with
+        rsplit("-", 2), which broke on the double hyphen poetry sometimes
+        produces and showed the hash in the environment table.
+        """
+        from src.utils.platform_utils import poetry_env_display_name
+        _n = poetry_env_display_name(self.venv_path.name)
+        return _n.lower() if _n != self.venv_path.name else ""
 
     @staticmethod
     def _pyproject_name(project_dir: str) -> str:

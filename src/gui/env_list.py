@@ -306,9 +306,38 @@ class EnvListMixin:
             self.ql_env_selector.blockSignals(True)
             self.ql_env_selector.clear()
             self.ql_env_selector.addItem(tr("select_environment"), "")
-            for env in envs:
-                if env.is_valid:
-                    self.ql_env_selector.addItem(f"  {env.name}", env.name)
+
+            # B135 (Bayram): Quick Launch listed environments only, so a
+            # project could not be reached from here at all -- and projects
+            # are where most work starts.
+            #
+            # Two headings rather than one mixed list. This panel is narrow
+            # and the two are not the same kind of thing: picking an
+            # environment selects it, picking a project means "the
+            # environment this project uses". Mixed together, `ml` and
+            # `project_pdm` look alike and the wrong one gets clicked.
+            _envs_valid = [e for e in envs if e.is_valid]
+            if _envs_valid:
+                self.ql_env_selector.addItem("\u2500\u2500 Environments", None)
+                _i = self.ql_env_selector.count() - 1
+                self.ql_env_selector.model().item(_i).setEnabled(False)
+            for env in _envs_valid:
+                self.ql_env_selector.addItem(f"  {env.name}", env.name)
+
+            # Projects come from the cache built in v1.6.91 (1910 ms -> 11 ms),
+            # which is what makes listing them here cheap enough to do on
+            # every refresh.
+            try:
+                _projects = self._ql_project_entries(_envs_valid)
+            except Exception:
+                _projects = []
+            if _projects:
+                self.ql_env_selector.addItem("\u2500\u2500 Projects", None)
+                _i = self.ql_env_selector.count() - 1
+                self.ql_env_selector.model().item(_i).setEnabled(False)
+                for _pname, _ename, _tool in _projects:
+                    self.ql_env_selector.addItem(
+                        f"  \U0001f4c1 {_pname}  ({_tool})", _ename)
             idx = self.ql_env_selector.findData(current_ql)
             if idx >= 0:
                 self.ql_env_selector.setCurrentIndex(idx)
@@ -903,6 +932,79 @@ class EnvListMixin:
     _PROJECT_DIR_KEYS = ("poetry_project_dir", "pdm_project_dir",
                          "pixi_project_dir", "hatch_project_dir",
                          "project_dir")
+
+    def _ql_project_entries(self, valid_envs) -> list:
+        """(project name, environment name, tool) for Quick Launch (B135).
+
+        Only projects whose environment is in the list: Quick Launch's whole
+        job is to start something INSIDE an environment, and a project with
+        no environment yet has nothing to start. Those belong on the Projects
+        page, where creating one is a button away.
+
+        The match is by environment path rather than by name, because a
+        poetry project's environment is called something else entirely --
+        ptr-project lives in ptr-project-fm2xxDZ4-py3.14.
+        """
+        from pathlib import Path as _P
+        try:
+            from src.gui.projects_page import read_project_meta
+        except Exception:
+            return []
+
+        # B135 follow-up (Bayram: "5-6 proje olmasina ragmen sadece bir
+        # tane gosteriyor"). MEASURED on his machine -- five projects, four
+        # with an environment that exists on disk:
+        #
+        #   htc-test           hatch   ~/.local/share/hatch/env/virtual/...
+        #   px_test            pixi    <project>/.pixi/envs/default
+        #   first_pdm_project  pdm     <project>/.venv
+        #   ptr-1              poetry  ~/.cache/pypoetry/virtualenvs/...
+        #
+        # Only the poetry one appears in the Environments table: hatch, pdm
+        # and pixi keep their environments beside the project or in their own
+        # cache, and that table lists neither. Requiring a match against it
+        # threw three of the four away.
+        #
+        # A project's environment is wherever the project says it is. The
+        # test is that it exists, not that something else already knows
+        # about it.
+        _by_path = {}
+        for _e in valid_envs:
+            try:
+                _by_path[str(_P(_e.path).resolve())] = _e.name
+            except Exception:
+                continue
+
+        try:
+            _entries = self.config.get("recent_projects", []) or []
+        except Exception:
+            _entries = []
+
+        _out = []
+        for _entry in _entries:
+            _path = _entry.get("path") if isinstance(_entry, dict) else _entry
+            if not _path:
+                continue
+            try:
+                _meta = read_project_meta(_P(_path))
+            except Exception:
+                continue
+            _envp = (_meta or {}).get("env_path") or ""
+            if not _envp:
+                continue
+            try:
+                _ep = _P(_envp)
+                if not _ep.is_dir():
+                    continue
+                _key = str(_ep.resolve())
+            except Exception:
+                continue
+            # Its name in the table when it is there; its own path when it is
+            # not -- which is what _on_ql_env_changed resolves against.
+            _out.append((_meta.get("name") or _P(_path).name,
+                         _by_path.get(_key) or _envp,
+                         _meta.get("tool") or "?"))
+        return sorted(_out, key=lambda t: t[0].lower())
 
     def _project_dir_for(self, name: str, env_type: str) -> str:
         """Directory a project-scoped command should run in, or '' if n/a."""

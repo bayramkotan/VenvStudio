@@ -40,6 +40,45 @@ def env_aware_environ(venv_path, base=None):
         _e["PATH"] = _scripts + os.pathsep + _e.get("PATH", "")
         _e["VIRTUAL_ENV"] = str(venv_path)
         _e.pop("PYTHONHOME", None)
+
+    # B134. In the AppImage, JupyterLab started and died instantly: the
+    # browser opened, nothing answered, Running Jupyter Servers stayed empty.
+    #
+    # MEASURED from /proc/<pid>/environ of a running AppImage:
+    #
+    #     APPDIR=/tmp/.mount_VenvStIHLbNF
+    #     LD_LIBRARY_PATH=/tmp/.mount_VenvStIHLbNF/usr/bin/_internal
+    #
+    # PyInstaller points the loader at its own bundled libraries, and a child
+    # process inherits that. The environment's python then starts, finds the
+    # AppImage's libpython and libssl instead of the system ones it was built
+    # against, and exits. From a source checkout there is nothing to inherit,
+    # which is why this only ever broke for people using the AppImage.
+    #
+    # Anything pointing INSIDE the bundle is removed rather than the whole
+    # variable: a user may have had their own LD_LIBRARY_PATH before launching
+    # VenvStudio and it should survive.
+    _appdir = _e.get("APPDIR") or os.environ.get("APPDIR") or ""
+    _mei = getattr(sys, "_MEIPASS", "")
+    _roots = [r for r in (_appdir, _mei) if r]
+    if _roots:
+        for _var in ("LD_LIBRARY_PATH", "PYTHONPATH", "GI_TYPELIB_PATH",
+                     "GST_PLUGIN_SYSTEM_PATH", "QT_PLUGIN_PATH",
+                     "QT_QPA_PLATFORM_PLUGIN_PATH"):
+            _val = _e.get(_var)
+            if not _val:
+                continue
+            _keep = [p for p in _val.split(os.pathsep)
+                     if p and not any(p.startswith(r) for r in _roots)]
+            if _keep:
+                _e[_var] = os.pathsep.join(_keep)
+            else:
+                _e.pop(_var, None)
+        # Certificates bundled with the application are not readable by a
+        # process that no longer has the bundle on its path.
+        for _var in ("SSL_CERT_FILE", "SSL_CERT_DIR"):
+            if any(str(_e.get(_var, "")).startswith(r) for r in _roots):
+                _e.pop(_var, None)
     return _e
 
 

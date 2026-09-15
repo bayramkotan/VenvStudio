@@ -19,7 +19,24 @@ class QuickLaunchMixin:
         if not venv_name:
             self._rebuild_ql_buttons(set())
             return
-        venv_path = self._get_env_path(venv_name) or self.venv_manager.base_dir / venv_name
+
+        # B135. The Projects half of this dropdown carries an environment
+        # PATH rather than a name, because hatch, pdm and pixi keep their
+        # environments beside the project or in their own cache and the
+        # Environments table lists none of them -- measured on Bayram's
+        # machine, three of his four projects.
+        #
+        # A name still resolves the old way. An absolute path is used as it
+        # is: _get_env_path would answer None for it and the fallback would
+        # build base_dir / "<the whole path>".
+        from pathlib import Path as _P
+        _as_path = _P(str(venv_name))
+        if _as_path.is_absolute() and _as_path.is_dir():
+            venv_path = _as_path
+            venv_name = _as_path.name
+        else:
+            venv_path = (self._get_env_path(venv_name)
+                         or self.venv_manager.base_dir / venv_name)
         if not venv_path.exists() and not (venv_path.parent / ".venvstudio_env").exists():
             pass  # pipx path may not have standard structure
         # Env tablosunda ilgili satırı seç
@@ -183,6 +200,23 @@ class QuickLaunchMixin:
             _match = {_env_type}
 
         for app in app_defs:
+            # B135 follow-up (Bayram: "neden yuklenmemis external yani
+            # uygulamalar cikiyor?"). External Apps -- VS Code, Antigravity,
+            # Weka, Git, Code::Blocks -- have a download_url because
+            # VenvStudio cannot install them into an environment at all.
+            # _system_app_present found them with shutil.which, which only
+            # says they exist SOMEWHERE ON THIS MACHINE.
+            #
+            # Quick Launch answers "what is in THIS environment". A program
+            # installed system-wide is not in it, and the same five would
+            # appear under every environment in the list.
+            #
+            # Their detection was removed from the External Apps window on
+            # 2026-09-14 for being unreliable -- guessing an executable name
+            # reported installed software as missing. Keeping the same guess
+            # here, where it produces buttons rather than a label, is worse.
+            if app.get("download_url"):
+                continue
             _types = set(app.get("env_types",
                 ["venv"] if not app.get("system_app")
                 else ["conda", "system_tools"]))

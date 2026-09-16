@@ -388,6 +388,29 @@ def get_default_venv_base_dir() -> Path:
         return Path.home() / "venv"
 
 
+def env_context(name: str, is_project: bool = False) -> str:
+    """"(project: px_test)" or "(env: ml)" for a command banner.
+
+    B148d (Bayram: "Project olacak!!! env: degil!!!"). Ten call sites wrote
+    `f"... (env: {name})"` by hand, so every banner called a project an
+    environment -- and named it after its directory, which for uv and pdm is
+    `.venv`:
+
+        COMMAND - Launch IPython (env: .venv)
+
+    The header above already distinguishes the two ("Project:" against
+    "Environment:", B45). The banners did not, because each one built its own
+    string.
+
+    Returns the parenthesised part only, so callers keep their own wording
+    for what happened.
+    """
+    _n = str(name or "").strip()
+    if not _n:
+        return ""
+    return f"({'project' if is_project else 'env'}: {_n})"
+
+
 def poetry_env_display_name(dir_name: str) -> str:
     """`pppp` from `pppp-InEhWoJ9-py3.14`, or the name unchanged.
 

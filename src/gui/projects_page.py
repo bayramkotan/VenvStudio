@@ -1452,6 +1452,18 @@ class ProjectsPageMixin:
                             label=_meta["name"])
             self.selected_env = _meta["name"]
             self._switch_page(0)
+
+            # B148b (Bayram): opening a project's packages moved the panel but
+            # left the Quick Launch dropdown showing whatever was there before
+            # -- his screenshot has the header on "test" and the dropdown on
+            # "dl". The buttons act on the PANEL, so they were right; the
+            # dropdown was the part that lied, which is worse than being
+            # wrong, because it is the thing a user reads to know where they
+            # are.
+            try:
+                self._sync_ql_selector_for_env(Path(_env), _meta["name"])
+            except Exception:
+                pass
             try:
                 self.statusBar().showMessage(
                     f"Packages for project: {_meta['name']}  \u2014  {_env}")

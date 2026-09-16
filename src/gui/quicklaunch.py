@@ -33,7 +33,28 @@ class QuickLaunchMixin:
         _as_path = _P(str(venv_name))
         if _as_path.is_absolute() and _as_path.is_dir():
             venv_path = _as_path
+            # B135 follow-up: the directory name is useless for uv and pdm,
+            # whose environments are called `.venv` and sit beside the
+            # project. Every log line and every command banner then said
+            # "env: .venv", and two different projects were indistinguishable
+            # from each other:
+            #
+            #     [Install] env='.venv' type=venv ...   <- which project?
+            #
+            # The project's own directory is the name worth showing. hatch
+            # and pixi are unaffected: theirs are already named after the
+            # project.
             venv_name = _as_path.name
+            _parts = [q.name for q in (_as_path, *_as_path.parents)]
+            if venv_name.startswith("."):
+                # uv, pdm:  <project>/.venv
+                venv_name = _as_path.parent.name or venv_name
+            elif ".pixi" in _parts:
+                # pixi:  <project>/.pixi/envs/default -- the last two are
+                # fixed, so "default" names nothing. Walk up past .pixi.
+                _i = _parts.index(".pixi")
+                if _i + 1 < len(_parts) and _parts[_i + 1]:
+                    venv_name = _parts[_i + 1]
         else:
             venv_path = (self._get_env_path(venv_name)
                          or self.venv_manager.base_dir / venv_name)
@@ -48,7 +69,22 @@ class QuickLaunchMixin:
                 self.env_table.blockSignals(False)
                 break
         # package_panel sync (sayfa değiştirme!)
-        if self.package_panel is not None: self.package_panel.set_venv(venv_path)
+        #
+        # B148c: pass the label and the tool for a project, exactly as the
+        # Projects page does. Without them the header read "Environment:
+        # px_test" while the Projects page calls the same thing a project,
+        # and the panel had to guess the tool from a directory named
+        # ".pixi/envs/default".
+        if self.package_panel is not None:
+            _meta = getattr(self, "_ql_project_meta", {}).get(
+                str(self.ql_env_selector.itemData(idx)))
+            if _meta:
+                _pname, _tool = _meta
+                self.package_panel.set_venv(venv_path,
+                                            env_type=_tool or "venv",
+                                            label=_pname)
+            else:
+                self.package_panel.set_venv(venv_path)
 
     def _ql_load_env_packages(self, venv_name: str):
         """Sadece QL için paket listesi yükle — sağ paneli değiştirme."""
@@ -122,6 +158,37 @@ class QuickLaunchMixin:
         except Exception:
             pass
         return set()
+
+    def _sync_ql_selector_for_env(self, env_path, label: str = ""):
+        """Point the dropdown at an environment given by PATH (B148b).
+
+        _sync_ql_selector matches on the name in the table, which a project
+        environment does not have -- it is carried as a path instead. And a
+        project created a moment ago is not in the list at all yet, so the
+        row is added rather than the dropdown left pointing somewhere else.
+        """
+        if not hasattr(self, "ql_env_selector"):
+            return
+        from pathlib import Path as _P
+        _want = str(_P(env_path))
+        _idx = self.ql_env_selector.findData(_want)
+        if _idx < 0:
+            # Also try the plain name, for an environment the table lists.
+            _idx = self.ql_env_selector.findData(_P(env_path).name)
+        if _idx < 0:
+            self.ql_env_selector.addItem(
+                f"  \U0001f4c1 {label or _P(env_path).name}", _want)
+            _idx = self.ql_env_selector.count() - 1
+        self.ql_env_selector.blockSignals(True)
+        self.ql_env_selector.setCurrentIndex(_idx)
+        self.ql_env_selector.blockSignals(False)
+        # The buttons still have to follow: blocking the signal above stops
+        # _on_ql_env_changed from running, and that is what rebuilds them.
+        try:
+            _inst = getattr(self.package_panel, "installed_package_names", set())
+            self._rebuild_ql_buttons(_inst)
+        except Exception:
+            pass
 
     def _sync_ql_selector(self, env_name: str):
         """Üst dropdown değişince QL + env tablosunu sync et."""

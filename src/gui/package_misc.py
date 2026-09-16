@@ -328,7 +328,11 @@ class PackageMiscMixin:
             if getattr(self, "pip_manager", None) and getattr(
                     self.pip_manager, "venv_path", None):
                 _env = self.pip_manager.venv_path.name
-            _ctx = f"{title} (env: {_env})" if _env else str(title)
+            # B148d: same wording as the launcher banners.
+            from src.utils.platform_utils import env_context as _ectx
+            _lbl = getattr(self, "_explicit_env_label", "")
+            _ctx = (f"{title} {_ectx(_lbl or _env, bool(_lbl))}".strip()
+                    if (_env or _lbl) else str(title))
             banner_command(command, context=_ctx, vs_equivalent=vs_equivalent)
         except Exception:
             pass

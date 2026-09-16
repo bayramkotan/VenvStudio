@@ -335,9 +335,18 @@ class EnvListMixin:
                 self.ql_env_selector.addItem("\u2500\u2500 Projects", None)
                 _i = self.ql_env_selector.count() - 1
                 self.ql_env_selector.model().item(_i).setEnabled(False)
+                # B148c: keep the name and the tool beside the path. The
+                # dropdown only carries one value per row, and set_venv needs
+                # three -- without the label the header says "Environment:
+                # px_test" for something the Projects page calls a project,
+                # and without the tool the panel guesses from a directory
+                # named ".pixi/envs/default".
+                if not hasattr(self, "_ql_project_meta"):
+                    self._ql_project_meta = {}
                 for _pname, _ename, _tool in _projects:
                     self.ql_env_selector.addItem(
                         f"  \U0001f4c1 {_pname}  ({_tool})", _ename)
+                    self._ql_project_meta[str(_ename)] = (_pname, _tool)
             idx = self.ql_env_selector.findData(current_ql)
             if idx >= 0:
                 self.ql_env_selector.setCurrentIndex(idx)
@@ -510,6 +519,43 @@ class EnvListMixin:
                 self._log.debug(
                     f"_refresh_env_list: previously selected "
                     f"{_keep_selected!r} is gone, leaving default selection")
+
+        # B148 (Bayram): "yanlisla tekrar basinca bu sefer bu launcher'i
+        # default env'a da yukluyor". From his log, exactly that:
+        #
+        #   23:49:25  Install env='.venv'          <- installed into a project
+        #   23:49:32  _on_env_selected: env='dl'   <- selection moved on its own
+        #   23:49:34  Launching 'IPython' in env 'dl'
+        #
+        # A project environment is not a row in this table -- it lives beside
+        # the project or in the tool's cache -- so after the refresh that
+        # follows an install there is nothing to restore the selection to,
+        # and it falls to the default. The panel follows it, and the next
+        # click installs somewhere the user never chose.
+        #
+        # The table's selection may have to move. What must NOT move is the
+        # environment the panel is pointed at, because that is the one every
+        # button acts on.
+        try:
+            _pm = getattr(self.package_panel, "pip_manager", None)
+            _before = getattr(_pm, "venv_path", None) if _pm else None
+            if _before is not None:
+                from pathlib import Path as _P
+                _names = {self.env_table.item(_r, 0).text().strip()
+                          for _r in range(self.env_table.rowCount())
+                          if self.env_table.item(_r, 0)}
+                # Only for an environment this table does not list: the rows
+                # it does list restore themselves above.
+                if _P(_before).name not in _names and _P(_before).is_dir():
+                    _pm_now = getattr(self.package_panel, "pip_manager", None)
+                    if (_pm_now is None
+                            or str(getattr(_pm_now, "venv_path", "")) != str(_before)):
+                        self._log.debug(
+                            f"_refresh_env_list: keeping the panel on "
+                            f"{_before} (not a row in this table)")
+                        self.package_panel.set_venv(_P(_before))
+        except Exception:
+            pass
 
         # Group envs by location
         _base_dir = str(self.venv_manager.base_dir)

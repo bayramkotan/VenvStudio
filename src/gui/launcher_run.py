@@ -506,7 +506,13 @@ class LauncherRunMixin:
                     self.pip_manager, "venv_path", None):
                 _env = self.pip_manager.venv_path.name
             _name = app_def.get("name", "app")
-            _ctx = f"Launch {_name} (env: {_env})" if _env else f"Launch {_name}"
+            # B148d: "(project: px_test)" when it is one -- the label is
+            # set only for projects, and it carries the real name rather
+            # than a directory called ".venv".
+            from src.utils.platform_utils import env_context as _ectx
+            _lbl = getattr(self, "_explicit_env_label", "")
+            _ctx = (f"Launch {_name} {_ectx(_lbl or _env, bool(_lbl))}".strip()
+                    if _env or _lbl else f"Launch {_name}")
             _cmd_str = " ".join(str(c) for c in cmd if c)
             banner_command(_cmd_str, context=_ctx)
             self._set_env_cmd_strip(_cmd_str)
@@ -639,8 +645,12 @@ class LauncherRunMixin:
             def _refresh_quick_launch():
                 _cb = getattr(self, "_ql_update_callback", None)
                 if callable(_cb):
-                    _env_name = (self.pip_manager.venv_path.name
-                                 if self.pip_manager else "")
+                    # B148c: the label when there is one -- a project is
+                    # called by its own name, not by a directory called
+                    # ".venv" or ".pixi/envs/default".
+                    _env_name = (getattr(self, "_explicit_env_label", "")
+                                 or (self.pip_manager.venv_path.name
+                                     if self.pip_manager else ""))
                     try:
                         _cb(env_name=_env_name)
                     except Exception:
@@ -850,7 +860,8 @@ class LauncherRunMixin:
 
         _env_name = ""
         if self.pip_manager and getattr(self.pip_manager, "venv_path", None):
-            _env_name = self.pip_manager.venv_path.name
+            _env_name = (getattr(self, "_explicit_env_label", "")
+                         or self.pip_manager.venv_path.name)   # B148c
         _log.info(f"🚀 [Launcher] Launching '{app_def.get('name', '?')}' in env '{_env_name or '(none)'}'")
 
         if not self.pip_manager:

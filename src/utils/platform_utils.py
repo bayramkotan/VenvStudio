@@ -388,6 +388,17 @@ def get_default_venv_base_dir() -> Path:
         return Path.home() / "venv"
 
 
+def panel_env_label(owner) -> str:
+    """The project label the package panel is showing, or "".
+
+    B149. `_explicit_env_label` lives on the PackagePanel, not on MainWindow,
+    so the banners written from the window have to reach through to it. One
+    function rather than the same getattr chain at six call sites.
+    """
+    return getattr(getattr(owner, "package_panel", None),
+                   "_explicit_env_label", "") or ""
+
+
 def env_context(name: str, is_project: bool = False) -> str:
     """"(project: px_test)" or "(env: ml)" for a command banner.
 

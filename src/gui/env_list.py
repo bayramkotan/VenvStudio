@@ -1,6 +1,8 @@
 """VenvStudio - MainWindow: Environment List Mixin
 Environment table refresh, selection, and detail loading (moved from main_window.py).
 """
+from src.utils.platform_utils import (  # B149
+    env_context as _ectx, panel_env_label as _plbl)
 from pathlib import Path
 from datetime import datetime
 
@@ -539,21 +541,41 @@ class EnvListMixin:
         try:
             _pm = getattr(self.package_panel, "pip_manager", None)
             _before = getattr(_pm, "venv_path", None) if _pm else None
+            # Carry the label and the tool back too, or a project restored
+            # this way comes back as "(env: .venv)" -- the very thing B148c
+            # was about.
+            _before_lbl = getattr(self.package_panel, "_explicit_env_label", "")
+            _before_type = getattr(self.package_panel, "_current_env_type", "")
             if _before is not None:
                 from pathlib import Path as _P
-                _names = {self.env_table.item(_r, 0).text().strip()
-                          for _r in range(self.env_table.rowCount())
-                          if self.env_table.item(_r, 0)}
-                # Only for an environment this table does not list: the rows
-                # it does list restore themselves above.
-                if _P(_before).name not in _names and _P(_before).is_dir():
+                # B148 was half a fix: it only protected environments the
+                # table does not list. Bayram hit the other half -- install
+                # something from a launcher card, the refresh that follows
+                # rebuilds the table, the table imposes ITS selection on the
+                # panel, and the next click asks to install into whatever the
+                # table happened to land on. From his log:
+                #
+                #   env_created -> _refresh_env_list
+                #   _on_env_selected: env='(none)'
+                #   _on_env_selected: env='ml'      <- panel dragged along
+                #
+                # The table's selection is the table's business. The panel is
+                # pointed at an environment by the user, and a refresh is not
+                # the user. No condition on whether the table lists it: being
+                # listed was never a reason to move the panel.
+                if _P(_before).is_dir():
                     _pm_now = getattr(self.package_panel, "pip_manager", None)
                     if (_pm_now is None
                             or str(getattr(_pm_now, "venv_path", "")) != str(_before)):
                         self._log.debug(
                             f"_refresh_env_list: keeping the panel on "
-                            f"{_before} (not a row in this table)")
-                        self.package_panel.set_venv(_P(_before))
+                            f"{_before} (the refresh tried to move it)")
+                        if _before_lbl:
+                            self.package_panel.set_venv(
+                                _P(_before), env_type=_before_type or "venv",
+                                label=_before_lbl)
+                        else:
+                            self.package_panel.set_venv(_P(_before))
         except Exception:
             pass
 
@@ -1340,7 +1362,9 @@ class EnvListMixin:
                 from src.utils.platform_utils import last_terminal_command
                 _ran = last_terminal_command()
                 _where = _proj or real_path
-                self.show_command(command, context=f"{command} (env: {name})")
+                self.show_command(
+                    command,
+                    context=f"{command} {_ectx(_plbl(self) or name, bool(_plbl(self)))}".strip())
                 self._fill_cmd_hints([
                     ("\U0001f4a1", command, f"Run inside '{name}'."),
                     ("", "", f"cd {_where}"),

@@ -177,6 +177,12 @@ def env_roots():
     return _roots
 
 
+# B147: set by find_project_env when it saw a directory but no interpreter in
+# it. A module-level slot rather than a changed return type, because
+# find_project_env has several callers and all but one only want the path.
+_LAST_HOLLOW_ENV = ""
+
+
 def find_project_env(project_dir, tool: str = "") -> str:
     """Where this project's virtual environment actually lives, or "".
 
@@ -199,6 +205,16 @@ def find_project_env(project_dir, tool: str = "") -> str:
     """
     d = Path(project_dir)
 
+    # B147: remember a directory that IS there but holds no interpreter, so
+    # the caller can tell "no environment" from "a broken one". Measured on
+    # Bayram's firstProject: .venv existed, bin/ and lib/ present, bin/ empty,
+    # no pyvenv.cfg. uv refuses it in the same words -- "not a valid Python
+    # environment (no Python executable was found)" -- while VenvStudio showed
+    # a dash, which reads as "never made one".
+    global _LAST_HOLLOW_ENV
+    _LAST_HOLLOW_ENV = ""
+    _hollow = ""
+
     # The in-project layouts, which are also poetry's when in-project venvs
     # are configured, so they are tried first regardless of tool.
     for candidate in (d / ".venv", d / ".pixi" / "envs" / "default"):
@@ -218,6 +234,11 @@ def find_project_env(project_dir, tool: str = "") -> str:
                 return str(candidate)
         if (candidate / "conda-meta").is_dir():
             return str(candidate)
+        try:
+            if not _hollow and candidate.is_dir():
+                _hollow = str(candidate)
+        except OSError:
+            pass
 
     # pdm can be configured for PEP 582, where there is no virtualenv at all:
     # packages go into __pypackages__/<x.y>/lib and are found through
@@ -292,6 +313,10 @@ def find_project_env(project_dir, tool: str = "") -> str:
             except OSError:
                 continue
 
+    # Nothing usable. Record the hollow directory, if there was one, so the
+    # caller can report WHY instead of showing the same dash it shows for a
+    # project that never had an environment.
+    _LAST_HOLLOW_ENV = _hollow
     return ""
 
 
@@ -597,6 +622,11 @@ def read_project_meta(project_dir) -> dict:
     # B43 stage 4: the environment, wherever the tool decided to put it.
     meta["env_path"] = find_project_env(d, meta["tool"])
     meta["has_env"] = bool(meta["env_path"])
+    # B147: a directory that is there but has no interpreter in it. Not the
+    # same as having none at all, and the difference matters: `uv sync` and
+    # `pdm install` REFUSE to build over one, so the fix is to remove it
+    # first, and nothing said that.
+    meta["env_broken"] = "" if meta["env_path"] else _LAST_HOLLOW_ENV
     meta["installed"] = count_installed(meta["env_path"])
 
     # B46: the two sizes, measured apart. Source excludes .venv and the
@@ -734,6 +764,16 @@ class ProjectsPageMixin:
         _refresh = QPushButton("\U0001f504 Refresh")
         _refresh.setObjectName("secondary")
         _refresh.setFixedHeight(40)
+        # B150 (Bayram, 2026-09-17): he made a project by hand, pressed
+        # Refresh, and it was not there. The behaviour is right -- Refresh
+        # re-reads the projects already on the list and cannot know about one
+        # it has never seen -- but the button said nothing, and "Refresh"
+        # reads as "go and look".
+        _refresh.setToolTip(
+            "Re-read the projects already listed \u2014 sizes, package "
+            "counts, whether an environment appeared.\n\n"
+            "This does NOT look for new projects. A project made outside "
+            "VenvStudio is found by Scan for Projects.")
         _refresh.clicked.connect(self._refresh_projects)
         header.addWidget(_refresh)
 
@@ -1085,6 +1125,18 @@ class ProjectsPageMixin:
             f"{_lg['disp']}  \u2022  {_lg['n']} project(s)  \u2022  "
             f"{fmt_size(_lg['bytes'])}" for _lg in _locs))
 
+        # B150: say what just happened, and what it did NOT do. Refresh
+        # re-reads what is on the list; a project made outside VenvStudio is
+        # not on it yet and cannot appear here however many times the button
+        # is pressed. Bayram pressed it, saw nothing, and reasonably concluded
+        # the application had missed something.
+        try:
+            self.statusBar().showMessage(
+                f"Refreshed {_n} project(s). "
+                f"Use Scan for Projects to look for new ones.", 6000)
+        except Exception:
+            pass
+
         _p_end = _perf.perf_counter()
         _log.info(
             f"[Projects] refresh: {(_p_end - _p0) * 1000:.0f} ms total  "
@@ -1278,13 +1330,29 @@ class ProjectsPageMixin:
                 "caches are not counted")
             t.setItem(row, 5, _src)
 
+            # B147: three states, not two. A hollow directory is not the same
+            # as no directory, and showing the same dash for both is how
+            # Bayram spent a while wondering why his uv project had vanished
+            # from Quick Launch while .venv sat there in the file manager.
+            _broken = meta.get("env_broken") or ""
             _envsz = QTableWidgetItem(
-                fmt_size(meta["env_bytes"]) if meta["env_bytes"] else "\u2014")
+                fmt_size(meta["env_bytes"]) if meta["env_bytes"]
+                else ("\u26a0 broken" if _broken else "\u2014"))
             _envsz.setTextAlignment(Qt.AlignCenter)
             _envsz.setFont(_cell_font)
-            _envsz.setToolTip(
-                f"{meta['env_path']}" if meta["env_path"]
-                else "No environment yet")
+            if meta["env_path"]:
+                _envsz.setToolTip(str(meta["env_path"]))
+            elif _broken:
+                _envsz.setToolTip(
+                    f"{_broken}\n\n"
+                    f"The directory is there but holds no Python interpreter, "
+                    f"so nothing can run in it.\n\n"
+                    f"{meta.get('tool') or 'The tool'} will not build over it "
+                    f"either -- uv answers \"not a valid Python environment\" "
+                    f"and refuses. Remove the directory first, then Sync:\n\n"
+                    f"    rm -rf \"{_broken}\"")
+            else:
+                _envsz.setToolTip("No environment yet")
             t.setItem(row, 6, _envsz)
 
             _loc = QTableWidgetItem(path)

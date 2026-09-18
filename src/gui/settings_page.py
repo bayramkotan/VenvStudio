@@ -870,7 +870,17 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
             row.addWidget(cb)
 
             edit = QLineEdit()
-            edit.setReadOnly(True)
+            # B139 (Bayram: Custom Paths does not work). The field was
+            # read-only, so typing a path into it did nothing and there was
+            # no sign of why -- it looks like an editable box because it is
+            # one everywhere else in this window. Measured in his config:
+            # conda_envs_dir_enabled and pipx_home_enabled were both True
+            # with no path stored beside either, which is a box that was
+            # ticked and then typed into.
+            #
+            # An override with no path is also silently ignored downstream
+            # (_get_config_path_override requires both), so the setting
+            # appeared to do nothing at every step.
             edit.setEnabled(False)
             edit.setPlaceholderText(default_hint)
             _saved_path = self.config.get(config_key_path, "") or ""
@@ -895,6 +905,11 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
                 browse_btn.setEnabled(on)
                 reset_btn.setEnabled(on)
                 self.config.set(config_key_enabled, on)
+                if on and not edit.text().strip():
+                    # B139: ticking the box on its own changes nothing until
+                    # a path is there, and nothing said so. Put the cursor
+                    # where the answer goes.
+                    edit.setFocus()
                 if not on:
                     # Disable → clear override
                     self.config.set(config_key_path, "")
@@ -916,23 +931,63 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
                 self.config.set(config_key_path, "")
                 self.config.save()
 
+            def _on_edited():
+                """Save what was typed, once the user has finished typing.
+
+                B139: editingFinished rather than textChanged -- the latter
+                fires on every keystroke and would write a dozen half-paths
+                to disk while someone types one.
+                """
+                _t = edit.text().strip()
+                self.config.set(config_key_path, _t)
+                self.config.save()
+                if _t and not Path(_t).is_dir():
+                    edit.setToolTip(f"{_t}\n\nThis directory does not exist "
+                                    f"yet. It will be used once it does.")
+                else:
+                    edit.setToolTip("")
+
             cb.toggled.connect(_on_cb_toggled)
+            edit.editingFinished.connect(_on_edited)
             browse_btn.clicked.connect(_on_browse)
             reset_btn.clicked.connect(_on_reset)
 
             # Restore enabled state on load
             if cb.isChecked():
                 edit.setEnabled(True)
+                if not _saved_path:
+                    # B139: ticked with nothing beside it -- which is the
+                    # state Bayram's config was actually in, for two of the
+                    # three rows. The override does nothing in that state and
+                    # said so nowhere.
+                    edit.setPlaceholderText(
+                        "Enabled, but no path set \u2014 the default is still "
+                        "in use")
                 browse_btn.setEnabled(True)
                 reset_btn.setEnabled(True)
 
             return row
 
+        # B139 (Bayram, on Windows, shown three POSIX paths). These hints
+        # were hard-coded strings, so a Windows user was told the default
+        # lives in ~/.cache/pypoetry/virtualenvs -- a directory that does not
+        # exist on Windows.
+        #
+        # platform_utils already carries three helpers written for exactly
+        # this, and its own comment says so: "These three helpers exist so
+        # the UI can show the real default WITHOUT consulting the user's
+        # override". They were never called from here.
+        from src.utils.platform_utils import (
+            get_default_poetry_venvs_path as _gd_poetry,
+            get_default_pipx_home as _gd_pipx,
+            get_default_conda_envs_dir as _gd_conda,
+        )
+
         # Poetry virtualenvs path
         _poetry_row = _make_pm_path_row(
             "poetry_venvs_path_enabled",
             "poetry_venvs_path",
-            "~/.cache/pypoetry/virtualenvs  (platform default)",
+            f"{_gd_poetry()}  (platform default)",
         )
         paths_layout.addRow("🎭 Poetry virtualenvs:", _poetry_row)
 
@@ -940,7 +995,7 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         _pipx_row = _make_pm_path_row(
             "pipx_home_enabled",
             "pipx_home",
-            "~/.local/share/pipx  (platform default)",
+            f"{_gd_pipx()}  (platform default)",
         )
         paths_layout.addRow("📦 Pipx home:", _pipx_row)
 
@@ -948,7 +1003,7 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
         _conda_row = _make_pm_path_row(
             "conda_envs_dir_enabled",
             "conda_envs_dir",
-            "~/.local/share/mamba/envs  (platform default)",
+            f"{_gd_conda()}  (platform default)",
         )
         paths_layout.addRow("🐍 Conda envs dir:", _conda_row)
 

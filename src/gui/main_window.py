@@ -9,6 +9,8 @@ window_theme.py, window_menu.py, linux_fixes.py); this file holds __init__,
 core UI setup, page switching, and top-level window lifecycle.
 """
 
+from src.utils.platform_utils import (  # B149
+    env_context as _ectx, panel_env_label as _plbl)
 import sys
 from pathlib import Path
 from datetime import datetime
@@ -1008,7 +1010,8 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
                     # regardless of env type. clone/rename have no vs
                     # equivalent (vs does not support either yet).
                     _vs_eq = f"vs delete {name} -y" if action == "delete" else ""
-                    banner_command(live, context=f"{action} (env: {name})",
+                    banner_command(live,
+                                   context=f"{action} {_ectx(_plbl(self) or name, bool(_plbl(self)))}".strip(),
                                    vs_equivalent=_vs_eq)
             except Exception:
                 pass
@@ -1554,7 +1557,7 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
             if _ran:
                 self.show_command(
                     _ran,
-                    context=f"Open Terminal (env: {name})")
+                    context=f"Open Terminal {_ectx(_plbl(self) or name, bool(_plbl(self)))}".strip())
                 self._fill_cmd_hints([
                     ("\U0001f4a1", f"Entering '{name}'",
                      "What VenvStudio just ran:"),
@@ -1593,7 +1596,7 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
                            else "xdg-open")
                 self.show_command(
                     f'{_opener} "{real_path}"',
-                    context=f"Open Folder (env: {name})")
+                    context=f"Open Folder {_ectx(_plbl(self) or name, bool(_plbl(self)))}".strip())
                 _bin = "Scripts" if _sys.platform == "win32" else "bin"
                 self._fill_cmd_hints([
                     ("\U0001f4c1", f"Where '{name}' lives", str(real_path)),

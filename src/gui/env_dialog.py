@@ -3,6 +3,8 @@ VenvStudio - Environment Creation Dialog
 With progress bar, status messages, and cancel support
 """
 
+from src.utils.platform_utils import (  # B149
+    env_context as _ectx, panel_env_label as _plbl)
 import sys
 
 from pathlib import Path
@@ -30,6 +32,8 @@ except Exception:
     def subprocess_args(**kw): return kw
 
 
+from src.utils.platform_utils import (  # B149
+    env_context as _ectx, panel_env_label as _plbl)
 from src.gui.workers import CreateWorker
 
 
@@ -1396,7 +1400,7 @@ class EnvCreateDialog(QDialog):
                 _vs_eq_c = f"vs create {name} -t conda"
                 if python_version:
                     _vs_eq_c += f" --python {python_version}"
-                _bc_c(_cc, context=f"Create conda (env: {name})",
+                _bc_c(_cc, context=f"Create conda {_ectx(name)}",
                       vs_equivalent=_vs_eq_c)
             except Exception:
                 pass
@@ -1635,7 +1639,7 @@ class EnvCreateDialog(QDialog):
                             _vs_eq_a = f"vs create {_name} -t {_etype}"
                             if _python:
                                 _vs_eq_a += f" --python {_python}"
-                        _bc_a(_head, context=f"Create {_etype} (env: {_name})",
+                        _bc_a(_head, context=f"Create {_etype} {_ectx(_name)}",
                               vs_equivalent=_vs_eq_a)
                 except Exception:
                     pass
@@ -2115,7 +2119,7 @@ class EnvCreateDialog(QDialog):
             if python_path:
                 _vs_eq_v += f" --python {python_path}"
             _bc_v([_py_v, "-m", "venv", venv_path],
-                  context=f"Create venv (env: {name})", vs_equivalent=_vs_eq_v)
+                  context=f"Create venv {_ectx(name)}", vs_equivalent=_vs_eq_v)
         except Exception:
             pass
 

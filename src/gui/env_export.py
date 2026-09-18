@@ -2,6 +2,8 @@
 Export selected environment to requirements.txt, Dockerfile, pyproject.toml,
 conda env.yml, clipboard, or JSON (moved from main_window.py).
 """
+from src.utils.platform_utils import (  # B149
+    env_context as _ectx, panel_env_label as _plbl)
 from pathlib import Path
 
 from PySide6.QtWidgets import QApplication, QFileDialog, QMessageBox
@@ -109,7 +111,9 @@ class EnvExportMixin:
         try:
             _env = self._get_selected_env_name() or ""
             self.show_command(
-                command, context=f"{action} (env: {_env})" if _env else action)
+                command,
+                context=(f"{action} {_ectx(_plbl(self) or _env, bool(_plbl(self)))}".strip()
+                         if (_env or _plbl(self)) else action))
         except Exception:
             pass
 

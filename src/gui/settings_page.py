@@ -1216,6 +1216,23 @@ class SettingsPage(AppearanceMixin, PythonMixin, CatalogMixin, AdvancedMixin, To
             self.conda_mirror_list.addItem(_m)
         self._save_conda_mirrors()
 
+        # B122: the mirror preference is a separate thing from this list --
+        # a file written the first time conda-forge's CDN could not be
+        # reached, read on every install after, and with no expiry. Someone
+        # who moves to a network where the CDN works again has no other way
+        # to say so, and Defaults is where they would look.
+        try:
+            from src.core.micromamba_installer import forget_mirror_preference
+            if forget_mirror_preference():
+                try:
+                    self.status_label.setText(
+                        "\u2713 Mirrors reset, and the saved preference for "
+                        "the prefix.dev mirror was forgotten.")
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
 
     # B71: _setup_toolchain_ui_section and _setup_cliops_section lived
     # here AND in ToolchainMixin, and this class's copies won -- so the

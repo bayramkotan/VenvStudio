@@ -404,6 +404,25 @@ def _mirror_preferred() -> bool:
         return False
 
 
+def forget_mirror_preference() -> bool:
+    """Forget that the mirror was needed on this network (B122).
+
+    The preference is a file, written the first time conda-forge's CDN could
+    not be reached and read on every install after. It has no expiry: move to
+    a network where the CDN works and VenvStudio keeps using the mirror --
+    correct, invisible, and until now impossible to undo.
+    """
+    try:
+        fp = _mirror_flag_path()
+        if fp.exists():
+            fp.unlink()
+            _log.info("🌐 [Conda] mirror preference forgotten")
+            return True
+    except OSError as _e:
+        _log.warning(f"[Conda] could not forget the mirror preference: {_e}")
+    return False
+
+
 def _remember_mirror_works() -> None:
     try:
         fp = _mirror_flag_path()
@@ -589,8 +608,17 @@ def create_conda_env(env_path: Path, python_version: str = "",
     try:
         _clear_mirror_skip()
         if _mirror_preferred() and "conda-forge" in channels:
-            _log.debug("🌐 [Conda] using prefix.dev mirror "
-                       "(saved preference for this network)")
+            # B122: the user was never told. The first failure says "CDN
+            # unreachable, retrying via the mirror" and every install after
+            # it goes to the mirror in silence -- packages arrive from a host
+            # nobody mentioned, and the preference outlives the network that
+            # caused it. Bayram's own network does exactly this.
+            _log.info("🌐 [Conda] using prefix.dev mirror "
+                      "(remembered from an earlier failure on this network)")
+            if progress_cb:
+                progress_cb("Using the prefix.dev mirror of conda-forge "
+                            "— remembered from an earlier failure on "
+                            "this network. Same packages.")
             channels = _mirror_channels(channels)
         result = _run_micromamba(_build_args(channels),
                                  progress_cb, timeout=600)
@@ -737,8 +765,17 @@ def install_conda_packages(env_path: Path, packages: list,
     try:
         _clear_mirror_skip()
         if _mirror_preferred() and "conda-forge" in channels:
-            _log.debug("🌐 [Conda] using prefix.dev mirror "
-                       "(saved preference for this network)")
+            # B122: the user was never told. The first failure says "CDN
+            # unreachable, retrying via the mirror" and every install after
+            # it goes to the mirror in silence -- packages arrive from a host
+            # nobody mentioned, and the preference outlives the network that
+            # caused it. Bayram's own network does exactly this.
+            _log.info("🌐 [Conda] using prefix.dev mirror "
+                      "(remembered from an earlier failure on this network)")
+            if progress_cb:
+                progress_cb("Using the prefix.dev mirror of conda-forge "
+                            "— remembered from an earlier failure on "
+                            "this network. Same packages.")
             channels = _mirror_channels(channels)
         result = _run_micromamba(_build_args(channels),
                                  progress_cb, timeout=600)

@@ -3,7 +3,7 @@ VenvStudio - Constants and Popular Package Catalog
 """
 
 APP_NAME = "VenvStudio"
-APP_VERSION = "1.6.103"
+APP_VERSION = "1.6.104"
 
 # ─── Shared Package Cache ─────────────────────────────────────────────────────
 # Default path for pip/uv shared download cache.
@@ -99,10 +99,11 @@ PRESET_DESCRIPTIONS = {
         "GluonTS for probabilistic forecasting."
     ),
     "💰 Financial Analysis": (
-        "Quantitative finance and algorithmic trading tools. "
-        "yfinance downloads market data, QuantLib for derivatives pricing, "
-        "Zipline for backtesting trading strategies, "
-        "PyFolio for portfolio performance analysis."
+        "Quantitative finance and portfolio analysis. "
+        "yfinance downloads market data, QuantLib prices derivatives, "
+        "TA-Lib computes technical indicators, arch models volatility, "
+        "quantstats and pyfolio-reloaded report portfolio performance, "
+        "mplfinance draws candlestick charts."
     ),
     "💰 Financial LLM": (
         "Fine-tune large language models for financial applications. "
@@ -901,7 +902,19 @@ PRESETS = {
     "🧪 JupyterLab Full": ["jupyterlab", "ipywidgets", "numpy", "pandas", "matplotlib"],
     "📈 Time Series (Classic)": ["statsmodels", "pmdarima", "prophet", "sktime", "tsfresh", "pandas", "numpy"],
     "📈 Time Series (Deep Learning)": ["pytorch-forecasting", "darts", "neuralforecast", "gluonts", "transformers", "torch"],
-    "💰 Financial Analysis": ["yfinance", "quantlib", "zipline-reloaded", "pyfolio", "ta-lib", "pandas", "numpy"],
+    # B157. MEASURED against PyPI on 2026-09-25, not guessed:
+    #   pyfolio 0.9.2        sdist ONLY, last release 2019 -- its
+    #                        versioneer.py calls configparser.SafeConfigParser,
+    #                        removed in Python 3.12, so the build dies before
+    #                        pip gets anywhere. Replaced by pyfolio-reloaded.
+    #   zipline-reloaded     wheels stop at cp313; on 3.14 pip compiles it and
+    #                        fails. Dropped -- a backtesting engine is a preset
+    #                        of its own, not a line in this one.
+    # Everything below has a wheel for cp314.
+    "💰 Financial Analysis": ["yfinance", "pandas", "numpy", "matplotlib",
+                              "statsmodels", "quantlib", "ta-lib", "arch",
+                              "quantstats", "pyfolio-reloaded",
+                              "empyrical-reloaded", "mplfinance"],
     "💰 Financial LLM": ["transformers", "datasets", "peft", "bitsandbytes", "accelerate", "sentencepiece", "pandas"],
     "🕸️ Web Scraping": ["scrapy", "playwright", "beautifulsoup4", "lxml", "requests", "pandas"],
     "⚡ Async Backend": ["fastapi", "uvicorn", "asyncpg", "sqlalchemy", "pydantic", "httpx", "celery"],

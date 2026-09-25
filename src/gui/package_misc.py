@@ -302,6 +302,27 @@ class PackageMiscMixin:
 
     # ── Helpers ──
 
+    @staticmethod
+    def _tail(message, limit: int = 2000) -> str:
+        """The END of a tool's output, not its beginning (B154).
+
+        These messages were cut with message[:500], and pip prints progress
+        first and the reason last -- so the cut removed exactly the part
+        worth reading. Bayram watched an install fail at:
+
+            Getting requirements to build wheel: sta
+
+        ...which is a progress line, chopped mid-word, with the actual error
+        several lines further down and never shown.
+
+        The limit is generous because the failure is usually a traceback from
+        a build backend, and the last line alone rarely explains it.
+        """
+        _m = str(message or "")
+        if len(_m) <= limit:
+            return _m
+        return "\u2026 (earlier output omitted)\n" + _m[-limit:]
+
     def _show_command_hint(self, title, command, vs_equivalent: str = ""):
         """Show the terminal command behind an action.
 
@@ -401,7 +422,8 @@ class PackageMiscMixin:
         # and is cleared in _on_packages_loaded() once the table is
         # actually populated. The failure path below has no reload to wait
         # for, so it still clears busy immediately, right where it is.
-        self._append_log(f"\n{'✅ Success' if success else '❌ Failed'}: {message[:500]}")
+        self._append_log(f"\n{'✅ Success' if success else '❌ Failed'}: "
+                          f"{self._tail(message)}")
 
         # B31: save the run AFTER the result line, so the history records
         # how it ended and not just what pip printed along the way.
@@ -418,7 +440,7 @@ class PackageMiscMixin:
             if success:
                 log.info(f"✅ [{_kind}] OK: {message[:200]}")
             else:
-                log.warning(f"❌ [{_kind}] FAILED: {message[:500]}")
+                log.warning(f"❌ [{_kind}] FAILED: {message}")   # B154: loga TAMAMI
         except Exception:
             pass
 
@@ -458,7 +480,7 @@ class PackageMiscMixin:
                     )
                 else:
                     self.status_label.setText("❌ Operation failed")
-                    self._append_log(f"\n❌ {message[:500]}")
+                    self._append_log(f"\n❌ {self._tail(message)}")
             else:
                 self.status_label.setText("⛔ Operation cancelled")
 

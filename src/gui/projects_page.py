@@ -841,6 +841,17 @@ class ProjectsPageMixin:
             lambda _i: self._proj_open_packages())
         self.projects_table.itemSelectionChanged.connect(
             self._update_project_buttons)
+        # B193: the command panel outlived the selection it described.
+        # Environments had a hide-on-selection-change path (dead on one of
+        # its two routes, fixed in main_window); this page had none at all,
+        # so the panel sat there describing whatever was last acted on.
+        #
+        # `clicked` and a key filter, NOT itemSelectionChanged: B148 was
+        # exactly the lesson that a refresh moving the selection is not the
+        # user doing it, and hiding the panel underneath a refresh would be
+        # the same bug wearing the opposite coat.
+        self.projects_table.clicked.connect(self._on_proj_user_interaction)
+        self.projects_table.installEventFilter(self)
         layout.addWidget(self.projects_table, 1)
 
         # ── Command Reference panel (B49) ────────────────────────────────
@@ -1991,21 +2002,36 @@ class ProjectsPageMixin:
             f"Run `{' '.join(_cmd)}` in {_path}" if _cmd
             else "No recognised project tool")
 
-        # B53 (Bayram, 2026-09-04): show the project's commands on SELECTION,
-        # not only after an action.
+        # B194 (Bayram, 2026-10-18): the panel no longer fills on selection.
         #
-        # The panel existed but stayed hidden until something was pressed, so
-        # the page looked like it had no command reference at all -- which is
-        # how Bayram read it. The Environments page fills its panel as you go
-        # too.
+        # THIS REVERSES B53, which was Bayram's own request on 2026-09-04:
+        # back then the panel stayed hidden until something was pressed and
+        # the page read as though it had no command reference at all. The
+        # call that used to sit here is what he asked for then.
         #
-        # This is the first pillar in its plainest form: select a poetry
-        # project and read what poetry would have you type, having pressed
-        # nothing and changed nothing.
-        self._show_project_commands_for(_path, _meta)
+        # What changed is that it turned out to be indistinguishable, on
+        # screen, from a panel reporting something that had just run: "ben
+        # birsey calistirmadim ki!". Clicking a row produced a block of
+        # commands that looked like a receipt for an action nobody took.
+        #
+        # The rule now, and it matches the Environments page exactly: the
+        # panel appears when a command is RUN, and clears when the selection
+        # moves elsewhere. Selection alone neither fills it nor is pretended
+        # to be an action.
+        #
+        # _show_project_commands_for is deliberately left in place and
+        # deliberately unreferenced. Restoring B53 is this one call; putting
+        # those commands behind a button of their own would be a new one.
 
     def _show_project_commands_for(self, path, meta):
-        """Fill the reference panel with this project's own commands (B53)."""
+        """Fill the reference panel with this project's own commands (B53).
+
+        NOT CALLED as of B194 (2026-10-18). It used to run on every
+        selection change, which made a click look like it had executed
+        something. Kept because the text it builds is correct and the
+        decision to stop showing it is a product one, not a defect --
+        see the note in _update_project_buttons.
+        """
         _tool = meta.get("tool", "")
         if not _tool:
             self._show_project_command(
@@ -2462,6 +2488,30 @@ class ProjectsPageMixin:
         except Exception as e:
             QMessageBox.warning(self, "Open Folder", f"{type(e).__name__}: {e}")
 
+    def _hide_proj_cmd_panel(self):
+        """Hide the Projects Command Reference panel (B193)."""
+        try:
+            self._proj_cmd_panel.setVisible(False)
+        except Exception:
+            pass
+        self._proj_cmd_path = None
+
+    def _on_proj_user_interaction(self, *args):
+        """Clear the command panel when the user picks another project.
+
+        B193. Called from the table's `clicked` signal and from the key
+        filter in main_window -- both of which mean a person did this.
+        A programmatic re-selection after a refresh reaches neither.
+        """
+        _p = getattr(self, "_proj_cmd_panel", None)
+        if _p is None or not _p.isVisible():
+            return
+        _cur = self._selected_project_path()
+        if not _cur:
+            return
+        if getattr(self, "_proj_cmd_path", None) != _cur:
+            self._hide_proj_cmd_panel()
+
     def _show_project_command(self, command: str, hints: str = ""):
         """Put a command in the reference panel and reveal it (B49).
 
@@ -2471,6 +2521,9 @@ class ProjectsPageMixin:
         likely to know already.
         """
         try:
+            # B193: which project this panel is about, so a click on
+            # another row can clear it.
+            self._proj_cmd_path = self._selected_project_path()
             self._proj_cmd_live.setText(f"\u25b6  {command}")
             # B120: setPlainText was why this panel looked "renksiz, hic
             # anlasilmiyor" next to the Environments one. That panel builds

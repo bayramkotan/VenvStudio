@@ -839,30 +839,50 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         # Refresh with current cache (no force) — just re-sorts in memory
         self._refresh_env_list(force=False)
 
+    def _selected_env_name(self):
+        """Name in the Environments table's selected row, or None.
+
+        B193. Two places needed this and only one had it, written inline;
+        the other path simply did not record the name, which is how the
+        panel came to outlive the selection it described.
+        """
+        try:
+            _rows = self.env_table.selectionModel().selectedRows()
+            if not _rows:
+                return None
+            return self.env_table.item(_rows[0].row(), 0).text().strip()
+        except Exception:
+            return None
+
     def _on_env_user_interaction(self, *args):
         """Called on manual user interaction (mouse click / key press) with env table.
         Hides the educational cmd panel if user moved to a different env.
         Programmatic selection changes (e.g. after refresh) do NOT trigger this.
         """
-        if not hasattr(self, "_cmd_panel_env_name"):
+        _w = getattr(self, "_cmd_panel_widget", None)
+        if _w is None or not _w.isVisible():
             return
-        _panel_env = self._cmd_panel_env_name
-        if _panel_env is None:
+        _cur = self._selected_env_name()
+        if _cur is None:
             return
-        # What env is currently selected?
-        rows = self.env_table.selectionModel().selectedRows()
-        if not rows:
-            return
-        try:
-            cur_name = self.env_table.item(rows[0].row(), 0).text().strip()
-        except Exception:
-            return
-        if cur_name != _panel_env:
+        # B193: a visible panel with no environment recorded is a path that
+        # forgot to set one. Hide it rather than letting it sit there
+        # describing some earlier selection -- the old code returned here
+        # and that is exactly how the bug survived.
+        if self._cmd_panel_env_name != _cur:
             self._hide_cmd_panel()
 
     def eventFilter(self, obj, event):
         """Detect keyboard arrow navigation on env_table for panel hiding."""
         from PySide6.QtCore import QEvent
+        # B193: the Projects table needs the same treatment -- its panel had
+        # no hide-on-selection-change logic at all. ProjectsPageMixin is
+        # mixed into this class, so self.projects_table lives on the same
+        # object and one event filter covers both tables.
+        if hasattr(self, "projects_table") and obj is self.projects_table:
+            if event.type() == QEvent.KeyRelease:
+                if hasattr(self, "_on_proj_user_interaction"):
+                    self._on_proj_user_interaction()
         if hasattr(self, "env_table") and obj is self.env_table:
             if event.type() == QEvent.KeyRelease:
                 # After key release, Qt has updated selection — check if it moved
@@ -910,6 +930,18 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
                 if hasattr(self, "_cmd_panel_widget"):
                     self._cmd_panel_widget.setVisible(True)
                 self._cmd_panel_sticky = True
+                # B193: record WHICH environment this panel is about.
+                #
+                # Two paths fill this panel. _update_cmd_panel (Delete,
+                # Clone, Rename) set _cmd_panel_env_name and this one never
+                # did, so after Open Terminal, Open Folder or a Run Command
+                # entry the name stayed None -- and _on_env_user_interaction
+                # returns early on None. The panel then described pipx while
+                # the selected row said dl, and no amount of clicking
+                # elsewhere would clear it, because the code that clears it
+                # had already given up. MEASURED: Bayram selected dl and the
+                # panel still read "Entering 'pipx'".
+                self._cmd_panel_env_name = self._selected_env_name()
                 self._cmd_panel_live.setText(f"▶ {command}")
             except Exception:
                 pass

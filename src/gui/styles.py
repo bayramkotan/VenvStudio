@@ -840,7 +840,26 @@ def cmd_panel_styles(c: dict) -> tuple:
         f"color: {c['warning']}; font-size: 20px; font-weight: bold; "
         f"font-family: Consolas, monospace; padding: 10px 12px; "
         f"background: {c['input_bg']}; "
-        f"border: 2px solid {c['warning']}; border-radius: 6px;",
+        #
+        # B193 (Bayram: "baska yere focus yapmama ragmen gitmiyor. Project
+        # kisminda da ayni."). It never was focus. The box carried a 2px
+        # ring in the warning colour at all times, and a full bright ring
+        # around a single widget is the shape every toolkit uses for "this
+        # has keyboard focus" -- so the eye read it as focus that would not
+        # clear and looked for a way to dismiss it. There was nothing to
+        # dismiss.
+        #
+        # MEASURED before changing anything: the theme's :focus rules cover
+        # QLineEdit, QComboBox and QSpinBox only, and both live boxes are
+        # QLabels, so no focus styling reaches them from anywhere. The
+        # permanent ring was the whole of it.
+        #
+        # The emphasis stays, as a left accent bar -- a callout, which
+        # reads as "look here" rather than "you are typing here" -- and the
+        # box now shares the hints box's 1px border, so the two halves of
+        # the panel read as one panel.
+        f"border: 1px solid {c['border']}; "
+        f"border-left: 4px solid {c['warning']}; border-radius: 6px;",
 
         f"background-color: {c['input_bg']}; "
         f"border: 1px solid {c['border']}; "

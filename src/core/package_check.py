@@ -56,7 +56,20 @@ def catalog_names() -> list:
     out = []
     try:
         for _cat in (PACKAGE_CATALOG or {}).values():
-            for _pkg in _cat:
+            # B190: `.get("packages", [])`, not `_cat`.
+            #
+            # A category is {"icon": ..., "packages": [...]}, so iterating it
+            # yields its KEYS. This function returned ['icon', 'packages']
+            # and nothing else, for every catalog, since the day the icon key
+            # was added. The isinstance guard below hid it: the keys are
+            # strings, so they fell through the dict branch and were appended
+            # as if they were package names.
+            #
+            # MEASURED: suggest("nunpy") -> [], suggest("pandsa") -> []. The
+            # did-you-mean this was written for in B55 has never once
+            # suggested anything. With B189 the catalog is 518 names.
+            for _pkg in (_cat.get("packages", [])
+                         if isinstance(_cat, dict) else _cat):
                 _n = _pkg.get("name") if isinstance(_pkg, dict) else _pkg
                 if _n:
                     out.append(str(_n))

@@ -3,7 +3,7 @@ VenvStudio - Constants and Popular Package Catalog
 """
 
 APP_NAME = "VenvStudio"
-APP_VERSION = "1.6.106"
+APP_VERSION = "1.6.107"
 
 # ─── Shared Package Cache ─────────────────────────────────────────────────────
 # Default path for pip/uv shared download cache.
@@ -1221,7 +1221,7 @@ PACKAGE_CATALOG = {
 PRESETS = {
     "📊 Data Science Starter": ["numpy", "pandas", "matplotlib", "scikit-learn", "jupyter"],
     "🌐 Web API (FastAPI)": ["fastapi", "uvicorn", "sqlalchemy", "pydantic", "python-dotenv"],
-    "🌐 Web App (Django)": ["django", "psycopg2-binary", "django-rest-framework", "celery"],
+    "🌐 Web App (Django)": ["django", "psycopg2-binary", "djangorestframework", "celery"],
     "🌐 Web App (Flask)": ["flask", "sqlalchemy", "flask-cors", "gunicorn"],
     "🤖 ML Starter": ["numpy", "pandas", "scikit-learn", "matplotlib", "jupyter", "xgboost"],
     "👁️ Computer Vision": ["opencv-python", "pillow", "scikit-image", "ultralytics", "torch", "torchvision"],

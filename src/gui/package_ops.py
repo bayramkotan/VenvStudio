@@ -708,7 +708,7 @@ class PackageOpsMixin:
         _conflict_errors   = []  # will definitely fail
         _conflict_warnings = []  # may fail / user should know
         try:
-            from src.utils.constants import CONFLICT_RULES, CONFLICT_RULES_ALIASES
+            from src.core import conflict_resolver as _cr
             import re as _re_cf
 
             # Resolve current Python version (already fetched above if available)
@@ -732,12 +732,15 @@ class PackageOpsMixin:
 
             # The full requested set, not just what pip will fetch (N76).
             for _pkg_spec in _conflict_check_list:
-                # Normalize: strip version spec, lowercase, dash→underscore
+                # F151: the name handling and the table lookup now live in
+                # conflict_resolver. They were written out here and AGAIN in
+                # window_menu.py, and the two copies did not agree: one tried
+                # the raw name against the alias map, the other the lowercased
+                # one. Names like PyQt5 happen to be keyed both ways, which is
+                # why nobody noticed.
                 _pkg_raw  = _re_cf.split(r'[><=!~;]', _pkg_spec)[0].strip()
-                _pkg_key  = _pkg_raw.lower().replace("_", "-")
-                # Check alias map first
-                _rule_key = CONFLICT_RULES_ALIASES.get(_pkg_raw, CONFLICT_RULES_ALIASES.get(_pkg_key, _pkg_key))
-                _rule     = CONFLICT_RULES.get(_rule_key)
+                _pkg_key  = _cr.normalise(_pkg_spec)
+                _rule     = _cr.rule_for(_pkg_spec)
 
                 # ── N9 Aşama 5+: manual list first, then live PyPI check ──
                 # Only for packages the manual list has NOTHING on (manual
@@ -859,42 +862,70 @@ class PackageOpsMixin:
                 + "\n\n".join(_conflict_warnings)
             )
 
-        # ── N9 Aşama 4: pip --dry-run — gerçek resolver kontrolü ──────
-        # CONFLICT_RULES yukarıda sadece elle girilmiş statik tabloyu kontrol
-        # etti. Bu blok pip'in GERÇEK resolver'ını (indirme/kurulum yok,
-        # sadece çözümleme) çalıştırır — tabloda hiç olmayan gerçek çakışmaları
-        # (örn. iki paketin birbirine zıt sürüm istemesi) yakalar. Sadece pip’in
-        # gerçekten doğrudan kurulum aracı olduğu tiplerde çalışır — uv/poetry/
-        # conda/pdm/pixi/pipx kendi resolver’larını kullanır, bu kontrol onlar
-        # için anlamlı değil (hatch pip'e devrettiği için dahil).
-        _dry_run_error = None
-        if _env_type in ("venv", "uv", "hatch") and self.pip_manager:
-            if hasattr(self, "status_label"):
-                self.status_label.setText("🐍 Verifying with pip’s dependency resolver...")
+        # ── N9 Aşama 4 / F151: ask pip what it would actually DO ─────
+        #
+        # The table above can only judge the names it was GIVEN. This asks
+        # pip to resolve the whole tree without installing anything.
+        #
+        # It used to run a bare `pip install --dry-run` and read only the
+        # exit code, so it could say "these cannot be installed together"
+        # and nothing else. MEASURED, 2026-09-25: `pip install pandas_ta
+        # yfinance` failed on Python 3.14 and this check passed it through,
+        # because pip resolved fine -- what broke was numba, a package
+        # Bayram never typed, with no 3.14 wheel, compiled on his behalf.
+        # Exit code 0 cannot see that.
+        #
+        # conflict_resolver.check_dynamic runs it with --report instead and
+        # reads the resolution: every package that would be COMPILED rather
+        # than downloaded, and whether the user asked for it. That is what
+        # will_build_from_source was written for in B153 and what nothing
+        # called until now.
+        #
+        # Which env types: unchanged, and now named once in
+        # conflict_resolver.PIP_DRIVEN rather than written inline here.
+        # uv, poetry, conda, pdm, pixi and pipx resolve their own way.
+        _cr_report = None
+        if self.pip_manager:
             try:
-                _dr_python = get_python_executable(self.pip_manager.venv_path)
-                _dr = subprocess.run(
-                    [str(_dr_python), "-m", "pip", "install", "--dry-run"] + packages,
-                    **subprocess_args(capture_output=True, text=True, timeout=25)
-                )
-                if _dr.returncode != 0:
-                    _dr_tail = (_dr.stderr or _dr.stdout or "").strip()
-                    # Son ~15 satır yeterli — pip resolver hataları uzun
-                    # olabilir, gerçek özet genelde en sonda.
-                    _dry_run_error = "\n".join(_dr_tail.splitlines()[-15:])
+                from src.core import conflict_resolver as _cr2
+                if _cr2.dynamic_applies(_env_type):
+                    if hasattr(self, "status_label"):
+                        self.status_label.setText(
+                            "🐍 Verifying with pip’s dependency resolver...")
+                    _cr_report = _cr2.check_dynamic(
+                        get_python_executable(self.pip_manager.venv_path),
+                        packages, env_type=_env_type, timeout=90.0)
             except Exception:
-                pass  # dry-run kendisi başarısız olursa install'ı asla engelleme
+                # Never block an install because the check itself broke.
+                _cr_report = None
 
-        if _dry_run_error:
+        if _cr_report is not None and _cr_report.resolve_error:
+            # pip gave up before choosing anything. Its own words are the
+            # message; nothing here improves on them.
             _dr_reply = QMessageBox.warning(
                 self, "pip Dependency Check Failed",
-                "⛔ pip’s real dependency resolver reports these packages "
-                "cannot be installed together:\n\n" + _dry_run_error +
+                "⛔ pip’s real dependency resolver could not work out how to "
+                "install these packages together:\n\n"
+                + _cr_report.resolve_error +
                 "\n\nProceed anyway?",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.No,
             )
             if _dr_reply != QMessageBox.Yes:
+                self._set_busy(False)
+                return
+        elif _cr_report is not None and _cr_report.builds:
+            # Resolution succeeded, but something in the tree has no wheel.
+            # A warning, not a refusal: plenty of sdists build fine. The
+            # point is that the reader finds out BEFORE the download, with
+            # the reason attached.
+            _sb_reply = QMessageBox.warning(
+                self, "Some Packages Must Be Compiled",
+                _cr_report.summary() + "\n\nProceed anyway?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if _sb_reply != QMessageBox.Yes:
                 self._set_busy(False)
                 return
 

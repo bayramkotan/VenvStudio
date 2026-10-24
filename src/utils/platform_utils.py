@@ -447,41 +447,135 @@ def poetry_env_display_name(dir_name: str) -> str:
     return _m.group("n") if _m else (dir_name or "")
 
 
+def icon_search_roots(start=None) -> list:
+    """Prefixes an installed icon could sit under, most trustworthy first.
+
+    B185. `sys.prefix` is not where pip put the files.
+
+    MEASURED on Bayram's Debian test machine, VenvStudio 1.6.104 installed
+    with `sudo pip install venvstudio`:
+
+        package          /usr/local/lib/python3.13/dist-packages
+        data-files       /usr/local/share/...
+        sys.prefix       /usr
+        searched         /usr/share/...          <- nothing there
+
+    Debian and Ubuntu send a root pip install to /usr/local while leaving
+    sys.prefix at /usr, so asking the interpreter where it lives answers a
+    different question from "where was this package installed". The icon was
+    on disk the whole time; the RECORD listed it and `ls` found it.
+
+    So the first root is derived from this file's own path: walk up from
+    .../dist-packages/src/utils/platform_utils.py until a directory with a
+    share/ beside it appears, which is the prefix the package was actually
+    installed into. That works for /usr/local, for a venv, for pipx and for
+    --user without knowing which of them is in play.
+
+    `start` exists for testing: it stands in for __file__ so a synthetic
+    install tree can be walked without installing anything.
+    """
+    import sys as _sys
+    from pathlib import Path as _P
+
+    _roots = []
+
+    def _add(_p):
+        try:
+            _p = _P(_p).resolve()
+        except Exception:
+            return
+        if _p not in _roots:
+            _roots.append(_p)
+
+    # 1. Where this package actually sits. This is the one that fixes B185.
+    try:
+        for _anc in _P(start or __file__).resolve().parents:
+            if (_anc / "share").is_dir():
+                _add(_anc)
+    except Exception:
+        pass
+
+    # 2. What the interpreter thinks. Correct for a venv, and for Windows,
+    #    where pip and the interpreter agree about the prefix.
+    _add(_sys.prefix)
+    _add(getattr(_sys, "exec_prefix", _sys.prefix))
+
+    # 3. site's view, which on some distributions lists /usr/local too, and
+    #    the per-user base that `pip install --user` writes to.
+    try:
+        import site as _site
+        for _p in getattr(_site, "PREFIXES", ()) or ():
+            _add(_p)
+        _add(_site.getuserbase())
+    except Exception:
+        pass
+
+    return _roots
+
+
 def find_app_icon(ext: str = ".png") -> str:
-    """Where this installation's icon actually is, or "" (B132).
+    """Where this installation's icon actually is, or "" (B132, B185).
 
-    Searched in the order a running application should trust:
-
-      sys.prefix/share/...   what pip installed, system or venv alike
-      repository assets/     a source checkout, for development
-
-    Returns "" rather than guessing. MEASURED: the wheel shipped no image at
-    all, because package-data paths resolve inside packages and assets/ sits
-    at the repository root -- so the shortcut code fell back to using the
-    ELF binary as an icon, which no desktop can render. Fixed in
+    Returns "" rather than guessing. MEASURED (B132): the wheel shipped no
+    image at all, because package-data paths resolve inside packages and
+    assets/ sits at the repository root -- so the shortcut code fell back to
+    using the ELF binary as an icon, which no desktop can render. Fixed in
     pyproject.toml with data-files; this is the other half.
+
+    B185 widened the search: see icon_search_roots for why sys.prefix alone
+    was the wrong question to ask. The hicolor sizes are globbed rather than
+    pinned to 512x512, so an icon installed at any size is still found.
 
     Lives here, not in window_menu or main, because THREE places want it:
     the window icon, the taskbar icon and the .desktop file. src/main.py
     already carries a comment about being a partial copy of main.py and the
     bugs that caused.
     """
-    import sys as _sys
     from pathlib import Path as _P
     _here = _P(__file__).resolve()
     _n = f"icon{ext}"
-    for _c in (
-        _P(_sys.prefix) / "share" / "pixmaps" / _n,
-        _P(_sys.prefix) / "share" / "icons" / "hicolor" / "512x512"
-        / "apps" / _n,
-        _here.parent.parent.parent / "assets" / _n,
-        _here.parent.parent / "assets" / _n,
-    ):
+
+    for _root in icon_search_roots():
+        _share = _root / "share"
+        _cands = [_share / "pixmaps" / _n]
+        # Any installed size, largest first -- a desktop scales down better
+        # than it scales up, and B186 left this icon at 512 alone.
+        try:
+            _sizes = sorted(
+                (_d for _d in (_share / "icons" / "hicolor").iterdir()
+                 if _d.is_dir()),
+                key=lambda _d: int(_d.name.split("x")[0])
+                if _d.name.split("x")[0].isdigit() else 0,
+                reverse=True)
+            _cands += [_d / "apps" / _n for _d in _sizes]
+        except Exception:
+            pass
+        for _c in _cands:
+            try:
+                if _c.is_file():
+                    return str(_c)
+            except OSError:
+                continue
+
+    # A source checkout, for development.
+    for _c in (_here.parent.parent.parent / "assets" / _n,
+               _here.parent.parent / "assets" / _n):
         try:
             if _c.is_file():
                 return str(_c)
         except OSError:
             continue
+
+    # B185: say so. The old silence is half of why this took three sessions
+    # to find -- _create_desktop_shortcut simply omitted the Icon= line and
+    # wrote a shortcut that worked and had no picture.
+    try:
+        from src.utils.logger import get_logger as _gl
+        _gl("venvstudio.platform").warning(
+            "[Icon] no icon%s found; searched %s",
+            ext, ", ".join(str(_r / "share") for _r in icon_search_roots()))
+    except Exception:
+        pass
     return ""
 
 

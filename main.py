@@ -813,6 +813,24 @@ def main():
         sys.exit(exit_code)
 
     except Exception as e:
+        # B40: PySide6 missing is not a crash to report, it is a setup
+        # problem with an answer. A traceback told the reader nothing they
+        # could act on, and this path is reached on exactly the machine
+        # where the application has never once started.
+        #
+        # Handled before the generic branch because everything below it --
+        # the crash report, the QMessageBox -- assumes Qt is importable.
+        if isinstance(e, ImportError) and "PySide6" in (
+                (getattr(e, "name", "") or "") + str(e)):
+            try:
+                from src.utils.platform_utils import qt_missing_help
+                print(qt_missing_help(e), file=sys.stderr)
+            except Exception:
+                print(f"PySide6 is missing: {e}", file=sys.stderr)
+                print("Try: pipx install venvstudio", file=sys.stderr)
+            sys.exit(1)
+
+    except Exception as e:
         # ── Startup crash — log + show error ──
         error_msg = f"VenvStudio Startup Error:\n\n{type(e).__name__}: {e}\n\n{traceback.format_exc()}"
 

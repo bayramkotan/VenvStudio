@@ -20,12 +20,15 @@ Usage examples:
     vs preset install data-science-starter ml
     vs preset remove llm-app-starter ml
     vs delete ml -y
+    vs update
+    vs update --check
     vs version
 """
 import argparse
 import sys
 
-COMMANDS = ("list", "create", "delete", "packages", "install", "uninstall", "preset", "version")
+COMMANDS = ("list", "create", "delete", "packages", "install", "uninstall",
+            "preset", "update", "version")
 
 
 # argparse is case-sensitive, so `vs -v` failed with "the following arguments
@@ -543,6 +546,148 @@ def _cmd_preset_op(args, install: bool) -> int:
     return 0 if ok else 1
 
 
+# ── B187: update ───────────────────────────────────────────────────────────
+
+PYPI_JSON = "https://pypi.org/pypi/venvstudio/json"
+RELEASES_URL = "https://github.com/bayramkotan/VenvStudio/releases/latest"
+
+
+def _version_key(v: str):
+    """A comparable key for "1.6.107".
+
+    packaging.version when it is there, a digit tuple when it is not.
+    NOT string order: 1.6.100 sorts before 1.6.97 as text, which is the
+    whole reason the version scheme note exists in the handoff.
+    """
+    try:
+        from packaging.version import Version
+        return Version(str(v))
+    except Exception:
+        _parts = []
+        for _p in str(v).split("."):
+            _d = "".join(_c for _c in _p if _c.isdigit())
+            _parts.append(int(_d) if _d else 0)
+        return tuple(_parts + [0, 0, 0])[:4]
+
+
+def _install_method():
+    """How THIS copy was installed: (method, where, how to upgrade it).
+
+    Bayram's rule for isnady, which holds here: a copy is updated WHERE IT
+    IS. There may be a system-wide one, a per-user one and several inside
+    environments, and updating one must never remove or relocate another.
+    So this reports on the copy that is running, and nothing else.
+    """
+    import os
+    import sys as _sys
+    from pathlib import Path as _P
+
+    if getattr(_sys, "frozen", False):
+        # An AppImage or a .exe. pip cannot upgrade it; a new build has to
+        # be downloaded, and replacing a running binary from inside itself
+        # is not something to attempt.
+        return "frozen", str(_P(_sys.executable)), []
+
+    _mod = _P(__file__).resolve()
+    _parts = [p.lower() for p in _mod.parts]
+
+    if "pipx" in _parts:
+        return "pipx", str(_mod), ["pipx", "upgrade", "venvstudio"]
+
+    # Installed by pip when a dist-info for it sits beside the package.
+    try:
+        import importlib.metadata as _md
+        _md.version("venvstudio")
+        _installed = True
+    except Exception:
+        _installed = False
+
+    if not _installed:
+        # A source checkout: there is no distribution to upgrade, and the
+        # working tree is the user's own.
+        return "source", str(_mod.parent.parent), ["git", "pull"]
+
+    _cmd = [_sys.executable, "-m", "pip", "install", "--upgrade", "venvstudio"]
+    # A system-wide install needs elevation, and a quiet permission error
+    # part-way through an upgrade is worse than being told in advance.
+    _writable = os.access(str(_mod.parent), os.W_OK)
+    return ("pip" if _writable else "pip-root"), str(_mod), _cmd
+
+
+def _latest_version(timeout: float = 6.0):
+    """The newest version on PyPI, or None when it cannot be reached.
+
+    None means unknown, not "up to date" -- the same rule verify() follows.
+    Being told nothing is better than being told you are current when the
+    check never happened.
+    """
+    import json as _json
+    import urllib.request as _ur
+    try:
+        _req = _ur.Request(PYPI_JSON, headers={"User-Agent": "VenvStudio"})
+        with _ur.urlopen(_req, timeout=timeout) as _r:
+            return str(_json.load(_r)["info"]["version"])
+    except Exception:
+        return None
+
+
+def _cmd_update(args) -> int:
+    import subprocess
+    from src.utils.constants import APP_VERSION
+
+    _method, _where, _cmd = _install_method()
+    print(f"VenvStudio v{APP_VERSION}")
+    print(f"Installed:  {_method}  ({_where})")
+
+    _latest = _latest_version()
+    if _latest is None:
+        print("Could not reach PyPI. Check your connection and try again.")
+        return 1
+
+    print(f"Latest:     v{_latest}")
+    if _version_key(_latest) <= _version_key(APP_VERSION):
+        print("Already up to date.")
+        return 0
+
+    print(f"\nv{_latest} is available.")
+
+    if _method == "frozen":
+        print("This is a packaged build, so pip cannot upgrade it.")
+        print(f"Download the new one: {RELEASES_URL}")
+        return 0
+
+    if _method == "source":
+        print("This is a source checkout, not an installed copy.")
+        print(f"    cd {_where} && git pull")
+        return 0
+
+    _shown = " ".join(_cmd)
+    if _method == "pip-root":
+        # No sudo is run from here. Asking for a password out of a program
+        # the user did not start as root is the wrong shape; printing the
+        # command lets them see exactly what would run.
+        print("This copy was installed system-wide, so the upgrade needs "
+              "administrator rights:")
+        print(f"    sudo {_shown}")
+        return 0
+
+    print(f"    {_shown}")
+    if getattr(args, "check", False):
+        return 0
+    if not getattr(args, "yes", False):
+        _reply = input("Run it now? [y/N] ")
+        if _reply.strip().lower() not in ("y", "yes", "e", "evet"):
+            print("Aborted.")
+            return 1
+
+    _r = subprocess.run(_cmd)
+    if _r.returncode != 0:
+        print("FAILED")
+        return _r.returncode
+    print(f"OK -- restart VenvStudio to use v{_latest}.")
+    return 0
+
+
 def _cmd_version(args) -> int:
     from src.utils.constants import APP_VERSION
     print(f"VenvStudio v{APP_VERSION}")
@@ -572,6 +717,8 @@ def run_cli(argv=None) -> int:
             "  vs preset list                    List all presets\n"
             "  vs preset install NAME ENV        Install a preset into ENV\n"
             "  vs preset remove NAME ENV         Remove a preset from ENV\n"
+            "  vs update                         Check for a newer version and install it\n"
+            "  vs update --check                 Only report what is available\n"
             "  vs version                        Show version\n"
             "\n"
             "Every subcommand also works as --<command>, e.g.\n"
@@ -625,6 +772,13 @@ def run_cli(argv=None) -> int:
     pp.add_argument("preset", help="Preset name or slug, e.g. data-science-starter")
     pp.add_argument("env")
     p.set_defaults(func=_cmd_preset)
+
+    p = sub.add_parser("update", help="Check for a newer VenvStudio and install it")
+    p.add_argument("-c", "--check", action="store_true",
+                   help="Only report what is available; change nothing")
+    p.add_argument("-y", "--yes", action="store_true",
+                   help="Do not ask for confirmation")
+    p.set_defaults(func=_cmd_update)
 
     sub.add_parser("version", help="Show VenvStudio version").set_defaults(func=_cmd_version)
 

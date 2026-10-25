@@ -170,8 +170,24 @@ def main():
 
         sys.exit(app.exec())
     except ImportError as e:
-        print(f"Error: {e}")
-        print("Make sure PySide6 is installed: pip install PySide6")
+        # B40: an installed copy can run and show nothing, and the old
+        # answer here -- "Make sure PySide6 is installed: pip install
+        # PySide6" -- is a command an externally-managed Linux refuses.
+        # Being handed an instruction that cannot be followed reads as the
+        # application being broken.
+        #
+        # platform_utils is Qt-free, so it still imports on the machine
+        # where importing Qt is what just failed.
+        _name = getattr(e, "name", "") or str(e)
+        if "PySide6" in _name or "PySide6" in str(e):
+            try:
+                from src.utils.platform_utils import qt_missing_help
+                print(qt_missing_help(e))
+            except Exception:
+                print(f"Error: {e}")
+                print("PySide6 is missing. Try: pipx install venvstudio")
+        else:
+            print(f"Error: {e}")
         sys.exit(1)
 
 

@@ -579,6 +579,109 @@ def find_app_icon(ext: str = ".png") -> str:
     return ""
 
 
+def externally_managed() -> bool:
+    """True when this interpreter refuses `pip install` (PEP 668).
+
+    Debian, Ubuntu, Fedora and Arch all ship the marker now. Telling
+    someone on such a system to run `pip install PySide6` is telling them
+    to run a command that will be refused, which is worse than saying
+    nothing -- they conclude the application is broken.
+    """
+    import sys as _sys
+    import sysconfig as _sc
+    from pathlib import Path as _P
+    for _key in ("stdlib", "platstdlib", "purelib"):
+        try:
+            _d = _sc.get_paths().get(_key)
+            if _d and (_P(_d) / "EXTERNALLY-MANAGED").is_file():
+                return True
+        except Exception:
+            continue
+    try:
+        if (_P(_sys.prefix) / "EXTERNALLY-MANAGED").is_file():
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def qt_missing_help(exc=None) -> str:
+    """What to actually DO when the GUI cannot start for want of PySide6.
+
+    B40. `pip install venvstudio` can leave a machine where the command
+    runs and no window appears. The two realistic causes are both at
+    install time: no PySide6 wheel for that Python (3.14 at the moment),
+    or PEP 668 refusing the install on Linux.
+
+    Both entry points used to answer this badly. src/main.py said "Make
+    sure PySide6 is installed: pip install PySide6" -- a command an
+    externally-managed system refuses, leaving the reader stuck on a
+    sentence that cannot be followed. main.py printed a traceback.
+
+    Returned as text rather than printed, because the two callers and any
+    future one should say the SAME thing. This file is where shared
+    helpers live for exactly that reason -- see the N92 note on
+    setup_application_font, which was duplicated and reached nobody who
+    had used pip.
+
+    Qt-free on purpose: it has to run on a machine where importing Qt is
+    the thing that just failed.
+    """
+    import shutil as _sh
+    import sys as _sys
+
+    _py = f"{_sys.version_info.major}.{_sys.version_info.minor}"
+    _lines = [
+        "VenvStudio could not start: PySide6 is missing.",
+        "",
+        f"PySide6 is the GUI toolkit. This is Python {_py} at {_sys.executable}.",
+        "",
+    ]
+    if exc is not None:
+        _lines += [f"    {type(exc).__name__}: {exc}", ""]
+
+    # pipx first when it is there: it is the right way to install a GUI
+    # application, it sidesteps PEP 668 entirely, and it does not touch
+    # the system Python.
+    if _sh.which("pipx"):
+        _lines += [
+            "Recommended -- pipx is already installed:",
+            "    pipx install venvstudio",
+            "",
+        ]
+
+    if externally_managed():
+        _lines += [
+            "This Python is externally managed (PEP 668), so a plain",
+            "`pip install` into it will be refused. Pick one:",
+            "",
+            "    pipx install venvstudio          (installs it properly, on its own)",
+            f"    {_sys.executable} -m pip install --user PySide6",
+            f"    {_sys.executable} -m pip install --break-system-packages PySide6",
+            "",
+            "Your distribution may also package it:",
+            "    apt install python3-pyside6    /    dnf install python3-pyside6",
+            "    pacman -S pyside6",
+            "",
+        ]
+    else:
+        _lines += [
+            "Install it with:",
+            f"    {_sys.executable} -m pip install PySide6",
+            "",
+        ]
+
+    _lines += [
+        f"If pip reports that no PySide6 wheel exists for Python {_py},",
+        "that version is newer than PySide6 supports. Installing VenvStudio",
+        "under an older Python is the way round it.",
+        "",
+        "The command line works without the GUI, and without PySide6:",
+        "    vs list        vs packages ENV        vs --help",
+    ]
+    return "\n".join(_lines)
+
+
 def browse_start_dir(path: str) -> str:
     """A directory QFileDialog will actually honour as a starting point.
 

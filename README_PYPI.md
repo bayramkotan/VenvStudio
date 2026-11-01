@@ -79,6 +79,14 @@ Install Launcher) goes through the same check, so nothing slips through.
   of a plain pip wheel
 - **Live PyPI fallback** — for packages not on the curated list,
   VenvStudio checks PyPI directly for a matching wheel before installing
+- **Reads wheel tags properly** — a `cp310-abi3` wheel is the stable ABI:
+  one file that serves Python 3.10 and every version after it, and a
+  `py3-none` wheel is pure Python wherever it was built. Both are read
+  correctly, so PyQt6 and astropy are no longer refused on a new Python
+  that they support
+- **Tells wheel from source** — packages that cap their wheels at an older
+  Python but still ship an sdist (vpython, fiona, kivy) are reported as
+  *installs, but compiles* rather than as unavailable
 - Click any package for a **detail panel**: plain-English explanation,
   the exact install command for your environment type, and one-click
   actions — 🚀 Install, 🌱 Create New Environment, 🔄 Try Alternative
@@ -88,9 +96,15 @@ Install Launcher) goes through the same check, so nothing slips through.
   just new ones
 - **Export** — save the full compatibility table as CSV or JSON
 
+**When an install fails, it says why.** pip answers `No matching
+distribution found` both when the name is wrong and when the name is right
+but nothing in the release fits this Python. VenvStudio asks PyPI about each
+name separately and names which of the two it is — with a *did you mean* for
+a real typo, and the Python versions that do have a file for the other case.
+
 ### 📦 Package Management
 - **Installed** tab — filter, select, uninstall, export, import packages
-- **Catalog** tab — 64 curated packages across 32 categories with PyPI & Docs links
+- **Catalog** tab — 535 curated packages across 39 categories with PyPI & Docs links
 - **Presets** tab — one-click install bundles (Data Science, Web API, Django, Flask, ML, NLP, CV, Testing...)
 - **Manual Install** tab — paste package names or version specs (`numpy==1.24`, `pandas>=2.0`)
 - pip or **uv** backend (uv is 10–100× faster)
@@ -273,6 +287,9 @@ Installing with pip gives you two names for the same tool: **`vs`** to type and
 | `vs preset list` | `venvstudio preset list` | List every preset with its packages |
 | `vs preset install NAME ENV` | `venvstudio preset install NAME ENV` | Install a whole preset into ENV |
 | `vs preset remove NAME ENV` | `venvstudio preset remove NAME ENV` | Uninstall a preset's packages from ENV |
+| `vs update` | `venvstudio update` | Update VenvStudio itself to the latest release |
+| `vs update -c` | `venvstudio update -c` | Only check — print the available version, change nothing |
+| `vs update -y` | `venvstudio update -y` | Update without the confirmation prompt |
 | `vs -V` | `venvstudio -V` | Show version (also: `version`) |
 | `vs -h` | `venvstudio -h` | Show help |
 

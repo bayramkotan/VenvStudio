@@ -120,79 +120,45 @@ _PACKAGE_DOCS = {
 
 
 def _check_pypi_wheel_availability(pkg_name, py_major, py_minor, platform_tag, timeout=5):
-    """
-    N9 live compatibility check (2026-08-12): query PyPI's JSON API for the
-    package's latest release and check whether a wheel exists for
-    (py_major, py_minor) on platform_tag ("win"/"linux"/"macos"). This is
-    the fallback tier -- CONFLICT_RULES (the manual list) is always checked
-    FIRST by the caller; this only runs for packages that list has no entry
-    for, so a maintained manual note always wins over a live guess.
+    """N9 live compatibility check -- now a thin call into package_check.
 
-    Returns a dict, never raises:
-      {"checked": bool,             # did the query succeed at all?
-       "compatible": bool | None,   # True/False if determinable, else None
-       "available_pyvers": [str],   # e.g. ["3.9", "3.10", "3.11"]
-       "has_sdist_only": bool,      # no wheels at all for ANY python/platform
-       "error": str | None}
+    B195. The body that used to be here read the literal string cp3NN out
+    of each wheel filename, which gets the two commonest cases wrong:
+    PyQt6 ships cp310-abi3 and astropy cp311-abi3, one file that serves
+    that version and every later one, and this read them as "3.10 only".
+    Measured against live PyPI on 2026-11-01: both were reported
+    INCOMPATIBLE with Python 3.14 and the install was blocked with a
+    dialog. Both install fine.
 
-    Ground-truth tested against real PyPI (2026-08-12): pygame/3.14/win ->
-    compatible=False, available_pyvers up to 3.13; requests/3.14/win ->
-    compatible=True (pure-python wheel); nonexistent package -> checked=False.
+    The shared version in package_check parses the python/abi/platform
+    tags properly, honours Requires-Python, and derives available_pyvers
+    by running the same per-file test over each version -- so the list and
+    the verdict cannot disagree, which they could when they were computed
+    separately.
+
+    The question HERE is whether a prebuilt wheel exists, not whether
+    anything at all installs: an sdist means a compiler runs, which is a
+    warning, and this result feeds a blocking dialog. So compatible maps
+    to wheel_compatible and available_pyvers to wheel_pyvers.
+
+    The return shape is unchanged, because the caller below reads these
+    exact keys.
     """
-    result = {"checked": False, "compatible": None, "available_pyvers": [],
-              "has_sdist_only": False, "error": None}
     try:
-        import urllib.request, json, re
-        url = f"https://pypi.org/pypi/{pkg_name}/json"
-        req = urllib.request.Request(url, headers={"User-Agent": "VenvStudio/1.0"})
-        with urllib.request.urlopen(req, timeout=timeout) as r:
-            data = json.load(r)
-        latest = data["info"]["version"]
-        files = data["releases"].get(latest, [])
-        if not files:
-            return result
+        from src.core.package_check import wheel_availability
+    except Exception as _e:
+        return {"checked": False, "compatible": None, "available_pyvers": [],
+                "has_sdist_only": False, "error": str(_e)}
 
-        plat_markers = {
-            "win":   ("win32", "win_amd64", "win_arm64"),
-            "linux": ("manylinux", "linux_"),
-            "macos": ("macosx",),
-        }.get(platform_tag, ())
-
-        target_cp = f"cp{py_major}{py_minor}"
-        found_wheels = []
-        pure_py_wheel = False
-        has_wheel_at_all = False
-        cp_minors_seen = set()
-
-        for f in files:
-            fn = f["filename"]
-            if f["packagetype"] != "bdist_wheel":
-                continue
-            has_wheel_at_all = True
-            if "-none-any.whl" in fn:
-                pure_py_wheel = True
-            m = re.search(r'-cp3(\d{1,2})-', fn)
-            if m:
-                cp_minors_seen.add(int(m.group(1)))
-            if target_cp in fn and any(pm in fn for pm in plat_markers):
-                found_wheels.append(fn)
-
-        result["checked"] = True
-        result["available_pyvers"] = [f"3.{m}" for m in sorted(cp_minors_seen)]
-        result["has_sdist_only"] = not has_wheel_at_all
-
-        if pure_py_wheel or found_wheels:
-            result["compatible"] = True
-        elif has_wheel_at_all:
-            result["compatible"] = False
-        else:
-            result["compatible"] = None
-
-        return result
-    except Exception as e:
-        result["error"] = str(e)
-        return result
-
+    _a = wheel_availability(pkg_name, py_major, py_minor, platform_tag,
+                            timeout=timeout)
+    return {
+        "checked": bool(_a["checked"] and _a["exists"]),
+        "compatible": _a["wheel_compatible"] if _a["exists"] else None,
+        "available_pyvers": _a["wheel_pyvers"],
+        "has_sdist_only": bool(_a["has_sdist"] and not _a["has_wheel"]),
+        "error": _a["error"],
+    }
 
 
 class PackageOpsMixin:

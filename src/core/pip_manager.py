@@ -373,19 +373,69 @@ class PipManager:
             if result.returncode == 0:
                 return True, output
             else:
-                # "Package Not Found" tespiti
+                # B194/F206: pip says "No matching distribution" for two
+                # different reasons and this branch assumed the first one.
+                #
+                # Bayram, 2026-07-24: tensorflow into a Python 3.14.5
+                # environment answered "Please check the package names".
+                # The name was right; there is no 3.14 wheel. He went
+                # looking for a typo. Telling someone to check something
+                # that is already correct is worse than saying nothing: it
+                # sends them away from the cause.
+                #
+                # Each name is now asked about separately -- does PyPI know
+                # it, and does anything install on THIS Python -- so the
+                # answer names which of the two it is, with a did-you-mean
+                # for a real typo and the versions that do work for the
+                # other.
                 if "No matching distribution" in output or "Could not find" in output:
-                    return False, (
-                        "One or more packages could not be found on PyPI.\n\n"
-                        "Please check the package names and try again.\n"
-                        "You can search at: https://pypi.org"
-                    )
+                    _why = self._explain_not_found(packages, output)
+                    if _why:
+                        return False, _why
+                    # Could not reach PyPI to tell the two apart. pip's own
+                    # words beat a guess.
+                    return False, f"Installation failed:\n{output}"
                 return False, f"Installation failed:\n{output}"
 
         except subprocess.TimeoutExpired:
             return False, "Installation timed out (300s)"
         except Exception as e:
             return False, f"Error: {str(e)}"
+
+    def _env_python_xy(self):
+        """(major, minor) of the environment's own Python, or None.
+
+        Asked of the interpreter rather than assumed from the host: the
+        whole point is that the environment may be on a different Python
+        from the one VenvStudio runs on.
+        """
+        try:
+            from src.utils.platform_utils import subprocess_args as _spa
+            _r = subprocess.run(
+                [str(self.python_exe), "-c",
+                 "import sys;print('%d.%d'%sys.version_info[:2])"],
+                **_spa(capture_output=True, text=True, timeout=10))
+            _v = (_r.stdout or _r.stderr).strip().split(".")
+            return (int(_v[0]), int(_v[1]))
+        except Exception:
+            return None
+
+    def _explain_not_found(self, packages, output: str) -> str:
+        """B194/F206: the real reason pip found no distribution, or ""."""
+        _xy = self._env_python_xy()
+        if not _xy:
+            return ""
+        import sys as _sys
+        _plat = {"win32": "win", "linux": "linux",
+                 "darwin": "macos"}.get(_sys.platform, "")
+        if not _plat:
+            return ""
+        try:
+            from src.core.package_check import explain_no_distribution
+            return explain_no_distribution(packages, _xy[0], _xy[1], _plat,
+                                           pip_output=output)
+        except Exception:
+            return ""
 
     # ── N7: Modern env install helpers ───────────────────────────────────────
 

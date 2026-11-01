@@ -63,8 +63,11 @@ This shows up throughout the app:
   command for the chosen backend (`python -m venv`, `uv venv`,
   `pdm init`, `poetry new`, `hatch new`, `pixi init`, `conda create`,
   `pipx install`) plus activate/deactivate commands, live as it runs
-- **Environments page** — a Command Reference panel shows the exact
-  command behind delete, clone, rename, and export actions
+- **Environments page** and **Projects page** — a Command Reference panel
+  shows the exact command behind delete, clone, rename, and export actions.
+  It appears when you run one and goes away when you move to something
+  else, so it never shows you a command belonging to a different
+  environment
 - **Launch / Install** — the real install command (`pip install`,
   `uv pip install`, `pdm add`, `poetry add`, `hatch run pip install`,
   `conda install`, `pixi add`, `pipx install` — whichever fits the
@@ -87,7 +90,7 @@ pile of packages, it tells you what each one is *for*:
 |:---|:---|:---|
 | **📊 Data Science Starter** | Essential tools for data analysis and visualization. | `numpy`, `pandas`, `matplotlib`, `scikit-learn`, `jupyter` |
 | **🌐 Web API (FastAPI)** | Build modern, high-performance REST APIs. | `fastapi`, `uvicorn`, `sqlalchemy`, `pydantic`, `python-dotenv` |
-| **🌐 Web App (Django)** | Full-featured web application framework with batteries included. | `django`, `psycopg2-binary`, `django-rest-framework`, `celery` |
+| **🌐 Web App (Django)** | Full-featured web application framework with batteries included. | `django`, `psycopg2-binary`, `djangorestframework`, `celery` |
 | **🌐 Web App (Flask)** | Lightweight and flexible web framework. | `flask`, `sqlalchemy`, `flask-cors`, `gunicorn` |
 | **🤖 ML Starter** | Machine learning essentials for building and evaluating models. | `numpy`, `pandas`, `scikit-learn`, `matplotlib`, `jupyter`, `xgboost` |
 | **👁️ Computer Vision** | Tools for image processing and object detection. | `opencv-python`, `pillow`, `scikit-image`, `ultralytics`, `torch`, `torchvision` |
@@ -196,7 +199,7 @@ Or download the standalone binary — **no Python required:**
 
 ### 📦 Package Management
 - **Installed** — filter, select, uninstall, export, import
-- **Catalog** — 64 curated packages across 32 categories
+- **Catalog** — 535 curated packages across 39 categories
 - **47 Presets** — one-click bundles, including modern AI/data stacks: **LLM App Starter** (openai, anthropic, langchain, chromadb), **RAG/NLP** (transformers, datasets, spacy, torch), **Data Engineering** (polars, duckdb, pyarrow, prefect), plus Data Science, Web API, Django, Flask, Computer Vision, Deep Learning (PyTorch/JAX), Financial Analysis, and more
 - **Manual Install** — paste package names or version specs
 - pip or **uv** backend (10–100× faster)
@@ -303,6 +306,15 @@ VenvStudio checks packages against a curated compatibility list **before** insta
 
 - **218 curated rules** — packages with known Python-version limits, environment restrictions, or that need a native/conda build instead of a plain pip wheel
 - **Live PyPI fallback** — for packages not on the curated list, VenvStudio checks PyPI directly for a matching wheel before installing
+- **Reads wheel tags properly** — a `cp310-abi3` wheel is the stable ABI: one
+  file that serves Python 3.10 *and every version after it*, and a `py3-none`
+  wheel is pure Python wherever it was built. VenvStudio reads both correctly,
+  so PyQt6 and astropy are no longer refused on a new Python that they
+  support
+- **Tells wheel from source** — "a wheel exists" and "pip can install it" are
+  different answers. Packages that cap their wheels at an older Python but
+  still ship an sdist (vpython, fiona, kivy) are reported as *installs, but
+  compiles* rather than as unavailable
 - Click any package for a **detail panel**: plain-English explanation, the exact install command for your environment type, and one-click actions:
   - 🚀 **Install** — into the current environment, if compatible
   - 🌱 **Create New Environment…** — if it isn't
@@ -310,6 +322,24 @@ VenvStudio checks packages against a curated compatibility list **before** insta
   - 📚 **Open in Learn** — jump to the matching tutorial, if one exists
 - **Scan Environment** — check every package already installed, not just new ones
 - **Export** — save the full compatibility table as CSV or JSON
+
+### When an install fails, it says why
+
+pip answers `No matching distribution found` for two completely different
+reasons — the name is wrong, or the name is right and nothing in the release
+fits this Python. VenvStudio used to read it as the first one every time and
+told you to check a package name that was already correct.
+
+It now asks PyPI about each name separately and says which of the two it is:
+
+```
+pip could not find a matching distribution.
+
+  tensorflow 2.21.0 -- exists, but has no file for Python 3.14 on linux.
+      Available for Python 3.9, 3.10, 3.11, 3.12, 3.13.
+
+  pandsa -- no package by this name on PyPI.  Did you mean: pandas?
+```
 
 ---
 
@@ -623,6 +653,9 @@ Installing with pip gives you two names for the same tool: **`vs`** to type and
 | `vs preset list` | `venvstudio preset list` | List every preset with its packages |
 | `vs preset install NAME ENV` | `venvstudio preset install NAME ENV` | Install a whole preset into ENV |
 | `vs preset remove NAME ENV` | `venvstudio preset remove NAME ENV` | Uninstall a preset's packages from ENV |
+| `vs update` | `venvstudio update` | Update VenvStudio itself to the latest release |
+| `vs update -c` | `venvstudio update -c` | Only check — print the available version, change nothing |
+| `vs update -y` | `venvstudio update -y` | Update without the confirmation prompt |
 | `vs -V` | `venvstudio -V` | Show version (also: `version`) |
 | `vs -h` | `venvstudio -h` | Show help |
 

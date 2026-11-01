@@ -160,6 +160,287 @@ def verify_many(names, ask_fn, tool: str = ""):
     return out
 
 
+# ── B195: which Pythons a package actually has a file for ──────────────────
+
+# Wheel filename: {name}-{ver}(-{build})?-{pytag}-{abitag}-{plattag}.whl
+# Any of the three tags may be compound, joined with dots: a single file can
+# declare cp310.cp311 or py2.py3.
+_PLAT_MARKERS = {
+    "win":   ("win32", "win_amd64", "win_arm64", "win-"),
+    "linux": ("manylinux", "musllinux", "linux_"),
+    "macos": ("macosx",),
+}
+
+
+def _plat_ok(plat_tag: str, platform_tag: str) -> bool:
+    if "any" in plat_tag.split("."):
+        return True
+    _markers = _PLAT_MARKERS.get(platform_tag, ())
+    return any(_m in plat_tag for _m in _markers)
+
+
+def _py_ok(py_tag: str, abi_tag: str, major: int, minor: int) -> bool:
+    """Does this file's python/abi pair cover Python major.minor?
+
+    B195. The old check asked only whether the literal string `cp314`
+    appeared in the filename, which is wrong in the two commonest cases:
+
+      PyQt6-6.11.0-cp310-abi3-manylinux_x86_64.whl
+      astropy-8.0.1-cp311-abi3-...
+
+    abi3 is the stable ABI: ONE file serves that version and every later
+    one. Reading those as "cp310 only" is how VenvStudio came to refuse to
+    install PyQt6 on Python 3.14, with a dialog, measured against live PyPI.
+
+      wandb-0.30.0-py3-none-macosx_11_0_arm64.whl
+
+    py3 with a platform is still pure Python -- the old check only
+    recognised purity from the literal "-none-any.whl", so a
+    platform-specific pure wheel was read as incompatible too.
+    """
+    _pys = py_tag.split(".")
+    _abis = abi_tag.split(".")
+
+    # Pure Python: py3, or py3X with X <= minor.
+    for _p in _pys:
+        if _p in ("py3", f"py{major}"):
+            return True
+        if _p.startswith(f"py{major}") and len(_p) > 2:
+            _d = _p[2 + len(str(major)):]
+            if _d.isdigit() and int(_d) <= minor:
+                return True
+
+    # Stable ABI: cp3Y-abi3 covers 3.Y and everything after it.
+    if "abi3" in _abis:
+        for _p in _pys:
+            if _p.startswith(f"cp{major}"):
+                _d = _p[2 + len(str(major)):]
+                if _d.isdigit() and int(_d) <= minor:
+                    return True
+
+    # Version-specific build.
+    return f"cp{major}{minor}" in _pys or f"cp{major}.{minor}" in _pys
+
+
+def _req_python_ok(spec: str, major: int, minor: int) -> bool:
+    """A coarse but honest reading of a Requires-Python string.
+
+    Only the bounds that matter for an X.Y question are applied; anything
+    unparseable is treated as "no opinion" rather than as a refusal,
+    because guessing a refusal here would block a working install.
+    """
+    if not spec:
+        return True
+    _v = (major, minor)
+    for _part in str(spec).split(","):
+        _part = _part.strip()
+        if not _part:
+            continue
+        for _op in (">=", "<=", "!=", "==", "~=", ">", "<"):
+            if _part.startswith(_op):
+                _num = _part[len(_op):].strip().rstrip("*").rstrip(".")
+                _bits = [b for b in _num.split(".") if b.isdigit()]
+                if not _bits:
+                    break
+                _t = (int(_bits[0]), int(_bits[1]) if len(_bits) > 1 else 0)
+                if _op == ">=" and _v < _t:
+                    return False
+                if _op == ">" and _v <= _t:
+                    return False
+                if _op == "<=" and _v > _t:
+                    return False
+                if _op == "<" and _v >= _t:
+                    return False
+                if _op == "==" and _v != _t:
+                    return False
+                if _op == "!=" and _v == _t:
+                    return False
+                break
+    return True
+
+
+def _files_support(files, major: int, minor: int, platform_tag: str,
+                   wheels_only: bool = False) -> bool:
+    """Is there a file in this release that installs on this Python?
+
+    Two different questions share this code, and keeping them apart
+    matters:
+
+      wheels_only=False  anything pip could install, sdist included.
+                         This is what "No matching distribution" means --
+                         pip found NOTHING, not even source.
+      wheels_only=True   a prebuilt wheel exists. An sdist means a
+                         compiler runs, which is a warning worth giving
+                         and not the same as being unable to install.
+
+    MEASURED while building this: vpython, fiona, pyaudio and kivy all
+    cap their wheels at cp312 or cp313 and still ship an sdist, so on
+    Python 3.14 the first question answers yes and the second no. Folding
+    them into one verdict loses exactly the distinction the reader needs.
+    """
+    for _f in files:
+        if not _req_python_ok(_f.get("requires_python") or "", major, minor):
+            continue
+        if _f.get("packagetype") == "sdist":
+            if wheels_only:
+                continue
+            return True
+        _fn = _f.get("filename") or ""
+        if not _fn.endswith(".whl"):
+            continue
+        _parts = _fn[:-4].split("-")
+        if len(_parts) < 3:
+            continue
+        _py, _abi, _plat = _parts[-3], _parts[-2], _parts[-1]
+        if _plat_ok(_plat, platform_tag) and _py_ok(_py, _abi, major, minor):
+            return True
+    return False
+
+
+def wheel_availability(pkg_name: str, py_major: int, py_minor: int,
+                       platform_tag: str, timeout: float = 6.0) -> dict:
+    """Can this package install on this Python, and if not, where can it?
+
+    B195. Replaces the per-caller copies: package_ops.py had its own
+    version used as the fallback tier of the pre-flight check, and
+    pip_manager.py had none at all and blamed the package name instead.
+
+    The supported versions are produced by running the SAME per-file test
+    over 3.8 to 3.15, so the list and the verdict can never disagree --
+    the old code derived them separately and they did.
+
+    Returns, and never raises:
+      {"checked": bool,              did the query succeed
+       "exists": bool,               PyPI knows this name
+       "compatible": bool | None,    anything installs, sdist included
+       "wheel_compatible": bool,     a PREBUILT wheel exists for it
+       "available_pyvers": [str],    versions something installs on
+       "wheel_pyvers": [str],        versions with a prebuilt wheel
+       "has_wheel": bool, "has_sdist": bool,
+       "latest": str, "requires_python": str, "error": str | None}
+    """
+    _out = {"checked": False, "exists": False, "compatible": None,
+            "wheel_compatible": None, "available_pyvers": [],
+            "wheel_pyvers": [], "has_wheel": False, "has_sdist": False,
+            "latest": "", "requires_python": "", "error": None}
+    _n = strip_specifier(pkg_name)
+    if not _n:
+        return _out
+    try:
+        import json as _json
+        _req = urllib.request.Request(
+            f"https://pypi.org/pypi/{urllib.parse.quote(_n)}/json",
+            headers={"User-Agent": "VenvStudio"})
+        with urllib.request.urlopen(_req, timeout=timeout) as _r:
+            _data = _json.load(_r)
+    except urllib.error.HTTPError as _e:
+        _out["checked"] = True
+        if _e.code == 404:
+            return _out                      # exists stays False
+        _out["checked"] = False
+        _out["error"] = f"HTTP {_e.code}"
+        return _out
+    except Exception as _e:
+        _out["error"] = repr(_e)[:120]
+        return _out
+
+    _out["checked"] = True
+    _out["exists"] = True
+    _latest = str(_data["info"].get("version") or "")
+    _out["latest"] = _latest
+    _out["requires_python"] = str(_data["info"].get("requires_python") or "")
+    _files = _data.get("releases", {}).get(_latest, []) or []
+    if not _files:
+        return _out
+
+    _out["has_wheel"] = any(_f.get("packagetype") == "bdist_wheel"
+                            for _f in _files)
+    _out["has_sdist"] = any(_f.get("packagetype") == "sdist" for _f in _files)
+    _out["compatible"] = _files_support(_files, py_major, py_minor,
+                                        platform_tag)
+    _out["wheel_compatible"] = _files_support(_files, py_major, py_minor,
+                                              platform_tag, wheels_only=True)
+    _out["available_pyvers"] = [
+        f"{py_major}.{_m}" for _m in range(8, 16)
+        if _files_support(_files, py_major, _m, platform_tag)]
+    _out["wheel_pyvers"] = [
+        f"{py_major}.{_m}" for _m in range(8, 16)
+        if _files_support(_files, py_major, _m, platform_tag,
+                          wheels_only=True)]
+    return _out
+
+
+def explain_no_distribution(packages, py_major: int, py_minor: int,
+                            platform_tag: str, pip_output: str = "") -> str:
+    """Why pip said "No matching distribution", in words that are true.
+
+    B194/F206. pip says the same sentence whether the name is wrong or the
+    name is right and no file fits this Python, and VenvStudio read it as
+    the first one every time:
+
+        "One or more packages could not be found on PyPI.
+         Please check the package names and try again."
+
+    Bayram, 2026-07-24: tensorflow on Python 3.14.5. The name was correct;
+    there was no 3.14 wheel. He went looking for a typo. Telling someone to
+    check something that is already right is worse than saying nothing,
+    because it sends them away from the real cause.
+
+    So each name is asked about separately, and the answer says which of
+    the two it is -- with a "did you mean" for a genuine typo, which only
+    started working in B190, and with the Python versions that DO have a
+    file for the other case.
+    """
+    _lines = []
+    _unknown = []
+    for _spec in (packages or []):
+        _n = strip_specifier(_spec)
+        if not _n:
+            continue
+        _a = wheel_availability(_n, py_major, py_minor, platform_tag)
+        if not _a["checked"]:
+            _unknown.append(_n)
+            continue
+        if not _a["exists"]:
+            _sug = suggest(_n)
+            _line = f"  {_n} -- no package by this name on PyPI."
+            if _sug:
+                _line += "  Did you mean: " + ", ".join(_sug) + "?"
+            _lines.append(_line)
+            continue
+        if _a["compatible"]:
+            # The name is fine and this Python is fine, so the failure is
+            # something else -- a version pin, a conflict, a network error.
+            # Saying nothing specific is correct here.
+            continue
+        _vers = _a["available_pyvers"]
+        _line = (f"  {_n} {_a['latest']} -- exists, but has no file for "
+                 f"Python {py_major}.{py_minor} on {platform_tag}.")
+        if _vers:
+            _line += ("\n      Available for Python "
+                      + ", ".join(_vers) + ".")
+        elif not _a["has_wheel"]:
+            _line += "\n      It ships source only, with no prebuilt wheel."
+        _lines.append(_line)
+
+    if not _lines and not _unknown:
+        return ""
+
+    _out = ["pip could not find a matching distribution.", ""]
+    _out += _lines
+    if _unknown:
+        _out += ["", "  Could not check on PyPI (offline?): "
+                 + ", ".join(_unknown)]
+    if any("no file for Python" in _l for _l in _lines):
+        _out += ["",
+                 "A package with no file for this Python cannot be installed "
+                 "here. Creating an environment on one of the Python versions "
+                 "listed above is the way round it."]
+    if pip_output:
+        _out += ["", "--- pip said ---", pip_output.strip()[-1200:]]
+    return "\n".join(_out)
+
+
 # ── B153: what will actually be BUILT, not just what was asked for ──────────
 
 def will_build_from_source(python_exe, packages, timeout: float = 90.0):

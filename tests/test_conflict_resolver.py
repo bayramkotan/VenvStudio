@@ -271,3 +271,96 @@ def test_summary_marks_errors_and_warnings_differently():
                           env_type="pipx")
     out = rep.summary()
     assert "⛔" in out and "⚠️" in out
+
+
+# ── B195: wheel tag reading ────────────────────────────────────────────────
+#
+# These do not touch the network. The tag parser is the part that was wrong,
+# and it is a pure function of a filename, so it is tested as one.
+
+from src.core import package_check as pc
+
+
+@pytest.mark.parametrize("fn,minor,want", [
+    # abi3: ONE file serves that version and every later one. Reading the
+    # literal cp310 as "3.10 only" is what blocked PyQt6 on Python 3.14.
+    ("PyQt6-6.11.0-cp310-abi3-manylinux_2_28_x86_64.whl", 14, True),
+    ("PyQt6-6.11.0-cp310-abi3-manylinux_2_28_x86_64.whl", 10, True),
+    ("PyQt6-6.11.0-cp310-abi3-manylinux_2_28_x86_64.whl", 9,  False),
+    ("astropy-8.0.1-cp311-abi3-manylinux_2_17_x86_64.whl", 14, True),
+    # pure Python, with and without a platform
+    ("requests-2.34.2-py3-none-any.whl", 14, True),
+    ("wandb-0.30.0-py3-none-manylinux_2_17_x86_64.whl", 14, True),
+    ("six-1.17.0-py2.py3-none-any.whl", 14, True),
+    # version-specific builds
+    ("numpy-2.3.0-cp314-cp314-manylinux_2_17_x86_64.whl", 14, True),
+    ("numpy-2.3.0-cp313-cp313-manylinux_2_17_x86_64.whl", 14, False),
+    # compound python tag
+    ("thing-1.0-cp313.cp314-cp313-manylinux_2_17_x86_64.whl", 14, True),
+])
+def test_wheel_tag_reading(fn, minor, want):
+    parts = fn[:-4].split("-")
+    py, abi, plat = parts[-3], parts[-2], parts[-1]
+    assert pc._plat_ok(plat, "linux")
+    assert pc._py_ok(py, abi, 3, minor) is want
+
+
+def test_platform_is_respected():
+    assert pc._plat_ok("win_amd64", "win")
+    assert not pc._plat_ok("win_amd64", "linux")
+    assert pc._plat_ok("any", "linux")
+    assert pc._plat_ok("manylinux_2_17_x86_64", "linux")
+    assert not pc._plat_ok("macosx_11_0_arm64", "linux")
+
+
+@pytest.mark.parametrize("spec,minor,want", [
+    ("", 14, True),
+    (">=3.9", 14, True),
+    (">=3.9", 8, False),
+    ("<3.14", 14, False),
+    ("<3.14", 13, True),
+    (">=3.9,<3.14", 13, True),
+    (">=3.9,<3.14", 14, False),
+    ("nonsense", 14, True),      # unparseable is no opinion, never a refusal
+])
+def test_requires_python(spec, minor, want):
+    assert pc._req_python_ok(spec, 3, minor) is want
+
+
+def _rel(*files):
+    return list(files)
+
+
+def _whl(fn, rp=""):
+    return {"packagetype": "bdist_wheel", "filename": fn, "requires_python": rp}
+
+
+def _sdist(rp=""):
+    return {"packagetype": "sdist", "filename": "x-1.0.tar.gz",
+            "requires_python": rp}
+
+
+def test_sdist_installs_but_is_not_a_wheel():
+    """The distinction the old single verdict lost.
+
+    vpython, fiona, pyaudio and kivy cap their wheels at cp312/cp313 and
+    still ship an sdist, so on 3.14 pip CAN install them -- by compiling.
+    Saying 'no matching distribution' there would be wrong, and so would
+    saying 'a wheel exists'.
+    """
+    files = _rel(_whl("x-1.0-cp313-cp313-manylinux_2_17_x86_64.whl"), _sdist())
+    assert pc._files_support(files, 3, 14, "linux") is True
+    assert pc._files_support(files, 3, 14, "linux", wheels_only=True) is False
+    assert pc._files_support(files, 3, 13, "linux", wheels_only=True) is True
+
+
+def test_nothing_at_all():
+    files = _rel(_whl("x-1.0-cp313-cp313-manylinux_2_17_x86_64.whl"))
+    assert pc._files_support(files, 3, 14, "linux") is False
+
+
+def test_requires_python_excludes_the_sdist_too():
+    """ruptures: declares python<3.14, so even its sdist is out."""
+    files = _rel(_sdist(rp=">=3.9,<3.14"))
+    assert pc._files_support(files, 3, 13, "linux") is True
+    assert pc._files_support(files, 3, 14, "linux") is False

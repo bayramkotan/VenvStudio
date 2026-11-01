@@ -724,19 +724,27 @@ def main():
 
         available_fonts = setup_application_font(app, logger)
 
-        # ── Linux-only: show a friendly warning dialog if no emoji font ──
+        # ── Linux-only: offer to install an emoji font ──
         # Skip entirely in a frozen build: the AppImage bundles Noto Color
         # Emoji and installs it to the user font dir on launch, so the host
         # doesn't need its own emoji font. The QFontDatabase check here also
         # runs before fontconfig has fully picked up the just-installed font,
         # so it would false-positive and nag the user about a font that IS
         # actually present. Only prompt in a normal (pip/source) run.
-        if (not getattr(sys, "frozen", False)) and sys.platform == "linux" and not any(
-            f in available_fonts for f in (
-                "Noto Color Emoji", "Twemoji Mozilla", "EmojiOne Color",
-                "JoyPixels", "Symbola"
-            )
-        ):
+        #
+        # B197: this used to RUN here, before MainWindow was even built, and
+        # box.exec() is modal -- it does not return until somebody presses a
+        # button. On a machine with nobody at the keyboard there is nobody to
+        # press one, so startup stopped at this line and the main window was
+        # never created, let alone shown. It is a function now, called after
+        # window.show(); see the post-show block below.
+        def _maybe_offer_emoji_font():
+            if getattr(sys, "frozen", False) or sys.platform != "linux":
+                return
+            if any(f in available_fonts for f in (
+                    "Noto Color Emoji", "Twemoji Mozilla", "EmojiOne Color",
+                    "JoyPixels", "Symbola")):
+                return
             try:
                 distro = _detect_linux_distro()
                 install_cmd = _emoji_install_command_for_distro(distro)
@@ -776,12 +784,45 @@ def main():
         window = MainWindow()
         logger.info("MainWindow created successfully")
 
-        # ── Linux: check pip/venv on first launch ──
-        if sys.platform == "linux":
-            _check_and_install_linux_deps(app, config, logger)
-
         window.show()
         logger.info("MainWindow shown — entering event loop")
+
+        # ── B197: first-launch checks run AFTER the window is on screen ──
+        #
+        # The AppImage catalog test rejected v1.6.109 with "the window is
+        # empty, only a menu bar on a blank background" and then killed the
+        # process. Measured first: a source run under a clean HOME with the
+        # network namespace removed starts in 1.1 seconds and never hangs,
+        # so nothing in MainWindow is at fault.
+        #
+        # Both first-launch checks were modal, and both ran before this
+        # line. _check_and_install_linux_deps asks, with QMessageBox.question,
+        # whether to install python3-pip and python3-venv -- and a bare test
+        # system is exactly the kind that has neither. The emoji-font dialog
+        # above ran even earlier. A modal dialog with nobody to answer it
+        # does not time out; it waits, which is why the window never
+        # appeared and why the smoke test could only report a kill.
+        #
+        # They are both worth keeping -- VenvStudio genuinely cannot create
+        # a venv without python3-venv -- so they are deferred by one
+        # event-loop turn instead of being dropped. The window is painted
+        # first and the question arrives on top of a working application.
+        # Anything that goes wrong in them is now logged rather than
+        # swallowed, because a check that cannot run is not a reason to not
+        # start.
+        def _post_show_checks():
+            try:
+                _maybe_offer_emoji_font()
+            except Exception as _e:
+                logger.warning(f"Emoji font check skipped: {_e}")
+            if sys.platform == "linux":
+                try:
+                    _check_and_install_linux_deps(app, config, logger)
+                except Exception as _e:
+                    logger.warning(f"Linux dependency check skipped: {_e}")
+
+        from PySide6.QtCore import QTimer as _QTimerPostShow
+        _QTimerPostShow.singleShot(0, _post_show_checks)
 
         # ── Raise window when another instance tries to start ──
         def _on_new_connection():
@@ -813,13 +854,27 @@ def main():
         sys.exit(exit_code)
 
     except Exception as e:
+        # B198: there were TWO `except Exception as e:` clauses on this try,
+        # and Python matches the first one that fits -- so the second,
+        # carrying the log line, the crash report and the error dialog, was
+        # unreachable. Verified by walking the AST: one try statement, two
+        # Exception handlers.
+        #
+        # The consequence was worse than a missing dialog. The reachable
+        # clause only handled a PySide6 ImportError; for any other startup
+        # exception it fell straight off the end, main() returned normally,
+        # and the process exited 0 -- no log, no crash report, nothing on
+        # screen, and a smoke test that sees a clean exit with no window.
+        # B18 has been waiting three sessions for a stack trace that this
+        # code could never have written.
+        #
+        # One clause now, with the PySide6 case first because everything
+        # after it assumes Qt is importable.
+
         # B40: PySide6 missing is not a crash to report, it is a setup
         # problem with an answer. A traceback told the reader nothing they
         # could act on, and this path is reached on exactly the machine
         # where the application has never once started.
-        #
-        # Handled before the generic branch because everything below it --
-        # the crash report, the QMessageBox -- assumes Qt is importable.
         if isinstance(e, ImportError) and "PySide6" in (
                 (getattr(e, "name", "") or "") + str(e)):
             try:
@@ -830,7 +885,6 @@ def main():
                 print("Try: pipx install venvstudio", file=sys.stderr)
             sys.exit(1)
 
-    except Exception as e:
         # ── Startup crash — log + show error ──
         error_msg = f"VenvStudio Startup Error:\n\n{type(e).__name__}: {e}\n\n{traceback.format_exc()}"
 
@@ -846,13 +900,33 @@ def main():
         except Exception:
             pass
 
-        # Show error dialog
-        try:
-            from PySide6.QtWidgets import QApplication, QMessageBox
-            app = QApplication.instance() or QApplication(sys.argv)
-            QMessageBox.critical(None, "VenvStudio — Startup Error", error_msg)
-        except Exception:
-            pass
+        # Show error dialog -- but never one that waits forever.
+        #
+        # This is the same trap as B197 in its last remaining corner. The
+        # dialog is worth keeping: a user who double-clicked VenvStudio and
+        # got nothing deserves to be told why. But QMessageBox.critical is
+        # modal and returns only when somebody presses a button, and on a
+        # CI runner, in a sandbox, or in any headless run there is nobody.
+        # Measured while testing B198: a deliberate startup crash under
+        # QT_QPA_PLATFORM=offscreen wrote its crash report and then sat on
+        # this dialog until the test harness killed it -- so the exit code
+        # said "killed" rather than "crashed", which is the same wrong
+        # signal B198 was about.
+        #
+        # So the dialog closes itself after 30 seconds and the process goes
+        # on to exit 1. VENVSTUDIO_NONINTERACTIVE skips it altogether, for
+        # automation that wants no window at all.
+        if not os.environ.get("VENVSTUDIO_NONINTERACTIVE"):
+            try:
+                from PySide6.QtCore import QTimer as _QTimerCrash
+                from PySide6.QtWidgets import QApplication, QMessageBox
+                app = QApplication.instance() or QApplication(sys.argv)
+                _box = QMessageBox(QMessageBox.Critical,
+                                   "VenvStudio — Startup Error", error_msg)
+                _QTimerCrash.singleShot(30000, _box.close)
+                _box.exec()
+            except Exception:
+                pass
 
         # Konsol açıksa kullanıcı okuyabilsin (sadece debug/console build)
         if getattr(sys, 'frozen', False) and not getattr(sys, 'frozen_windowed', True):

@@ -3,7 +3,8 @@ VenvStudio - Qt Stylesheets
 Modern dark and light themes with multiple variants.
 
 Themes:
-  - dark           : Catppuccin Mocha (default)
+  - system         : follow the desktop (default)
+  - dark           : Catppuccin Mocha
   - light-latte    : Catppuccin Latte (soft, warm)
   - light-github   : GitHub Light (clean, minimal)
   - light-vscode   : VS Code Light (professional)
@@ -690,6 +691,8 @@ _PALETTES = {
 }
 
 THEME_OPTIONS = [
+    # B196: first, and the default for a fresh install.
+    ('system',           '🖥️ Follow system — light or dark'),
     # Dark
     ('dark',             '🌙 Dark — Catppuccin Mocha'),
     ('dark-dracula',     '🧛 Dark — Dracula'),
@@ -708,6 +711,129 @@ THEME_OPTIONS = [
 ]
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# "system": whatever the desktop is set to
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# What a stored theme looks like when nobody has chosen one.
+SYSTEM_THEME_IDS = ("", "system", "auto")
+
+# Which concrete palette each side of the desktop setting means.
+SYSTEM_DARK_THEME = "dark"
+SYSTEM_LIGHT_THEME = "light-latte"
+
+_SCHEME_CACHE = None
+
+
+def system_color_scheme(refresh: bool = False) -> str:
+    """"dark", "light", or "" when the desktop does not say.
+
+    B196. VenvStudio had no system detection at all: a grep of src/ for
+    colorScheme, styleHints and AppsUseLightTheme returned nothing, and
+    DEFAULT_SETTINGS hard-coded "dark", so a first run on a light desktop
+    opened dark. The AppImage catalog test rejected the v1.6.109 build for
+    exactly that -- "the application seems to default to a dark theme,
+    although the test system is not set to dark mode".
+
+    Qt 6.5 answers this directly through QStyleHints.colorScheme(), the
+    only source that works on all three platforms, so it is asked first.
+    It returns Unknown when no platform theme is loaded -- a bare X
+    session, or a sandbox with no desktop portal -- and the fallbacks
+    below cover the cases where a cheap answer exists.
+
+    Unknown stays "", and the caller then picks light: a light window is
+    readable on every desktop, while a dark one is wrong on most.
+
+    Cached for the process. The desktop can change this while VenvStudio
+    is open, and WindowThemeMixin listens for that; refresh=True is how it
+    asks again.
+    """
+    global _SCHEME_CACHE
+    if _SCHEME_CACHE is not None and not refresh:
+        return _SCHEME_CACHE
+    _SCHEME_CACHE = _detect_color_scheme()
+    return _SCHEME_CACHE
+
+
+def _detect_color_scheme() -> str:
+    # 1. Qt itself. Needs a QGuiApplication, and colorScheme() arrived in
+    #    Qt 6.5 -- hence the getattr rather than a version check.
+    try:
+        from PySide6.QtCore import Qt
+        from PySide6.QtGui import QGuiApplication
+        _app = QGuiApplication.instance()
+        if _app is not None:
+            _fn = getattr(_app.styleHints(), "colorScheme", None)
+            if callable(_fn):
+                _v = _fn()
+                if _v == Qt.ColorScheme.Dark:
+                    return "dark"
+                if _v == Qt.ColorScheme.Light:
+                    return "light"
+    except Exception:
+        pass
+
+    import os as _os
+    import sys as _sys
+
+    # 2. Windows: the same value the taskbar reads.
+    if _sys.platform == "win32":
+        try:
+            import winreg as _wr
+            with _wr.OpenKey(
+                _wr.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Themes"
+                r"\Personalize"
+            ) as _k:
+                return "light" if int(
+                    _wr.QueryValueEx(_k, "AppsUseLightTheme")[0]) else "dark"
+        except Exception:
+            pass
+
+    # 3. An explicit GTK_THEME costs nothing to read. Only a -dark suffix
+    #    means anything: a bare theme name says nothing about preference.
+    if (_os.environ.get("GTK_THEME") or "").lower().endswith(
+            (":dark", "-dark", "_dark")):
+        return "dark"
+
+    # 4. Linux desktops that publish the preference. One subprocess with a
+    #    1.5s cap, and only once everything above has been silent --
+    #    startup time is the thing this project measures most.
+    #    gsettings answers 'default' when the user has never chosen, which
+    #    is not the same as choosing light, so it falls through to "".
+    if _sys.platform.startswith("linux"):
+        try:
+            import shutil as _sh
+            import subprocess as _sp
+            if _sh.which("gsettings"):
+                _out = _sp.run(
+                    ["gsettings", "get", "org.gnome.desktop.interface",
+                     "color-scheme"],
+                    capture_output=True, text=True, timeout=1.5
+                ).stdout.strip().strip("'\"").lower()
+                if "prefer-dark" in _out:
+                    return "dark"
+                if "prefer-light" in _out:
+                    return "light"
+        except Exception:
+            pass
+    return ""
+
+
+def resolve_theme(name: str) -> str:
+    """A concrete palette id, following the desktop when asked to.
+
+    Every page in VenvStudio reads the theme straight out of the config
+    with config.get("theme", "dark") -- more than twenty call sites -- and
+    they all end up here or in get_colors(). Resolving at these two
+    functions is the only place where one change covers all of them.
+    """
+    if (name or "").strip().lower() in SYSTEM_THEME_IDS:
+        return (SYSTEM_DARK_THEME if system_color_scheme() == "dark"
+                else SYSTEM_LIGHT_THEME)
+    return name
+
+
 def get_theme(name: str = "dark", font_family: str = "", font_size: int = 13,
               primary_family: str = "", primary_size: int = 22,
               tertiary_family: str = "", tertiary_size: int = 11) -> str:
@@ -717,7 +843,9 @@ def get_theme(name: str = "dark", font_family: str = "", font_size: int = 13,
     f-string that is identical for identical inputs — building it on every
     env switch / tab change was wasteful. The cache is global and bounded.
     """
-    return _get_theme_cached(name, font_family, font_size,
+    # B196: resolved BEFORE the cache, so a cached entry is always keyed on
+    # a concrete palette and never on the word "system".
+    return _get_theme_cached(resolve_theme(name), font_family, font_size,
                              primary_family, primary_size,
                              tertiary_family, tertiary_size)
 
@@ -882,7 +1010,8 @@ def get_colors(name: str = "dark", font_size: int = 13,
     font_size     = max(int(font_size or 13),     8)
     primary_size  = max(int(primary_size or 22),  10)
     tertiary_size = max(int(tertiary_size or 11),  8)
-    cached = _get_colors_cached(name, font_size, primary_size, tertiary_size)
+    cached = _get_colors_cached(resolve_theme(name), font_size,
+                                primary_size, tertiary_size)
     return dict(cached)  # fresh dict per call, cache holds an immutable mapping
 
 
@@ -918,6 +1047,13 @@ def _get_colors_cached(name: str, font_size: int,
 def invalidate_style_cache() -> None:
     """Clear the QSS / palette cache. Call this when settings (theme, font
     size) change at runtime so the next get_theme() / get_colors() call
-    rebuilds with the new values."""
+    rebuilds with the new values.
+
+    B196: the detected desktop scheme is dropped too. It is cached for the
+    process, and the one moment a caller asks for a rebuild is the moment
+    that cache is most likely to be out of date.
+    """
+    global _SCHEME_CACHE
+    _SCHEME_CACHE = None
     _get_theme_cached.cache_clear()
     _get_colors_cached.cache_clear()

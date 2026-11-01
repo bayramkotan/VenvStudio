@@ -8,7 +8,10 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QTimer
 
 from src.core.config_manager import ConfigManager
-from src.gui.styles import get_theme
+from src.gui.styles import (
+    SYSTEM_DARK_THEME, SYSTEM_LIGHT_THEME, SYSTEM_THEME_IDS,
+    get_theme, invalidate_style_cache, system_color_scheme,
+)
 
 
 class WindowThemeMixin:
@@ -37,6 +40,17 @@ class WindowThemeMixin:
             "light": "light-latte",  # default light variant
         }
         theme_name = _menu_alias.get(theme_name, theme_name)
+        # B196: "system" is a choice to stop choosing. It is recorded
+        # through set_system_theme, which keeps follow mode on; every other
+        # value goes through set(), which turns it off.
+        if str(theme_name or "").strip().lower() in SYSTEM_THEME_IDS:
+            invalidate_style_cache()
+            self.config.set_system_theme(
+                SYSTEM_DARK_THEME
+                if system_color_scheme(refresh=True) == "dark"
+                else SYSTEM_LIGHT_THEME)
+            self._apply_theme()
+            return
         self.config.set("theme", theme_name)
         for _save_attr in ("save", "_save", "save_config", "flush", "write"):
             _fn = getattr(self.config, _save_attr, None)
@@ -56,7 +70,7 @@ class WindowThemeMixin:
             return  # prevent re-entrant calls during screen change
         self._applying_theme = True
         try:
-            theme = self.config.get("theme", "dark")
+            theme = self._theme_for_this_run()
             font_family = self.config.get("font_secondary_family", "") or self.config.get("font_family", "")
             font_size = self.config.get("font_secondary_size", 13) or self.config.get("font_size", 13)
             primary_family = self.config.get("font_primary_family", "")
@@ -173,6 +187,52 @@ class WindowThemeMixin:
         finally:
             self._applying_theme = False
 
+    def _theme_for_this_run(self) -> str:
+        """The theme to use now, following the desktop while allowed to.
+
+        B196. This returns a CONCRETE palette id, never the word "system",
+        and writes that id back to the config. That matters more than it
+        looks: the theme is read directly out of the config in more than
+        twenty places, and some of those compare the string ("light" in
+        name) rather than look up a palette. Handing them a sentinel would
+        have meant auditing every one of them.
+
+        Following stops the moment the user picks a theme anywhere --
+        ConfigManager.set() clears the flag for every caller at once, so
+        the Appearance page, the Advanced page's reset and the View menu
+        did not each have to remember to.
+        """
+        _saved = str(self.config.get("theme", "") or "").strip()
+        _follow = bool(self.config.get("theme_follows_system", False))
+        if _saved.lower() in SYSTEM_THEME_IDS:
+            _follow = True            # nothing chosen yet, or chosen as system
+        if not _follow:
+            return _saved or SYSTEM_LIGHT_THEME
+        _want = (SYSTEM_DARK_THEME if system_color_scheme() == "dark"
+                 else SYSTEM_LIGHT_THEME)
+        if _want != _saved:
+            try:
+                self.config.set_system_theme(_want)
+            except AttributeError:
+                # An older ConfigManager without the method: use the theme,
+                # just do not record it. Better than failing to start.
+                pass
+        return _want
+
+    def _on_system_color_scheme_changed(self, *_args):
+        """The desktop switched between light and dark while we were open.
+
+        B196. Only acts while the theme is still following the desktop; a
+        theme the user picked is theirs and is left alone.
+        """
+        try:
+            if not self.config.get("theme_follows_system", False):
+                return
+            invalidate_style_cache()   # also drops the cached scheme
+            QTimer.singleShot(0, self._apply_theme)
+        except Exception:
+            pass
+
     def _refresh_sidebar_styles(self):
         """Re-apply inline styles on sidebar widgets that don't inherit QSS."""
         try:
@@ -204,8 +264,15 @@ class WindowThemeMixin:
             pass
 
     def _connect_screen_changed(self):
-        """Connect to windowHandle().screenChanged so theme is re-applied
-        safely when the window moves between monitors with different DPI.
+        """Re-apply the theme when the window's surroundings change.
+
+        Two signals, one reason. screenChanged is the original: moving
+        between monitors with different DPI needs the stylesheet rebuilt.
+
+        colorSchemeChanged is B196 -- the desktop switching between light
+        and dark while VenvStudio is open. Nothing was listening for it,
+        because nothing read the desktop setting at all. Qt 6.5 and later
+        only, hence the getattr.
         """
         try:
             handle = self.windowHandle()
@@ -213,6 +280,15 @@ class WindowThemeMixin:
                 handle.screenChanged.connect(self._on_screen_changed)
         except Exception:
             pass  # windowHandle() can return None before show()
+        try:
+            from PySide6.QtGui import QGuiApplication
+            _app = QGuiApplication.instance()
+            if _app is not None:
+                _sig = getattr(_app.styleHints(), "colorSchemeChanged", None)
+                if _sig is not None:
+                    _sig.connect(self._on_system_color_scheme_changed)
+        except Exception:
+            pass
 
     def _on_screen_changed(self, new_screen):
         """Re-apply theme after a short delay so Qt finishes its internal

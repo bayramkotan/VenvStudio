@@ -12,7 +12,16 @@ from src.utils.platform_utils import get_config_dir, get_default_venv_base_dir
 
 DEFAULT_SETTINGS = {
     "venv_base_dir": str(get_default_venv_base_dir()),
-    "theme": "dark",
+    # B196: no hard-coded "dark" any more. Empty means nobody has chosen
+    # yet, and WindowThemeMixin fills it in from the desktop's own setting
+    # on the first run -- light when the desktop does not say, because a
+    # light window is readable on every desktop and a dark one is wrong on
+    # most. The AppImage catalog test rejected the v1.6.109 build for
+    # opening dark on a light test system.
+    "theme": "",
+    # True while the theme is whatever the desktop says. Choosing a theme
+    # anywhere in the app turns it off -- see set() below.
+    "theme_follows_system": True,
     "auto_upgrade_pip": True,
     "show_hidden_packages": False,
     # Educational side of VenvStudio: show the terminal command behind each
@@ -41,12 +50,21 @@ class ConfigManager:
 
     def load(self) -> None:
         """Load settings from file, creating defaults if needed."""
+        _pin_saved_theme = False
         if self._config_file.exists():
             try:
                 with open(self._config_file, "r", encoding="utf-8") as f:
                     loaded = json.load(f)
                 if not isinstance(loaded, dict):
                     raise ValueError("Invalid config format")
+                # B196: an install that already carries a theme is an
+                # install whose owner has been looking at that theme.
+                # Adding theme_follows_system must not change what they
+                # see, so a config written before the key existed keeps
+                # its saved theme. Only a config with no theme at all --
+                # a genuine first run -- follows the desktop.
+                _pin_saved_theme = (bool(loaded.get("theme"))
+                                    and "theme_follows_system" not in loaded)
                 self._settings = loaded
                 # Merge any new default keys
                 for key, value in DEFAULT_SETTINGS.items():
@@ -63,6 +81,8 @@ class ConfigManager:
                 self._settings = DEFAULT_SETTINGS.copy()
         else:
             self._settings = DEFAULT_SETTINGS.copy()
+        if _pin_saved_theme:
+            self._settings["theme_follows_system"] = False
         self.save()
 
     def save(self) -> None:
@@ -80,11 +100,34 @@ class ConfigManager:
 
     def set(self, key: str, value: Any) -> None:
         """Set a setting value. Saves immediately unless in batch mode."""
+        # B196: choosing a theme anywhere in the app stops it following the
+        # desktop. Several places write "theme" directly -- the Appearance
+        # page, the Advanced page's reset, the View menu -- and making each
+        # of them remember to clear the flag is the duplication this
+        # codebase keeps paying for. One place, every caller.
+        #
+        # set_system_theme() below is the one writer that is NOT a choice,
+        # and it bypasses this on purpose.
+        if key == "theme":
+            self._settings["theme_follows_system"] = (
+                str(value or "").strip().lower() in ("", "system", "auto"))
         self._settings[key] = value
         if self._batch_mode:
             self._batch_dirty = True
         else:
             self.save()
+
+    def set_system_theme(self, theme_id: str) -> None:
+        """Record the theme the DESKTOP asked for, keeping follow mode on.
+
+        B196. set() turns following off, because a theme written anywhere
+        in the app is a choice someone made. This is the only writer that
+        is not a choice, so it is the only one that may leave the flag
+        alone.
+        """
+        self._settings["theme"] = theme_id
+        self._settings["theme_follows_system"] = True
+        self.save()
 
     def begin_batch(self) -> None:
         """Start batch mode — set() calls won't trigger disk writes."""

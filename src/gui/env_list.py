@@ -42,6 +42,29 @@ def _shorten_location(path_str: str, max_len: int = 34) -> str:
     return path_str[:head] + "\u2026" + path_str[-(keep - head):]
 
 
+def _broken_env_tooltip(env, reason: str) -> str:
+    """What to tell someone whose environment has lost its Python (B199).
+
+    The old row said "0 packages" and nothing else, and the reasonable
+    conclusion was that the environment was empty. It was not: Bayram's
+    held 166 packages and 1.6 GB at the moment it was reported as empty,
+    and he deleted it. The number and the reason both belong here.
+    """
+    _n = int(getattr(env, "package_count", 0) or 0)
+    _lines = [f"{env.name} cannot run: its Python is missing.", "", reason, ""]
+    if _n:
+        _lines.append(f"Nothing has been lost -- {_n} package(s) are still "
+                      f"on disk ({env.size}).")
+        _lines.append("Install that Python version again and the environment "
+                      "works as before. Or export this environment's "
+                      "requirements and build a new one.")
+        _lines.append("")
+        _lines.append("Deleting it is the one thing that WOULD lose them.")
+    else:
+        _lines.append("No packages were found on disk either.")
+    return "\n".join(_lines)
+
+
 def _location_chips(other_envs, fmt_size, max_chips: int = 3):
     """Build one summary chip per distinct location, plus a tooltip line.
 
@@ -423,11 +446,20 @@ class EnvListMixin:
 
         for i, env in enumerate(envs):
             etype = getattr(env, "env_type", "venv")
+            # B199: an environment whose interpreter has gone missing. It is
+            # still a venv and still holds its packages, so it is NOT shown
+            # as a tools folder and NOT shown as empty.
+            _broken = bool(getattr(env, "broken", False))
+            _breason = str(getattr(env, "broken_reason", "") or "")
+            _danger = self._c().get("danger", "#f38ba8")
 
             # ── Name column ──
             name_item = QTableWidgetItem(f"  {env.name}")
             _color = _type_colors.get(etype)
-            if etype == "system_tools":
+            if _broken:
+                name_item.setForeground(QColor(_danger))
+                name_item.setToolTip(_broken_env_tooltip(env, _breason))
+            elif etype == "system_tools":
                 name_item.setForeground(QColor(self._c().get("accent", "#89b4fa")))
                 name_item.setToolTip("System tools environment — install R, RStudio, Ollama, DBeaver etc. from Launch tab")
             elif _color:
@@ -443,9 +475,17 @@ class EnvListMixin:
             self.env_table.setItem(i, 0, name_item)
 
             # ── Type column ──
-            type_item = QTableWidgetItem(f"  {_type_labels.get(etype, '🐍 venv')}")
+            # B199: the type cell is where the eye lands after the name, so
+            # it carries the warning. etype stays the real one underneath --
+            # delete, clone and rename all read it from UserRole.
+            _type_text = ("⚠️ Needs Python" if _broken
+                          else _type_labels.get(etype, "🐍 venv"))
+            type_item = QTableWidgetItem(f"  {_type_text}")
             type_item.setData(Qt.UserRole, etype)  # store raw env_type for deletion etc.
-            if _color:
+            if _broken:
+                type_item.setForeground(QColor(_danger))
+                type_item.setToolTip(_broken_env_tooltip(env, _breason))
+            elif _color:
                 type_item.setForeground(QColor(_color))
             elif etype == "system_tools":
                 type_item.setForeground(QColor(self._c().get("accent", "#89b4fa")))
@@ -465,16 +505,32 @@ class EnvListMixin:
 
             # ── Runtime column: Python version or "----" ──
             _rv = str(env.python_version).strip()
-            _runtime_str = f"  Python {_rv}" if (_rv and _rv not in ("Unknown", "?", "...")) else "  ----"
+            if _rv and _rv not in ("Unknown", "?", "..."):
+                # B199: the version still comes from pyvenv.cfg, which needs
+                # no interpreter to read. Saying "Python 3.13.13 (missing)"
+                # names the thing to reinstall; "----" named nothing.
+                _runtime_str = (f"  Python {_rv}  (missing)" if _broken
+                                else f"  Python {_rv}")
+            else:
+                _runtime_str = "  ----"
             _runtime_item = QTableWidgetItem(_runtime_str)
             _runtime_item.setFont(_row_font)
-            if _is_light_theme:
+            if _broken:
+                _runtime_item.setForeground(QColor(_danger))
+                _runtime_item.setToolTip(_breason)
+            elif _is_light_theme:
                 _runtime_item.setForeground(QColor("#1f2937"))
             self.env_table.setItem(i, 3, _runtime_item)
 
             pkg = str(env.package_count) if env.package_count else "0"
             _pkg_item = QTableWidgetItem(f"  {pkg}")
             _pkg_item.setFont(_row_font)
+            if _broken:
+                # B199: counted off disk, because pip cannot be run without
+                # the interpreter. Worth saying where the number came from.
+                _pkg_item.setToolTip(
+                    "Counted from site-packages on disk. pip could not be "
+                    "asked -- that needs the interpreter, which is missing.")
             if _is_light_theme:
                 _pkg_item.setForeground(QColor("#1f2937"))
             self.env_table.setItem(i, 4, _pkg_item)

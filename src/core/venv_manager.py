@@ -38,6 +38,9 @@ from src.core.venv_manager_common import (
     _run,
     _robust_rmtree,
     _find_windows_python,
+    broken_venv_reason,
+    count_installed_packages,
+    venv_cfg_version,
     _SUBPROCESS_FLAGS,
     banner_start,
     banner_success,
@@ -62,6 +65,10 @@ class VenvInfo:
     package_count: int = 0
     is_valid: bool = True
     env_type: str = "venv"  # venv | uv | poetry | pipx | conda | hatch | pdm | pixi
+    # B199: a venv whose interpreter has gone missing. Still a venv, still
+    # holds its packages; it simply cannot run until the Python comes back.
+    broken: bool = False
+    broken_reason: str = ""
 
     def to_dict(self) -> Dict[str, Any]:
         return {
@@ -73,6 +80,8 @@ class VenvInfo:
             "package_count": self.package_count,
             "is_valid": self.is_valid,
             "env_type": self.env_type,
+            "broken": self.broken,
+            "broken_reason": self.broken_reason,
         }
 
 
@@ -872,13 +881,37 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
         for item in _scan_targets:
             # ── Marker-based env (system_tools or conda) ──────────────────
             marker = item / ".venvstudio_env"
-            if marker.exists():
+            _use_marker = marker.exists()
+            marker_data = {}
+            if _use_marker:
                 try:
                     with open(marker) as f:
                         marker_data = json.load(f)
                 except Exception:
                     marker_data = {}
                 env_type = marker_data.get("type", "system_tools")
+                # B199: a `system_tools` marker on a directory that holds a
+                # pyvenv.cfg is not a tools folder. It is a venv that the
+                # auto-detect branch below mislabelled while its interpreter
+                # was missing -- and because the marker is read first, on
+                # every later scan, the label outlived the problem that
+                # caused it. An environment does not change kind because its
+                # Python was uninstalled for an afternoon.
+                #
+                # Removing the marker is the repair: the venv path below
+                # then reads pyvenv.cfg and reports the truth, whether the
+                # interpreter has come back or not.
+                if (env_type == "system_tools"
+                        and (item / "pyvenv.cfg").is_file()):
+                    _log.warning(
+                        f"B199: {item.name!r} carries a system_tools marker "
+                        f"but has a pyvenv.cfg -- removing the mislabel")
+                    try:
+                        marker.unlink()
+                    except OSError:
+                        pass
+                    _use_marker = False
+            if _use_marker:
                 # Skip pipx marker in base_dir — listed from its own home
                 if env_type == "pipx":
                     continue
@@ -1282,27 +1315,72 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
 
                     self.write_cache(item, info.python_version, info.package_count, info.size)
 
-            # Not a valid Python venv — treat as system tools env and auto-create marker
             if not is_valid:
-                info.is_valid = True  # show in list
-                info.env_type = "system_tools"
-                info.python_version = ""
-                info.package_count = 0
-                info.size = get_venv_size(item)
-                # Auto-create marker so it's recognized next time
-                try:
-                    import json as _json, datetime as _dt
-                    marker = item / ".venvstudio_env"
-                    if not marker.exists():
-                        with open(marker, "w") as _f:
-                            _json.dump({
-                                "type": "system_tools",
-                                "name": item.name,
-                                "created": _dt.datetime.now().isoformat(),
-                                "auto_detected": True,
-                            }, _f, indent=2)
-                except Exception:
-                    pass
+                # B199 (Bayram, 2026-11-01). This branch used to do four
+                # things and three of them were wrong for the commonest case
+                # it actually meets.
+                #
+                # It relabelled the environment `system_tools`, blanked the
+                # Python version, set package_count to 0, and WROTE a
+                # `.venvstudio_env` marker saying so. The marker is read
+                # before anything else on the next scan, so the relabelling
+                # was permanent -- it would have survived the interpreter
+                # coming back.
+                #
+                # MEASURED from his log. At 21:00 `ml` was py=3.13.13, 166
+                # packages, 1.6 GB. Its interpreter, /usr/local/bin/
+                # python3.13 -> /opt/python/3.13.13/bin/python3, then went
+                # away. At 23:26 the same environment listed as
+                # env_type='system_tools', Runtime "----", 0 packages.
+                # Nothing on screen said a Python was missing, so the
+                # reasonable reading was "this is empty and broken", and he
+                # deleted it and built it again. The 1.6 GB of packages had
+                # been sitting there the whole time.
+                #
+                # A directory with a pyvenv.cfg is a venv. Everything the
+                # user needs here is knowable without running anything: the
+                # version pyvenv.cfg recorded, the packages counted off
+                # disk, and which interpreter went missing.
+                _reason = broken_venv_reason(item)
+                if _reason:
+                    info.is_valid = False
+                    info.broken = True
+                    info.broken_reason = _reason
+                    info.env_type = "venv"
+                    info.python_version = venv_cfg_version(item)
+                    info.package_count = count_installed_packages(item)
+                    info.size = get_venv_size(item)
+                    _log.warning(
+                        f"B199: {item.name!r} is a venv with no interpreter "
+                        f"-- {_reason} ({info.package_count} package(s) "
+                        f"still on disk, {info.size})")
+                    # Deliberately NOT cached: the cache is keyed on the
+                    # path and carries no "why", so a broken reading stored
+                    # today would be served tomorrow as if it were a healthy
+                    # count. Re-reading pyvenv.cfg and site-packages costs
+                    # no subprocess at all.
+                else:
+                    # No pyvenv.cfg -- a genuine tools directory, which is
+                    # what this branch was written for.
+                    info.is_valid = True  # show in list
+                    info.env_type = "system_tools"
+                    info.python_version = ""
+                    info.package_count = 0
+                    info.size = get_venv_size(item)
+                    # Auto-create marker so it's recognized next time
+                    try:
+                        import json as _json, datetime as _dt
+                        marker = item / ".venvstudio_env"
+                        if not marker.exists():
+                            with open(marker, "w") as _f:
+                                _json.dump({
+                                    "type": "system_tools",
+                                    "name": item.name,
+                                    "created": _dt.datetime.now().isoformat(),
+                                    "auto_detected": True,
+                                }, _f, indent=2)
+                    except Exception:
+                        pass
 
             venvs.append(info)
 
@@ -1533,6 +1611,19 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
         is_valid = python_exe.exists()
 
         info = VenvInfo(name=name, path=venv_path, is_valid=is_valid)
+
+        # B199: the same answer as the fast path, so the two cannot
+        # disagree about the same environment depending on which one the
+        # caller happened to use.
+        if not is_valid:
+            _reason = broken_venv_reason(venv_path)
+            if _reason:
+                info.broken = True
+                info.broken_reason = _reason
+                info.env_type = "venv"
+                info.python_version = venv_cfg_version(venv_path)
+                info.package_count = count_installed_packages(venv_path)
+                info.size = get_venv_size(venv_path)
 
         meta_file = venv_path / ".venvstudio_meta.json"
         if meta_file.exists():

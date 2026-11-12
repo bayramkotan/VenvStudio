@@ -117,13 +117,25 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
         self._connect_screen_changed(); _step("_connect_screen_changed")
 
         self.venv_manager.sync_cache_with_disk(); _step("sync_cache_with_disk")
-        self.venv_manager.ensure_pipx_env();      _step("ensure_pipx_env")
         self._apply_linux_emoji_fix();            _step("_apply_linux_emoji_fix")
-        self._check_linux_venv_module();          _step("_check_linux_venv_module")
         self._refresh_env_list();                 _step("_refresh_env_list")
 
         from PySide6.QtCore import QTimer
         QTimer.singleShot(300, self._open_default_env)
+
+        # B202: ensure_pipx_env and _check_linux_venv_module used to run
+        # here, between sync_cache_with_disk and _refresh_env_list, which
+        # means they ran before the window existed. MEASURED from Bayram's
+        # own log on 2026-11-11, v1.6.111:
+        #
+        #     ensure_pipx_env           572 ms
+        #     _check_linux_venv_module   74 ms
+        #     __init__ total           ~2470 ms
+        #
+        # Neither answers a question the first frame depends on. See
+        # _deferred_startup_checks for what each one is and why the pipx
+        # one needs a refresh behind it.
+        QTimer.singleShot(600, self._deferred_startup_checks)
 
         # N84 (Bayram, 2026-08-31): build the deferred pages while nobody is
         # waiting.
@@ -158,6 +170,64 @@ class MainWindow(EnvListMixin, EnvOperationsMixin, EnvExportMixin, QuickLaunchMi
 
         self._log.info("MainWindow.__init__ complete")
 
+
+    def _deferred_startup_checks(self):
+        """Startup work that does not have to finish before the window shows.
+
+        B202. Two calls, 646 ms between them on Bayram's machine, both
+        sitting in __init__ ahead of the first paint:
+
+        ensure_pipx_env writes a marker file into the pipx home so the
+        pipx row appears in the environment table. It is slow because
+        finding pipx means looking for it -- and the answer does not
+        change while the window is being drawn.
+
+        _check_linux_venv_module asks whether python3-venv is installed.
+        That matters when someone presses New Environment, not when the
+        application opens, and it may put a dialog on screen -- which is
+        exactly the B197 trap, where a modal question asked before
+        window.show() left the AppImage catalog test looking at an empty
+        frame.
+
+        600 ms rather than 0: _open_default_env fires at 300 ms and
+        _refresh_env_list has usually just finished, so this waits for the
+        window to be painted and responsive instead of stealing the first
+        half-second of it.
+
+        The pipx marker is the one with a visible consequence -- without
+        it there is no pipx row -- so its absence is noted BEFORE the call
+        and the list is refreshed afterwards if one got written. That
+        happens on a first run and never again.
+        """
+        _marker_missing = False
+        try:
+            from pathlib import Path as _P202
+            from src.utils.platform_utils import get_pipx_home as _gph202
+            _home = _gph202() or ""
+            _marker_missing = bool(_home) and not (
+                _P202(_home) / ".venvstudio_env").exists()
+        except Exception:
+            _marker_missing = False
+
+        try:
+            self.venv_manager.ensure_pipx_env()
+        except Exception as _e:
+            self._log.warning(f"[B202] ensure_pipx_env failed: {_e}")
+
+        try:
+            self._check_linux_venv_module()
+        except Exception as _e:
+            self._log.warning(f"[B202] _check_linux_venv_module failed: {_e}")
+
+        if _marker_missing:
+            self._log.info(
+                "[B202] pipx marker was just created — refreshing the list "
+                "so the row appears")
+            try:
+                self.venv_manager.invalidate_memory_cache()
+                self._refresh_env_list()
+            except Exception as _e:
+                self._log.warning(f"[B202] refresh after pipx marker: {_e}")
 
     def _auto_check_update(self):
         """Silently check for updates on startup — runs in background thread."""

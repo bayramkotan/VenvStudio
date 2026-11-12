@@ -573,7 +573,22 @@ class PackageOpsMixin:
 
     # ── Install / Uninstall ──
 
-    def _install_packages(self, packages: list, hint_name: str = ""):
+    def _install_packages(self, packages: list, hint_name: str = "",
+                          _swap_round: int = 0):
+        """Install packages, after the pre-flight checks below.
+
+        _swap_round counts how many times the user has accepted the "install
+        this instead" offer in one chain. F151 phase 3 re-enters this method
+        with the replacements rather than writing a shorter second path for
+        them, so the replacement faces the same checks the original failed.
+
+        MEASURED over the 16 rules that name an alternative: no chain loops
+        back on itself and none is longer than one hop -- six targets carry
+        a rule of their own (torch, waitress, pillow,
+        opencv-python-headless) but none of those names a further
+        alternative. The limit is for the table growing one that does, not
+        for anything in it today.
+        """
         self._pkg_op_hint = hint_name  # preset/app adı — _do_install loglar
         if not self.pip_manager:
             QMessageBox.warning(self, "Warning", "No environment selected.\nPlease select an environment first.")
@@ -668,14 +683,38 @@ class PackageOpsMixin:
             except Exception:
                 pass
 
-        # ── CONFLICT_RULES pre-flight check ───────────────────────────────────
-        # Check each package against known incompatibilities before showing
-        # the confirm dialog. Errors block; warnings are shown alongside.
-        _conflict_errors   = []  # will definitely fail
-        _conflict_warnings = []  # may fail / user should know
+        # ── Pre-flight: the table, applied by the module that owns it ────────
+        #
+        # F151 phase 3. This used to be a second implementation of
+        # conflict_resolver.check_static, written out here by hand: it used
+        # normalise() and rule_for() but then read max_python, min_python,
+        # blocked_envs and severity itself, in its own loop.
+        #
+        # MEASURED before replacing it, over all 218 rules across 8 Python
+        # versions and 9 environment types -- 72 combinations: the two
+        # agreed on every single finding. So this is not a bug fix, and
+        # saying it was would be false. Two things make it worth doing
+        # anyway.
+        #
+        # The first is measured and user-visible: 16 rules name a package to
+        # use INSTEAD -- PyQt5 to PySide6, psycopg2 to psycopg2-binary,
+        # pygame to pygame-ce, tensorflow to torch -- and the hand-written
+        # pass never read the `alternative` key at all. Someone blocked on
+        # PyQt5 was told the install would fail and left to find the
+        # replacement themselves, with the answer sitting in the table.
+        #
+        # The second is the shape of the thing. check_static has 82 tests
+        # and this did not; every rule the table grows has to be understood
+        # by both; and the whole loop sat inside `except Exception: pass`,
+        # so one rule missing a `note` key would have silently abandoned the
+        # check for every remaining package in the list. The table is clean
+        # today -- measured, all 218 rules carry note and severity -- which
+        # is luck, not a guarantee.
+        _conflict_errors   = []   # kept: the live-PyPI pass below adds to it
+        _conflict_warnings = []
+        _alt_for = {}             # package -> replacement, for the swap offer
         try:
             from src.core import conflict_resolver as _cr
-            import re as _re_cf
 
             # Resolve current Python version (already fetched above if available)
             _py_ver = None
@@ -697,88 +736,60 @@ class PackageOpsMixin:
                     pass
 
             # The full requested set, not just what pip will fetch (N76).
-            for _pkg_spec in _conflict_check_list:
-                # F151: the name handling and the table lookup now live in
-                # conflict_resolver. They were written out here and AGAIN in
-                # window_menu.py, and the two copies did not agree: one tried
-                # the raw name against the alias map, the other the lowercased
-                # one. Names like PyQt5 happen to be keyed both ways, which is
-                # why nobody noticed.
-                _pkg_raw  = _re_cf.split(r'[><=!~;]', _pkg_spec)[0].strip()
-                _pkg_key  = _cr.normalise(_pkg_spec)
-                _rule     = _cr.rule_for(_pkg_spec)
+            _py_str = f"{_py_ver[0]}.{_py_ver[1]}" if _py_ver else ""
+            _static = _cr.check_static(_conflict_check_list,
+                                       python_version=_py_str,
+                                       env_type=_env_type)
+            if _static.blocks:
+                _conflict_errors.append(_cr.render_findings(_static.blocks))
+            if _static.warnings:
+                _conflict_warnings.append(_cr.render_findings(_static.warnings))
+            _alt_for = _static.blocking_alternatives()
 
-                # ── N9 Aşama 5+: manual list first, then live PyPI check ──
-                # Only for packages the manual list has NOTHING on (manual
-                # always wins -- a maintained note beats a live guess), and
-                # only for env types where PyPI wheels are actually what
-                # gets installed (conda/pixi pull from conda-forge by
-                # default, and pipx never resolves _py_ver at all).
-                if not _rule and _py_ver and _env_type in ("venv", "uv", "hatch", "pdm", "poetry"):
-                    import sys as _sys_cf
-                    _plat = {"win32": "win", "linux": "linux", "darwin": "macos"}.get(_sys_cf.platform, "")
-                    if _plat:
-                        _live = _check_pypi_wheel_availability(_pkg_key, _py_ver[0], _py_ver[1], _plat)
-                        if _live["checked"] and _live["compatible"] is False:
-                            _avail = _live["available_pyvers"]
-                            _avail_str = (
-                                f"Python {_avail[0]}–{_avail[-1]}" if len(_avail) > 1
-                                else (f"Python {_avail[0]}" if _avail else "an older Python")
-                            )
-                            _rule = {
-                                "max_python": None, "min_python": None, "blocked_envs": [],
-                                "severity": "error",
-                                "note": (
-                                    f"No prebuilt wheel on PyPI for Python {_py_ver[0]}.{_py_ver[1]} "
-                                    f"({_plat}). Available for {_avail_str}. Create a new "
-                                    f"environment with a compatible Python version, or install "
-                                    f"anyway if you know it builds from source on your system."
-                                ),
-                                "_live_check": True,
-                            }
-
-                if not _rule:
-                    continue
-
-                _msgs = []
-
-                # A live-PyPI-derived rule only exists because we already
-                # determined it's incompatible (see the gate above) -- its
-                # note carries the whole finding, there's no separate
-                # min/max/blocked_envs condition left to re-check.
-                if _rule.get("_live_check"):
-                    _msgs.append("no compatible wheel on PyPI for this Python/platform")
-
-                # Python version checks
-                if _py_ver:
-                    _max = _rule.get("max_python")
-                    _min = _rule.get("min_python")
-                    if _max:
-                        _max_t = tuple(int(x) for x in _max.split("."))
-                        if _py_ver > _max_t:
-                            _msgs.append(
-                                f"requires Python ≤ {_max} "
-                                f"(env has Python {_py_ver[0]}.{_py_ver[1]})"
-                            )
-                    if _min:
-                        _min_t = tuple(int(x) for x in _min.split("."))
-                        if _py_ver < _min_t:
-                            _msgs.append(
-                                f"requires Python ≥ {_min} "
-                                f"(env has Python {_py_ver[0]}.{_py_ver[1]})"
-                            )
-
-                # Env type check
-                _blocked = _rule.get("blocked_envs", [])
-                if _env_type in _blocked:
-                    _msgs.append(f"not compatible with {_env_type} environments")
-
-                if _msgs:
-                    _detail = f"• {_pkg_raw}: {'; '.join(_msgs)}\n  ↳ {_rule['note']}"
-                    if _rule.get("severity") == "error":
-                        _conflict_errors.append(_detail)
-                    else:
-                        _conflict_warnings.append(_detail)
+            # ── N9 Aşama 5+: manual list first, then live PyPI check ──
+            # Only for packages the manual list has NOTHING on (manual
+            # always wins -- a maintained note beats a live guess), and
+            # only for env types where PyPI wheels are actually what
+            # gets installed (conda/pixi pull from conda-forge by
+            # default, and pipx never resolves _py_ver at all).
+            if _py_ver and _env_type in ("venv", "uv", "hatch", "pdm", "poetry"):
+                import sys as _sys_cf
+                _plat = {"win32": "win", "linux": "linux",
+                         "darwin": "macos"}.get(_sys_cf.platform, "")
+                _live_found = []
+                for _pkg_spec in _conflict_check_list:
+                    if not _plat or _cr.rule_for(_pkg_spec):
+                        continue
+                    _pkg_key = _cr.normalise(_pkg_spec)
+                    _live = _check_pypi_wheel_availability(
+                        _pkg_key, _py_ver[0], _py_ver[1], _plat)
+                    if not (_live["checked"] and _live["compatible"] is False):
+                        continue
+                    _avail = _live["available_pyvers"]
+                    _avail_str = (
+                        f"Python {_avail[0]}–{_avail[-1]}" if len(_avail) > 1
+                        else (f"Python {_avail[0]}" if _avail
+                              else "an older Python"))
+                    # Shaped like a check_static finding so it goes through
+                    # the same formatter -- one description of a package,
+                    # whether the table knew about it or PyPI was asked.
+                    _live_found.append({
+                        "name": _pkg_key,
+                        "severity": "error",
+                        "reasons": ["no compatible wheel on PyPI for this "
+                                    "Python and platform"],
+                        "note": (
+                            f"Available for {_avail_str}. Create a new "
+                            f"environment with a compatible Python version, "
+                            f"or install anyway if you know it builds from "
+                            f"source on your system."),
+                        "alternative": "",
+                    })
+                if _live_found:
+                    _conflict_errors.append(_cr.render_findings(_live_found))
+                    # A live finding has no alternative, so the swap offer
+                    # can no longer cover everything that blocks.
+                    _alt_for = {}
         except Exception:
             pass  # Never block install if conflict check itself fails
 
@@ -798,6 +809,29 @@ class PackageOpsMixin:
             _err_box.setWindowTitle("Compatibility Issues Detected")
             _err_box.setIcon(QMessageBox.Warning)
             _err_box.setText(_err_text)
+            # F151 phase 3: offer the swap when the table names a
+            # replacement for EVERY blocking package and all of them are in
+            # the list pip is about to fetch. Partial swaps are not offered
+            # -- an install that still has one blocker in it is still going
+            # to fail, and a button that does not fix the problem is worse
+            # than no button.
+            _swap_btn = None
+            _swapped = []
+            if _alt_for and _swap_round < 2:
+                try:
+                    from src.core import conflict_resolver as _cr3
+                    _hit = {}
+                    for _p in packages:
+                        _alt = _alt_for.get(_cr3.normalise(_p))
+                        if _alt:
+                            _hit[_p] = _alt
+                    if _hit and len(_hit) == len(_alt_for):
+                        _swapped = [_hit.get(_p, _p) for _p in packages]
+                        _names = ", ".join(sorted(set(_hit.values())))
+                        _swap_btn = _err_box.addButton(
+                            f"Install {_names} instead", QMessageBox.ActionRole)
+                except Exception:
+                    _swap_btn = None
             _install_anyway_btn = _err_box.addButton("Install Anyway", QMessageBox.AcceptRole)
             _create_env_btn = _err_box.addButton("Create New Environment…", QMessageBox.ActionRole)
             _cancel_btn = _err_box.addButton("Cancel", QMessageBox.RejectRole)
@@ -805,6 +839,15 @@ class PackageOpsMixin:
             _err_box.exec()
             _clicked = _err_box.clickedButton()
 
+            if _swap_btn is not None and _clicked is _swap_btn:
+                # Start again with the replacements. Going round rather than
+                # carrying on: the replacement has to face the same checks
+                # the original just failed, and writing a second, shorter
+                # path for it is how the two would drift apart.
+                self._set_busy(False)
+                self._install_packages(_swapped, hint_name=hint_name,
+                                       _swap_round=_swap_round + 1)
+                return
             if _clicked is _create_env_btn:
                 self._set_busy(False)
                 # self here is PackagePanel, not MainWindow -- it has no

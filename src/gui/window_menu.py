@@ -722,10 +722,15 @@ class WindowMenuMixin:
         pkg_name = app_def.get("package", "")
         if pkg_name and pkg_name != "__system__":
             try:
-                from src.utils.constants import CONFLICT_RULES, CONFLICT_RULES_ALIASES
-                _pkg_key = pkg_name.lower().replace("_", "-")
-                _rule_key = CONFLICT_RULES_ALIASES.get(pkg_name, CONFLICT_RULES_ALIASES.get(_pkg_key, _pkg_key))
-                _rule = CONFLICT_RULES.get(_rule_key)
+                # F151: this was the third hand-written copy of the same
+                # lookup -- package_ops.py had one, conflict_resolver.py was
+                # written to end them, and this one stayed behind. It also
+                # differed: it tried the raw name against the alias map and
+                # then the lowercased one, while package_ops tried them in
+                # the other order. Names like PyQt5 are keyed both ways,
+                # which is why the difference never showed.
+                from src.core.conflict_resolver import rule_for as _rule_for
+                _rule = _rule_for(pkg_name)
                 if _rule:
                     if _rule.get("min_python"):
                         min_py = _rule["min_python"]

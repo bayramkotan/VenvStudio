@@ -81,8 +81,25 @@ def is_cli_invocation(argv) -> bool:
     instead. This also routes -h/--help/-V/--version through argparse
     (one consistent place) instead of main.py's separate hardcoded
     handling of those two.
+
+    B200. This compared argv[1] against COMMANDS directly, while
+    run_cli() below compares the NORMALISED argv -- so the two disagreed
+    about what counts as a subcommand, and `vs LIST` fell through to the
+    GUI while `vs --LIST` worked. MEASURED before the fix:
+
+        vs list    -> True      vs LIST   -> False
+        vs update  -> True      vs UPDATE -> False
+        vs --list  -> True      vs --LIST -> True
+
+    `--LIST` escaped only because anything starting with a dash is
+    treated as CLI, not because the case was handled. Asking
+    _normalize_argv first means one function decides what a subcommand
+    is, and both callers get the same answer.
     """
-    return len(argv) > 1 and (argv[1] in COMMANDS or argv[1].startswith("-"))
+    if len(argv) <= 1:
+        return False
+    _first = _normalize_argv(list(argv))[1]
+    return _first in COMMANDS or _first.startswith("-")
 
 
 def _managers():
@@ -594,18 +611,44 @@ def _install_method():
     if "pipx" in _parts:
         return "pipx", str(_mod), ["pipx", "upgrade", "venvstudio"]
 
-    # Installed by pip when a dist-info for it sits beside the package.
+    # B201: "is venvstudio installed anywhere?" is the wrong question.
+    #
+    # This asked importlib.metadata whether a distribution called
+    # venvstudio exists, and answered "pip" whenever one did. Anyone who
+    # has VenvStudio installed AND runs it from a checkout -- which is
+    # every development machine, including Bayram's -- got told their
+    # source tree was a pip install, and `vs update` offered to upgrade a
+    # copy that was not the one running. Updating a copy WHERE IT IS is
+    # the whole rule this function exists to follow.
+    #
+    # The question is whether THIS FILE is part of the installed
+    # distribution, so that is what is asked: locate_file("") gives the
+    # directory the distribution's files live under, and a module outside
+    # it belongs to something else.
+    _dist_root = None
     try:
         import importlib.metadata as _md
-        _md.version("venvstudio")
-        _installed = True
+        _dist_root = _P(_md.distribution("venvstudio").locate_file("")).resolve()
     except Exception:
-        _installed = False
+        _dist_root = None
 
-    if not _installed:
-        # A source checkout: there is no distribution to upgrade, and the
-        # working tree is the user's own.
-        return "source", str(_mod.parent.parent), ["git", "pull"]
+    _is_installed_copy = False
+    if _dist_root is not None:
+        try:
+            _mod.relative_to(_dist_root)
+            _is_installed_copy = True
+        except ValueError:
+            _is_installed_copy = False
+
+    if not _is_installed_copy:
+        # A source checkout: there is no distribution to upgrade here, and
+        # the working tree is the user's own. `git pull` is only the right
+        # advice when it IS a git checkout -- a downloaded zip is not, and
+        # telling someone to pull in a directory with no remote is the kind
+        # of wrong instruction that sends them looking in the wrong place.
+        _tree = _mod.parent.parent
+        _how = ["git", "pull"] if (_tree / ".git").exists() else []
+        return "source", str(_tree), _how
 
     _cmd = [_sys.executable, "-m", "pip", "install", "--upgrade", "venvstudio"]
     # A system-wide install needs elevation, and a quiet permission error
@@ -657,8 +700,15 @@ def _cmd_update(args) -> int:
         return 0
 
     if _method == "source":
-        print("This is a source checkout, not an installed copy.")
-        print(f"    cd {_where} && git pull")
+        print("This is a source checkout, not an installed copy, so there "
+              "is nothing here for pip to upgrade.")
+        if _cmd:
+            print(f"    cd {_where} && {' '.join(_cmd)}")
+        else:
+            # B201: no .git, so `git pull` would fail in a way that looks
+            # like VenvStudio's fault.
+            print(f"    {_where} is not a git checkout — update it the way "
+                  f"you obtained it.")
         return 0
 
     _shown = " ".join(_cmd)

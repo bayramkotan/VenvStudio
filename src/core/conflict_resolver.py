@@ -132,6 +132,39 @@ class ConflictReport:
         return not (self.blocks or self.warnings or self.builds
                     or self.resolve_error)
 
+    def alternatives(self) -> list:
+        """[(package, replacement)] for the findings that have one.
+
+        F151 phase 3. Sixteen of the 218 rules name a package to use
+        instead -- PyQt5 to PySide6, psycopg2 to psycopg2-binary, pygame to
+        pygame-ce -- and until now the install dialog read none of them:
+        package_ops.py wrote its own pass over CONFLICT_RULES and that pass
+        never looked at the `alternative` key at all. The user was told the
+        install would fail and left to find the replacement themselves,
+        with the answer sitting in the table.
+        """
+        _out = []
+        for _f in self.blocks + self.warnings:
+            if _f.get("alternative"):
+                _out.append((_f["name"], _f["alternative"]))
+        return _out
+
+    def blocking_alternatives(self) -> dict:
+        """{package: replacement} covering EVERY blocking finding, or {}.
+
+        All or nothing on purpose: swapping two of three blockers leaves
+        the install just as doomed, and an offer that does not fix the
+        problem is worse than no offer.
+        """
+        if not self.blocks:
+            return {}
+        _out = {}
+        for _f in self.blocks:
+            if not _f.get("alternative"):
+                return {}
+            _out[_f["name"]] = _f["alternative"]
+        return _out
+
     def summary(self) -> str:
         """The findings as prose. Empty string when there is nothing to say.
 
@@ -141,23 +174,8 @@ class ConflictReport:
         their own.
         """
         _out = []
-        for _f in self.blocks + self.warnings:
-            # The REASON THAT FIRED leads, and the table's note follows as
-            # context.
-            #
-            # MEASURED while testing: numpy at Python 3.13 in a pipx
-            # environment fires on blocked_envs, but its note reads
-            # "Requires Python 3.12+". Printing the note alone told the
-            # reader their Python was wrong when it was fine -- a wrong
-            # explanation is worse than none, because it sends them to fix
-            # the wrong thing.
-            _mark = "⛔" if _f.get("severity") == "error" else "⚠️"
-            _line = f"{_mark} {_f['name']}: " + "; ".join(_f["reasons"])
-            if _f.get("note"):
-                _line += f"\n     {_f['note']}"
-            if _f.get("alternative"):
-                _line += f"\n     Alternative: {_f['alternative']}"
-            _out.append(_line)
+        if self.blocks or self.warnings:
+            _out.append(render_findings(self.blocks + self.warnings))
         if self.resolve_error:
             _out.append("⛔ pip could not work out how to install these and "
                         "stopped before downloading anything.\n\n"
@@ -172,6 +190,34 @@ class ConflictReport:
                     for _b in self.builds)
                 _out.append("No ready-made package exists for: " + _names)
         return "\n\n".join(_out)
+
+
+def render_findings(findings) -> str:
+    """Findings as prose, one paragraph each. The only formatter.
+
+    F151 phase 3: package_ops.py had its own, which produced a different
+    shape from this one and -- more to the point -- dropped the
+    `alternative` line entirely. One function now, so a package cannot be
+    described one way in the install dialog and another in the summary.
+    """
+    _out = []
+    for _f in findings or []:
+        # The REASON THAT FIRED leads, and the table's note follows as
+        # context.
+        #
+        # MEASURED while testing: numpy at Python 3.13 in a pipx
+        # environment fires on blocked_envs, but its note reads "Requires
+        # Python 3.12+". Printing the note alone told the reader their
+        # Python was wrong when it was fine -- a wrong explanation is worse
+        # than none, because it sends them to fix the wrong thing.
+        _mark = "⛔" if _f.get("severity") == "error" else "⚠️"
+        _line = f"{_mark} {_f['name']}: " + "; ".join(_f.get("reasons") or [])
+        if _f.get("note"):
+            _line += f"\n     {_f['note']}"
+        if _f.get("alternative"):
+            _line += f"\n     Use instead: {_f['alternative']}"
+        _out.append(_line)
+    return "\n\n".join(_out)
 
 
 # ── Layer 1: the table ─────────────────────────────────────────────────────

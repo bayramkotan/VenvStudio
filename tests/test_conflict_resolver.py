@@ -364,3 +364,69 @@ def test_requires_python_excludes_the_sdist_too():
     files = _rel(_sdist(rp=">=3.9,<3.14"))
     assert pc._files_support(files, 3, 13, "linux") is True
     assert pc._files_support(files, 3, 14, "linux") is False
+
+
+# ── F151 phase 3: the alternative nobody was being told about ──────────────
+#
+# 16 of the 218 rules name a package to use INSTEAD. package_ops.py wrote
+# its own pass over CONFLICT_RULES and never read that key, so a user
+# blocked on PyQt5 was told the install would fail and left to find PySide6
+# themselves. These assert the three pieces the install dialog now uses.
+
+def test_the_alternative_is_offered_not_just_the_refusal():
+    rep = cr.check_static(["PyQt5"], python_version="3.13")
+    assert rep.alternatives() == [("pyqt5", "PySide6")]
+
+
+def test_alternatives_is_empty_when_the_table_names_none():
+    rep = cr.check_static(["numpy"], python_version="3.13", env_type="pipx")
+    assert rep.warnings           # it did fire
+    assert rep.alternatives() == []
+
+
+def test_blocking_alternatives_covers_every_blocker_or_none():
+    """All or nothing.
+
+    Swapping two of three blockers leaves the install just as doomed, so an
+    offer that cannot fix the problem is not made at all.
+    """
+    rep = cr.check_static(["PyQt5"], python_version="3.13")
+    assert rep.blocking_alternatives() == {"pyqt5": "PySide6"}
+
+    # orange3 blocks in a pipx environment and has no alternative; the
+    # offer has to disappear entirely rather than cover PyQt5 alone.
+    rep2 = cr.check_static(["PyQt5", "orange3"], python_version="3.13",
+                           env_type="pipx")
+    assert len(rep2.blocks) >= 2
+    assert rep2.blocking_alternatives() == {}
+
+
+def test_blocking_alternatives_ignores_warnings():
+    """A warning is not a blocker, so its alternative is not an escape."""
+    rep = cr.check_static(["numpy"], python_version="3.13", env_type="pipx")
+    assert not rep.blocks
+    assert rep.blocking_alternatives() == {}
+
+
+def test_render_findings_says_what_to_use_instead():
+    rep = cr.check_static(["PyQt5"], python_version="3.13")
+    out = cr.render_findings(rep.blocks)
+    assert "Use instead: PySide6" in out
+    assert "pyqt5" in out
+
+
+def test_render_findings_is_the_only_formatter():
+    """summary() must not grow a second way of describing a finding."""
+    rep = cr.check_static(["PyQt5"], python_version="3.13")
+    assert cr.render_findings(rep.blocks + rep.warnings) in rep.summary()
+
+
+def test_render_findings_survives_a_finding_with_nothing_optional():
+    """The live-PyPI pass builds findings by hand; they have no note."""
+    assert cr.render_findings([{"name": "x", "severity": "error",
+                                "reasons": ["no wheel"]}]) == "⛔ x: no wheel"
+
+
+def test_render_findings_of_nothing_is_empty():
+    assert cr.render_findings([]) == ""
+    assert cr.render_findings(None) == ""

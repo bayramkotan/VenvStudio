@@ -236,6 +236,42 @@ class EnvStateMixin:
         # Async refresh (updates if cache stale, runs pip list in background)
         self._async_refresh_packages()
 
+    def _apply_manual_env_text(self, env_type: str = ""):
+        """Put the current environment type's wording on the Manual tab.
+
+        B204: this used to sit inline in _update_tabs_for_env_type, which
+        was fine while the Manual tab was always built by the time that ran.
+        It no longer is. _create_manual_tab writes its own generic label and
+        placeholder, so a tab built on first click came up describing pip to
+        someone looking at a conda or pipx environment -- the env-aware text
+        had been written to the stub label that the build discarded.
+
+        Called from both places now: once when the environment changes, and
+        again by _ensure_tab_built when the tab is finally created.
+        """
+        env_type = env_type or getattr(self, "_current_env_type", "venv")
+        _manual_descriptions = {
+            "venv":   "Enter package names separated by spaces or newlines.\nYou can specify versions like: numpy==1.24.0 or pandas>=2.0",
+            "uv":    "Enter package names separated by spaces or newlines.\nUses uv pip install (10-100× faster than pip).",
+            "poetry": "Enter package names to add.\nUses poetry add command.",
+            "conda":  "Enter package names separated by spaces or newlines.\nPackages will be installed from conda-forge.",
+            "pipx":   "Enter CLI app names to install globally.\nEach app gets its own isolated environment via pipx.",
+        }
+        _manual_placeholders = {
+            "venv":   "numpy pandas matplotlib\nscikit-learn==1.3.0\nrequests>=2.28",
+            "uv":     "numpy pandas matplotlib\nscikit-learn==1.3.0",
+            "poetry": "numpy pandas matplotlib",
+            "conda":  "numpy pandas matplotlib\nscipy r-base",
+            "pipx":   "httpie black ruff poetry cowsay",
+        }
+        try:
+            self.manual_info_label.setText(
+                _manual_descriptions.get(env_type, _manual_descriptions["venv"]))
+            self.manual_input.setPlaceholderText(
+                _manual_placeholders.get(env_type, _manual_placeholders["venv"]))
+        except Exception:
+            pass
+
     def _update_tabs_for_env_type(self):
         """
         Show/hide tabs based on current env type using removeTab/insertTab.
@@ -243,31 +279,11 @@ class EnvStateMixin:
         """
         if not hasattr(self, "_tab_defs"):
             return
-        # Ensure visible tabs are built
-        current = self.tabs.currentIndex()
-        if current >= 0:
-            self._ensure_tab_built(current)
 
         env_type = getattr(self, "_current_env_type", "venv")
 
         # Update manual tab description and placeholder per env type
-        if True:
-            _manual_descriptions = {
-                "venv":   "Enter package names separated by spaces or newlines.\nYou can specify versions like: numpy==1.24.0 or pandas>=2.0",
-                "uv":    "Enter package names separated by spaces or newlines.\nUses uv pip install (10-100× faster than pip).",
-                "poetry": "Enter package names to add.\nUses poetry add command.",
-                "conda":  "Enter package names separated by spaces or newlines.\nPackages will be installed from conda-forge.",
-                "pipx":   "Enter CLI app names to install globally.\nEach app gets its own isolated environment via pipx.",
-            }
-            _manual_placeholders = {
-                "venv":   "numpy pandas matplotlib\nscikit-learn==1.3.0\nrequests>=2.28",
-                "uv":     "numpy pandas matplotlib\nscikit-learn==1.3.0",
-                "poetry": "numpy pandas matplotlib",
-                "conda":  "numpy pandas matplotlib\nscipy r-base",
-                "pipx":   "httpie black ruff poetry cowsay",
-            }
-            self.manual_info_label.setText(_manual_descriptions.get(env_type, _manual_descriptions["venv"]))
-            self.manual_input.setPlaceholderText(_manual_placeholders.get(env_type, _manual_placeholders["venv"]))
+        self._apply_manual_env_text(env_type)
 
         # Which tab keys should be visible?
         visible_keys = {
@@ -278,22 +294,8 @@ class EnvStateMixin:
             "pipx":         {"launcher", "installed", "catalog", "presets", "manual"},
         }.get(env_type, {"launcher", "installed", "catalog", "presets", "manual"})
 
-        # Remember current tab key before we remove tabs
-        cur_widget = self.tabs.currentWidget()
-        cur_key = None
-        for key, label, widget, tooltip in self._tab_defs:
-            if widget is cur_widget:
-                cur_key = key
-                break
-
-        # Block signals to prevent feedback loops
-        self.tabs.blockSignals(True)
-
-        # Remove all tabs (widgets are kept alive, just removed from tab bar)
-        while self.tabs.count() > 0:
-            self.tabs.removeTab(0)
-
-        # Re-add only visible tabs in original order with env-type-aware tooltips
+        # Env-type-aware tooltips. These are the only part of the tab bar
+        # that actually depends on env_type -- see the note below.
         _manual_tooltips = {
             "venv":   "📝 Manually install packages by name.\nYou can paste from pip install commands.",
             "uv":     "📝 Manually install packages by name.\nUses uv pip install (10-100× faster).",
@@ -310,41 +312,84 @@ class EnvStateMixin:
         _catalog_tooltips = {
             "conda":  "🛒 Browse popular packages.\nInstalls via conda-forge channel.",
         }
-        for key, label, widget, tooltip in self._tab_defs:
-            if key in visible_keys:
-                # Override tooltip for env-type awareness
-                if key == "manual":
-                    tooltip = _manual_tooltips.get(env_type, tooltip)
-                elif key == "installed":
-                    tooltip = _installed_tooltips.get(env_type, tooltip)
-                elif key == "catalog":
-                    tooltip = _catalog_tooltips.get(env_type, tooltip)
-                # Build widget lazily if not yet created
-                if widget is None:
-                    tab_index = next((i for i, d in enumerate(self._tab_defs) if d[0] == key), -1)
-                    if tab_index >= 0:
-                        self._ensure_tab_built(tab_index)
-                        widget = self._tab_defs[tab_index][2]
-                if widget is not None:
-                    idx = self.tabs.addTab(widget, label)
-                    self.tabs.setTabToolTip(idx, tooltip)
 
-        self.tabs.blockSignals(False)
+        def _tooltip_for(_key, _default):
+            if _key == "manual":
+                return _manual_tooltips.get(env_type, _default)
+            if _key == "installed":
+                return _installed_tooltips.get(env_type, _default)
+            if _key == "catalog":
+                return _catalog_tooltips.get(env_type, _default)
+            return _default
 
-        # Restore current tab if still visible, else go to Launch
-        restored = False
-        if cur_key and cur_key in visible_keys:
-            for i, (key, label, widget, tooltip) in enumerate(self._tab_defs):
-                if key == cur_key and key in visible_keys:
-                    # Find its actual index in the new tab order
-                    for j in range(self.tabs.count()):
-                        if self.tabs.widget(j) is widget:
-                            self.tabs.setCurrentIndex(j)
-                            restored = True
-                            break
-                    break
-        if not restored:
-            self.tabs.setCurrentIndex(0)
+        # B204 (Bayram, 2026-11-13). Opening an environment took 2263 ms,
+        # and this function was most of it. MEASURED from his own log on
+        # v1.6.111, one environment selected:
+        #
+        #     [Tabs] 'catalog'   built in 471 ms, inserted in 296 ms
+        #     [Tabs] 'presets'   built in 158 ms, inserted in 108 ms
+        #     [Tabs] 'installed' ...
+        #     [Tabs] 'manual'    ...
+        #
+        # package_panel._setup_ui builds ONE tab and leaves the other four
+        # as empty placeholders, to be built when the user first clicks
+        # them. This function then removed every tab and re-added them --
+        # and QTabWidget.addTab needs a widget, so it built all four on the
+        # spot. The lazy design was paid for and never used; four tabs
+        # nobody had asked to see were constructed while the user waited
+        # for one environment to open.
+        #
+        # Two things are wrong, and both are fixed here.
+        #
+        # First, the tab bar does not change. Look at visible_keys above:
+        # every env type maps to the same five keys, and so does the .get()
+        # default. The removeTab/addTab cycle has been rebuilding an
+        # identical bar on every environment switch since the dict was
+        # flattened. So the bar is only rebuilt when it would actually come
+        # out different, which today is never -- but the comparison is
+        # cheap and it keeps working if a future env type does hide a tab.
+        #
+        # Second, when a rebuild IS needed, an unbuilt tab goes back as its
+        # placeholder, not as a freshly constructed widget. That is what
+        # placeholders are for.
+        _wanted = [d for d in self._tab_defs if d[0] in visible_keys]
+        _wanted_keys = [d[0] for d in _wanted]
+        _on_bar = [self._tab_key_at(i) for i in range(self.tabs.count())]
+
+        if _on_bar == _wanted_keys:
+            # Same tabs, same order: nothing to rebuild, only the tooltips
+            # can differ.
+            for _i, (_key, _label, _widget, _tip) in enumerate(_wanted):
+                self.tabs.setTabToolTip(_i, _tooltip_for(_key, _tip))
+        else:
+            cur_key = self._tab_key_at(self.tabs.currentIndex())
+
+            # Block signals to prevent feedback loops
+            self.tabs.blockSignals(True)
+
+            # Remove all tabs (widgets are kept alive, just removed from
+            # the tab bar)
+            while self.tabs.count() > 0:
+                self.tabs.removeTab(0)
+
+            for _key, _label, _widget, _tip in _wanted:
+                if _widget is None:
+                    _widget = self._tab_placeholder(_key)
+                _idx = self.tabs.addTab(_widget, _label)
+                self.tabs.setTabToolTip(_idx, _tooltip_for(_key, _tip))
+
+            self.tabs.blockSignals(False)
+
+            # Restore the tab the user was on if it is still here, else
+            # Launch. By key, not by widget identity: a placeholder has no
+            # entry in _tab_defs to be identical to.
+            self.tabs.setCurrentIndex(
+                _wanted_keys.index(cur_key) if cur_key in _wanted_keys else 0)
+
+        # Whichever tab we ended on must have real content behind it. Qt
+        # does not emit currentChanged when setCurrentIndex is handed the
+        # index it is already on, so this cannot be left to the signal.
+        self._ensure_tab_built(self.tabs.currentIndex())
 
         # Installed tab toolbar: disable pip-only actions for non-pip envs
         is_pip_like = env_type in ("venv", "uv", "poetry")

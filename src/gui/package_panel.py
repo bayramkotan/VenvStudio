@@ -506,9 +506,13 @@ class PackagePanel(LauncherUIMixin, LauncherRunMixin, LauncherShortcutsMixin,
         self._tab_built = {}
 
         # Add placeholder tabs immediately
+        #
+        # B204: these are the same placeholders _update_tabs_for_env_type
+        # puts back when it rebuilds the bar, and they carry the tab key so
+        # _ensure_tab_built can tell which tab a bar position belongs to.
+        self._tab_placeholders = {}
         for i, (key, label, widget, tooltip) in enumerate(self._tab_defs):
-            from PySide6.QtWidgets import QWidget as _QW
-            self.tabs.addTab(_QW(), label)
+            self.tabs.addTab(self._tab_placeholder(key), label)
             self.tabs.setTabToolTip(i, tooltip)
 
         # Build launcher tab immediately (first visible tab)

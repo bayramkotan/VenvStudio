@@ -749,12 +749,72 @@ class PackageMiscMixin:
         self._set_env_cmd_strip("")
         self._ensure_tab_built(index)
 
+    def _tab_placeholder(self, key: str):
+        """The empty widget that holds a tab's place until it is first opened.
+
+        B204. QTabWidget.addTab needs a widget, and that is the only reason
+        _update_tabs_for_env_type used to build every visible tab: it had
+        nothing else to hand over. One empty QWidget per key costs nothing
+        and is enough, so the real widget can wait until someone actually
+        clicks the tab.
+
+        The key is stored as a Qt property rather than a Python attribute
+        because a plain QWidget() is a C++ object and this is the way that
+        is guaranteed to survive the round trip. _tab_key_at reads it back.
+
+        The same placeholder is reused for a key every time -- the tab bar
+        is rebuilt on env changes, and a fresh QWidget per rebuild would be
+        a slow leak.
+        """
+        if not hasattr(self, "_tab_placeholders"):
+            self._tab_placeholders = {}
+        _w = self._tab_placeholders.get(key)
+        if _w is None:
+            from PySide6.QtWidgets import QWidget as _QW
+            _w = _QW()
+            _w.setProperty("vsTabKey", key)
+            self._tab_placeholders[key] = _w
+        return _w
+
+    def _tab_key_at(self, index: int):
+        """Which of _tab_defs sits at tab-bar position `index`, or None.
+
+        B204. Tab-bar positions and _tab_defs positions are not the same
+        thing once a tab can be hidden, and before this they were used
+        interchangeably. Ask the widget instead of counting.
+        """
+        try:
+            _w = self.tabs.widget(index)
+        except Exception:
+            return None
+        if _w is None:
+            return None
+        for _k, _l, _wid, _tt in self._tab_defs:
+            if _wid is not None and _wid is _w:
+                return _k
+        _p = _w.property("vsTabKey")
+        return _p or None
+
     def _ensure_tab_built(self, index: int):
-        """Build tab widget at index if not yet built."""
-        if index < 0 or index >= len(self._tab_defs):
-            return
-        key = self._tab_defs[index][0]
+        """Build the tab at tab-bar position `index`, if it is a placeholder.
+
+        B204: `index` is a position on the TAB BAR, which is what both
+        callers actually have -- currentChanged hands one over, and
+        _update_tabs_for_env_type reads currentIndex(). It used to be read
+        as an index into _tab_defs as well, which is the same number only
+        while every tab is visible. The key is resolved from the widget now,
+        and the two indices are kept apart below.
+        """
+        key = self._tab_key_at(index)
+        if key is None:
+            if index < 0 or index >= len(self._tab_defs):
+                return
+            key = self._tab_defs[index][0]
         if self._tab_built.get(key):
+            return
+        _def_index = next((_i for _i, _d in enumerate(self._tab_defs)
+                           if _d[0] == key), -1)
+        if _def_index < 0:
             return
         creators = {
             "launcher":  self._create_launcher_tab,
@@ -763,9 +823,29 @@ class PackageMiscMixin:
             "presets":   self._create_presets_tab,
             "manual":    self._create_manual_tab,
         }
+        # B204: the tab bar may be showing an env-aware tooltip that is not
+        # the generic one in _tab_defs. Rebuilding the tab must not quietly
+        # replace it with the generic text.
+        try:
+            _live_tooltip = self.tabs.tabToolTip(index)
+        except Exception:
+            _live_tooltip = ""
         creator = creators.get(key)
         if not creator:
             return
+        # B204: the Manual tab owns the output log, and an install can now
+        # finish before that tab has ever been opened -- started from
+        # Catalog or Presets. _append_log wrote into the stub that the loop
+        # below is about to throw away, so the record of what pip just did
+        # would vanish the first time the user went looking for it. Carry
+        # it across.
+        _carry_log = ""
+        if key == "manual":
+            try:
+                _carry_log = self.output_log.toPlainText()
+            except Exception:
+                _carry_log = ""
+
         # Clear stub widgets so creator assigns fresh ones
         stub_attrs = {
             "installed":  ["packages_table", "pkg_count_label", "search_input",
@@ -832,10 +912,12 @@ class PackageMiscMixin:
         _t_insert = _t70.perf_counter()
         try:
             _was_blocked = self.tabs.blockSignals(True)
+            _label = self._tab_defs[_def_index][1]
+            _generic_tip = self._tab_defs[_def_index][3]
             self.tabs.removeTab(index)
-            self.tabs.insertTab(index, widget, self._tab_defs[index][1])
-            self.tabs.setTabToolTip(index, self._tab_defs[index][3])
-            self._tab_defs[index] = (key, self._tab_defs[index][1], widget, self._tab_defs[index][3])
+            self.tabs.insertTab(index, widget, _label)
+            self.tabs.setTabToolTip(index, _live_tooltip or _generic_tip)
+            self._tab_defs[_def_index] = (key, _label, widget, _generic_tip)
             self.tabs.setCurrentIndex(index)
         except Exception as _re:
             try:
@@ -857,5 +939,41 @@ class PackageMiscMixin:
                     f"inserted in {(_t70.perf_counter() - _t_insert) * 1000:.0f} ms")
             except Exception:
                 pass
+
+        if _carry_log:
+            try:
+                from PySide6.QtGui import QTextCursor as _QTC204
+                self.output_log.setPlainText(_carry_log)
+                self.output_log.moveCursor(_QTC204.End)
+            except Exception:
+                pass
+
+        # B204: a tab built late has missed whatever would have filled it.
+        #
+        # While every tab was built before the packages finished loading,
+        # _on_packages_loaded could write straight into them and that was
+        # the end of it. Now a tab can be born after the load, and the
+        # write went into the stub widget that the build just discarded --
+        # so Installed would open empty on an environment whose packages
+        # were listed correctly everywhere else in the window.
+        #
+        # The Catalog tab needs nothing here: _create_catalog_tab already
+        # ends with its own _populate_catalog().
+        _catch_up = {
+            "installed": getattr(self, "_fill_packages_table_from_cache", None),
+            "presets":   getattr(self, "_update_preset_badges", None),
+            "manual":    getattr(self, "_apply_manual_env_text", None),
+        }.get(key)
+        if callable(_catch_up):
+            try:
+                _catch_up()
+            except Exception as _cue:
+                try:
+                    from src.utils.logger import get_logger as _gl204
+                    _gl204("venvstudio.tabs").warning(
+                        f"[B204] catch-up for '{key}' failed: "
+                        f"{type(_cue).__name__}: {_cue}")
+                except Exception:
+                    pass
 
 

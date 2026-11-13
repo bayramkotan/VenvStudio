@@ -180,6 +180,69 @@ class PackageOpsMixin:
                 lookup[name.lower().replace("_", "-")] = (desc, cat_name)
         return lookup
 
+    def _fill_packages_table(self, packages):
+        """Render `packages` into the Installed table.
+
+        B204. This loop used to live inside _on_packages_loaded, which made
+        a package load the only thing in the program that could put rows on
+        screen. That was fine while every tab was built before the load
+        finished. It stopped being fine when the Installed tab started being
+        built on first click: the load wrote its rows into the stub table,
+        the build then threw that stub away, and the tab opened empty on an
+        environment whose package count was correct everywhere else.
+
+        Pulling it out gives _ensure_tab_built something to call.
+        """
+        self.packages_table.setRowCount(len(packages))
+        for i, pkg in enumerate(packages):
+            name_item = QTableWidgetItem(pkg.name)
+            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
+            self.packages_table.setItem(i, 0, name_item)
+
+            ver_item = QTableWidgetItem(pkg.version)
+            ver_item.setFlags(ver_item.flags() & ~Qt.ItemIsEditable)
+            self.packages_table.setItem(i, 1, ver_item)
+
+            cb = QCheckBox()
+            cb_widget = QWidget()
+            cb_layout = QHBoxLayout(cb_widget)
+            cb_layout.addWidget(cb)
+            cb_layout.setAlignment(Qt.AlignCenter)
+            cb_layout.setContentsMargins(0, 0, 0, 0)
+            self.packages_table.setCellWidget(i, 2, cb_widget)
+
+    def _fill_packages_table_from_cache(self) -> bool:
+        """Fill the Installed table from the package cache. True if it did.
+
+        B204: what _ensure_tab_built calls when the Installed tab is built
+        after the packages were already loaded. The cache is the same one
+        _on_packages_loaded writes, so the rows are the rows that load
+        produced -- no second pip list, and nothing on screen that the rest
+        of the window does not already believe.
+
+        A miss is not an error: it means no environment has been loaded
+        yet, and the load that follows will fill the table itself.
+        """
+        try:
+            _cached = self._load_pkg_cache()
+        except Exception:
+            _cached = None
+        if not _cached:
+            return False
+
+        class _Pkg:
+            def __init__(self, name, version):
+                self.name = name
+                self.version = version
+
+        self._fill_packages_table(
+            [_Pkg(p.get("name", ""), p.get("version", "")) for p in _cached])
+        try:
+            self.pkg_count_label.setText(f"{len(_cached)} packages")
+        except Exception:
+            pass
+        return True
+
     def _on_packages_loaded(self, packages, loaded_for_path: str = ""):
         """Called when async package loading finishes.
 
@@ -233,23 +296,7 @@ class PackageOpsMixin:
             self.installed_package_names.add(n.replace("-", "_"))
             self.installed_package_names.add(n.replace("_", "-"))
 
-        self.packages_table.setRowCount(len(packages))
-        for i, pkg in enumerate(packages):
-            name_item = QTableWidgetItem(pkg.name)
-            name_item.setFlags(name_item.flags() & ~Qt.ItemIsEditable)
-            self.packages_table.setItem(i, 0, name_item)
-
-            ver_item = QTableWidgetItem(pkg.version)
-            ver_item.setFlags(ver_item.flags() & ~Qt.ItemIsEditable)
-            self.packages_table.setItem(i, 1, ver_item)
-
-            cb = QCheckBox()
-            cb_widget = QWidget()
-            cb_layout = QHBoxLayout(cb_widget)
-            cb_layout.addWidget(cb)
-            cb_layout.setAlignment(Qt.AlignCenter)
-            cb_layout.setContentsMargins(0, 0, 0, 0)
-            self.packages_table.setCellWidget(i, 2, cb_widget)
+        self._fill_packages_table(packages)
 
         count = len(packages)
         self.pkg_count_label.setText(f"{count} packages")
@@ -336,6 +383,32 @@ class PackageOpsMixin:
     # ── Catalog ──
 
     def _populate_catalog(self):
+        # B204. MEASURED on Bayram's machine, v1.6.113 + the first B204
+        # patch, before the window had finished opening:
+        #
+        #     UNHANDLED: AttributeError: 'PackagePanel' object has no
+        #     attribute 'apply_btn'
+        #       package_ops.py _on_packages_loaded
+        #       package_ops.py _populate_catalog
+        #       package_ops.py _update_apply_button
+        #
+        # _create_catalog_tab is what creates apply_btn and changes_label,
+        # and unlike catalog_table and category_combo they have no stub in
+        # PackagePanel.__init__. That never mattered while the Catalog tab
+        # was built eagerly on the first environment load -- the widgets
+        # always existed by the time anything looked for them. Once the tab
+        # waits for its first click, _on_packages_loaded gets here first.
+        #
+        # Returning is the right answer, not adding two more stubs: filling
+        # a table that is about to be thrown away was never useful work --
+        # 535 catalog rows, each with checkboxes and link widgets -- and
+        # _create_catalog_tab ends with its own _populate_catalog(), so the
+        # tab fills itself the moment it exists. apply_btn is the test
+        # because it is created by that creator and by nothing else.
+        if not hasattr(self, "apply_btn"):
+            if not hasattr(self, "_catalog_initial_state"):
+                self._catalog_initial_state = {}
+            return
         selected = self.category_combo.currentData()
         self.catalog_table.setRowCount(0)
         self._catalog_initial_state = {}

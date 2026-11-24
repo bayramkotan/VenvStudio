@@ -40,6 +40,7 @@ from src.core.venv_manager_common import (
     _find_windows_python,
     broken_venv_reason,
     count_installed_packages,
+    count_packages_fast,
     venv_cfg_version,
     _SUBPROCESS_FLAGS,
     banner_start,
@@ -839,15 +840,21 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
                         if _pcached.get("python_version"):
                             _pinfo.python_version = _pcached["python_version"]
                     else:
-                        _pip_exe = get_pip_executable(_penv)
-                        if _pip_exe.exists():
-                            try:
-                                _r = _run([str(_pip_exe), "list", "--format=json"],
-                                          capture_output=True, text=True, timeout=15)
-                                if _r.returncode == 0:
-                                    _pinfo.package_count = len(json.loads(_r.stdout))
-                            except Exception:
-                                pass
+                        # B205: count off disk; pip only when that cannot
+                        # be trusted. See count_packages_fast.
+                        _fast = count_packages_fast(_penv)
+                        if _fast is not None:
+                            _pinfo.package_count = _fast
+                        else:
+                            _pip_exe = get_pip_executable(_penv)
+                            if _pip_exe.exists():
+                                try:
+                                    _r = _run([str(_pip_exe), "list", "--format=json"],
+                                              capture_output=True, text=True, timeout=15)
+                                    if _r.returncode == 0:
+                                        _pinfo.package_count = len(json.loads(_r.stdout))
+                                except Exception:
+                                    pass
                         # Size
                         _pinfo.size = get_venv_size(_penv)
                         # Write to cache
@@ -1054,7 +1061,15 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
                                         pass
                         # Count packages
                         _counted = False
-                        if env_type == "uv":
+                        # B205: both uv and poetry environments are ordinary
+                        # venvs on disk, so the .dist-info count answers for
+                        # them too -- and for uv it saves resolving the uv
+                        # binary and starting it as well.
+                        _fast = count_packages_fast(_venv_dir)
+                        if _fast is not None:
+                            info.package_count = _fast
+                            _counted = True
+                        if not _counted and env_type == "uv":
                             try:
                                 import shutil as _shutil
                                 _uv_bin = _shutil.which("uv")
@@ -1301,17 +1316,24 @@ class VenvManager(_CacheMixin, _CloneMixin, _RenameMixin):
 
                     info.size = get_venv_size(item)
 
-                    pip_exe = get_pip_executable(item)
-                    if pip_exe.exists():
-                        try:
-                            result = _run(
-                                [str(pip_exe), "list", "--format=json"],
-                                capture_output=True, text=True, timeout=15,
-                            )
-                            if result.returncode == 0:
-                                info.package_count = len(json.loads(result.stdout))
-                        except Exception:
-                            pass
+                    # B205: the hot path. Every unmarked environment in
+                    # the folder comes through here on a rescan, and this
+                    # was one pip subprocess each, one after another.
+                    _fast = count_packages_fast(item)
+                    if _fast is not None:
+                        info.package_count = _fast
+                    else:
+                        pip_exe = get_pip_executable(item)
+                        if pip_exe.exists():
+                            try:
+                                result = _run(
+                                    [str(pip_exe), "list", "--format=json"],
+                                    capture_output=True, text=True, timeout=15,
+                                )
+                                if result.returncode == 0:
+                                    info.package_count = len(json.loads(result.stdout))
+                            except Exception:
+                                pass
 
                     self.write_cache(item, info.python_version, info.package_count, info.size)
 

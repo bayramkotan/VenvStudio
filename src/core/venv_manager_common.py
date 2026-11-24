@@ -215,6 +215,50 @@ def count_installed_packages(venv_path) -> int:
     return len(_names)
 
 
+def count_packages_fast(venv_path):
+    """How many packages are installed, or None when pip must be asked.
+
+    B205 (2026-11-24). Listing environments ran `pip list --format=json`
+    once per environment, and a full rescan therefore ran one subprocess
+    per environment in a row. invalidate_memory_cache's own docstring
+    records what that cost: "observed taking 30-40+ seconds with several
+    envs". The number it was after is the count of installed packages --
+    which PEP 376 puts on disk, one .dist-info directory per package, and
+    which B199's count_installed_packages already reads for exactly this
+    reason. MEASURED on a venv with 15 packages:
+
+        pip list --format=json   222.6 ms
+        count_installed_packages   1.0 ms      same 15
+
+    None means "do not trust the disk count here, run pip". There is one
+    case that matters: a venv created with --system-site-packages sees the
+    interpreter's own packages too, and pip counts them while the disk
+    does not. MEASURED on such a venv: pip 172, disk 1. The Installed tab
+    lists packages with pip, so taking the disk count there would put a
+    different number in the table than in the tab -- worse than slow.
+    pyvenv.cfg says which kind it is, and reading it costs nothing.
+
+    A count of zero is also returned as None. A venv with no .dist-info at
+    all is either empty, in which case pip will say zero too and the one
+    subprocess is cheap, or laid out in some way this cannot read, in
+    which case pip is the right thing to ask.
+    """
+    _p = Path(venv_path)
+    try:
+        _text = (_p / "pyvenv.cfg").read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        # Not a venv, or unreadable: this function has nothing to say.
+        return None
+    for _line in _text.splitlines():
+        _key, _, _val = _line.partition("=")
+        if _key.strip().lower() == "include-system-site-packages":
+            if _val.strip().lower() == "true":
+                return None
+            break
+    _n = count_installed_packages(_p)
+    return _n if _n else None
+
+
 def broken_venv_reason(venv_path) -> str:
     """Why this venv cannot run, in words, or "" when it is fine.
 
